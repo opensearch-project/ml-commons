@@ -4,8 +4,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.Tracer;
@@ -226,6 +230,41 @@ public class MLConnectorTracer extends MLTracer {
     public static void setConnectorIdAttribute(Span span, String connectorId) {
         if (connectorId != null) {
             span.addAttribute(ML_CONNECTOR_ID, connectorId);
+        }
+    }
+
+    /**
+     * Creates a span-wrapped ActionListener that automatically handles span lifecycle.
+     * @param span The span to manage.
+     * @param originalListener The original ActionListener to wrap.
+     * @param <T> The response type.
+     * @return A new ActionListener that handles span lifecycle.
+     */
+    public static <T> ActionListener<T> createSpanWrappedListener(Span span, ActionListener<T> originalListener) {
+        return ActionListener.wrap(response -> {
+            getInstance().endSpan(span);
+            originalListener.onResponse(response);
+        }, exception -> {
+            if (exception instanceof IllegalStateException) {
+                getInstance().endSpan(span);
+                throw (IllegalStateException) exception;
+            }
+            handleSpanError(span, "Error in span", exception);
+            originalListener.onFailure(exception);
+        });
+    }
+
+    public static void serializeInputForTracing(MLPredictionTaskRequest mlPredictionTaskRequest, Span predictSpan) {
+        if (mlPredictionTaskRequest.getMlInput() != null) {
+            try {
+                String inputBody = mlPredictionTaskRequest
+                    .getMlInput()
+                    .toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS)
+                    .toString();
+                predictSpan.addAttribute(MLConnectorTracer.ML_MODEL_REQUEST_BODY, inputBody);
+            } catch (Exception e) {
+                log.warn("Failed to serialize model input for tracing", e);
+            }
         }
     }
 

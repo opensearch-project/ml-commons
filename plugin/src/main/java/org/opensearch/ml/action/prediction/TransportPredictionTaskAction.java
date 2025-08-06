@@ -108,9 +108,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
-        String modelName = null;
-        Span predictSpan = MLConnectorTracer.startModelPredictSpan(modelId, modelName);
-        serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
+        Span predictSpan = MLConnectorTracer.startModelPredictSpan(modelId, null);
+        MLConnectorTracer.serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
         String tenantId = mlPredictionTaskRequest.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
@@ -123,37 +122,19 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         final User userInfo = user;
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
-                MLConnectorTracer.getInstance().endSpan(predictSpan);
-                listener.onResponse(response);
-            }, exception -> {
-                // Re-throw IllegalStateException to maintain synchronous behavior for tests
-                if (exception instanceof IllegalStateException) {
-                    MLConnectorTracer.getInstance().endSpan(predictSpan);
-                    throw (IllegalStateException) exception;
-                }
-                MLConnectorTracer.handleSpanError(predictSpan, "Error in model.predict span", exception);
-                listener.onFailure(exception);
-            });
+            ActionListener<MLTaskResponse> spanWrappedListener = MLConnectorTracer.createSpanWrappedListener(predictSpan, listener);
             ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(spanWrappedListener, context::restore);
             MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
-
-            // Check for local model disabled synchronously before async call
-            if (cachedMlModel != null) {
-                FunctionName functionName = cachedMlModel.getAlgorithm();
-                if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                    MLConnectorTracer.getInstance().endSpan(predictSpan);
-                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
-                }
-            }
 
             ActionListener<MLModel> modelActionListener = new ActionListener<>() {
                 @Override
                 public void onResponse(MLModel mlModel) {
                     context.restore();
                     modelCacheHelper.setModelInfo(modelId, mlModel);
-                    String actualModelName = mlModel.getName();
                     FunctionName functionName = mlModel.getAlgorithm();
+                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                    }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     modelAccessControlHelper
                         .validateModelGroupAccess(
@@ -218,11 +199,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     );
                                             } else {
                                                 validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId, actualModelName);
+                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId, mlModel.getName());
                                             }
                                         } else {
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId, actualModelName);
+                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId, mlModel.getName());
                                         }
                                     }
                                 }
@@ -260,6 +241,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
                 @Override
                 public void onFailure(Exception e) {
+                    log.error("Failed to find model {}", modelId, e);
                     MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
                     wrappedListener.onFailure(e);
                 }
@@ -268,13 +250,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             if (cachedMlModel != null) {
                 modelActionListener.onResponse(cachedMlModel);
             } else {
+                // For multi-node cluster, the function name is null in cache, so should always get model first.
                 mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
         } catch (Exception e) {
-            if (e instanceof IllegalStateException) {
-                MLConnectorTracer.getInstance().endSpan(predictSpan);
-                throw (IllegalStateException) e;
-            }
             MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
             listener.onFailure(e);
         }
@@ -287,11 +266,14 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelName
     ) {
         Span executeSpan = MLConnectorTracer.startModelExecuteSpan(modelId, modelName);
-        serializeInputForTracing(mlPredictionTaskRequest, executeSpan);
+        MLConnectorTracer.serializeInputForTracing(mlPredictionTaskRequest, executeSpan);
         try {
             String requestId = mlPredictionTaskRequest.getRequestID();
             log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
             long startTime = System.nanoTime();
+            // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
+            // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
+            // from model cache first.
             FunctionName functionName = modelCacheHelper
                 .getOptionalFunctionName(modelId)
                 .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
@@ -304,13 +286,19 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             });
 
             mlPredictTaskRunner
-                .run(functionName, mlPredictionTaskRequest, transportService, ActionListener.runAfter(spanWrappedListener, () -> {
-                    long endTime = System.nanoTime();
-                    double durationInMs = (endTime - startTime) / 1e6;
-                    modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
-                    modelCacheHelper.refreshLastAccessTime(modelId);
-                    log.debug("completed predict request {} for model {}", requestId, modelId);
-                }));
+                .run(
+                    // This is by design to NOT use mlPredictionTaskRequest.getMlInput().getAlgorithm() here
+                    functionName,
+                    mlPredictionTaskRequest,
+                    transportService,
+                    ActionListener.runAfter(spanWrappedListener, () -> {
+                        long endTime = System.nanoTime();
+                        double durationInMs = (endTime - startTime) / 1e6;
+                        modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+                        modelCacheHelper.refreshLastAccessTime(modelId);
+                        log.debug("completed predict request {} for model {}", requestId, modelId);
+                    })
+                );
         } catch (Exception e) {
             MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", e);
             wrappedListener.onFailure(e);
@@ -335,19 +323,4 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             }
         }
     }
-
-    private void serializeInputForTracing(MLPredictionTaskRequest mlPredictionTaskRequest, Span predictSpan) {
-        if (mlPredictionTaskRequest.getMlInput() != null) {
-            try {
-                String inputBody = mlPredictionTaskRequest
-                    .getMlInput()
-                    .toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS)
-                    .toString();
-                predictSpan.addAttribute(MLConnectorTracer.ML_MODEL_REQUEST_BODY, inputBody);
-            } catch (Exception e) {
-                log.warn("Failed to serialize model input for tracing", e);
-            }
-        }
-    }
-
 }

@@ -198,14 +198,23 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
 
-        IllegalStateException e = assertThrows(
-                IllegalStateException.class,
-                () -> transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener)
-        );
-        assertEquals(
-                e.getMessage(),
-                LOCAL_MODEL_DISABLED_ERR_MSG
-        );
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(2);
+            listener.onResponse(model);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), anyString(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true); // Access granted
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(LOCAL_MODEL_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
     }
 
     @Test

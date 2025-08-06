@@ -104,8 +104,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
-        String connectorName = mlCreateConnectorInput.getName();
-        Span createSpan = MLConnectorTracer.startConnectorCreateSpan(connectorName);
+        Span createSpan = MLConnectorTracer.startConnectorCreateSpan(mlCreateConnectorInput.getName());
         if (mlCreateConnectorInput.getProtocol() != null
             && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
             && !this.mcpConnectorIsEnabled) {
@@ -121,12 +120,13 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             listener.onResponse(response);
             return;
         }
-        String connectorNameLocal = mlCreateConnectorInput.getName();
+        String connectorName = mlCreateConnectorInput.getName();
         try {
             XContentBuilder builder = XContentFactory.jsonBuilder();
             mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
             Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+
             User user = RestActionUtils.getUserContext(client);
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
                 validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
@@ -142,10 +142,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 indexConnector(connector, listener, createSpan);
             }
         } catch (MetaDataException e) {
+            log.error("The masterKey for credential encryption is missing in connector creation");
             MLConnectorTracer.handleSpanError(createSpan, "The masterKey for credential encryption is missing in connector creation", e);
             listener.onFailure(e);
         } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorNameLocal, e);
+            log.error("Failed to create connector {}", connectorName, e);
+            MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorName, e);
             listener.onFailure(e);
         }
     }

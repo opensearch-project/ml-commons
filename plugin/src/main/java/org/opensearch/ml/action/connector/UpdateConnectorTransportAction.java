@@ -165,10 +165,15 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                         }
                     }
                 }, exception -> {
+                    log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
                     MLConnectorTracer
                         .handleSpanError(updateSpan, "Permission denied: Unable to update the connector with ID " + connectorId, exception);
                     listener.onFailure(exception);
                 }));
+        } catch (Exception e) {
+            log.error("Failed to update ML connector for connector id {}. Details {}", connectorId, e);
+            MLConnectorTracer.handleSpanError(updateSpan, "Failed to update ML connector for connector id " + connectorId, e);
+            listener.onFailure(e);
         }
     }
 
