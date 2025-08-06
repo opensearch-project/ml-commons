@@ -4,8 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -19,40 +17,29 @@ import org.opensearch.ml.common.indexInsight.IndexInsight;
 import lombok.Builder;
 
 public class MLIndexInsightGetResponse extends ActionResponse implements ToXContentObject {
-    private List<IndexInsight> indexInsights;
+    private IndexInsight indexInsight;
 
     @Builder
-    public MLIndexInsightGetResponse(List<IndexInsight> indexInsights) {
-        this.indexInsights = indexInsights;
+    public MLIndexInsightGetResponse(IndexInsight indexInsight) {
+        this.indexInsight = indexInsight;
     }
 
     public MLIndexInsightGetResponse(StreamInput in) throws IOException {
         super(in);
-        int size = in.readVInt();
-        List<IndexInsight> insights = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) {
-            insights.add(IndexInsight.fromStream(in));
-        }
-        this.indexInsights = insights;
+        this.indexInsight = IndexInsight.fromStream(in);
     }
 
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
-        streamOutput.writeVInt(indexInsights.size());
-        for (IndexInsight insight : indexInsights) {
-            insight.writeTo(streamOutput);
-        }
+        indexInsight.writeTo(streamOutput);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
         xContentBuilder.startObject();
-        if (indexInsights != null && !indexInsights.isEmpty()) {
-            xContentBuilder.startArray("index_insights");
-            for (IndexInsight insight : indexInsights) {
-                insight.toXContent(xContentBuilder, params);
-            }
-            xContentBuilder.endArray();
+        if (indexInsight != null) {
+            xContentBuilder.field("index_insight");
+            indexInsight.toXContent(xContentBuilder, params);
         }
         xContentBuilder.endObject();
         return xContentBuilder;

@@ -3,7 +3,6 @@ package org.opensearch.ml.common.indexInsight;
 import java.util.Locale;
 
 public enum MLIndexInsightType {
-    ALL,
     STATISTICAL_DATA,
     FIELD_DESCRIPTION,
     INDEX_DESCRIPTION,
