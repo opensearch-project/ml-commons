@@ -6,12 +6,15 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
@@ -54,6 +57,9 @@ public class RestMLCreateMemoryContainerAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
         MLCreateMemoryContainerRequest mlCreateMemoryContainerRequest = getRequest(request);
         return channel -> client
             .execute(MLCreateMemoryContainerAction.INSTANCE, mlCreateMemoryContainerRequest, new RestToXContentListener<>(channel));

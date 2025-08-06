@@ -25,6 +25,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -66,6 +67,7 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
         restMLCreateMemoryContainerAction = new RestMLCreateMemoryContainerAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -360,5 +362,23 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
             .withMethod(RestRequest.Method.POST)
             .withPath("/_plugins/_ml/memory_containers/_create")
             .build();
+    }
+
+    public void testPrepareRequestWithAgenticMemoryDisabled() throws IOException {
+        // Disable agentic memory feature
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        String requestContent = "{\n"
+            + "  \"name\": \"test-memory-container\",\n"
+            + "  \"description\": \"Test memory container description\"\n"
+            + "}";
+
+        RestRequest request = createRestRequest(requestContent);
+
+        // Expect OpenSearchStatusException when feature is disabled
+        thrown.expect(OpenSearchStatusException.class);
+        thrown.expectMessage("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled");
+
+        restMLCreateMemoryContainerAction.prepareRequest(request, client);
     }
 }

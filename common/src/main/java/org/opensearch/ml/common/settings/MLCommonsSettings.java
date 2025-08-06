@@ -362,4 +362,10 @@ public final class MLCommonsSettings {
     // Feature flag for enabling telemetry static metric collection job -- MLStatsJobProcessor
     public static final Setting<Boolean> ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED = Setting
         .boolSetting("plugins.ml_commons.metrics_static_collection_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
+
+    // Feature flag for Agentic memory APIs
+    public static final Setting<Boolean> ML_COMMONS_AGENTIC_MEMORY_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.agentic_memory_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
+        "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
 }
