@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SYSTEM_PROMPT;
@@ -13,7 +14,9 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.OpenSearchException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
@@ -116,6 +119,7 @@ public class QueryPlanningTool implements WithModelTool {
     public static class Factory implements WithModelTool.Factory<QueryPlanningTool> {
         private Client client;
         private static volatile Factory INSTANCE;
+        private static MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
         public static Factory getInstance() {
             if (INSTANCE != null) {
@@ -130,12 +134,17 @@ public class QueryPlanningTool implements WithModelTool {
             }
         }
 
-        public void init(Client client) {
+        public void init(Client client, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
             this.client = client;
+            this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         }
 
         @Override
         public QueryPlanningTool create(Map<String, Object> map) {
+
+            if (!mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
+                throw new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE);
+            }
 
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(map);
 
