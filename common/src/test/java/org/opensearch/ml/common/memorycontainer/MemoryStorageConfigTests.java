@@ -93,7 +93,7 @@ public class MemoryStorageConfigTests {
         assertNull(minimalConfig.getEmbeddingModelId());
         assertEquals("llm-model-only", minimalConfig.getLlmModelId());
         assertNull(minimalConfig.getDimension());
-        assertNull(minimalConfig.getMaxInferSize()); // Null when semantic storage disabled
+        assertEquals(Integer.valueOf(5), minimalConfig.getMaxInferSize()); // Default value when llmModelId is present
     }
 
     @Test
@@ -119,16 +119,29 @@ public class MemoryStorageConfigTests {
 
     @Test
     public void testDefaultMaxInferSize() {
-        MemoryStorageConfig config = MemoryStorageConfig
+        // Test with llmModelId present - should get default value
+        MemoryStorageConfig configWithLlm = MemoryStorageConfig
+            .builder()
+            .memoryIndexName("test-index")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("embedding-model")
+            .llmModelId("llm-model")
+            .dimension(768)
+            // maxInferSize not set, should use default
+            .build();
+
+        assertEquals(Integer.valueOf(MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE), configWithLlm.getMaxInferSize());
+
+        // Test without llmModelId - should be null
+        MemoryStorageConfig configWithoutLlm = MemoryStorageConfig
             .builder()
             .memoryIndexName("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
             .dimension(768)
-            // maxInferSize not set, should use default
             .build();
 
-        assertEquals(Integer.valueOf(MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE), config.getMaxInferSize());
+        assertNull(configWithoutLlm.getMaxInferSize());
     }
 
     @Test
@@ -162,7 +175,7 @@ public class MemoryStorageConfigTests {
         assertNull(parsedConfig.getEmbeddingModelId());
         assertEquals(minimalConfig.getLlmModelId(), parsedConfig.getLlmModelId());
         assertNull(parsedConfig.getDimension());
-        assertNull(parsedConfig.getMaxInferSize());
+        assertEquals(Integer.valueOf(5), parsedConfig.getMaxInferSize()); // Default value when llmModelId is present
     }
 
     @Test
@@ -197,7 +210,8 @@ public class MemoryStorageConfigTests {
         assertFalse(jsonStr.contains("\"embedding_model_type\""));
         assertFalse(jsonStr.contains("\"embedding_model_id\""));
         assertFalse(jsonStr.contains("\"dimension\""));
-        assertFalse(jsonStr.contains("\"max_infer_size\""));
+        // max_infer_size is present because llmModelId is set
+        assertTrue(jsonStr.contains("\"max_infer_size\":5"));
     }
 
     @Test
@@ -241,7 +255,7 @@ public class MemoryStorageConfigTests {
         assertNull(parsedConfig.getEmbeddingModelId());
         assertEquals("partial-llm-model", parsedConfig.getLlmModelId());
         assertNull(parsedConfig.getDimension());
-        assertNull(parsedConfig.getMaxInferSize());
+        assertEquals(Integer.valueOf(5), parsedConfig.getMaxInferSize()); // Default value when llmModelId is present
     }
 
     @Test
