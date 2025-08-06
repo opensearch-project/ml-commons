@@ -9,12 +9,16 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.UPDATE_MEMORY_PATH;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
 import java.util.List;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
@@ -32,11 +36,14 @@ import com.google.common.collect.ImmutableList;
 public class RestMLUpdateMemoryAction extends BaseRestHandler {
 
     private static final String ML_UPDATE_MEMORY_ACTION = "ml_update_memory_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLUpdateMemoryAction() {}
+    public RestMLUpdateMemoryAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -50,6 +57,10 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
+
         MLUpdateMemoryRequest mlUpdateMemoryRequest = getRequest(request);
         return channel -> client.execute(MLUpdateMemoryAction.INSTANCE, mlUpdateMemoryRequest, new RestToXContentListener<>(channel));
     }

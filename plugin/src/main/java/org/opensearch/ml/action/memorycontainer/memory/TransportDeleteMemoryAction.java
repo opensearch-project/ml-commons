@@ -17,6 +17,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
@@ -65,6 +66,14 @@ public class TransportDeleteMemoryAction extends HandledTransportAction<ActionRe
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                );
+            return;
+        }
+
         MLDeleteMemoryRequest deleteRequest = MLDeleteMemoryRequest.fromActionRequest(request);
         String memoryContainerId = deleteRequest.getMemoryContainerId();
         String memoryId = deleteRequest.getMemoryId();

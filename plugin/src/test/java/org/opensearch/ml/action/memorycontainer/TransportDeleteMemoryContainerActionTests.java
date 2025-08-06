@@ -149,11 +149,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(mockContainer);
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(any(), any());
-        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Setup ML feature settings
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
     }
 
     @Test
@@ -307,10 +309,14 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         // Disable agentic memory feature
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
 
+        // Create request
+        MLMemoryContainerDeleteRequest request = MLMemoryContainerDeleteRequest.builder().memoryContainerId(MEMORY_CONTAINER_ID).build();
+
         // Execute
-        transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
+        transportDeleteMemoryContainerAction.doExecute(null, request, actionListener);
 
         // Verify failure response due to feature being disabled
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
         assertNotNull(exception);

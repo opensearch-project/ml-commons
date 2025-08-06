@@ -25,6 +25,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
@@ -81,6 +82,14 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> actionListener) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            actionListener
+                .onFailure(
+                    new OpenSearchStatusException(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN)
+                );
+            return;
+        }
+
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest.fromActionRequest(request);
         String memoryContainerId = updateRequest.getMemoryContainerId();
         String memoryId = updateRequest.getMemoryId();

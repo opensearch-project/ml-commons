@@ -1087,14 +1087,14 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     public void testDoExecuteWithTenantValidationFailure() throws InterruptedException {
         // Enable multi-tenancy and provide null tenant ID to trigger validation failure
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        
+
         MLCreateMemoryContainerInput invalidTenantInput = MLCreateMemoryContainerInput
-            .builder()
-            .name("invalid-tenant-container")
-            .description("Container with invalid tenant")
-            .memoryStorageConfig(memoryStorageConfig)
-            .tenantId(null) // This should trigger tenant validation failure
-            .build();
+                .builder()
+                .name("invalid-tenant-container")
+                .description("Container with invalid tenant")
+                .memoryStorageConfig(memoryStorageConfig)
+                .tenantId(null) // This should trigger tenant validation failure
+                .build();
 
         MLCreateMemoryContainerRequest invalidTenantRequest = new MLCreateMemoryContainerRequest(invalidTenantInput);
 

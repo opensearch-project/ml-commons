@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -78,6 +79,11 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
 
     @Override
     protected void doExecute(Task task, MLSearchMemoriesRequest request, ActionListener<MLSearchMemoriesResponse> actionListener) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+
         MLSearchMemoriesInput input = request.getMlSearchMemoriesInput();
         String tenantId = request.getTenantId();
 
