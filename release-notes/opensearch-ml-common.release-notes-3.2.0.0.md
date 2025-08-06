@@ -9,6 +9,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.2.0
 * Enable AI-Oriented memory operation on Memory APIs (Add, Search, Update & Delete) ([#4055](https://github.com/opensearch-project/ml-commons/pull/4055))
 * Support output filter, unify tool parameter handling and improve SearchIndexTool output parsing ([#4053](https://github.com/opensearch-project/ml-commons/pull/4053))
 * Delete memory container API ([#4027](https://github.com/opensearch-project/ml-commons/pull/4027))
+* GET memory API ([#4069](https://github.com/opensearch-project/ml-commons/pull/4069))
 
 ### Enhancements
 * Add Default System Prompt for the query Planner tool ([#4046](https://github.com/opensearch-project/ml-commons/pull/4046))
