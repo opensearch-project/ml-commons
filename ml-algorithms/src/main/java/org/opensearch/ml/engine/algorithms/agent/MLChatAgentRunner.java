@@ -70,6 +70,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -80,6 +81,7 @@ import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -119,6 +121,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String LLM_INTERFACE = "_llm_interface";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
+    private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
 
     private Client client;
     private Settings settings;
@@ -151,6 +154,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
+        Span agentTaskSpan = MLAgentTracer
+            .getInstance()
+            .startConversationalAgentTaskSpanLogic(
+                mlAgent.getName(),
+                inputParams,
+                inputParams.get(MLAgentExecutor.AGENT_ID),
+                mlAgent.getLlm().getModelId()
+            );
+
         Map<String, String> params = new HashMap<>();
         if (mlAgent.getParameters() != null) {
             params.putAll(mlAgent.getParameters());
@@ -236,12 +248,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 }
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                runAgent(mlAgent, params, ActionListener.wrap(result -> {
+                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                    listener.onResponse(result);
+                }, e -> {
+                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run chat agent", e);
+                    listener.onFailure(e);
+                }), memory, memory.getConversationId(), functionCalling, agentTaskSpan);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to get chat history", e);
                 listener.onFailure(e);
             }), messageHistoryLimit);
-        }, listener::onFailure));
+        }, e -> {
+            MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to create memory", e);
+            listener.onFailure(e);
+        }));
     }
 
     private void runAgent(
@@ -250,7 +271,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ActionListener<Object> listener,
         Memory memory,
         String sessionId,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Span agentTaskSpan
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
@@ -259,7 +281,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
             Map<String, Tool> tools = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
             createTools(toolFactories, params, allToolSpecs, tools, toolSpecMap, mlAgent);
-            runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener, functionCalling);
+            runReAct(
+                mlAgent.getLlm(),
+                tools,
+                toolSpecMap,
+                params,
+                memory,
+                sessionId,
+                mlAgent.getTenantId(),
+                listener,
+                functionCalling,
+                agentTaskSpan
+            );
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -281,7 +314,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         String tenantId,
         ActionListener<Object> listener,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Span agentTaskSpan
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -298,16 +332,26 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
-
-        AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(agentTaskSpan, null);
+        AtomicReference<MLAgentTracer.ListenerWithSpan> lastLlmListenerWithSpan = new AtomicReference<>();
         AtomicReference<String> lastThought = new AtomicReference<>();
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
 
+        Span llmCallSpan = MLAgentTracer
+            .getInstance()
+            .startConversationalLLMCallSpan(
+                question,
+                context.getLlmCallIndex().get(),
+                tmpParameters.get("system_prompt"),
+                tmpParameters.get("_llm_interface"),
+                agentTaskSpan
+            );
         StepListener firstListener = new StepListener<MLTaskResponse>();
-        lastLlmListener.set(firstListener);
+        MLAgentTracer.ListenerWithSpan firstListenerWithSpan = new MLAgentTracer.ListenerWithSpan(firstListener, llmCallSpan);
+        lastLlmListenerWithSpan.set(firstListenerWithSpan);
         StepListener<?> lastStepListener = firstListener;
 
         StringBuilder scratchpadBuilder = new StringBuilder();
@@ -321,7 +365,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
-            StepListener<?> nextStepListener = new StepListener<>();
+            int currentLlmCallIndex = context.getLlmCallIndex().get();
+            int currentToolCallIndex = context.getToolCallIndex().get();
+            StepListener<MLTaskResponse> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
 
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
@@ -345,8 +391,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
                     String finalAnswer = modelOutput.get(FINAL_ANSWER);
 
+                    MLAgentTracer.ToolCallExtractionResult llmResultInfo = MLAgentTracer
+                        .processLLMToolCall(tmpModelTensorOutput, context, lastLlmListenerWithSpan.get());
+
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
+
+                        MLAgentTracer.processFinalAnswer(lastLlmListenerWithSpan.get(), llmResultInfo, context, additionalInfo);
+
                         sendFinalAnswer(
                             sessionId,
                             listener,
@@ -390,6 +442,35 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         "LLM"
                     );
 
+                    if (nextStepListener == null) {
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
+                        );
+                        return;
+                    }
+
+                    Span toolCallSpan = MLAgentTracer
+                        .getInstance()
+                        .startConversationalToolCallSpan(
+                            actionInput,
+                            currentToolCallIndex,
+                            action,
+                            tools.containsKey(action) && tools.get(action) != null ? tools.get(action).getDescription() : null,
+                            lastLlmListenerWithSpan.get() != null ? lastLlmListenerWithSpan.get().span() : agentTaskSpan
+                        );
+
                     if (tools.containsKey(action)) {
                         Map<String, String> toolParams = constructToolParams(
                             tools,
@@ -399,20 +480,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             action,
                             actionInput
                         );
-                        runTool(
-                            tools,
-                            toolSpecMap,
-                            tmpParameters,
-                            (ActionListener<Object>) nextStepListener,
+
+                        runTool(tools, toolSpecMap, tmpParameters, ActionListener.wrap(result -> {
+                            nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createMLTaskOutput(result.toString())));
+                        }, e -> nextStepListener.onFailure(e)),
                             action,
                             actionInput,
                             toolParams,
                             interactions,
                             toolCallId,
-                            functionCalling
+                            functionCalling,
+                            toolCallSpan
                         );
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        MLAgentTracer.setSpanResult(toolCallSpan, res);
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                         StringSubstitutor substitutor = new StringSubstitutor(
                             Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
                             "${parameters.",
@@ -420,7 +503,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                         newPrompt.set(substitutor.replace(finalPrompt));
                         tmpParameters.put(PROMPT, newPrompt.get());
-                        ((ActionListener<Object>) nextStepListener).onResponse(res);
+                        nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createMLTaskOutput(res)));
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
@@ -449,7 +532,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
-                    if (interactions.size() > 0) {
+                    if (!interactions.isEmpty()) {
                         tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
                     }
 
@@ -468,36 +551,59 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
 
                     if (finalI == maxIterations - 1) {
-                        if (verbose) {
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(traceTensors).build());
-                        } else {
-                            List<ModelTensors> finalModelTensors = createFinalAnswerTensors(
-                                createModelTensors(sessionId, parentInteractionId),
-                                List.of(ModelTensor.builder().name("response").dataAsMap(Map.of("response", lastThought.get())).build())
-                            );
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-                        }
-                    } else {
-                        ActionRequest request = new MLPredictionTaskRequest(
-                            llm.getModelId(),
-                            RemoteInferenceMLInput
-                                .builder()
-                                .algorithm(FunctionName.REMOTE)
-                                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                                .build(),
-                            null,
-                            tenantId
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
                         );
-                        client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
+                        return;
                     }
+
+                    Span nextLlmCallSpan = MLAgentTracer
+                        .getInstance()
+                        .startConversationalLLMCallSpan(
+                            question,
+                            currentLlmCallIndex,
+                            tmpParameters.get("system_prompt"),
+                            tmpParameters.get("_llm_interface"),
+                            agentTaskSpan
+                        );
+
+                    ActionRequest nextRequest = new MLPredictionTaskRequest(
+                        llm.getModelId(),
+                        RemoteInferenceMLInput
+                            .builder()
+                            .algorithm(FunctionName.REMOTE)
+                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                            .build(),
+                        null,
+                        tenantId
+                    );
+
+                    StepListener<MLTaskResponse> llmListener = MLAgentTracer
+                        .createAndConnectLLMListener(nextLlmCallSpan, nextStepListener, lastLlmListenerWithSpan);
+                    client.execute(MLPredictionTaskAction.INSTANCE, nextRequest, (ActionListener<MLTaskResponse>) llmListener);
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
+                MLAgentTracer.updateSpanWithResultAttributes(agentTaskSpan, context);
                 listener.onFailure(e);
             });
-            if (i < maxIterations - 1) {
+            if (nextStepListener != null) {
                 lastStepListener = nextStepListener;
             }
+            // Increment index at the end of each iteration becuase of async listener
+            MLAgentTracer.incrementIndexForIteration(context, finalI);
         }
 
         ActionRequest request = new MLPredictionTaskRequest(
@@ -575,17 +681,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> toolParams,
         List<String> interactions,
         String toolCallId,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Span toolCallSpan
     ) {
         if (tools.get(action).validate(toolParams)) {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                    MLAgentTracer.ToolCallExtractionResult toolResultInfo = MLAgentTracer.extractToolCallInfo(r, actionInput);
+                    MLAgentTracer.updateToolCallSpanWithResult(toolCallSpan, toolResultInfo);
+
                     if (functionCalling != null) {
                         List<Map<String, Object>> toolResults = List.of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", r)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     } else {
                         interactions
                             .add(
@@ -595,6 +706,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     INTERACTIONS_PREFIX
                                 )
                             );
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     }
                     nextStepListener.onResponse(r);
                 }, e -> {
@@ -606,6 +718,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 INTERACTIONS_PREFIX
                             )
                         );
+                    MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run tool", e);
                     nextStepListener
                         .onResponse(
                             String
@@ -631,11 +744,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             } catch (Exception e) {
                 log.error("Failed to run tool {}", action, e);
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run tool", e);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
         } else { // TODO: add failure to interaction to let LLM regenerate ?
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
+            MLAgentTracer.setSpanResult(toolCallSpan, res);
+            MLAgentTracer.getInstance().endSpan(toolCallSpan);
             nextStepListener.onResponse(res);
         }
     }
@@ -837,5 +953,39 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
         }
+    }
+
+    private void handleMaxIterationsReached(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> traceTensors,
+        ConversationIndexMemory conversationIndexMemory,
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        AtomicReference<String> lastThought,
+        int maxIterations,
+        Map<String, Tool> tools
+    ) {
+        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        sendFinalAnswer(
+            sessionId,
+            listener,
+            question,
+            parentInteractionId,
+            verbose,
+            traceDisabled,
+            traceTensors,
+            conversationIndexMemory,
+            traceNumber,
+            additionalInfo,
+            incompleteResponse
+        );
+        cleanUpResource(tools);
     }
 }

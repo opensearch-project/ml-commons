@@ -9,11 +9,37 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_LATENCY;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_OPERATION_NAME;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_RESULT;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_SERVICE_TYPE;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_STEP_NUMBER;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_SYSTEM;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_SYSTEM_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_TASK;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_TOOL_DESCRIPTION;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_TOOL_NAME;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_USAGE_INPUT_TOKENS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.METRIC_FIELD_LATENCY_MS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.OperationType;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.QUESTION_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.SERVICE_TYPE_TRACER;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.TOKEN_FIELD_INPUT_TOKENS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.TOKEN_FIELD_OUTPUT_TOKENS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.TOKEN_FIELD_TOTAL_TOKENS;
+import static org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer.TRACE_PARENT_FIELD;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,14 +48,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.action.StepListener;
+import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.telemetry.tracing.Span;
+import org.opensearch.telemetry.tracing.SpanCreationContext;
 import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.telemetry.tracing.noop.NoopTracer;
 
@@ -151,9 +182,11 @@ public class MLAgentTracerTests {
      */
     @Test
     public void testCreateAgentTaskAttributes() {
-        Map<String, String> attrs = MLAgentTracer.createAgentTaskAttributes("agent1", "task1");
+        Map<String, String> attrs = MLAgentTracer.createAgentTaskAttributes("agent1", "task1", "agent1", "model1");
         assertEquals("agent1", attrs.get(MLAgentTracer.ATTR_NAME));
         assertEquals("task1", attrs.get(MLAgentTracer.ATTR_TASK));
+        assertEquals("agent1", attrs.get(MLAgentTracer.ATTR_AGENT_ID));
+        assertEquals("model1", attrs.get(MLAgentTracer.ATTR_MODEL_ID));
         assertEquals("create_agent", attrs.get(MLAgentTracer.ATTR_OPERATION_NAME));
     }
 
@@ -209,9 +242,9 @@ public class MLAgentTracerTests {
         Span mockSpan = org.mockito.Mockito.mock(Span.class);
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(mockSpan, null);
         context.getCurrentResult().set("result");
-        context.getPhaseInputTokens().set(1.0);
-        context.getPhaseOutputTokens().set(2.0);
-        context.getPhaseTotalTokens().set(3.0);
+        context.getPhaseInputTokens().set(1);
+        context.getPhaseOutputTokens().set(2);
+        context.getPhaseTotalTokens().set(3);
         context.getCurrentLatency().set(4L);
         MLAgentTracer.updateSpanWithResultAttributes(mockSpan, context);
         org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_RESULT, "result");
@@ -229,9 +262,9 @@ public class MLAgentTracerTests {
         // Should not throw
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
         context.getCurrentResult().set("result");
-        context.getPhaseInputTokens().set(1.0);
-        context.getPhaseOutputTokens().set(2.0);
-        context.getPhaseTotalTokens().set(3.0);
+        context.getPhaseInputTokens().set(1);
+        context.getPhaseOutputTokens().set(2);
+        context.getPhaseTotalTokens().set(3);
         context.getCurrentLatency().set(4L);
         MLAgentTracer.updateSpanWithResultAttributes(null, context);
     }
@@ -256,7 +289,7 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
         Map<String, String> params = new HashMap<>();
         params.put("_llm_interface", "bedrock/converse/claude");
-        Map<String, Double> extractedTokens = MLAgentTracer.extractTokensFromModelOutput(mockOutput, params);
+        Map<String, Integer> extractedTokens = MLAgentTracer.extractTokensFromModelOutput(mockOutput, params);
         Map<String, String> attrs = MLAgentTracer.createLLMCallAttributes("result", 100L, params, extractedTokens);
         assertEquals("bedrock", attrs.get(MLAgentTracer.ATTR_SYSTEM));
         assertEquals("10", attrs.get(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS));
@@ -285,7 +318,7 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
         Map<String, String> params = new HashMap<>();
         params.put("_llm_interface", "openai/v1/chat/completions");
-        Map<String, Double> extractedTokens = MLAgentTracer.extractTokensFromModelOutput(mockOutput, params);
+        Map<String, Integer> extractedTokens = MLAgentTracer.extractTokensFromModelOutput(mockOutput, params);
         Map<String, String> attrs = MLAgentTracer.createLLMCallAttributes("result", 100L, params, extractedTokens);
         assertEquals("openai", attrs.get(MLAgentTracer.ATTR_SYSTEM));
         assertEquals("5", attrs.get(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS));
@@ -780,9 +813,9 @@ public class MLAgentTracerTests {
     @Test
     public void testUpdateAgentTaskSpanWithCumulativeTokensNullSpan() {
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getAgentInputTokens().set(10.0);
-        context.getAgentOutputTokens().set(20.0);
-        context.getAgentTotalTokens().set(30.0);
+        context.getAgentInputTokens().set(10);
+        context.getAgentOutputTokens().set(20);
+        context.getAgentTotalTokens().set(30);
 
         // Should not throw
         MLAgentTracer.updateAgentTaskSpanWithCumulativeTokens(context);
@@ -795,9 +828,9 @@ public class MLAgentTracerTests {
     public void testUpdateAgentTaskSpanWithCumulativeTokensValidSpan() {
         Span mockAgentTaskSpan = mock(Span.class);
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(mockAgentTaskSpan, null);
-        context.getAgentInputTokens().set(10.0);
-        context.getAgentOutputTokens().set(20.0);
-        context.getAgentTotalTokens().set(30.0);
+        context.getAgentInputTokens().set(10);
+        context.getAgentOutputTokens().set(20);
+        context.getAgentTotalTokens().set(30);
 
         MLAgentTracer.updateAgentTaskSpanWithCumulativeTokens(context);
 
@@ -822,15 +855,15 @@ public class MLAgentTracerTests {
     @Test
     public void testIncrementPhaseTokensFromReActOutputNullResult() {
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getPhaseInputTokens().set(5.0);
-        context.getPhaseOutputTokens().set(10.0);
-        context.getPhaseTotalTokens().set(15.0);
+        context.getPhaseInputTokens().set(5);
+        context.getPhaseOutputTokens().set(10);
+        context.getPhaseTotalTokens().set(15);
 
         MLAgentTracer.incrementPhaseTokensFromReActOutput(null, context);
 
-        assertEquals(5.0, context.getPhaseInputTokens().get(), 0.001);
-        assertEquals(10.0, context.getPhaseOutputTokens().get(), 0.001);
-        assertEquals(15.0, context.getPhaseTotalTokens().get(), 0.001);
+        assertEquals(Integer.valueOf(5), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(10), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(15), context.getPhaseTotalTokens().get());
     }
 
     /**
@@ -842,15 +875,15 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.emptyList());
 
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getPhaseInputTokens().set(5.0);
-        context.getPhaseOutputTokens().set(10.0);
-        context.getPhaseTotalTokens().set(15.0);
+        context.getPhaseInputTokens().set(5);
+        context.getPhaseOutputTokens().set(10);
+        context.getPhaseTotalTokens().set(15);
 
         MLAgentTracer.incrementPhaseTokensFromReActOutput(mockOutput, context);
 
-        assertEquals(5.0, context.getPhaseInputTokens().get(), 0.001);
-        assertEquals(10.0, context.getPhaseOutputTokens().get(), 0.001);
-        assertEquals(15.0, context.getPhaseTotalTokens().get(), 0.001);
+        assertEquals(Integer.valueOf(5), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(10), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(15), context.getPhaseTotalTokens().get());
     }
 
     /**
@@ -865,15 +898,15 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
 
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getPhaseInputTokens().set(5.0);
-        context.getPhaseOutputTokens().set(10.0);
-        context.getPhaseTotalTokens().set(15.0);
+        context.getPhaseInputTokens().set(5);
+        context.getPhaseOutputTokens().set(10);
+        context.getPhaseTotalTokens().set(15);
 
         MLAgentTracer.incrementPhaseTokensFromReActOutput(mockOutput, context);
 
-        assertEquals(5.0, context.getPhaseInputTokens().get(), 0.001);
-        assertEquals(10.0, context.getPhaseOutputTokens().get(), 0.001);
-        assertEquals(15.0, context.getPhaseTotalTokens().get(), 0.001);
+        assertEquals(Integer.valueOf(5), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(10), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(15), context.getPhaseTotalTokens().get());
     }
 
     /**
@@ -890,15 +923,15 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
 
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getPhaseInputTokens().set(5.0);
-        context.getPhaseOutputTokens().set(10.0);
-        context.getPhaseTotalTokens().set(15.0);
+        context.getPhaseInputTokens().set(5);
+        context.getPhaseOutputTokens().set(10);
+        context.getPhaseTotalTokens().set(15);
 
         MLAgentTracer.incrementPhaseTokensFromReActOutput(mockOutput, context);
 
-        assertEquals(5.0, context.getPhaseInputTokens().get(), 0.001);
-        assertEquals(10.0, context.getPhaseOutputTokens().get(), 0.001);
-        assertEquals(15.0, context.getPhaseTotalTokens().get(), 0.001);
+        assertEquals(Integer.valueOf(5), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(10), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(15), context.getPhaseTotalTokens().get());
     }
 
     /**
@@ -922,15 +955,15 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
 
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getPhaseInputTokens().set(5.0);
-        context.getPhaseOutputTokens().set(10.0);
-        context.getPhaseTotalTokens().set(15.0);
+        context.getPhaseInputTokens().set(5);
+        context.getPhaseOutputTokens().set(10);
+        context.getPhaseTotalTokens().set(15);
 
         MLAgentTracer.incrementPhaseTokensFromReActOutput(mockOutput, context);
 
-        assertEquals(10.0, context.getPhaseInputTokens().get(), 0.001);
-        assertEquals(20.0, context.getPhaseOutputTokens().get(), 0.001);
-        assertEquals(30.0, context.getPhaseTotalTokens().get(), 0.001);
+        assertEquals(Integer.valueOf(10), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(20), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(30), context.getPhaseTotalTokens().get());
     }
 
     /**
@@ -954,15 +987,15 @@ public class MLAgentTracerTests {
         when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
 
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
-        context.getPhaseInputTokens().set(5.0);
-        context.getPhaseOutputTokens().set(10.0);
-        context.getPhaseTotalTokens().set(15.0);
+        context.getPhaseInputTokens().set(5);
+        context.getPhaseOutputTokens().set(10);
+        context.getPhaseTotalTokens().set(15);
 
         MLAgentTracer.incrementPhaseTokensFromReActOutput(mockOutput, context);
 
-        assertEquals(10.0, context.getPhaseInputTokens().get(), 0.001);
-        assertEquals(20.0, context.getPhaseOutputTokens().get(), 0.001);
-        assertEquals(30.0, context.getPhaseTotalTokens().get(), 0.001);
+        assertEquals(Integer.valueOf(10), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(20), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(30), context.getPhaseTotalTokens().get());
     }
 
     /**
@@ -1070,5 +1103,775 @@ public class MLAgentTracerTests {
                 // Log warning would happen here in real code
             }
         }
+    }
+
+    /**
+     * Tests createToolCallAttributesWithStep method.
+     */
+    @Test
+    public void testCreateToolCallAttributesWithStep() {
+        Map<String, String> attributes = MLAgentTracer
+            .createToolCallAttributesWithStep("test_action_input", 1, "test_tool", "test_description");
+
+        assertEquals(SERVICE_TYPE_TRACER, attributes.get(ATTR_SERVICE_TYPE));
+        assertEquals(OperationType.EXECUTE_TOOL.getValue(), attributes.get(ATTR_OPERATION_NAME));
+        assertEquals("test_action_input", attributes.get(ATTR_TASK));
+        assertEquals("1", attributes.get(ATTR_STEP_NUMBER));
+        assertEquals("test_tool", attributes.get(ATTR_TOOL_NAME));
+        assertEquals("test_description", attributes.get(ATTR_TOOL_DESCRIPTION));
+    }
+
+    /**
+     * Tests createToolCallAttributesWithStep method with null values.
+     */
+    @Test
+    public void testCreateToolCallAttributesWithStepNullValues() {
+        Map<String, String> attributes = MLAgentTracer.createToolCallAttributesWithStep(null, 2, null, null);
+
+        assertEquals(SERVICE_TYPE_TRACER, attributes.get(ATTR_SERVICE_TYPE));
+        assertEquals(OperationType.EXECUTE_TOOL.getValue(), attributes.get(ATTR_OPERATION_NAME));
+        assertEquals("", attributes.get(ATTR_TASK));
+        assertEquals("2", attributes.get(ATTR_STEP_NUMBER));
+        assertEquals("", attributes.get(ATTR_TOOL_NAME));
+        assertNull(attributes.get(ATTR_TOOL_DESCRIPTION));
+    }
+
+    /**
+     * Tests createLLMCallAttributesForConv method.
+     */
+    @Test
+    public void testCreateLLMCallAttributesForConv() {
+        Map<String, String> attributes = MLAgentTracer
+            .createLLMCallAttributesForConv("test_question", 1, "test_system_prompt", "openai/v1/chat/completions");
+
+        assertEquals(SERVICE_TYPE_TRACER, attributes.get(ATTR_SERVICE_TYPE));
+        assertEquals(OperationType.CHAT.getValue(), attributes.get(ATTR_OPERATION_NAME));
+        assertEquals("test_question", attributes.get(ATTR_TASK));
+        assertEquals("1", attributes.get(ATTR_STEP_NUMBER));
+        assertEquals("test_system_prompt", attributes.get(ATTR_SYSTEM_MESSAGE));
+        assertEquals("openai", attributes.get(ATTR_SYSTEM));
+    }
+
+    /**
+     * Tests createLLMCallAttributesForConv method with null values.
+     */
+    @Test
+    public void testCreateLLMCallAttributesForConvNullValues() {
+        Map<String, String> attributes = MLAgentTracer.createLLMCallAttributesForConv(null, 2, null, null);
+
+        assertEquals(SERVICE_TYPE_TRACER, attributes.get(ATTR_SERVICE_TYPE));
+        assertEquals(OperationType.CHAT.getValue(), attributes.get(ATTR_OPERATION_NAME));
+        assertEquals("", attributes.get(ATTR_TASK));
+        assertEquals("2", attributes.get(ATTR_STEP_NUMBER));
+        assertNull(attributes.get(ATTR_SYSTEM_MESSAGE));
+        assertNull(attributes.get(ATTR_SYSTEM));
+    }
+
+    /**
+     * Tests updateToolCallSpanWithResult method.
+     */
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void testUpdateToolCallSpanWithResult() {
+        Span mockSpan = mock(Span.class);
+        MLAgentTracer.ToolCallExtractionResult result = new MLAgentTracer.ToolCallExtractionResult();
+        result.input = "test_input";
+        result.output = "test_output";
+
+        Map usage = new HashMap();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, 10);
+        usage.put(TOKEN_FIELD_OUTPUT_TOKENS, 20);
+        usage.put(TOKEN_FIELD_TOTAL_TOKENS, 30);
+        result.usage = usage;
+
+        Map metrics = new HashMap();
+        metrics.put(METRIC_FIELD_LATENCY_MS, 100);
+        result.metrics = metrics;
+
+        MLAgentTracer.updateToolCallSpanWithResult(mockSpan, result);
+
+        verify(mockSpan).addAttribute(ATTR_RESULT, "test_output");
+        verify(mockSpan).addAttribute(ATTR_USAGE_INPUT_TOKENS, "10");
+        verify(mockSpan).addAttribute(ATTR_USAGE_OUTPUT_TOKENS, "20");
+        verify(mockSpan).addAttribute(ATTR_USAGE_TOTAL_TOKENS, "30");
+        verify(mockSpan).addAttribute(ATTR_LATENCY, "100");
+    }
+
+    /**
+     * Tests updateToolCallSpanWithResult method with null values.
+     */
+    @Test
+    public void testUpdateToolCallSpanWithResultNullValues() {
+        Span mockSpan = mock(Span.class);
+        MLAgentTracer.ToolCallExtractionResult result = new MLAgentTracer.ToolCallExtractionResult();
+        result.input = "test_input";
+        result.output = "test_output";
+        result.usage = null;
+        result.metrics = null;
+
+        MLAgentTracer.updateToolCallSpanWithResult(mockSpan, result);
+
+        verify(mockSpan).addAttribute(ATTR_RESULT, "test_output");
+        // Should not add token attributes since usage is null
+        verify(mockSpan, never()).addAttribute(eq(ATTR_USAGE_INPUT_TOKENS), any(String.class));
+        verify(mockSpan, never()).addAttribute(eq(ATTR_USAGE_OUTPUT_TOKENS), any(String.class));
+        verify(mockSpan, never()).addAttribute(eq(ATTR_USAGE_TOTAL_TOKENS), any(String.class));
+        verify(mockSpan, never()).addAttribute(eq(ATTR_LATENCY), any(String.class));
+    }
+
+    /**
+     * Tests processLLMToolCall method.
+     */
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void testProcessLLMToolCall() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockModelTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+        Span mockSpan = mock(Span.class);
+        
+        Map dataAsMap = new HashMap();
+        dataAsMap.put("response", "test_response");
+        Map usage = new HashMap();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, 10);
+        usage.put(TOKEN_FIELD_OUTPUT_TOKENS, 20);
+        usage.put(TOKEN_FIELD_TOTAL_TOKENS, 30);
+        dataAsMap.put("usage", usage);
+        
+        when(mockTensor.getDataAsMap()).thenReturn(dataAsMap);
+        when(mockModelTensors.getMlModelTensors()).thenReturn(java.util.Collections.singletonList(mockTensor));
+        when(mockOutput.getMlModelOutputs()).thenReturn(java.util.Collections.singletonList(mockModelTensors));
+        
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(mockSpan, null);
+        MLAgentTracer.ListenerWithSpan listenerWithSpan = new MLAgentTracer.ListenerWithSpan(new StepListener<>(), mockSpan);
+        
+        MLAgentTracer.ToolCallExtractionResult result = MLAgentTracer.processLLMToolCall(mockOutput, context, listenerWithSpan);
+        
+        assertEquals("test_response", result.output);
+        assertEquals(Integer.valueOf(10), context.getAgentInputTokens().get());
+        assertEquals(Integer.valueOf(20), context.getAgentOutputTokens().get());
+        assertEquals(Integer.valueOf(30), context.getAgentTotalTokens().get());
+    }
+
+    /**
+     * Tests processFinalAnswer method.
+     */
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void testProcessFinalAnswer() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        
+        Span mockSpan = mock(Span.class);
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(mockSpan, null);
+        context.getAgentInputTokens().set(10);
+        context.getAgentOutputTokens().set(20);
+        context.getAgentTotalTokens().set(30);
+        
+        MLAgentTracer.ToolCallExtractionResult llmResultInfo = new MLAgentTracer.ToolCallExtractionResult();
+        llmResultInfo.output = "final_answer";
+        
+        Map<String, Object> additionalInfo = new HashMap<>();
+        MLAgentTracer.ListenerWithSpan listenerWithSpan = new MLAgentTracer.ListenerWithSpan(new StepListener<>(), mockSpan);
+        
+        MLAgentTracer.processFinalAnswer(listenerWithSpan, llmResultInfo, context, additionalInfo);
+        
+        assertEquals(Integer.valueOf(10), additionalInfo.get(TOKEN_FIELD_INPUT_TOKENS));
+        assertEquals(Integer.valueOf(20), additionalInfo.get(TOKEN_FIELD_OUTPUT_TOKENS));
+        assertEquals(Integer.valueOf(30), additionalInfo.get(TOKEN_FIELD_TOTAL_TOKENS));
+    }
+
+    /**
+     * Tests createAndConnectLLMListener method.
+     */
+    @Test
+    public void testCreateAndConnectLLMListener() {
+        Span mockSpan = mock(Span.class);
+        StepListener<MLTaskResponse> nextStepListener = new StepListener<>();
+        AtomicReference<MLAgentTracer.ListenerWithSpan> lastLlmListenerWithSpan = new AtomicReference<>();
+
+        StepListener<MLTaskResponse> result = MLAgentTracer
+            .createAndConnectLLMListener(mockSpan, nextStepListener, lastLlmListenerWithSpan);
+
+        assertNotNull(result);
+        assertNotNull(lastLlmListenerWithSpan.get());
+        assertEquals(mockSpan, lastLlmListenerWithSpan.get().span());
+        assertEquals(result, lastLlmListenerWithSpan.get().listener());
+    }
+
+    /**
+     * Tests createAndConnectLLMListener method with null nextStepListener.
+     */
+    @Test
+    public void testCreateAndConnectLLMListenerNullNextStepListener() {
+        Span mockSpan = mock(Span.class);
+        AtomicReference<MLAgentTracer.ListenerWithSpan> lastLlmListenerWithSpan = new AtomicReference<>();
+
+        StepListener<MLTaskResponse> result = MLAgentTracer.createAndConnectLLMListener(mockSpan, null, lastLlmListenerWithSpan);
+
+        assertNotNull(result);
+        assertNotNull(lastLlmListenerWithSpan.get());
+        assertEquals(mockSpan, lastLlmListenerWithSpan.get().span());
+        assertEquals(result, lastLlmListenerWithSpan.get().listener());
+    }
+
+    /**
+     * Tests incrementIndexForIteration method for even iteration (LLM call).
+     */
+    @Test
+    public void testIncrementIndexForIterationEven() {
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        context.getLlmCallIndex().set(5);
+        context.getToolCallIndex().set(3);
+
+        MLAgentTracer.incrementIndexForIteration(context, 0);
+
+        assertEquals(Integer.valueOf(6), context.getLlmCallIndex().get());
+        assertEquals(Integer.valueOf(3), context.getToolCallIndex().get());
+    }
+
+    /**
+     * Tests incrementIndexForIteration method for odd iteration (tool call).
+     */
+    @Test
+    public void testIncrementIndexForIterationOdd() {
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        context.getLlmCallIndex().set(5);
+        context.getToolCallIndex().set(3);
+
+        MLAgentTracer.incrementIndexForIteration(context, 1);
+
+        assertEquals(Integer.valueOf(5), context.getLlmCallIndex().get());
+        assertEquals(Integer.valueOf(4), context.getToolCallIndex().get());
+    }
+
+    /**
+     * Tests startConversationalAgentTaskSpanLogic method without parent span context.
+     */
+    @Test
+    public void testStartConversationalAgentTaskSpanLogicWithoutParent() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        Span mockSpan = mock(Span.class);
+        when(mockTracer.startSpan(any(SpanCreationContext.class))).thenReturn(mockSpan);
+        
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer tracer = MLAgentTracer.getInstance();
+        
+        Map<String, String> inputParams = new HashMap<>();
+        inputParams.put(QUESTION_FIELD, "test_question");
+        
+        Span result = tracer.startConversationalAgentTaskSpanLogic("test_agent", inputParams, "test_agent_id", "test_model_id");
+        
+        assertNotNull(result);
+        assertEquals(mockSpan, result);
+        verify(mockTracer).startSpan(any(SpanCreationContext.class));
+    }
+
+    /**
+     * Tests startConversationalAgentTaskSpanLogic method with parent span context.
+     */
+    @Test
+    public void testStartConversationalAgentTaskSpanLogicWithParent() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        when(mockTracer.startSpan(any(SpanCreationContext.class))).thenReturn(mock(Span.class));
+        
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer tracer = MLAgentTracer.getInstance();
+        
+        Map<String, String> inputParams = new HashMap<>();
+        inputParams.put(QUESTION_FIELD, "test_question");
+        inputParams.put(TRACE_PARENT_FIELD, "test_trace_parent");
+        
+        Span result = tracer.startConversationalAgentTaskSpanLogic("test_agent", inputParams, "test_agent_id", "test_model_id");
+        
+        assertNotNull(result);
+        verify(mockTracer).startSpan(any(SpanCreationContext.class));
+    }
+
+    /**
+     * Tests startConversationalAgentTaskSpan method.
+     */
+    @Test
+    public void testStartConversationalAgentTaskSpan() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        Span mockSpan = mock(Span.class);
+        when(mockTracer.startSpan(any(SpanCreationContext.class))).thenReturn(mockSpan);
+        
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer tracer = MLAgentTracer.getInstance();
+        
+        Span result = tracer.startConversationalAgentTaskSpan("test_agent", "test_question", "test_agent_id", "test_model_id");
+        
+        assertNotNull(result);
+        assertEquals(mockSpan, result);
+        verify(mockTracer).startSpan(any(SpanCreationContext.class));
+    }
+
+    /**
+     * Tests startConversationalAgentTaskSpan method with parent span.
+     */
+    @Test
+    public void testStartConversationalAgentTaskSpanWithParent() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        when(mockTracer.startSpan(any(SpanCreationContext.class))).thenReturn(mock(Span.class));
+        
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer tracer = MLAgentTracer.getInstance();
+        
+        Span parentSpan = mock(Span.class);
+        Span result = tracer.startConversationalAgentTaskSpan("test_agent", "test_question", "test_agent_id", "test_model_id", parentSpan);
+        
+        assertNotNull(result);
+        verify(mockTracer).startSpan(any(SpanCreationContext.class));
+    }
+
+    /**
+     * Tests startConversationalLLMCallSpan method.
+     */
+    @Test
+    public void testStartConversationalLLMCallSpan() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        when(mockTracer.startSpan(any(SpanCreationContext.class))).thenReturn(mock(Span.class));
+        
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer tracer = MLAgentTracer.getInstance();
+        
+        Span parentSpan = mock(Span.class);
+        Span result = tracer.startConversationalLLMCallSpan(
+            "test_question", 
+            1, 
+            "test_system_prompt", 
+            "openai/v1/chat/completions", 
+            parentSpan
+        );
+        
+        assertNotNull(result);
+        verify(mockTracer).startSpan(any(SpanCreationContext.class));
+    }
+
+    /**
+     * Tests startConversationalToolCallSpan method.
+     */
+    @Test
+    public void testStartConversationalToolCallSpan() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        when(mockTracer.startSpan(any(SpanCreationContext.class))).thenReturn(mock(Span.class));
+        
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer tracer = MLAgentTracer.getInstance();
+        
+        Span parentSpan = mock(Span.class);
+        Span result = tracer.startConversationalToolCallSpan(
+            "test_action_input", 
+            1, 
+            "test_tool", 
+            "test_description", 
+            parentSpan
+        );
+        
+        assertNotNull(result);
+        verify(mockTracer).startSpan(any(SpanCreationContext.class));
+    }
+
+    /**
+     * Tests extractTokenValue method with valid number.
+     */
+    @Test
+    public void testExtractTokenValueValidNumber() {
+        Map<String, Object> usage = new HashMap<>();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, 100);
+
+        Integer result = MLAgentTracer.extractTokenValue(usage, TOKEN_FIELD_INPUT_TOKENS);
+
+        assertEquals(Integer.valueOf(100), result);
+    }
+
+    /**
+     * Tests extractTokenValue method with null usage.
+     */
+    @Test
+    public void testExtractTokenValueNullUsage() {
+        Integer result = MLAgentTracer.extractTokenValue(null, TOKEN_FIELD_INPUT_TOKENS);
+
+        assertNull(result);
+    }
+
+    /**
+     * Tests extractTokenValue method with missing key.
+     */
+    @Test
+    public void testExtractTokenValueMissingKey() {
+        Map<String, Object> usage = new HashMap<>();
+        usage.put("other_key", 100);
+
+        Integer result = MLAgentTracer.extractTokenValue(usage, TOKEN_FIELD_INPUT_TOKENS);
+
+        assertNull(result);
+    }
+
+    /**
+     * Tests extractTokenValue method with non-number value.
+     */
+    @Test
+    public void testExtractTokenValueNonNumber() {
+        Map<String, Object> usage = new HashMap<>();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, "not_a_number");
+
+        Integer result = MLAgentTracer.extractTokenValue(usage, TOKEN_FIELD_INPUT_TOKENS);
+
+        assertNull(result);
+    }
+
+    /**
+     * Tests extractAndAccumulateTokensToAgent method.
+     */
+    @Test
+    public void testExtractAndAccumulateTokensToAgent() {
+        Map<String, Object> usage = new HashMap<>();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, 10);
+        usage.put(TOKEN_FIELD_OUTPUT_TOKENS, 20);
+        usage.put(TOKEN_FIELD_TOTAL_TOKENS, 30);
+
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        context.getAgentInputTokens().set(5);
+        context.getAgentOutputTokens().set(15);
+        context.getAgentTotalTokens().set(25);
+
+        MLAgentTracer.extractAndAccumulateTokensToAgent(usage, context);
+
+        assertEquals(Integer.valueOf(15), context.getAgentInputTokens().get());
+        assertEquals(Integer.valueOf(35), context.getAgentOutputTokens().get());
+        assertEquals(Integer.valueOf(55), context.getAgentTotalTokens().get());
+    }
+
+    /**
+     * Tests extractAndAccumulateTokensToAgent method with null usage.
+     */
+    @Test
+    public void testExtractAndAccumulateTokensToAgentNullUsage() {
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        context.getAgentInputTokens().set(5);
+        context.getAgentOutputTokens().set(15);
+        context.getAgentTotalTokens().set(25);
+
+        // Should not throw
+        MLAgentTracer.extractAndAccumulateTokensToAgent(null, context);
+
+        assertEquals(Integer.valueOf(5), context.getAgentInputTokens().get());
+        assertEquals(Integer.valueOf(15), context.getAgentOutputTokens().get());
+        assertEquals(Integer.valueOf(25), context.getAgentTotalTokens().get());
+    }
+
+    /**
+     * Tests extractAndSetPhaseTokens method.
+     */
+    @Test
+    public void testExtractAndSetPhaseTokens() {
+        Map<String, Object> usage = new HashMap<>();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, 10);
+        usage.put(TOKEN_FIELD_OUTPUT_TOKENS, 20);
+        usage.put(TOKEN_FIELD_TOTAL_TOKENS, 30);
+
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+
+        MLAgentTracer.extractAndSetPhaseTokens(usage, context);
+
+        assertEquals(Integer.valueOf(10), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(20), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(30), context.getPhaseTotalTokens().get());
+    }
+
+    /**
+     * Tests extractAndSetPhaseTokens method with null usage.
+     */
+    @Test
+    public void testExtractAndSetPhaseTokensNullUsage() {
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+
+        // Should not throw
+        MLAgentTracer.extractAndSetPhaseTokens(null, context);
+
+        assertEquals(Integer.valueOf(0), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(0), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(0), context.getPhaseTotalTokens().get());
+    }
+
+    /**
+     * Tests extractAndSetLatency method.
+     */
+    @Test
+    public void testExtractAndSetLatency() {
+        Map<String, Object> metrics = new HashMap<>();
+        metrics.put(METRIC_FIELD_LATENCY_MS, 100);
+
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+
+        MLAgentTracer.extractAndSetLatency(metrics, context);
+
+        assertEquals(Long.valueOf(100), context.getCurrentLatency().get());
+    }
+
+    /**
+     * Tests extractAndSetLatency method with null metrics.
+     */
+    @Test
+    public void testExtractAndSetLatencyNullMetrics() {
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        context.getCurrentLatency().set(50L);
+
+        // Should not throw
+        MLAgentTracer.extractAndSetLatency(null, context);
+
+        assertEquals(Long.valueOf(50), context.getCurrentLatency().get());
+    }
+
+    /**
+     * Tests updateAndEndLLMSpan method.
+     */
+    @Test
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+    public void testUpdateAndEndLLMSpan() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        
+        Span mockSpan = mock(Span.class);
+        MLAgentTracer.ListenerWithSpan listenerWithSpan = new MLAgentTracer.ListenerWithSpan(new StepListener<>(), mockSpan);
+        
+        MLAgentTracer.ToolCallExtractionResult llmResultInfo = new MLAgentTracer.ToolCallExtractionResult();
+        llmResultInfo.output = "test_output";
+        
+        Map usage = new HashMap();
+        usage.put(TOKEN_FIELD_INPUT_TOKENS, 10);
+        usage.put(TOKEN_FIELD_OUTPUT_TOKENS, 20);
+        usage.put(TOKEN_FIELD_TOTAL_TOKENS, 30);
+        llmResultInfo.usage = usage;
+        
+        Map metrics = new HashMap();
+        metrics.put(METRIC_FIELD_LATENCY_MS, 100);
+        llmResultInfo.metrics = metrics;
+        
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(mockSpan, null);
+        
+        MLAgentTracer.updateAndEndLLMSpan(listenerWithSpan, llmResultInfo, context);
+        
+        assertEquals("test_output", context.getCurrentResult().get());
+        assertEquals(Integer.valueOf(10), context.getPhaseInputTokens().get());
+        assertEquals(Integer.valueOf(20), context.getPhaseOutputTokens().get());
+        assertEquals(Integer.valueOf(30), context.getPhaseTotalTokens().get());
+        assertEquals(Long.valueOf(100), context.getCurrentLatency().get());
+        
+        verify(mockSpan, times(2)).addAttribute(ATTR_RESULT, "test_output");
+        verify(mockSpan).addAttribute(ATTR_USAGE_INPUT_TOKENS, "10");
+        verify(mockSpan).addAttribute(ATTR_USAGE_OUTPUT_TOKENS, "20");
+        verify(mockSpan).addAttribute(ATTR_USAGE_TOTAL_TOKENS, "30");
+        verify(mockSpan).addAttribute(ATTR_LATENCY, "100");
+    }
+
+    /**
+     * Tests updateAndEndLLMSpan method with null listener.
+     */
+    @Test
+    public void testUpdateAndEndLLMSpanNullListener() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        
+        MLAgentTracer.ToolCallExtractionResult llmResultInfo = new MLAgentTracer.ToolCallExtractionResult();
+        llmResultInfo.output = "test_output";
+        
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        
+        // Should not throw and should not set result when listener is null
+        MLAgentTracer.updateAndEndLLMSpan(null, llmResultInfo, context);
+        
+        assertEquals("", context.getCurrentResult().get()); // Should remain empty since listener is null
+    }
+
+    /**
+     * Tests createMLTaskOutput method.
+     */
+    @Test
+    public void testCreateMLTaskOutput() {
+        MLTaskOutput result = MLAgentTracer.createMLTaskOutput("test_response");
+
+        assertNotNull(result);
+        assertEquals("tool_result", result.getTaskId());
+        assertEquals("completed", result.getStatus());
+
+        Map<String, Object> response = result.getResponse();
+        assertNotNull(response);
+        assertEquals("test_response", response.get("response"));
+    }
+
+    /**
+     * Tests updateAdditionalInfoWithTokens method.
+     */
+    @Test
+    public void testUpdateAdditionalInfoWithTokens() {
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(null, null);
+        context.getAgentInputTokens().set(10);
+        context.getAgentOutputTokens().set(20);
+        context.getAgentTotalTokens().set(30);
+
+        Map<String, Object> additionalInfo = new HashMap<>();
+
+        MLAgentTracer.updateAdditionalInfoWithTokens(context, additionalInfo);
+
+        assertEquals(Integer.valueOf(10), additionalInfo.get(TOKEN_FIELD_INPUT_TOKENS));
+        assertEquals(Integer.valueOf(20), additionalInfo.get(TOKEN_FIELD_OUTPUT_TOKENS));
+        assertEquals(Integer.valueOf(30), additionalInfo.get(TOKEN_FIELD_TOTAL_TOKENS));
+    }
+
+    /**
+     * Tests handleSpanError method.
+     */
+    @Test
+    public void testHandleSpanError() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        
+        Span mockSpan = mock(Span.class);
+        Exception testException = new RuntimeException("test exception");
+        
+        MLAgentTracer.handleSpanError(mockSpan, "test error", testException);
+        
+        verify(mockSpan).setError(testException);
+        verify(mockSpan).endSpan();
+    }
+
+    /**
+     * Tests setSpanAttributes method.
+     */
+    @Test
+    public void testSetSpanAttributes() {
+        Span mockSpan = mock(Span.class);
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("key1", "value1");
+        attributes.put("key2", "value2");
+
+        MLAgentTracer.setSpanAttributes(mockSpan, attributes);
+
+        verify(mockSpan).addAttribute("key1", "value1");
+        verify(mockSpan).addAttribute("key2", "value2");
+    }
+
+    /**
+     * Tests setSpanResult method.
+     */
+    @Test
+    public void testSetSpanResult() {
+        Span mockSpan = mock(Span.class);
+
+        MLAgentTracer.setSpanResult(mockSpan, "test_result");
+
+        verify(mockSpan).addAttribute(ATTR_RESULT, "test_result");
+    }
+
+    /**
+     * Tests setSpanResult method with null result.
+     */
+    @Test
+    public void testSetSpanResultNull() {
+        Span mockSpan = mock(Span.class);
+
+        MLAgentTracer.setSpanResult(mockSpan, null);
+
+        verify(mockSpan).addAttribute(ATTR_RESULT, "");
+    }
+
+    /**
+     * Tests setSpanTask method.
+     */
+    @Test
+    public void testSetSpanTask() {
+        Span mockSpan = mock(Span.class);
+
+        MLAgentTracer.setSpanTask(mockSpan, "test_task");
+
+        verify(mockSpan).addAttribute(ATTR_TASK, "test_task");
+    }
+
+    /**
+     * Tests setSpanTask method with null task.
+     */
+    @Test
+    public void testSetSpanTaskNull() {
+        Span mockSpan = mock(Span.class);
+
+        MLAgentTracer.setSpanTask(mockSpan, null);
+
+        verify(mockSpan, never()).addAttribute(eq(ATTR_TASK), any(String.class));
+    }
+
+    /**
+     * Tests setSpanTask method with empty task.
+     */
+    @Test
+    public void testSetSpanTaskEmpty() {
+        Span mockSpan = mock(Span.class);
+
+        MLAgentTracer.setSpanTask(mockSpan, "");
+
+        verify(mockSpan, never()).addAttribute(eq(ATTR_TASK), any(String.class));
+    }
+
+    /**
+     * Tests setSpanTaskAndResult method.
+     */
+    @Test
+    public void testSetSpanTaskAndResult() {
+        Span mockSpan = mock(Span.class);
+
+        MLAgentTracer.setSpanTaskAndResult(mockSpan, "test_task", "test_result");
+
+        verify(mockSpan).addAttribute(ATTR_TASK, "test_task");
+        verify(mockSpan).addAttribute(ATTR_RESULT, "test_result");
+    }
+
+    /**
+     * Tests ListenerWithSpan record.
+     */
+    @Test
+    public void testListenerWithSpan() {
+        StepListener<MLTaskResponse> listener = new StepListener<>();
+        Span span = mock(Span.class);
+
+        MLAgentTracer.ListenerWithSpan listenerWithSpan = new MLAgentTracer.ListenerWithSpan(listener, span);
+
+        assertEquals(listener, listenerWithSpan.listener());
+        assertEquals(span, listenerWithSpan.span());
+    }
+
+    /**
+     * Tests resetForTest method.
+     */
+    @Test
+    public void testResetForTest() {
+        // First initialize
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        
+        // Verify instance exists
+        assertNotNull(MLAgentTracer.getInstance());
+        
+        // Reset for test
+        MLAgentTracer.resetForTest();
+        
+        // Verify instance is null
+        assertThrows(IllegalStateException.class, () -> MLAgentTracer.getInstance());
     }
 }
