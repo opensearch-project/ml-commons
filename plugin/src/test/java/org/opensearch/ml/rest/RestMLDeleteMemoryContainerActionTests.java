@@ -21,6 +21,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -58,6 +59,7 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         restMLDeleteMemoryContainerAction = new RestMLDeleteMemoryContainerAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -143,6 +145,19 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(mlMemoryContainerDeleteRequest);
         assertEquals("memory_container_id", mlMemoryContainerDeleteRequest.getMemoryContainerId());
         assertNull(mlMemoryContainerDeleteRequest.getTenantId());
+    }
+
+    public void testPrepareRequestWithAgenticMemoryDisabled() throws Exception {
+        // Disable agentic memory feature
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        RestRequest request = getRestRequest("memory_container_id", "tenant_id");
+
+        // Expect OpenSearchStatusException when feature is disabled
+        thrown.expect(OpenSearchStatusException.class);
+        thrown.expectMessage("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled");
+
+        restMLDeleteMemoryContainerAction.handleRequest(request, channel, client);
     }
 
     public void testActionNameConstant() {
