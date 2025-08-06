@@ -25,7 +25,6 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -66,6 +65,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -218,6 +218,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 return modelCacheMissForModelIds;
             });
             if (response.getNodes().isEmpty() || modelNotFoundInNodesCache) {
+                log.warn("No nodes service these models, performing manual `UNDEPLOY` write to model index");
                 bulkSetModelIndexToUndeploy(modelIds, tenantId, listener, response);
                 return;
             }
@@ -227,10 +228,10 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     }
 
     private void bulkSetModelIndexToUndeploy(
-            String[] modelIds,
-            String tenantId,
-            ActionListener<MLUndeployModelsResponse> listener,
-            MLUndeployModelNodesResponse mlUndeployModelNodesResponse
+        String[] modelIds,
+        String tenantId,
+        ActionListener<MLUndeployModelsResponse> listener,
+        MLUndeployModelNodesResponse mlUndeployModelNodesResponse
     ) {
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().globalIndex(ML_MODEL_INDEX).build();
 
@@ -245,11 +246,11 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
             updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
 
             UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
-                    .builder()
-                    .id(modelId)
-                    .tenantId(tenantId)
-                    .dataObject(updateDocument)
-                    .build();
+                .builder()
+                .id(modelId)
+                .tenantId(tenantId)
+                .dataObject(updateDocument)
+                .build();
             bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         }
 
@@ -263,12 +264,12 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 listenerWithContextRestoration.onResponse(new MLUndeployModelsResponse(mlUndeployModelNodesResponse));
             }, e -> {
                 String modelsNotFoundMessage = String
-                        .format("Failed to set the following modelId(s) to UNDEPLOY in index: %s", Arrays.toString(modelIds));
+                    .format("Failed to set the following modelId(s) to UNDEPLOY in index: %s", Arrays.toString(modelIds));
                 log.error(modelsNotFoundMessage, e);
 
                 OpenSearchStatusException exception = new OpenSearchStatusException(
-                        modelsNotFoundMessage + e.getMessage(),
-                        RestStatus.INTERNAL_SERVER_ERROR
+                    modelsNotFoundMessage + e.getMessage(),
+                    RestStatus.INTERNAL_SERVER_ERROR
                 );
                 listenerWithContextRestoration.onFailure(exception);
             });
@@ -283,19 +284,24 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 try {
                     BulkResponse bulkResponse = BulkResponse.fromXContent(response.parser());
                     log
-                            .info(
-                                    "Executed {} bulk operations with {} failures, Took: {}",
-                                    bulkResponse.getItems().length,
-                                    bulkResponse.hasFailures()
-                                            ? Arrays.stream(bulkResponse.getItems()).filter(BulkItemResponse::isFailed).count()
-                                            : 0,
-                                    bulkResponse.getTook()
-                            );
-                    List<String> unemployedModelIds = Arrays.stream(bulkResponse.getItems())
-                            .filter(bulkItemResponse -> !bulkItemResponse.isFailed())
-                            .map(BulkItemResponse::getId)
-                            .collect(Collectors.toList());
-                    log.debug("Successfully set the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(unemployedModelIds.toArray()));
+                        .info(
+                            "Executed {} bulk operations with {} failures, Took: {}",
+                            bulkResponse.getItems().length,
+                            bulkResponse.hasFailures()
+                                ? Arrays.stream(bulkResponse.getItems()).filter(BulkItemResponse::isFailed).count()
+                                : 0,
+                            bulkResponse.getTook()
+                        );
+                    List<String> unemployedModelIds = Arrays
+                        .stream(bulkResponse.getItems())
+                        .filter(bulkItemResponse -> !bulkItemResponse.isFailed())
+                        .map(BulkItemResponse::getId)
+                        .collect(Collectors.toList());
+                    log
+                        .debug(
+                            "Successfully set the following modelId(s) to UNDEPLOY in index: {}",
+                            Arrays.toString(unemployedModelIds.toArray())
+                        );
 
                     bulkResponseListener.onResponse(bulkResponse);
                 } catch (Exception e) {
