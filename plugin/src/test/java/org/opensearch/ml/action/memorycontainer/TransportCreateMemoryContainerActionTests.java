@@ -25,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
@@ -38,6 +39,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
@@ -160,6 +162,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Setup ML feature settings
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
 
         // Create action
         action = new TransportCreateMemoryContainerAction(
@@ -1384,6 +1387,23 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Verify that no model validation was called since both LLM and embedding model IDs are null
         verify(mlModelManager, never()).getModel(anyString(), any());
+    }
+
+    public void testDoExecuteWithAgenticMemoryDisabled() throws InterruptedException {
+        // Disable agentic memory feature
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        // Execute
+        action.doExecute(task, request, actionListener);
+
+        // Verify failure response due to feature being disabled
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertNotNull(exception);
+        assertTrue(exception instanceof OpenSearchStatusException);
+        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
+        assertEquals(RestStatus.FORBIDDEN, statusException.status());
+        assertEquals("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled", exception.getMessage());
     }
 
     public void testDoExecuteWithSemanticStorageEnabledButNoLlmModel() throws InterruptedException {

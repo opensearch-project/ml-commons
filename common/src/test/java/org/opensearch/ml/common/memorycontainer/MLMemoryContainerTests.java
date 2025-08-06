@@ -294,7 +294,7 @@ public class MLMemoryContainerTests {
         assertEquals(FunctionName.TEXT_EMBEDDING, parsedContainer.getMemoryStorageConfig().getEmbeddingModelType());
         assertEquals("test-model", parsedContainer.getMemoryStorageConfig().getEmbeddingModelId());
         assertEquals(Integer.valueOf(512), parsedContainer.getMemoryStorageConfig().getDimension());
-        assertEquals(Integer.valueOf(5), parsedContainer.getMemoryStorageConfig().getMaxInferSize());
+        assertNull(parsedContainer.getMemoryStorageConfig().getMaxInferSize()); // No llmModelId, so maxInferSize is null
     }
 
     @Test

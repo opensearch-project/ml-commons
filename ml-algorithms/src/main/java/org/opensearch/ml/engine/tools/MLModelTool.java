@@ -67,6 +67,10 @@ public class MLModelTool implements WithModelTool {
     private String responseField;
 
     public MLModelTool(Client client, String modelId, String responseField) {
+        if (modelId == null || modelId.isBlank()) {
+            throw new IllegalArgumentException("Model ID can't be null or empty");
+        }
+
         this.client = client;
         this.modelId = modelId;
         this.responseField = responseField;
@@ -89,27 +93,32 @@ public class MLModelTool implements WithModelTool {
 
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
-        Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        String tenantId = null;
-        if (parameters != null) {
-            tenantId = parameters.get(TENANT_ID_FIELD);
-        }
+        try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+            String tenantId = null;
+            if (parameters != null) {
+                tenantId = parameters.get(TENANT_ID_FIELD);
+            }
 
-        ActionRequest request = MLPredictionTaskRequest
-            .builder()
-            .modelId(modelId)
-            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build())
-            .tenantId(tenantId)
-            .build();
-        client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
-            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
-            modelTensorOutput.getMlModelOutputs();
-            listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
-        }, e -> {
-            log.error("Failed to run model {}", modelId, e);
+            ActionRequest request = MLPredictionTaskRequest
+                .builder()
+                .modelId(modelId)
+                .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build())
+                .tenantId(tenantId)
+                .build();
+            client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
+                ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
+                modelTensorOutput.getMlModelOutputs();
+                listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+            }, e -> {
+                log.error("Failed to run model {}", modelId, e);
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to run MLModelTool for model: {}", modelId, e);
             listener.onFailure(e);
-        }));
+        }
     }
 
     @Override
@@ -134,10 +143,7 @@ public class MLModelTool implements WithModelTool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
-            return false;
-        }
-        return true;
+        return parameters != null && !parameters.isEmpty();
     }
 
     public static class Factory implements WithModelTool.Factory<MLModelTool> {

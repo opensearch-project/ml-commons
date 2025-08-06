@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
@@ -76,6 +77,7 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                             ML_COMMONS_EXECUTE_TOOL_ENABLED,
                             ML_COMMONS_AGENTIC_SEARCH_ENABLED,
+                            ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_MCP_CONNECTOR_ENABLED
                         )
                 )

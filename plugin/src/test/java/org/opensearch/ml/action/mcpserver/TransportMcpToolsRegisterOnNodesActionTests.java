@@ -149,7 +149,9 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     @Test(expected = FailedNodeException.class)
     public void testNodeOperation_OnError() {
         List<McpToolRegisterInput> mcpTools = List
-            .of(new McpToolRegisterInput("AgentTool", "AgentTool", "test agent tool", null, null, null, null));
+            .of(
+                new McpToolRegisterInput("AgentTool", "AgentTool", "test agent tool", Map.of("agent_id", "test_agent_id"), null, null, null)
+            );
         McpServerFeatures.AsyncToolSpecification specification = mcpToolsHelper.createToolSpecification(mcpTools.get(0));
         McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(specification).subscribe();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);

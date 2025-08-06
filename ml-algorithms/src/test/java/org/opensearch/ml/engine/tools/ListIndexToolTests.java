@@ -324,4 +324,17 @@ public class ListIndexToolTests {
         Tool.Factory<ListIndexTool> factory = ListIndexTool.Factory.getInstance();
         assert factory.getDefaultVersion() == null;
     }
+
+    @Test
+    public void test_run_withGeneralException() {
+        ListIndexTool tool = new ListIndexTool(null, clusterService);
+        ActionListener<String> listener = mock(ActionListener.class);
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+
+        Map<String, String> parameters = createParameters("[\"index-1\"]", "true", "10", "true");
+        tool.run(parameters, listener);
+
+        verify(listener).onFailure(captor.capture());
+        assert captor.getValue() instanceof Exception;
+    }
 }
