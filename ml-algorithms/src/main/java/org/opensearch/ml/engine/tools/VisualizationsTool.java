@@ -129,6 +129,7 @@ public class VisualizationsTool implements Tool {
             });
         } catch (Exception e) {
             log.error("Failed to run VisualizationsTool", e);
+            listener.onFailure(e);
         }
     }
 

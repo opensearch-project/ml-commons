@@ -227,4 +227,14 @@ public class MLModelToolTests {
     public void testToolWithFailure() {
         assertThrows(IllegalArgumentException.class, () -> MLModelTool.Factory.getInstance().create(Collections.emptyMap()));
     }
+
+    @Test
+    public void testToolWithNullModelId() {
+        assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, null, "response"));
+    }
+
+    @Test
+    public void testToolWithBlankModelId() {
+        assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, "", "response"));
+    }
 }

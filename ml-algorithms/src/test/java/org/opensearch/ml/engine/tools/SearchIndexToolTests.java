@@ -229,6 +229,29 @@ public class SearchIndexToolTests {
         Map<String, String> parameters = Map.of("input", inputString);
         ActionListener<String> listener = mock(ActionListener.class);
         mockedSearchIndexTool.run(parameters, listener);
+        ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argument.capture());
+        assertEquals(
+            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
+            argument.getValue().getMessage()
+        );
+        Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
+        Mockito.verify(client, Mockito.never()).search(any(), any());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithEmptyIndex() {
+        String inputString = "{\"query\": {\"match_all\": {}}}";
+        Map<String, String> parameters = Map.of("input", inputString);
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+        ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argument.capture());
+        assertEquals(
+            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
+            argument.getValue().getMessage()
+        );
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
         Mockito.verify(client, Mockito.never()).search(any(), any());
     }

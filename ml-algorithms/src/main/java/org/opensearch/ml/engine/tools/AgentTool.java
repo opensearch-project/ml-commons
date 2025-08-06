@@ -37,6 +37,7 @@ public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
     private final Client client;
 
+    @Setter
     private String agentId;
     @Setter
     @Getter
