@@ -161,6 +161,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     listener.onFailure(e);
                 }), memory, memory.getConversationId(), parentInteractionId, agentTaskSpan);
             }, e -> {
+                log.error("Failed to get chat history", e);
                 MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to get chat history", e);
                 listener.onFailure(e);
             }), messageHistoryLimit);
@@ -199,7 +200,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
 
         MLMemorySpec memorySpec = mlAgent.getMemory();
-
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);

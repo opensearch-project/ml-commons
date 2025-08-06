@@ -797,7 +797,7 @@ public class MLConversationalFlowAgentRunnerTest {
         };
 
         // This should handle the exception gracefully
-        mlConversationalFlowAgentRunner.updateSpanWithTool(mockSpan, problematicOutput, "test question");
+        MLAgentTracer.updateSpanWithTool(mockSpan, problematicOutput, "test question");
 
         // Verify that the span was marked with error and ended
         verify(mockSpan).setError(any(RuntimeException.class));

@@ -182,53 +182,42 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                 }, e -> {
+                    log.error("Failed to run flow agent", e);
                     MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e);
                     listener.onFailure(e);
                 });
                 previousStepListener = nextStepListener;
             }
         }
-        if (toolSpecs.size() == 1) {
-            MLToolSpec toolSpec = toolSpecs.get(0);
-            Span toolCallSpan = MLAgentTracer
-                .getInstance()
-                .startConversationalToolCallSpan(
-                    params.get(MLAgentExecutor.QUESTION),
-                    0,
-                    toolSpec.getType(),
-                    toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
-                    agentTaskSpan
-                );
 
+        MLToolSpec toolSpec = toolSpecs.get(0);
+        Span toolCallSpan = MLAgentTracer
+            .getInstance()
+            .startConversationalToolCallSpan(
+                params.get(MLAgentExecutor.QUESTION),
+                0,
+                toolSpec.getType(),
+                toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
+                agentTaskSpan
+            );
+
+        if (toolSpecs.size() == 1) {
             firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
                 MLAgentTracer.updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
                 MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                 listener.onResponse(firstToolOutput);
             }, e -> {
-                toolCallSpan.setError(e);
-                MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run first tool", e);
                 MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
                 listener.onFailure(e);
             }));
         } else {
-            MLToolSpec toolSpec = toolSpecs.get(0);
-            Span toolCallSpan = MLAgentTracer
-                .getInstance()
-                .startConversationalToolCallSpan(
-                    params.get(MLAgentExecutor.QUESTION),
-                    0,
-                    toolSpec.getType(),
-                    toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
-                    agentTaskSpan
-                );
-
             final StepListener<Object> finalFirstStepListener = firstStepListener;
             firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
                 MLAgentTracer.updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
                 finalFirstStepListener.onResponse(firstToolOutput);
             }, e -> {
-                toolCallSpan.setError(e);
-                MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run first tool", e);
                 MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
                 finalFirstStepListener.onFailure(e);
             }));
