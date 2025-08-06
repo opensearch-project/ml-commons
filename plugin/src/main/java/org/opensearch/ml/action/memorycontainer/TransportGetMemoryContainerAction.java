@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -82,6 +83,11 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLMemoryContainerGetResponse> actionListener) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
+
         MLMemoryContainerGetRequest mlMemoryContainerGetRequest = MLMemoryContainerGetRequest.fromActionRequest(request);
         String memoryContainerId = mlMemoryContainerGetRequest.getMemoryContainerId();
         String tenantId = mlMemoryContainerGetRequest.getTenantId();

@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BASE_MEMORY_CONTAINERS_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
@@ -14,6 +15,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetRequest;
@@ -54,6 +57,9 @@ public class RestMLGetMemoryContainerAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
         MLMemoryContainerGetRequest mlMemoryContainerGetRequest = getRequest(request);
         return channel -> client
             .execute(MLMemoryContainerGetAction.INSTANCE, mlMemoryContainerGetRequest, new RestToXContentListener<>(channel));

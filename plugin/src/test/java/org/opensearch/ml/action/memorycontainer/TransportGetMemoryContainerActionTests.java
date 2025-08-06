@@ -135,6 +135,7 @@ public class TransportGetMemoryContainerActionTests extends OpenSearchTestCase {
 
         // Setup ML feature settings
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
 
         // Create action
         action = new TransportGetMemoryContainerAction(
@@ -708,5 +709,25 @@ public class TransportGetMemoryContainerActionTests extends OpenSearchTestCase {
             + "\"last_updated_time\":"
             + currentTimeEpoch
             + "}";
+    }
+
+    public void testDoExecuteWithAgenticMemoryDisabled() throws InterruptedException {
+        // Disable agentic memory feature
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        // Create request
+        MLMemoryContainerGetRequest request = new MLMemoryContainerGetRequest(MEMORY_CONTAINER_ID, TENANT_ID);
+
+        // Execute
+        action.doExecute(task, request, actionListener);
+
+        // Verify failure response due to feature being disabled
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertNotNull(exception);
+        assertTrue(exception instanceof OpenSearchStatusException);
+        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
+        assertEquals(RestStatus.FORBIDDEN, statusException.status());
+        assertEquals("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled", exception.getMessage());
     }
 }
