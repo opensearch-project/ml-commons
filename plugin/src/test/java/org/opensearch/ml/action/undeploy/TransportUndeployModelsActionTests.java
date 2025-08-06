@@ -7,37 +7,22 @@
 
 package org.opensearch.ml.action.undeploy;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
-import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.DocWriteRequest;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.service.ClusterService;
@@ -46,6 +31,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -62,10 +48,32 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
+import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 
 public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
@@ -135,6 +143,8 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
+        sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
+
         transportUndeployModelsAction = spy(
             new TransportUndeployModelsAction(
                 transportService,
@@ -217,11 +227,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
 
+        BulkResponse bulkResponse = getSuccessBulkResponse();
         // mock the bulk response that can be captured for inspecting the contents of the write to index
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
-            BulkResponse bulkResponse = mock(BulkResponse.class);
-            when(bulkResponse.hasFailures()).thenReturn(false);
             listener.onResponse(bulkResponse);
             return null;
         }).when(client).bulk(bulkRequestCaptor.capture(), any(ActionListener.class));
@@ -333,11 +342,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
+        BulkResponse bulkResponse = getSuccessBulkResponse();
         // Mock the client.bulk call
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
-            BulkResponse bulkResponse = mock(BulkResponse.class);
-            when(bulkResponse.hasFailures()).thenReturn(false);
             listener.onResponse(bulkResponse);
             return null;
         }).when(client).bulk(any(BulkRequest.class), any(ActionListener.class));
@@ -392,9 +400,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
 
+        BulkResponse bulkResponse = getSuccessBulkResponse();
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
-            listener.onResponse(mock(BulkResponse.class));
+            listener.onResponse(bulkResponse);
             return null;
         }).when(client).bulk(any(BulkRequest.class), any(ActionListener.class));
 
@@ -458,17 +467,18 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             listener.onResponse(response);
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
-        // Mock the client.bulk call
+
+        BulkResponse bulkResponse = getSuccessBulkResponse();
         doAnswer(invocation -> {
             ActionListener<BulkResponse> listener = invocation.getArgument(1);
-            BulkResponse bulkResponse = mock(BulkResponse.class);
-            when(bulkResponse.hasFailures()).thenReturn(false);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(BulkRequest.class), any(ActionListener.class));
+        }).when(client).bulk(any(), any());
 
         MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLUndeployModelsResponse.class));
+
         verify(actionListener).onResponse(any(MLUndeployModelsResponse.class));
         verify(client).bulk(any(BulkRequest.class), any(ActionListener.class));
     }
@@ -533,5 +543,18 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
         expectedException.expect(IllegalArgumentException.class);
         MLUndeployModelsRequest request = new MLUndeployModelsRequest(new String[] { "modelId1", "modelId2" }, nodeIds, null);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
+    }
+
+    private BulkResponse getSuccessBulkResponse() {
+        return new BulkResponse(
+                new BulkItemResponse[]{
+                        new BulkItemResponse(
+                                1,
+                                DocWriteRequest.OpType.UPDATE,
+                                new UpdateResponse(new ShardId(ML_MODEL_INDEX, "modelId123", 0), "id1", 1, 1, 1, DocWriteResponse.Result.UPDATED)
+                        )
+                },
+                100L
+        );
     }
 }
