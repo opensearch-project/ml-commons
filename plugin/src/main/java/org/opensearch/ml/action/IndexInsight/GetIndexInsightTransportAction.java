@@ -63,9 +63,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
             boolQueryBuilder.must(new TermQueryBuilder(INDEX_NAME_FIELD, indexName));
-            if (mlIndexInsightGetRequest.getTargetIndexInsight() != MLIndexInsightType.ALL) {
-                boolQueryBuilder.must(new TermQueryBuilder(TASK_TYPE_FIELD, mlIndexInsightGetRequest.getTargetIndexInsight().toString()));
-            }
+            boolQueryBuilder.must(new TermQueryBuilder(TASK_TYPE_FIELD, mlIndexInsightGetRequest.getTargetIndexInsight().toString()));
             searchSourceBuilder.query(boolQueryBuilder);
             searchRequest.source(searchSourceBuilder);
 
@@ -81,17 +79,13 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                             );
                         return;
                     }
-                    List<IndexInsight> indexInsights = new ArrayList<>();
-                    for (SearchHit hit : hits) {
-                        try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            IndexInsight indexInsight = IndexInsight.parse(parser);
-                            indexInsights.add(indexInsight);
-                        } catch (Exception e) {
-                            wrappedListener.onFailure(e);
-                        }
+                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hits[0].getSourceRef())) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        IndexInsight indexInsight = IndexInsight.parse(parser);
+                        wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(indexInsight).build());
+                    } catch (Exception e) {
+                        wrappedListener.onFailure(e);
                     }
-                    wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsights(indexInsights).build());
                 }, wrappedListener::onFailure));
 
             } catch (Exception e) {
