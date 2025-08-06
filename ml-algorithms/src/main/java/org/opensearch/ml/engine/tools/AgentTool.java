@@ -35,6 +35,7 @@ public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
     private final Client client;
 
+    @Setter
     private String agentId;
     @Setter
     @Getter
@@ -51,30 +52,41 @@ public class AgentTool implements Tool {
     private Map<String, Object> attributes;
 
     public AgentTool(Client client, String agentId) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new IllegalArgumentException("Agent ID cannot be null or empty");
+        }
+
         this.client = client;
         this.agentId = agentId;
     }
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
-        String tenantId = parameters.get(TENANT_ID_FIELD);
-        AgentMLInput agentMLInput = AgentMLInput
-            .AgentMLInputBuilder()
-            .agentId(agentId)
-            .tenantId(tenantId)
-            .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
-            .build();
-        ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
-        client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
-            ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
-            listener.onResponse((T) output);
-        }, e -> {
-            log.error("Failed to run agent " + agentId, e);
+        try {
+            if (agentId == null || agentId.isBlank()) {
+                throw new IllegalArgumentException("Agent ID not registered in tool");
+            }
+            Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
+            String tenantId = parameters.get(TENANT_ID_FIELD);
+            AgentMLInput agentMLInput = AgentMLInput
+                .AgentMLInputBuilder()
+                .agentId(agentId)
+                .tenantId(tenantId)
+                .functionName(FunctionName.AGENT)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
+                .build();
+            ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
+            client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
+                ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
+                listener.onResponse((T) output);
+            }, e -> {
+                log.error("Failed to run agent " + agentId, e);
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to run AgentTool with agent: {}", agentId, e);
             listener.onFailure(e);
-        }));
-
+        }
     }
 
     @Override
