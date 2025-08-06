@@ -10,10 +10,8 @@ import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
-import org.opensearch.ml.jobs.processors.MLIndexInsightJobProcessor;
 import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
@@ -60,9 +58,6 @@ public class MLJobRunner implements ScheduledJobRunner {
     @Setter
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Setter
-    private MLIndicesHandler mlIndicesHandler;
-
     private boolean initialized;
 
     @VisibleForTesting
@@ -76,8 +71,7 @@ public class MLJobRunner implements ScheduledJobRunner {
         final Client client,
         final SdkClient sdkClient,
         final ConnectorAccessControlHelper connectorAccessControlHelper,
-        final MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        final MLIndicesHandler mlIndicesHandler
+        final MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.clusterService = clusterService;
         this.threadPool = threadPool;
@@ -86,7 +80,6 @@ public class MLJobRunner implements ScheduledJobRunner {
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.initialized = true;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.mlIndicesHandler = mlIndicesHandler;
     }
 
     @Override
@@ -108,11 +101,6 @@ public class MLJobRunner implements ScheduledJobRunner {
                 break;
             case BATCH_TASK_UPDATE:
                 MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
-                break;
-            case INDEX_INSIGHT:
-                MLIndexInsightJobProcessor
-                    .getInstance(clusterService, client, threadPool, mlIndicesHandler)
-                    .process(jobParameter, jobExecutionContext);
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported job type " + jobParameter.getJobType());
