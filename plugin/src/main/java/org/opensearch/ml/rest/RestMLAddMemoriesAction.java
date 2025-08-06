@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParserUtils;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
@@ -54,18 +55,12 @@ public class RestMLAddMemoriesAction extends BaseRestHandler {
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
 
         XContentParser parser = request.contentParser();
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+        XContentParserUtils.ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser);
 
         // Set the container ID from the path
         mlAddMemoryInput.setMemoryContainerId(memoryContainerId);
 
         return new MLAddMemoriesRequest(mlAddMemoryInput);
-    }
-
-    private static void ensureExpectedToken(XContentParser.Token expected, XContentParser.Token actual, XContentParser parser) {
-        if (actual != expected) {
-            throw new IllegalArgumentException("Expected token [" + expected + "] but found [" + actual + "]");
-        }
     }
 }
