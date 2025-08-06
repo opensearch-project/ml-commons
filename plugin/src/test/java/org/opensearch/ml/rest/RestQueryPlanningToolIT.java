@@ -40,8 +40,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         + GITHUB_CI_AWS_REGION
         + "\",\n"
         + "      \"service_name\": \"bedrock\",\n"
-        + "      \"model\": \"us.anthropic.claude-3-7-sonnet-20250219-v1:0\",\n"
-        + "      \"system_prompt\":\"please help answer the user question. \"\n"
+        + "      \"model\": \"us.anthropic.claude-3-7-sonnet-20250219-v1:0\"\n"
         + "    },\n"
         + "    \"credential\": {\n"
         + "      \"access_key\":\" "
@@ -62,7 +61,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         + "        \"headers\": {\n"
         + "          \"content-type\": \"application/json\"\n"
         + "        },\n"
-        + "        \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"${parameters.system_prompt}\\\"}], \\\"messages\\\": [{\\\"role\\\":\\\"user\\\",\\\"content\\\":[{\\\"text\\\":\\\"${parameters.prompt}\\\"}]}]}\"\n"
+        + "        \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"${parameters.system_prompt}\\\"}], \\\"messages\\\": [{\\\"role\\\":\\\"user\\\",\\\"content\\\":[{\\\"text\\\":\\\"${parameters.query_text}\\\"}]}]}\"\n"
         + "      }\n"
         + "    ]\n"
         + "}";
