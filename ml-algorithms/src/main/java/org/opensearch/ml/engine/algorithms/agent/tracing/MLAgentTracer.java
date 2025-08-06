@@ -976,6 +976,26 @@ public class MLAgentTracer extends MLTracer {
     }
 
     /**
+     * Starts a conversational flow agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startConversationalFlowAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_CONV_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask, null, null));
+    }
+
+    /**
+     * Starts a flow agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startFlowAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask, null, null));
+    }
+
+    /**
      * Extracts token information from ModelTensorOutput using the robust provider-specific logic.
      * @param modelTensorOutput The model output to extract tokens from.
      * @param parameters The parameters used for the LLM call (for provider detection).

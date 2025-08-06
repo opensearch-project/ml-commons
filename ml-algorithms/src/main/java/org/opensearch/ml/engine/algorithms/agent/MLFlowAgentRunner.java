@@ -98,9 +98,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             StepListener<Object> previousStepListener = null;
             Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
             if (toolSpecs == null || toolSpecs.isEmpty()) {
-                MLAgentTracer
-                    .getInstance()
-                    .handleSpanError(agentTaskSpan, "no tool configured", new IllegalArgumentException("no tool configured"), listener);
+                MLAgentTracer.handleSpanError(agentTaskSpan, "no tool configured", new IllegalArgumentException("no tool configured"));
+                listener.onFailure(new IllegalArgumentException("no tool configured"));
                 return;
             }
 
@@ -145,14 +144,17 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                         if (finalI == toolSpecs.size()) {
                             agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
                             if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
-                                MLAgentTracer.getInstance().endSpanAndRespond(agentTaskSpan, flowAgentOutput, listener);
+                                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                                listener.onResponse(flowAgentOutput);
                             } else {
                                 ActionListener<UpdateResponse> updateListener = ActionListener.wrap(updateResponse -> {
                                     log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
-                                    MLAgentTracer.getInstance().endSpanAndRespond(agentTaskSpan, flowAgentOutput, listener);
+                                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                                    listener.onResponse(flowAgentOutput);
                                 }, e -> {
                                     log.error("Failed to update root interaction", e);
-                                    MLAgentTracer.getInstance().endSpanAndRespond(agentTaskSpan, flowAgentOutput, listener);
+                                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                                    listener.onResponse(flowAgentOutput);
                                 });
                                 updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
                             }
@@ -178,13 +180,13 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                             },
                                 e -> {
                                     MLAgentTracer
-                                        .getInstance()
-                                        .handleSpanError(toolCallSpan, "Failed to run next step", e, nextStepListener);
+                                        .handleSpanError(toolCallSpan, "Failed to run next step", e);
+                                    nextStepListener.onFailure(e);
                                 }
                             ));
                         }
 
-                    }, e -> { MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to run flow agent", e, listener); });
+                    }, e -> { MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e); listener.onFailure(e); });
                     previousStepListener = nextStepListener;
                 }
             }
@@ -202,11 +204,13 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
                 firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
                     updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
-                    MLAgentTracer.getInstance().endSpanAndRespond(agentTaskSpan, firstToolOutput, listener);
+                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                    listener.onResponse(firstToolOutput);
                 }, e -> {
                     toolCallSpan.setError(e);
                     MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                    MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to run first tool", e, listener);
+                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
+                    listener.onFailure(e);
                 }));
             } else {
                 MLToolSpec toolSpec = toolSpecs.get(0);
@@ -227,11 +231,13 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 }, e -> {
                     toolCallSpan.setError(e);
                     MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                    MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to run first tool", e, finalFirstStepListener);
+                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
+                    finalFirstStepListener.onFailure(e);
                 }));
             }
         } catch (Exception e) {
-            MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Error in MLFlowAgentRunner", e, listener);
+            MLAgentTracer.handleSpanError(agentTaskSpan, "Error in MLFlowAgentRunner", e);
+            listener.onFailure(e);
         }
     }
 

@@ -112,8 +112,12 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     mlAgent,
                     params,
                     ActionListener
-                        .wrap(result -> { MLAgentTracer.getInstance().endSpanAndRespond(agentTaskSpan, result, listener); }, e -> {
-                            MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to run flow agent", e, listener);
+                        .wrap(result -> { 
+                            MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                            listener.onResponse(result);
+                        }, e -> {
+                            MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e);
+                            listener.onFailure(e);
                         }),
                     null,
                     memoryId,
@@ -165,20 +169,25 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         mlAgent,
                         params,
                         ActionListener
-                            .wrap(result -> { MLAgentTracer.getInstance().endSpanAndRespond(agentTaskSpan, result, listener); }, e -> {
-                                MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to run flow agent", e, listener);
+                            .wrap(result -> { 
+                                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                                listener.onResponse(result);
+                            }, e -> {
+                                MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e);
+                                listener.onFailure(e);
                             }),
                         memory,
                         memory.getConversationId(),
                         parentInteractionId,
                         agentTaskSpan
                     );
-                }, e -> { MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to get chat history", e, listener); }),
+                }, e -> { MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to get chat history", e); listener.onFailure(e); }),
                     messageHistoryLimit
                 );
-            }, e -> { MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Failed to create memory", e, listener); }));
+            }, e -> { MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to create memory", e); listener.onFailure(e); }));
         } catch (Exception e) {
-            MLAgentTracer.getInstance().handleSpanError(agentTaskSpan, "Error in MLConversationalFlowAgentRunner", e, listener);
+            MLAgentTracer.handleSpanError(agentTaskSpan, "Error in MLConversationalFlowAgentRunner", e);
+            listener.onFailure(e);
         }
     }
 
@@ -436,7 +445,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             tool.run(getToolExecuteParams(toolSpec, params, tenantId), ActionListener.wrap(output -> {
                 updateSpanWithTool(toolCallSpan, output, params.get(QUESTION));
                 nextStepListener.onResponse(output);
-            }, e -> { MLAgentTracer.getInstance().handleSpanError(toolCallSpan, "Failed to run next step", e, nextStepListener); }));
+            }, e -> { MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run next step", e); nextStepListener.onFailure(e); }));
         }
     }
 
