@@ -108,6 +108,7 @@ import org.opensearch.ml.action.memorycontainer.TransportDeleteMemoryContainerAc
 import org.opensearch.ml.action.memorycontainer.TransportGetMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportGetMemoryAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction;
 import org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction;
@@ -201,6 +202,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDelet
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -313,6 +315,7 @@ import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetControllerAction;
+import org.opensearch.ml.rest.RestMLGetMemoryAction;
 import org.opensearch.ml.rest.RestMLGetMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
@@ -534,6 +537,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLSearchMemoriesAction.INSTANCE, TransportSearchMemoriesAction.class),
                 new ActionHandler<>(MLDeleteMemoryAction.INSTANCE, TransportDeleteMemoryAction.class),
                 new ActionHandler<>(MLUpdateMemoryAction.INSTANCE, TransportUpdateMemoryAction.class),
+                new ActionHandler<>(MLGetMemoryAction.INSTANCE, TransportGetMemoryAction.class),
                 new ActionHandler<>(MLRegisterAgentAction.INSTANCE, TransportRegisterAgentAction.class),
                 new ActionHandler<>(MLSearchAgentAction.INSTANCE, TransportSearchAgentAction.class),
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
@@ -940,6 +944,7 @@ public class MachineLearningPlugin extends Plugin
         RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction(
             mlFeatureEnabledSetting
         );
+        RestMLGetMemoryAction restMLGetMemoryAction = new RestMLGetMemoryAction();
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
@@ -1013,6 +1018,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLSearchMemoriesAction,
                 restMLDeleteMemoryAction,
                 restMLUpdateMemoryAction,
+                restMLGetMemoryAction,
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,

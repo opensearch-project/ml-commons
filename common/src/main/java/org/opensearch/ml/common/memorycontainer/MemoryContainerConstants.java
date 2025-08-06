@@ -72,6 +72,7 @@ public class MemoryContainerConstants {
     public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/_search";
     public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
 
     // Memory types are defined in MemoryType enum
 
