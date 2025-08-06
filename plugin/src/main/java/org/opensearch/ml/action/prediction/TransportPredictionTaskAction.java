@@ -163,7 +163,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         if (FunctionName.isDLModel(functionName)) {
                                             if (modelCacheHelper.getRateLimiter(modelId) != null
                                                 && !modelCacheHelper.getRateLimiter(modelId).request()) {
-                                                MLConnectorTracer
+                                                MLModelTracer
                                                     .handleSpanError(
                                                         predictSpan,
                                                         "Request is throttled at model level.",
@@ -182,7 +182,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             } else if (userInfo != null
                                                 && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
                                                 && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
-                                                MLConnectorTracer
+                                                MLModelTracer
                                                     .handleSpanError(
                                                         predictSpan,
                                                         "Request is throttled at user level.",
@@ -235,7 +235,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             )
                                         );
                                 }
-                                MLConnectorTracer.getInstance().endSpan(predictSpan);
+                                MLModelTracer.getInstance().endSpan(predictSpan);
                             })
                         );
                 }
