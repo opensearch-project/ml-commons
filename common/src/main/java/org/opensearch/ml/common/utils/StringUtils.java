@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 import java.nio.ByteBuffer;
@@ -16,6 +17,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -40,6 +42,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
@@ -109,6 +112,30 @@ public class StringUtils {
         } catch (JsonSyntaxException ex) {
             return false;
         }
+    }
+
+    /**
+     * Ensures that a string is properly JSON escaped.
+     *
+     * <p>This method examines the input string and determines whether it already represents
+     * valid JSON content. If the input is valid JSON, it is returned unchanged. Otherwise,
+     * the input is treated as a plain string and escaped according to JSON string literal
+     * rules.</p>
+     *
+     * <p>Examples:</p>
+     * <pre>
+     *   prepareJsonValue("hello")        → "\"hello\""
+     *   prepareJsonValue("\"hello\"")        → "\\\"hello\\\""
+     *   prepareJsonValue("{\"key\":123}") → {\"key\":123} (valid JSON object, unchanged)
+     * </pre>
+     * @param input
+     * @return
+     */
+    public static String prepareJsonValue(String input) {
+        if (isJson(input)) {
+            return input;
+        }
+        return escapeJson(input);
     }
 
     public static String toUTF8(String rawString) {
@@ -552,4 +579,22 @@ public class StringUtils {
         return SAFE_INPUT_PATTERN.matcher(value).matches();
     }
 
+    /**
+     * Parses a JSON array string into a List of Strings.
+     *
+     * @param jsonArrayString JSON array string to parse (e.g., "[\"item1\", \"item2\"]")
+     * @return List of strings parsed from the JSON array, or an empty list if the input is
+     *         null, empty, or invalid JSON
+     */
+    public static List<String> parseStringArrayToList(String jsonArrayString) {
+        if (jsonArrayString == null || jsonArrayString.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            return gson.fromJson(jsonArrayString, TypeToken.getParameterized(List.class, String.class).getType());
+        } catch (JsonSyntaxException e) {
+            log.error("Failed to parse JSON array string: {}", jsonArrayString, e);
+            return Collections.emptyList();
+        }
+    }
 }

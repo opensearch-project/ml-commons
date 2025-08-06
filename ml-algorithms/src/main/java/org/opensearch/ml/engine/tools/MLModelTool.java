@@ -92,8 +92,9 @@ public class MLModelTool implements WithModelTool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
             String tenantId = null;
             if (parameters != null) {

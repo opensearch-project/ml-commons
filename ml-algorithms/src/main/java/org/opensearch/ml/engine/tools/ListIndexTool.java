@@ -125,10 +125,11 @@ public class ListIndexTool implements Tool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         // TODO: This logic exactly matches the OpenSearch _list/indices REST action. If code at
         // o.o.rest/action/list/RestIndicesListAction.java changes those changes need to be reflected here
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("indices"))) {
                 indexList = parameters.containsKey("indices")

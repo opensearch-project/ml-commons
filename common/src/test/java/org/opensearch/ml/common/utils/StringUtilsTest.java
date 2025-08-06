@@ -7,17 +7,13 @@ package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
-import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
-import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
-import static org.opensearch.ml.common.utils.StringUtils.isValidJSONPath;
-import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
-import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
-import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -190,7 +186,7 @@ public class StringUtilsTest {
     public void addDefaultMethod_Escape() {
         String input = "return escape(\"abc\n123\");";
         String result = StringUtils.addDefaultMethod(input);
-        Assert.assertNotEquals(input, result);
+        assertNotEquals(input, result);
         assertTrue(result.startsWith(StringUtils.DEFAULT_ESCAPE_FUNCTION));
     }
 
@@ -856,6 +852,101 @@ public class StringUtilsTest {
         ActionRequestValidationException exception = StringUtils.validateFields(fields);
         assertNotNull(exception);
         assertTrue(exception.getMessage().contains("Field1"));
+    }
+
+    @Test
+    public void prepareJsonValue_returnsRawIfJson() {
+        String json = "{\"key\": 123}";
+        String result = StringUtils.prepareJsonValue(json);
+        assertSame(json, result);  // branch where isJson(input)==true
+    }
+
+    @Test
+    public void prepareJsonValue_escapesBadCharsOtherwise() {
+        String input = "Tom & Jerry \"<script>";
+        String escaped = StringUtils.prepareJsonValue(input);
+        assertNotEquals(input, escaped);
+        assertFalse(StringUtils.isJson(escaped));
+        assertEquals("Tom & Jerry \\\"<script>", escaped);
+    }
+
+    @Test
+    public void testParseStringArrayToList_validJsonArray() {
+        // Arrange
+        String jsonArray = "[\"apple\", \"banana\", \"cherry\"]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertEquals(Arrays.asList("apple", "banana", "cherry"), result);
+    }
+
+    @Test
+    public void testParseStringArrayToList_emptyArray() {
+        // Arrange
+        String jsonArray = "[]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testParseStringArrayToList_withSpecialCharacters() {
+        // Arrange
+        String jsonArray = "[\"hello\", \"world!\", \"special: @#$%^&*()\"]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertEquals(Arrays.asList("hello", "world!", "special: @#$%^&*()"), result);
+    }
+
+    @Test
+    public void testParseStringArrayToList_withNullElement() {
+        // Arrange
+        String jsonArray = "[\"first\", null, \"third\"]";
+
+        // Act
+        List<String> result = parseStringArrayToList(jsonArray);
+
+        // Assert
+        assertEquals(3, result.size());
+        assertEquals("first", result.get(0));
+        assertNull(result.get(1));
+        assertEquals("third", result.get(2));
+    }
+
+    @Test
+    public void testParseStringArrayToList_jsonWithTrailingComma() {
+        // Arrange
+        String jsonWithTrailingComma = "[\"apple\", \"banana\",]"; // Invalid trailing comma
+
+        List<String> result = parseStringArrayToList(jsonWithTrailingComma);
+
+        // Assert
+        assertEquals(Arrays.asList("apple", "banana", null), result);
+        assertEquals(3, result.size());
+    }
+
+    @Test
+    public void testParseStringArrayToList_nonArrayJson() {
+        // Arrange
+        String nonArrayJson = "{\"key\": \"value\"}";
+
+        // Act & Assert
+        List<String> array = parseStringArrayToList(nonArrayJson);
+        assertEquals(0, array.size());
+    }
+
+    @Test
+    public void testParseStringArrayToList_Null() {
+        List<String> array = parseStringArrayToList(null);
+        assertEquals(0, array.size());
     }
 
 }

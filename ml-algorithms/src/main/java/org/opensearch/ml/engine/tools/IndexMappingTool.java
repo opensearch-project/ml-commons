@@ -91,8 +91,9 @@ public class IndexMappingTool implements Tool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("index"))) {
                 try {

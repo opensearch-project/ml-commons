@@ -6,9 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
@@ -68,8 +66,7 @@ public class AgentTool implements Tool {
             if (agentId == null || agentId.isBlank()) {
                 throw new IllegalArgumentException("Agent ID not registered in tool");
             }
-
-            Map<String, String> extractedParameters = extractInputParameters(parameters);
+            Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
             String tenantId = parameters.get(TENANT_ID_FIELD);
             AgentMLInput agentMLInput = AgentMLInput
                 .AgentMLInputBuilder()
@@ -83,7 +80,7 @@ public class AgentTool implements Tool {
                 ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
                 listener.onResponse((T) output);
             }, e -> {
-                log.error("Failed to run agent: {}", agentId, e);
+                log.error("Failed to run agent " + agentId, e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
@@ -158,20 +155,5 @@ public class AgentTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
-    }
-
-    private Map<String, String> extractInputParameters(Map<String, String> parameters) {
-        Map<String, String> extractedParameters = new HashMap<>();
-        extractedParameters.putAll(parameters);
-        if (parameters.containsKey("input")) {
-            try {
-                Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
-                extractedParameters.putAll(chatParameters);
-            } catch (Exception exception) {
-                log.error("Fail to extract parameters from key 'input'", exception);
-            }
-        }
-
-        return extractedParameters;
     }
 }
