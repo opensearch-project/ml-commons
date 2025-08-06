@@ -10,7 +10,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -29,6 +28,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_D
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
+import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -81,6 +81,7 @@ import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -646,10 +647,6 @@ public class AgentUtils {
         return messageHistoryLimitStr != null ? Integer.parseInt(messageHistoryLimitStr) : LAST_N_INTERACTIONS;
     }
 
-    public static String getToolName(MLToolSpec toolSpec) {
-        return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
-    }
-
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = new ArrayList<>();
@@ -841,7 +838,8 @@ public class AgentUtils {
             return;
         }
         for (MLToolSpec toolSpec : toolSpecs) {
-            Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
+            Map<String, String> toolParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+            Tool tool = ToolUtils.createTool(toolFactories, toolParams, toolSpec);
             tools.put(tool.getName(), tool);
             if (toolSpec.getAttributes() != null) {
                 if (tool.getAttributes() == null) {
@@ -856,55 +854,6 @@ public class AgentUtils {
         }
     }
 
-    public static Tool createTool(
-        Map<String, Tool.Factory> toolFactories,
-        Map<String, String> params,
-        MLToolSpec toolSpec,
-        String tenantId
-    ) {
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-        executeParams.put(TENANT_ID_FIELD, tenantId);
-        for (String key : params.keySet()) {
-            String toolNamePrefix = getToolName(toolSpec) + ".";
-            if (key.startsWith(toolNamePrefix)) {
-                executeParams.put(key.replace(toolNamePrefix, ""), params.get(key));
-            }
-        }
-        Map<String, Object> toolParams = new HashMap<>();
-        toolParams.putAll(executeParams);
-        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
-        if (runtimeResources != null) {
-            toolParams.putAll(runtimeResources);
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        String toolName = getToolName(toolSpec);
-        tool.setName(toolName);
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        if (params.containsKey(toolName + ".description")) {
-            tool.setDescription(params.get(toolName + ".description"));
-        }
-
-        return tool;
-    }
-
-    public static List<String> getToolNames(Map<String, Tool> tools) {
-        final List<String> inputTools = new ArrayList<>();
-        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = entry.getValue().getName();
-            inputTools.add(toolName);
-        }
-        return inputTools;
-    }
-
     public static Map<String, String> constructToolParams(
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
@@ -916,8 +865,15 @@ public class AgentUtils {
         Map<String, String> toolParams = new HashMap<>();
         Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
         Map<String, String> toolSpecConfigMap = toolSpecMap.get(action).getConfigMap();
+        MLToolSpec toolSpec = toolSpecMap.get(action);
         if (toolSpecParams != null) {
             toolParams.putAll(toolSpecParams);
+            for (String key : toolSpecParams.keySet()) {
+                String toolNamePrefix = getToolName(toolSpec) + ".";
+                if (key.startsWith(toolNamePrefix)) {
+                    toolParams.put(key.replace(toolNamePrefix, ""), toolSpecParams.get(key));
+                }
+            }
         }
         if (toolSpecConfigMap != null) {
             toolParams.putAll(toolSpecConfigMap);
