@@ -1,9 +1,13 @@
 package org.opensearch.ml.common.indexInsight;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.search.SearchHit;
@@ -11,6 +15,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
+
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFieldNamesTypes;
 
 /**
  * Statistical Data Task: Collects sample documents from the target index for analysis.
@@ -77,8 +83,29 @@ public class StatisticalDataTask implements IndexInsightTask {
     public SearchHit[] getSampleDocuments() {
         return sampleDocuments;
     }
-    
+
+    private GetMappingsRequest buildGetMappingRequest(String indexName) {
+        String[] indices = new String[] { indexName };
+        GetMappingsRequest getMappingsRequest = new GetMappingsRequest();
+        getMappingsRequest.indices(indices);
+        return getMappingsRequest;
+    }
+
     private void collectSampleDocuments(String targetIndex, ActionListener<IndexInsight> listener) {
+        GetMappingsRequest getMappingsRequest = buildGetMappingRequest(indexName);
+        client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
+
+            Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
+            if (mappings.isEmpty()) {
+                throw new IllegalArgumentException("No matching mapping with index name: " + indexName);
+            }
+            String firstIndexName = (String) mappings.keySet().toArray()[0];
+            Map<String, String> fieldsToType = new HashMap<>();
+            extractFieldNamesTypes(mappings.get(firstIndexName).getSourceAsMap(), fieldsToType, "", false);
+
+
+                }, e -> {}));
+
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(5).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
