@@ -33,13 +33,13 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
     
     @Override
-    public void runTaskLogic(ActionListener<IndexInsight> listener) {
+    public void runTaskLogic(String targetIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-            collectSampleDocuments(listener);
+            collectSampleDocuments(targetIndex, listener);
         } catch (Exception e) {
             log.error("Failed to execute statistical data task for index {}", indexName, e);
-            saveFailedStatus();
+            saveFailedStatus(targetIndex);
             listener.onFailure(e);
         }
     }
@@ -78,7 +78,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return sampleDocuments;
     }
     
-    private void collectSampleDocuments(ActionListener<IndexInsight> listener) {
+    private void collectSampleDocuments(String targetIndex, ActionListener<IndexInsight> listener) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(5).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
@@ -88,10 +88,10 @@ public class StatisticalDataTask implements IndexInsightTask {
             log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
             
             String statisticalContent = generateStatisticalContent();
-            saveResult(statisticalContent, listener);
+            saveResult(statisticalContent, targetIndex, listener);
         }, e -> {
             log.error("Failed to collect sample documents for index: {}", indexName, e);
-            saveFailedStatus();
+            saveFailedStatus(targetIndex);
             listener.onFailure(e);
         }));
     }

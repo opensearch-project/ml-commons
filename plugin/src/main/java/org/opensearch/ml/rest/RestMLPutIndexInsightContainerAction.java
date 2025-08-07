@@ -2,17 +2,11 @@ package org.opensearch.ml.rest;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.settings.ClusterSettings;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
-import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -25,8 +19,6 @@ import java.util.Locale;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_INDEX_ID;
-import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 public class RestMLPutIndexInsightContainerAction extends BaseRestHandler {
