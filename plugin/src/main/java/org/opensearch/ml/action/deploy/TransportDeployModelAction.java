@@ -127,7 +127,6 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
         this.settings = settings;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
         clusterService

@@ -35,7 +35,6 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
         this.transportService = transportService;
         this.actionFilters = actionFilters;
         this.mlModelChunkUploader = mlModelChunkUploader;
-
     }
 
     @Override

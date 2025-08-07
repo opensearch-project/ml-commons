@@ -80,7 +80,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

@@ -140,7 +140,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             MLPredictionTaskAction.NAME,
                             client,
                             sdkClient,
-
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     wrappedListener

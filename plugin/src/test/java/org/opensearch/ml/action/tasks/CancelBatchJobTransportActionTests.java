@@ -113,9 +113,6 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
-    private MLResourceSharingExtension mlResourceSharingExtension;
-
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 

@@ -23,7 +23,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -68,7 +67,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final ActionFilters actionFilters;
     private Client client;
     final SdkClient sdkClient;
-    final Settings settings;
     private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
@@ -81,7 +79,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -93,14 +90,12 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         this.actionFilters = actionFilters;
         this.transportService = transportService;
         this.client = client;
-        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

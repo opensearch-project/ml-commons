@@ -56,7 +56,6 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         this.client = client;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
-
     }
 
     @Override

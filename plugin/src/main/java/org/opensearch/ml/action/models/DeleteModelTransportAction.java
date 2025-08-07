@@ -138,7 +138,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         isSafeDelete = ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK, it -> isSafeDelete = it);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

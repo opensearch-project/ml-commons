@@ -82,7 +82,6 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

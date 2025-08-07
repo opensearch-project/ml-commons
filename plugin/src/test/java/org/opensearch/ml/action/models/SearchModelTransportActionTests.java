@@ -114,7 +114,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
-        mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper, clusterService, Settings.EMPTY));
+        mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper, clusterService));
         searchModelTransportAction = new SearchModelTransportAction(
             transportService,
             actionFilters,

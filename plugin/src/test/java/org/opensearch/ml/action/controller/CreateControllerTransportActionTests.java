@@ -149,7 +149,6 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
                 actionFilters,
                 mlIndicesHandler,
                 client,
-                Settings.EMPTY,
                 clusterService,
                 modelAccessControlHelper,
                 mlModelCacheHelper,

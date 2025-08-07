@@ -79,7 +79,6 @@ public class MLModelGroupManager {
         try {
             String modelName = input.getName();
             User user = RestActionUtils.getUserContext(client);
-
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
                 validateUniqueModelGroupName(input.getName(), input.getTenantId(), ActionListener.wrap(modelGroups -> {
@@ -98,7 +97,6 @@ public class MLModelGroupManager {
                     } else {
                         MLModelGroup.MLModelGroupBuilder builder = MLModelGroup.builder();
                         MLModelGroup mlModelGroup;
-
                         // TODO: Remove security-related entries from MLModelGroup builder
                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(input, user);
@@ -106,9 +104,7 @@ public class MLModelGroupManager {
 
                             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                                 input.setBackendRoles(user.getBackendRoles());
-
                             }
-
                             mlModelGroup = builder
                                 .name(modelName)
                                 .description(input.getDescription())
@@ -120,7 +116,6 @@ public class MLModelGroupManager {
                                 .build();
                         } else {
                             validateSecurityDisabledOrModelAccessControlDisabled(input);
-
                             mlModelGroup = builder
                                 .name(modelName)
                                 .description(input.getDescription())
@@ -155,7 +150,6 @@ public class MLModelGroupManager {
                                                     indexResponse.getResult(),
                                                     indexResponse.getId()
                                                 );
-
                                             wrappedListener.onResponse(r.id());
                                         } catch (Exception e) {
                                             wrappedListener.onFailure(e);

@@ -140,7 +140,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     public void test_UndefinedOwner() throws IOException {
         getResponse = modelGroupBuilder(null, null, null);
         modelAccessControlHelper
-            .validateModelGroupAccess(null, mlFeatureEnabledSetting, null, null, "testGroupID", client, sdkClient, actionListener);
+            .validateModelGroupAccess(null, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -169,7 +169,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, null, "testGroupID", client, sdkClient, latchedActionListener);
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

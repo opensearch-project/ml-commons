@@ -84,7 +84,6 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

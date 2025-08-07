@@ -118,7 +118,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override
@@ -344,7 +343,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             MLUndeployModelsAction.NAME,
                             client,
                             sdkClient,
-
                             listener
                         );
                 }

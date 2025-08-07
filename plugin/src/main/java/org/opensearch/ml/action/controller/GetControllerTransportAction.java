@@ -72,7 +72,6 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

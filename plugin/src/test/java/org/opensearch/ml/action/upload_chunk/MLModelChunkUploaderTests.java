@@ -40,7 +40,6 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -77,9 +76,6 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
-
-    @Mock
-    ResourceSharingClient resourceSharingClient;
 
     @Before
     public void setup() throws IOException {

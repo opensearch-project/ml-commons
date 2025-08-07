@@ -58,7 +58,6 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

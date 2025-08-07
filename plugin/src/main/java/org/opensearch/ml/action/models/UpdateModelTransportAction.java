@@ -176,7 +176,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         MLUpdateModelAction.NAME,
                                         client,
                                         sdkClient,
-
                                         ActionListener.wrap(hasPermission -> {
                                             if (hasPermission) {
                                                 updateRemoteOrTextEmbeddingModel(
@@ -443,7 +442,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     newModelGroupId,
                     MLUpdateModelAction.NAME,
                     client,
-
                     ActionListener.wrap(hasNewModelGroupPermission -> {
                         if (hasNewModelGroupPermission) {
                             mlModelGroupManager

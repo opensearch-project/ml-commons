@@ -802,7 +802,7 @@ public class MachineLearningPlugin extends Plugin
         MLToolExecutor toolExecutor = new MLToolExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories);
         MLEngineClassLoader.register(FunctionName.TOOL, toolExecutor);
 
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService, settings);
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
             client,

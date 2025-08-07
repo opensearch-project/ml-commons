@@ -110,7 +110,6 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

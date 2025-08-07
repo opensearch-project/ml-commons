@@ -82,7 +82,6 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
     }
 
     @Override

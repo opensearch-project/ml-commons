@@ -375,7 +375,6 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             MLTaskGetAction.NAME,
                             client,
                             sdkClient,
-
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     actionListener
