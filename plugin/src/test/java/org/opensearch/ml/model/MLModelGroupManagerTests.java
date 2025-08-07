@@ -109,15 +109,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
         sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
         threadContext = new ThreadContext(settings);
-        mlModelGroupManager = new MLModelGroupManager(
-            mlIndicesHandler,
-            client,
-            settings,
-            sdkClient,
-            clusterService,
-            modelAccessControlHelper,
-            mlFeatureEnabledSetting
-        );
+        mlModelGroupManager = new MLModelGroupManager(mlIndicesHandler, client, sdkClient, clusterService, modelAccessControlHelper);
         assertNotNull(mlModelGroupManager);
         indexResponse = new IndexResponse(new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0), "model_group_ID", 1, 0, 2, true);
         // when(indexResponse.getId()).thenReturn("modelGroupID");

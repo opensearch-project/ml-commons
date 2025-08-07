@@ -214,7 +214,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLRegisterModelAction.NAME,
                 client,
                 sdkClient,
-
                 ActionListener.wrap(access -> {
                     if (access) {
                         doRegister(registerModelInput, listener);

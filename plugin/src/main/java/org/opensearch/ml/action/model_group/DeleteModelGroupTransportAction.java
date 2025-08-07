@@ -116,7 +116,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
-
                 ActionListener
                     .wrap(
                         hasAccess -> handleAccessValidation(hasAccess, modelGroupId, tenantId, listener),

@@ -122,17 +122,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     public void test_UndefinedModelGroupID() {
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                null,
-                mlFeatureEnabledSetting,
-                null,
-                null,
-                null,
-                client,
-                sdkClient,
-
-                actionListener
-            );
+            .validateModelGroupAccess(null, mlFeatureEnabledSetting, null, null, null, client, sdkClient, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -141,7 +131,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     // TODO Remove when all calls are migrated to SdkClient version
     public void test_UndefinedOwner_NoSdkClient() throws IOException {
         getResponse = modelGroupBuilder(null, null, null);
-        modelAccessControlHelper.validateModelGroupAccess(null, null, "testGroupID", client, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(null, "testGroupID", null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -150,17 +140,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     public void test_UndefinedOwner() throws IOException {
         getResponse = modelGroupBuilder(null, null, null);
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                null,
-                mlFeatureEnabledSetting,
-                null,
-                null,
-                "testGroupID",
-                client,
-                sdkClient,
-
-                actionListener
-            );
+            .validateModelGroupAccess(null, mlFeatureEnabledSetting, null, null, "testGroupID", client, sdkClient, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -189,17 +169,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                user,
-                mlFeatureEnabledSetting,
-                null,
-                null,
-                "testGroupID",
-                client,
-                sdkClient,
-
-                latchedActionListener
-            );
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, null, "testGroupID", client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -232,17 +202,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                user,
-                mlFeatureEnabledSetting,
-                null,
-                "testGroupID",
-                null,
-                client,
-                sdkClient,
-
-                latchedActionListener
-            );
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -275,17 +235,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                user,
-                mlFeatureEnabledSetting,
-                null,
-                "testGroupID",
-                null,
-                client,
-                sdkClient,
-
-                latchedActionListener
-            );
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -318,17 +268,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                user,
-                mlFeatureEnabledSetting,
-                null,
-                "testGroupID",
-                null,
-                client,
-                sdkClient,
-
-                latchedActionListener
-            );
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -361,17 +301,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(
-                user,
-                mlFeatureEnabledSetting,
-                null,
-                "testGroupID",
-                null,
-                client,
-                sdkClient,
-
-                latchedActionListener
-            );
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
