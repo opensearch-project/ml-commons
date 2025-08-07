@@ -33,10 +33,12 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -82,6 +84,9 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+
+        MLConnectorTracer.resetForTest();
+        MLConnectorTracer.initialize(NoopTracer.INSTANCE, mlFeatureEnabledSetting);
 
         ClusterState testState = new ClusterState(
             new ClusterName("clusterName"),

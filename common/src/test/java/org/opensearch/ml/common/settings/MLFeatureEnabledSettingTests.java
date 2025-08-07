@@ -49,7 +49,9 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED
+                    MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MODEL_TRACING_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -76,6 +78,8 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.agentic_memory_enabled", true)
             .put("plugins.ml_commons.tracing_enabled", true)
             .put("plugins.ml_commons.agent_tracing_enabled", true)
+            .put("plugins.ml_commons.connector_tracing_enabled", true)
+            .put("plugins.ml_commons.model_tracing_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -97,6 +101,8 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isAgenticMemoryEnabled());
         assertTrue(setting.isTracingEnabled());
         assertTrue(setting.isAgentTracingEnabled());
+        assertTrue(setting.isConnectorTracingEnabled());
+        assertTrue(setting.isModelTracingEnabled());
     }
 
     @Test
@@ -120,6 +126,8 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.agentic_memory_enabled", false)
             .put("plugins.ml_commons.tracing_enabled", false)
             .put("plugins.ml_commons.agent_tracing_enabled", false)
+            .put("plugins.ml_commons.connector_tracing_enabled", false)
+            .put("plugins.ml_commons.model_tracing_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -141,6 +149,8 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isAgenticMemoryEnabled());
         assertFalse(setting.isTracingEnabled());
         assertFalse(setting.isAgentTracingEnabled());
+        assertFalse(setting.isConnectorTracingEnabled());
+        assertFalse(setting.isModelTracingEnabled());
     }
 
     @Test

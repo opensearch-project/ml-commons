@@ -31,6 +31,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLModelTracer;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -41,6 +43,7 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -106,6 +109,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
+        Span predictSpan = MLModelTracer.startModelPredictSpan(modelId, null);
+        MLModelTracer.serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
         String tenantId = mlPredictionTaskRequest.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
@@ -118,8 +123,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         final User userInfo = user;
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<MLTaskResponse> spanWrappedListener = MLConnectorTracer.createSpanWrappedListener(predictSpan, listener);
+            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(spanWrappedListener, context::restore);
             MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
+
             ActionListener<MLModel> modelActionListener = new ActionListener<>() {
                 @Override
                 public void onResponse(MLModel mlModel) {
@@ -156,6 +163,15 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         if (FunctionName.isDLModel(functionName)) {
                                             if (modelCacheHelper.getRateLimiter(modelId) != null
                                                 && !modelCacheHelper.getRateLimiter(modelId).request()) {
+                                                MLModelTracer
+                                                    .handleSpanError(
+                                                        predictSpan,
+                                                        "Request is throttled at model level.",
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at model level.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
                                                 wrappedListener
                                                     .onFailure(
                                                         new OpenSearchStatusException(
@@ -166,6 +182,15 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             } else if (userInfo != null
                                                 && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
                                                 && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
+                                                MLModelTracer
+                                                    .handleSpanError(
+                                                        predictSpan,
+                                                        "Request is throttled at user level.",
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
                                                 wrappedListener
                                                     .onFailure(
                                                         new OpenSearchStatusException(
@@ -175,17 +200,18 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     );
                                             } else {
                                                 validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId, mlModel.getName());
                                             }
                                         } else {
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId, mlModel.getName());
                                         }
                                     }
                                 }
                             }, e -> {
                                 log.error("Failed to Validate Access for ModelId {}", modelId, e);
                                 if (e instanceof OpenSearchStatusException) {
+                                    predictSpan.setError(e);
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
@@ -194,10 +220,13 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             )
                                         );
                                 } else if (e instanceof MLResourceNotFoundException) {
+                                    predictSpan.setError(e);
                                     wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
                                 } else if (e instanceof CircuitBreakingException) {
+                                    predictSpan.setError(e);
                                     wrappedListener.onFailure(e);
                                 } else {
+                                    predictSpan.setError(e);
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
@@ -206,6 +235,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             )
                                         );
                                 }
+                                MLModelTracer.getInstance().endSpan(predictSpan);
                             })
                         );
                 }
@@ -213,6 +243,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 @Override
                 public void onFailure(Exception e) {
                     log.error("Failed to find model {}", modelId, e);
+                    MLModelTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
                     wrappedListener.onFailure(e);
                 }
             };
@@ -223,37 +254,57 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 // For multi-node cluster, the function name is null in cache, so should always get model first.
                 mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
+        } catch (Exception e) {
+            MLModelTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
+            listener.onFailure(e);
         }
     }
 
     private void executePredict(
         MLPredictionTaskRequest mlPredictionTaskRequest,
         ActionListener<MLTaskResponse> wrappedListener,
-        String modelId
+        String modelId,
+        String modelName
     ) {
-        String requestId = mlPredictionTaskRequest.getRequestID();
-        log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
-        long startTime = System.nanoTime();
-        // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
-        // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
-        // from model cache first.
-        FunctionName functionName = modelCacheHelper
-            .getOptionalFunctionName(modelId)
-            .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
-        mlPredictTaskRunner
-            .run(
-                // This is by design to NOT use mlPredictionTaskRequest.getMlInput().getAlgorithm() here
-                functionName,
-                mlPredictionTaskRequest,
-                transportService,
-                ActionListener.runAfter(wrappedListener, () -> {
-                    long endTime = System.nanoTime();
-                    double durationInMs = (endTime - startTime) / 1e6;
-                    modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
-                    modelCacheHelper.refreshLastAccessTime(modelId);
-                    log.debug("completed predict request {} for model {}", requestId, modelId);
-                })
-            );
+        Span executeSpan = MLModelTracer.startModelExecuteSpan(modelId, modelName);
+        MLModelTracer.serializeInputForTracing(mlPredictionTaskRequest, executeSpan);
+        try {
+            String requestId = mlPredictionTaskRequest.getRequestID();
+            log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
+            long startTime = System.nanoTime();
+            // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
+            // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
+            // from model cache first.
+            FunctionName functionName = modelCacheHelper
+                .getOptionalFunctionName(modelId)
+                .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
+            ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                MLModelTracer.getInstance().endSpan(executeSpan);
+                wrappedListener.onResponse(response);
+            }, exception -> {
+                MLModelTracer.handleSpanError(executeSpan, "Error in model.execute span", exception);
+                wrappedListener.onFailure(exception);
+            });
+
+            mlPredictTaskRunner
+                .run(
+                    // This is by design to NOT use mlPredictionTaskRequest.getMlInput().getAlgorithm() here
+                    functionName,
+                    mlPredictionTaskRequest,
+                    transportService,
+                    ActionListener.runAfter(spanWrappedListener, () -> {
+                        long endTime = System.nanoTime();
+                        double durationInMs = (endTime - startTime) / 1e6;
+                        modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+                        modelCacheHelper.refreshLastAccessTime(modelId);
+                        log.debug("completed predict request {} for model {}", requestId, modelId);
+                    })
+                );
+        } catch (Exception e) {
+            MLModelTracer.handleSpanError(executeSpan, "Error in model.execute span", e);
+            wrappedListener.onFailure(e);
+            throw e;
+        }
     }
 
     public void validateInputSchema(String modelId, MLInput mlInput) {
