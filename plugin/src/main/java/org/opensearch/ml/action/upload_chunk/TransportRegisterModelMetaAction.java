@@ -15,6 +15,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
@@ -23,7 +24,6 @@ import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRespon
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
@@ -50,8 +50,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         MLModelManager mlModelManager,
         Client client,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLModelGroupManager mlModelGroupManager,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLModelGroupManager mlModelGroupManager
     ) {
         super(MLRegisterModelMetaAction.NAME, transportService, actionFilters, MLRegisterModelMetaRequest::new);
         this.transportService = transportService;
@@ -60,7 +59,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         this.client = client;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

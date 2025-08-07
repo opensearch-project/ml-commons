@@ -17,11 +17,11 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -52,8 +52,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         SdkClient sdkClient,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelGroupSearchAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
@@ -61,7 +60,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

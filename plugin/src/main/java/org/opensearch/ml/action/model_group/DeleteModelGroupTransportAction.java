@@ -27,12 +27,12 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -73,8 +73,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelGroupDeleteAction.NAME, transportService, actionFilters, MLModelGroupDeleteRequest::new);
         this.client = client;
@@ -83,7 +82,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

@@ -64,6 +64,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -86,7 +87,6 @@ import org.opensearch.ml.engine.utils.S3Utils;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -153,8 +153,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         MLModelManager mlModelManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings,
-        MLEngine mlEngine,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLEngine mlEngine
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
         this.client = client;
@@ -169,7 +168,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlEngine = mlEngine;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);

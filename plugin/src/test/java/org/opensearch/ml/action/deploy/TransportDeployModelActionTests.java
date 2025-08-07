@@ -70,7 +70,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -140,9 +139,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
 
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
@@ -275,8 +271,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlStats,
                 settings,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
         MLModel mlModel = mock(MLModel.class);
@@ -321,8 +316,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlStats,
                 settings,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 
@@ -484,8 +478,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlStats,
                 settings,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
         MLDeployModelRequest MLDeployModelRequest1 = mock(MLDeployModelRequest.class);

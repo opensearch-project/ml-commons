@@ -38,6 +38,7 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -50,7 +51,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -105,8 +105,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         MLTaskDispatcher mlTaskDispatcher,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUndeployModelsAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -122,7 +121,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

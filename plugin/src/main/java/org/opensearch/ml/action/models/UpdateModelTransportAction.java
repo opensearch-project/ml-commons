@@ -44,6 +44,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
@@ -61,7 +62,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -106,8 +106,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         Settings settings,
         ClusterService clusterService,
         MLEngine mlEngine,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
@@ -119,7 +118,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()

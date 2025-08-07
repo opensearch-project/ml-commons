@@ -41,7 +41,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
@@ -86,9 +85,6 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -105,8 +101,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 clusterService,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 

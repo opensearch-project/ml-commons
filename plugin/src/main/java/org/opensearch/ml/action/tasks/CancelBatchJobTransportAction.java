@@ -37,6 +37,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -58,7 +59,6 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.script.ScriptService;
@@ -100,8 +100,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         EncryptorImpl encryptor,
         MLTaskManager mlTaskManager,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLCancelBatchJobAction.NAME, transportService, actionFilters, MLCancelBatchJobRequest::new);
         this.client = client;
@@ -114,7 +113,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

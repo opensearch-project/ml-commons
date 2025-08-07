@@ -37,6 +37,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLDeployControllerAction;
@@ -47,7 +48,6 @@ import org.opensearch.ml.common.transport.controller.MLUpdateControllerRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
@@ -78,8 +78,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelCacheHelper mlModelCacheHelper,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUpdateControllerAction.NAME, transportService, actionFilters, MLUpdateControllerRequest::new);
         this.client = client;
@@ -88,7 +87,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

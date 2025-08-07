@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLControllerGetAction;
@@ -34,7 +35,6 @@ import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
@@ -66,8 +66,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         ClusterService clusterService,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLControllerGetAction.NAME, transportService, actionFilters, MLControllerGetRequest::new);
         this.client = client;
@@ -76,7 +75,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

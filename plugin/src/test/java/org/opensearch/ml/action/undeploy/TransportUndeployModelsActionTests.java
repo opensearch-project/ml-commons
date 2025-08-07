@@ -63,7 +63,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -125,9 +124,6 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     TransportUndeployModelsAction transportUndeployModelsAction;
 
     private String[] modelIds = { "modelId1" };
@@ -162,8 +158,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
                 mlTaskDispatcher,
                 mlModelManager,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(true);

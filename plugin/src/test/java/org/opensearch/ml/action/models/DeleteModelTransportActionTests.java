@@ -81,7 +81,6 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
@@ -153,9 +152,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     GetPipelineResponse getIngestionPipelineResponse;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     private BulkByScrollResponse emptyBulkByScrollResponse;
 
     private Map<String, Object> configDataMap;
@@ -186,8 +182,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 modelAccessControlHelper,
                 agentModelsSearcher,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 
@@ -940,8 +935,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 modelAccessControlHelper,
                 agentModelsSearcher,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 

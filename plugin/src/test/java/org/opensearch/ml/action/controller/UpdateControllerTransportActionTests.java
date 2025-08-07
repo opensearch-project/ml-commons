@@ -58,7 +58,6 @@ import org.opensearch.ml.common.transport.controller.MLUpdateControllerRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -110,9 +109,6 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -159,8 +155,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
                 modelAccessControlHelper,
                 mlModelCacheHelper,
                 mlModelManager,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 

@@ -79,7 +79,6 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -134,9 +133,6 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -203,8 +199,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 mlFeatureEnabledSetting,
                 settings,
-                mlEngine,
-                mlResourceSharingExtension
+                mlEngine
             )
         );
 

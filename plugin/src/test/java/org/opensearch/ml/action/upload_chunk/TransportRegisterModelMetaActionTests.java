@@ -35,7 +35,6 @@ import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRespon
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -75,9 +74,6 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     private Client client;
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
-
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
 
     @Before
     public void setup() throws IOException {

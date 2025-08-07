@@ -38,6 +38,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -60,7 +61,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -127,8 +127,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         ModelAccessControlHelper modelAccessControlHelper,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLModelGroupManager mlModelGroupManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLRegisterModelAction.NAME, transportService, actionFilters, MLRegisterModelRequest::new);
         this.transportService = transportService;
@@ -148,7 +147,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.mlModelGroupManager = mlModelGroupManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.settings = settings;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);

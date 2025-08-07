@@ -25,6 +25,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -34,7 +35,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -86,8 +86,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        Settings settings,
-        MLResourceSharingExtension mlResourceSharingExtension
+        Settings settings
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
@@ -101,7 +100,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> enableAutomaticDeployment = it);

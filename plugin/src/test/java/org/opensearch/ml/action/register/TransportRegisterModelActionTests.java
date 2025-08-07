@@ -66,7 +66,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -148,9 +147,6 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private IndexResponse indexResponse;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     ThreadContext threadContext;
 
     private TransportRegisterModelAction transportRegisterModelAction;
@@ -207,8 +203,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
                 modelAccessControlHelper,
                 connectorAccessControlHelper,
                 mlModelGroupManager,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
         assertNotNull(transportRegisterModelAction);

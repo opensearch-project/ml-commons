@@ -86,7 +86,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -179,9 +178,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
 
     @Before
@@ -269,8 +265,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 clusterService,
                 mlEngine,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 

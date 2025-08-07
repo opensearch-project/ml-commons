@@ -18,7 +18,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
@@ -39,9 +38,6 @@ public class TransportUploadModelChunkActionTests extends OpenSearchTestCase {
 
     @Mock
     private Task task;
-
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
 
     @Mock
     private ActionListener<MLUploadModelChunkResponse> actionListener;

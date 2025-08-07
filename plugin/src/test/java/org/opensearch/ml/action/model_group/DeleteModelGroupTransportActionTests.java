@@ -42,7 +42,6 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -85,9 +84,6 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -114,8 +110,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 clusterService,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 

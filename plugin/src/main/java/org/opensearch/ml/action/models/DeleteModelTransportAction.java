@@ -68,6 +68,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -75,7 +76,6 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -129,8 +129,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         AgentModelsSearcher agentModelsSearcher,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
         this.client = client;
@@ -142,7 +141,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         isSafeDelete = ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK, it -> isSafeDelete = it);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

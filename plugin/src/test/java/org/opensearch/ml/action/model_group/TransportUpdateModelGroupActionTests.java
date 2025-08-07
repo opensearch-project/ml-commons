@@ -50,7 +50,6 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -107,9 +106,6 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
 
     private String ownerString = "bob|IT,HR|myTenant";
     private List<String> backendRoles = Arrays.asList("IT");

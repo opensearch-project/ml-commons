@@ -10,11 +10,11 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -32,14 +32,13 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
     public TransportUploadModelChunkAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLModelChunkUploader mlModelChunkUploader,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLModelChunkUploader mlModelChunkUploader
     ) {
         super(MLUploadModelChunkAction.NAME, transportService, actionFilters, MLUploadModelChunkRequest::new);
         this.transportService = transportService;
         this.actionFilters = actionFilters;
         this.mlModelChunkUploader = mlModelChunkUploader;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override

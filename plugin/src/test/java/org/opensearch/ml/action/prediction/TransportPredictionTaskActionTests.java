@@ -54,7 +54,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -112,9 +111,6 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
-    @Mock
-    MLResourceSharingExtension mlResourceSharingExtension;
-
     private MLInput mlInput;
 
     @Before
@@ -160,8 +156,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 modelAccessControlHelper,
                 mlFeatureEnabledSetting,
-                settings,
-                mlResourceSharingExtension
+                settings
             )
         );
     }

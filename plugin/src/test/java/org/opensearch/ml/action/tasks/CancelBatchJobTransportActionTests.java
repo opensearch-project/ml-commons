@@ -62,7 +62,6 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
@@ -152,8 +151,7 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
                 encryptor,
                 mlTaskManager,
                 mlModelManager,
-                mlFeatureEnabledSetting,
-                mlResourceSharingExtension
+                mlFeatureEnabledSetting
             )
         );
 

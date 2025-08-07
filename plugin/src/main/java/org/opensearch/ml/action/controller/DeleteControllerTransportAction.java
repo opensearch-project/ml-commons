@@ -33,6 +33,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteRequest;
@@ -42,7 +43,6 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerNodesRe
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
@@ -75,8 +75,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         MLModelManager mlModelManager,
         MLModelCacheHelper mlModelCacheHelper,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLResourceSharingExtension mlResourceSharingExtension
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLControllerDeleteAction.NAME, transportService, actionFilters, MLControllerDeleteRequest::new);
         this.client = client;
@@ -86,7 +85,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Override
