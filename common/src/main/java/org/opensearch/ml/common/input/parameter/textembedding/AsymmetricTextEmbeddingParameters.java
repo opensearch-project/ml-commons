@@ -78,7 +78,7 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
         Version streamInputVersion = in.getVersion();
         String contentType = in.readOptionalString();
         this.embeddingContentType = contentType != null ? EmbeddingContentType.valueOf(contentType) : null;
-        if (streamInputVersion.onOrAfter(Version.V_3_2_0)) {
+        if (streamInputVersion.onOrAfter(Version.V_3_1_0)) {
             String formatName = in.readOptionalString();
             this.sparseEmbeddingFormat = formatName != null ? SparseEmbeddingFormat.valueOf(formatName) : SparseEmbeddingFormat.WORD;
         } else {
@@ -135,7 +135,7 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
     public void writeTo(StreamOutput out) throws IOException {
         Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(embeddingContentType != null ? embeddingContentType.name() : null);
-        if (streamOutputVersion.onOrAfter(Version.V_3_2_0)) {
+        if (streamOutputVersion.onOrAfter(Version.V_3_1_0)) {
             out.writeOptionalString(sparseEmbeddingFormat != null ? sparseEmbeddingFormat.name() : null);
         }
     }
