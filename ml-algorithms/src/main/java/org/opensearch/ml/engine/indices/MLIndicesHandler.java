@@ -108,6 +108,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT, listener);
     }
 
+    public void initMLIndexInsightContainerIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener);
+    }
+
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();
