@@ -2,7 +2,6 @@ package org.opensearch.ml.action.IndexInsight;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -13,19 +12,14 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteResponse;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -40,7 +34,6 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 @Getter
 @Log4j2

@@ -3,7 +3,6 @@ package org.opensearch.ml.common.indexInsight;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +23,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.hash.Hashing;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
@@ -53,7 +51,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic(ActionListener<IndexInsight> listener) {
+    public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String statisticalContent = getInsightContent(MLIndexInsightType.STATISTICAL_DATA);
@@ -61,16 +59,16 @@ public class IndexDescriptionTask implements IndexInsightTask {
             String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
             if (modelId == null || modelId.trim().isEmpty()) {
                 log.error("No model ID configured for index insight");
-                saveFailedStatus();
+                saveFailedStatus(storageIndex);
                 listener.onFailure(new Exception("No model ID configured"));
                 return;
             }
 
             String prompt = generateIndexDescriptionPrompt(statisticalContent);
-            callLLM(prompt, modelId, listener);
+            callLLM(prompt, modelId, storageIndex, listener);
         } catch (Exception e) {
             log.error("Failed to execute index description task for index {}", indexName, e);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }
     }
@@ -164,7 +162,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
         }
     }
 
-    private void callLLM(String prompt, String modelId, ActionListener<IndexInsight> listener) {
+    private void callLLM(String prompt, String modelId, String storageIndex, ActionListener<IndexInsight> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
             .builder()
             .parameters(Collections.singletonMap("prompt", prompt))
@@ -187,20 +185,20 @@ public class IndexDescriptionTask implements IndexInsightTask {
 
             String response = extractModelResponse(dataAsMap);
             indexDescription = parseIndexDescription(response);
-            saveResult(indexDescription, ActionListener.wrap(
+            saveResult(indexDescription, storageIndex, ActionListener.wrap(
                 insight -> {
                     log.info("Index description completed for: {}", indexName);
                     listener.onResponse(insight);
                 },
                 e -> {
                     log.error("Failed to save index description result for index {}", indexName, e);
-                    saveFailedStatus();
+                    saveFailedStatus(storageIndex);
                     listener.onFailure(e);
                 }
             ));
         }, e -> {
             log.error("Failed to call LLM for index description: {}", indexName, e);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }));
     }

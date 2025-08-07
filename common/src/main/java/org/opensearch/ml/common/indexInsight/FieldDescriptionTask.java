@@ -3,9 +3,7 @@ package org.opensearch.ml.common.indexInsight;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -21,7 +19,6 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -29,10 +26,8 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.search.SearchHit;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.hash.Hashing;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
@@ -62,7 +57,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
     
     @Override
-    public void runTaskLogic(ActionListener<IndexInsight> listener) {
+    public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String statisticalContent = getInsightContent(MLIndexInsightType.STATISTICAL_DATA);
@@ -70,15 +65,15 @@ public class FieldDescriptionTask implements IndexInsightTask {
             String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
             if (modelId == null || modelId.trim().isEmpty()) {
                 log.error("No model ID configured for index insight");
-                saveFailedStatus();
+                saveFailedStatus(storageIndex);
                 listener.onFailure(new Exception("No model ID configured"));
                 return;
             }
             
-            batchProcessFields(statisticalContent, modelId, listener);
+            batchProcessFields(statisticalContent, modelId, storageIndex, listener);
         } catch (Exception e) {
             log.error("Failed to execute field description task for index {}", indexName, e);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }
     }
@@ -149,11 +144,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
     }
     
-    private void batchProcessFields(String statisticalContent, String modelId, ActionListener<IndexInsight> listener) {
+    private void batchProcessFields(String statisticalContent, String modelId, String storageIndex, ActionListener<IndexInsight> listener) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         if (mappingSource == null) {
             log.error("No mapping properties found for index: {}", indexName);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             return;
         }
 
@@ -163,14 +158,14 @@ public class FieldDescriptionTask implements IndexInsightTask {
         if (allFields.isEmpty()) {
             log.warn("No fields found for index: {}", indexName);
             fieldDescriptions = Collections.emptyMap();
-            saveResult("", ActionListener.wrap(
+            saveResult("", storageIndex, ActionListener.wrap(
                 insight -> {
                     log.info("Empty field description completed for: {}", indexName);
                     listener.onResponse(insight);
                 },
                 e -> {
                     log.error("Failed to save empty field description result for index {}", indexName, e);
-                    saveFailedStatus();
+                    saveFailedStatus(storageIndex);
                     listener.onFailure(e);
                 }
             ));
@@ -193,19 +188,19 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 // If any batch fails, the entire task is marked as failed and no partial results are saved in ML_INDEX_INSIGHT_INDEX
                 if (!hasErrors.get()) {
                     fieldDescriptions = resultsMap;
-                    saveResult(resultsMap.toString(), ActionListener.wrap(
+                    saveResult(resultsMap.toString(), storageIndex, ActionListener.wrap(
                         insight -> {
                             log.info("Field description completed for: {}", indexName);
                             listener.onResponse(insight);
                         },
                         e -> {
                             log.error("Failed to save field description result for index {}", indexName, e);
-                            saveFailedStatus();
+                            saveFailedStatus(storageIndex);
                             listener.onFailure(e);
                         }
                     ));
                 } else {
-                    saveFailedStatus();
+                    saveFailedStatus(storageIndex);
                     listener.onFailure(new Exception("Batch processing failed"));
                 }
             }
@@ -214,7 +209,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             hasErrors.set(true);
             log.error("Batch processing failed for index {}: {}", indexName, e.getMessage());
             if (countDownLatch.getCount() == 0 && isCompleted.compareAndSet(false, true)) {
-                saveFailedStatus();
+                saveFailedStatus(storageIndex);
                 listener.onFailure(new Exception("Batch processing failed"));
             }
         });

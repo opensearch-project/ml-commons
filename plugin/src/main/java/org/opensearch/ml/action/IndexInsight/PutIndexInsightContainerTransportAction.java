@@ -1,10 +1,8 @@
 package org.opensearch.ml.action.IndexInsight;
 
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -14,18 +12,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutResponse;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -36,12 +29,9 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import javax.swing.*;
-
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.CONTENT_FIELD;
@@ -49,7 +39,6 @@ import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIEL
 import static org.opensearch.ml.common.indexInsight.IndexInsight.LAST_UPDATE_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.STATUS_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.TASK_TYPE_FIELD;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 @Log4j2
 public class PutIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightContainerPutResponse> {
