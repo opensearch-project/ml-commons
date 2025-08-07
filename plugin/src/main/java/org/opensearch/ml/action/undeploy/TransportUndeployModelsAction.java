@@ -214,6 +214,12 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 return modelCacheMissForModelIds;
             });
             if (response.getNodes().isEmpty() || modelNotFoundInNodesCache) {
+                log
+                    .warn(
+                        "Model undeployment fallback: No active nodes found for models {}."
+                            + " Proceeding with manual index update to UNDEPLOY state.",
+                        Arrays.toString(modelIds)
+                    );
                 bulkSetModelIndexToUndeploy(modelIds, tenantId, listener, response);
                 return;
             }
