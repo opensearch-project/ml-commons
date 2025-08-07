@@ -41,7 +41,7 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/index_insight/{%s}", ML_BASE_URI, PARAMETER_INDEX_ID)));
+            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/insights/{%s}/{insight_type}", ML_BASE_URI, PARAMETER_INDEX_ID)));
     }
 
     @Override
@@ -53,7 +53,10 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
     @VisibleForTesting
     MLIndexInsightGetRequest getRequest(RestRequest request) throws IOException {
         String indexName = getParameterId(request, PARAMETER_INDEX_ID);
-        String insightType = request.param("insight_type", "STATISTICAL_DATA");
+        String insightType = request.param("insight_type");
+        if (insightType == null) {
+            insightType = "STATISTICAL_DATA";
+        }
         MLIndexInsightType type = MLIndexInsightType.fromString(insightType);
         return new MLIndexInsightGetRequest(indexName, type);
     }
