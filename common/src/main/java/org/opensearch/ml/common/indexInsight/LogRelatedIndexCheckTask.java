@@ -228,4 +228,9 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             return defaultResult;
         }
     }
+    
+    @Override
+    public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
+        throw new IllegalArgumentException("LogRelatedIndexCheckTask has no prerequisites");
+    }
 }

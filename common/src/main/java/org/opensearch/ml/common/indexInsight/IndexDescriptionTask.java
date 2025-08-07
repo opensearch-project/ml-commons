@@ -226,4 +226,12 @@ public class IndexDescriptionTask implements IndexInsightTask {
     private String parseIndexDescription(String modelResponse) {
         return modelResponse.trim();
     }
+    
+    @Override
+    public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
+        if (prerequisiteType == MLIndexInsightType.STATISTICAL_DATA) {
+            return new StatisticalDataTask(indexName, client);
+        }
+        throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
+    }
 }

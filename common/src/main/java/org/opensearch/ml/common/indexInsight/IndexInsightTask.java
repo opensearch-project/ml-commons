@@ -137,41 +137,74 @@ public interface IndexInsightTask {
             return;
         }
         
-        // Check prerequisites synchronously for single node scenario
-        try {
-            for (MLIndexInsightType prerequisite : prerequisites) {
-                String prereqDocId = generateDocId(getTargetIndex(), prerequisite);
-                GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, prereqDocId);
-                
-                GetResponse response = getClient().get(getRequest).actionGet();
-                if (!response.isExists()) {
-                    saveFailedStatus();
-                    listener.onFailure(new Exception("Prerequisite not found: " + prerequisite));
-                    return;
-                }
-                
-                Map<String, Object> source = response.getSourceAsMap();
-                String prereqStatus = (String) source.get("status");
-                
-                if (IndexInsightTaskStatus.FAILED.toString().equals(prereqStatus)) {
-                    saveFailedStatus();
-                    listener.onFailure(new Exception("Prerequisite failed: " + prerequisite));
-                    return;
-                }
-                
-                if (IndexInsightTaskStatus.GENERATING.toString().equals(prereqStatus)) {
-                    saveFailedStatus();
-                    listener.onFailure(new Exception("Prerequisite still generating: " + prerequisite));
-                    return;
-                }
+        checkAndRunPrerequisites(prerequisites, 0, listener);
+    }
+    
+    default void checkAndRunPrerequisites(List<MLIndexInsightType> prerequisites, int index, ActionListener<IndexInsight> listener) {
+        if (index >= prerequisites.size()) {
+            // All prerequisites satisfied, run current task
+            runTaskLogic(listener);
+            return;
+        }
+        
+        MLIndexInsightType prerequisite = prerequisites.get(index);
+        String prereqDocId = generateDocId(getTargetIndex(), prerequisite);
+        GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, prereqDocId);
+        
+        getClient().get(getRequest, ActionListener.wrap(response -> {
+            if (!response.isExists()) {
+                // Prerequisite not found - run it
+                runPrerequisite(prerequisite, ActionListener.wrap(
+                    prereqInsight -> checkAndRunPrerequisites(prerequisites, index + 1, listener),
+                    e -> {
+                        saveFailedStatus();
+                        listener.onFailure(new Exception("Failed to run prerequisite: " + prerequisite, e));
+                    }
+                ));
+                return;
             }
             
-            // All prerequisites satisfied, run task
-            runTaskLogic(listener);
-        } catch (Exception e) {
+            Map<String, Object> source = response.getSourceAsMap();
+            String prereqStatus = (String) source.get("status");
+            
+            if (IndexInsightTaskStatus.FAILED.toString().equals(prereqStatus) || 
+                IndexInsightTaskStatus.GENERATING.toString().equals(prereqStatus)) {
+                saveFailedStatus();
+                listener.onFailure(new Exception("Prerequisite failed or still generating: " + prerequisite));
+                return;
+            }
+            
+            if (IndexInsightTaskStatus.COMPLETED.toString().equals(prereqStatus)) {
+                // Check if prerequisite is expired
+                Long prereqLastUpdateTime = (Long) source.get("last_updated_time");
+                long currentTime = Instant.now().toEpochMilli();
+                
+                if (prereqLastUpdateTime != null && (currentTime - prereqLastUpdateTime) > UPDATE_INTERVAL) {
+                    // Prerequisite expired - run it again
+                    runPrerequisite(prerequisite, ActionListener.wrap(
+                        prereqInsight -> checkAndRunPrerequisites(prerequisites, index + 1, listener),
+                        e -> {
+                            saveFailedStatus();
+                            listener.onFailure(new Exception("Failed to run expired prerequisite: " + prerequisite, e));
+                        }
+                    ));
+                } else {
+                    // This prerequisite is satisfied, check next one
+                    checkAndRunPrerequisites(prerequisites, index + 1, listener);
+                }
+            } else {
+                saveFailedStatus();
+                listener.onFailure(new Exception("Unknown prerequisite status: " + prereqStatus));
+            }
+        }, e -> {
             saveFailedStatus();
             listener.onFailure(e);
-        }
+        }));
+    }
+    
+    default void runPrerequisite(MLIndexInsightType prerequisiteType, ActionListener<IndexInsight> listener) {
+        IndexInsightTask prerequisiteTask = createPrerequisiteTask(prerequisiteType);
+        prerequisiteTask.execute(listener);
     }
     
     default void saveResult(String content, ActionListener<IndexInsight> listener) {
@@ -273,4 +306,9 @@ public interface IndexInsightTask {
      * Run the specific task logic (to be implemented by each task)
      */
     void runTaskLogic(ActionListener<IndexInsight> listener);
+    
+    /**
+     * Create prerequisite task instance (to be implemented by each task)
+     */
+    IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType);
 }

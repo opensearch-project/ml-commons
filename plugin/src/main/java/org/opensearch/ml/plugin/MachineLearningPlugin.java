@@ -847,14 +847,7 @@ public class MachineLearningPlugin extends Plugin
 
         MLJobRunner
             .getInstance()
-            .initialize(
-                clusterService,
-                threadPool,
-                client,
-                sdkClient,
-                connectorAccessControlHelper,
-                mlFeatureEnabledSetting
-            );
+            .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting);
 
         if (mlFeatureEnabledSetting.isMetricCollectionEnabled()) {
             MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
