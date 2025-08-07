@@ -93,61 +93,23 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic() {
+    public void runTaskLogic(ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
             if (modelId == null || modelId.isBlank()) {
                 log.error("No model ID configured for RCA index check");
                 saveFailedStatus();
+                listener.onFailure(new Exception("No model ID configured"));
                 return;
             }
 
             // Fetch 3 sample docs
-            collectSampleDocString();
-
-            // Build prompt
-            String prompt = RCA_TEMPLATE
-                    .replace("{indexName}", indexName)
-                    .replace("{samples}", sampleDocSting);
-
-            // Call LLM
-            RemoteInferenceInputDataSet input = RemoteInferenceInputDataSet.builder()
-                    .parameters(Collections.singletonMap("prompt", prompt))
-                    .build();
-            MLPredictionTaskRequest req = new MLPredictionTaskRequest(
-                    modelId,
-                    MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(input).build(),
-                    null,
-                    null
-            );
-
-            client.execute(MLPredictionTaskAction.INSTANCE, req, ActionListener.wrap(mlResp -> {
-                try {
-                    ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
-                    ModelTensors t = out.getMlModelOutputs().getFirst();
-                    ModelTensor mt = t.getMlModelTensors().getFirst();
-                    Map<String,Object> data = (Map<String, Object>) mt.getDataAsMap();
-                    String text = extractModelResponse(data);
-                    Map<String,Object> parsed = parseCheckResponse(text);
-
-                    isLogIndex = Boolean.TRUE.equals(parsed.get("is_log_index"));
-                    logMessageField = (String) parsed.get("log_message_field");
-                    traceIdField = (String) parsed.get("trace_id_field");
-
-                    saveResult(MAPPER.writeValueAsString(parsed));
-                    log.info("Log related check completed for index {}", indexName);
-                } catch (Exception e) {
-                    log.error("Error parsing response of log related check for {}", indexName, e);
-                    saveFailedStatus();
-                }
-            }, e -> {
-                log.error("Failed to call LLM for log related check: {}", e.getMessage(), e);
-                saveFailedStatus();
-            }));
+            collectSampleDocString(modelId, listener);
         } catch (Exception ex) {
             log.error("Failed log related check for {}", indexName, ex);
             saveFailedStatus();
+            listener.onFailure(ex);
         }
     }
     // Standard IndexInsightTask interface methods
@@ -162,20 +124,30 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return sampleDocSting;
     }
 
-    private void collectSampleDocString(){
+    private void collectSampleDocString(String modelId, ActionListener<IndexInsight> listener){
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
 
         client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-            List<Map<String, Object>> samples = Arrays.stream(searchResponse.getHits().getHits())
-                    .map(SearchHit::getSourceAsMap)
-                    .toList();
-            sampleDocSting = MAPPER.writeValueAsString(samples);
-            log.info("Collected sample documents for index: {}", indexName);
+            try {
+                List<Map<String, Object>> samples = Arrays.stream(searchResponse.getHits().getHits())
+                        .map(SearchHit::getSourceAsMap)
+                        .toList();
+                sampleDocSting = MAPPER.writeValueAsString(samples);
+                log.info("Collected sample documents for index: {}", indexName);
+                
+                // Build prompt and call LLM
+                callLLM(modelId, listener);
+            } catch (Exception e) {
+                log.error("Failed to process sample documents for index: {}", indexName, e);
+                saveFailedStatus();
+                listener.onFailure(e);
+            }
         }, e -> {
             log.error("Failed to collect sample documents for index: {}", indexName, e);
             saveFailedStatus();
+            listener.onFailure(e);
         }));
     }
 
@@ -189,18 +161,71 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return JsonPath.read(data, "$.response");
     }
 
+    private void callLLM(String modelId, ActionListener<IndexInsight> listener) {
+        // Build prompt
+        String prompt = RCA_TEMPLATE
+                .replace("{indexName}", indexName)
+                .replace("{samples}", sampleDocSting);
+
+        // Call LLM
+        RemoteInferenceInputDataSet input = RemoteInferenceInputDataSet.builder()
+                .parameters(Collections.singletonMap("prompt", prompt))
+                .build();
+        MLPredictionTaskRequest req = new MLPredictionTaskRequest(
+                modelId,
+                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(input).build(),
+                null,
+                null
+        );
+
+        client.execute(MLPredictionTaskAction.INSTANCE, req, ActionListener.wrap(mlResp -> {
+            try {
+                ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
+                ModelTensors t = out.getMlModelOutputs().get(0);
+                ModelTensor mt = t.getMlModelTensors().get(0);
+                Map<String,Object> data = (Map<String, Object>) mt.getDataAsMap();
+                String text = extractModelResponse(data);
+                Map<String,Object> parsed = parseCheckResponse(text);
+
+                isLogIndex = Boolean.TRUE.equals(parsed.get("is_log_index"));
+                logMessageField = (String) parsed.get("log_message_field");
+                traceIdField = (String) parsed.get("trace_id_field");
+
+                saveResult(MAPPER.writeValueAsString(parsed), ActionListener.wrap(
+                    insight -> {
+                        log.info("Log related check completed for index {}", indexName);
+                        listener.onResponse(insight);
+                    },
+                    e -> {
+                        log.error("Failed to save log related check result for index {}", indexName, e);
+                        saveFailedStatus();
+                        listener.onFailure(e);
+                    }
+                ));
+            } catch (Exception e) {
+                log.error("Error parsing response of log related check for {}", indexName, e);
+                saveFailedStatus();
+                listener.onFailure(e);
+            }
+        }, e -> {
+            log.error("Failed to call LLM for log related check: {}", e.getMessage(), e);
+            saveFailedStatus();
+            listener.onFailure(e);
+        }));
+    }
+
     private Map<String,Object> parseCheckResponse(String resp) {
         try {
             String json = resp.split("<RCA_analysis>",2)[1]
                     .split("</RCA_analysis>",2)[0].trim();
             return MAPPER.readValue(json, new TypeReference<Map<String,Object>>(){});
         } catch (Exception e) {
-            log.warn("Parsing log related check JSON failed, defaulting", e);
-            Map<String,Object> def = new HashMap<>();
-            def.put("is_log_index", false);
-            def.put("log_message_field", null);
-            def.put("trace_id_field", null);
-            return def;
+            log.warn("Failed to parse RCA analysis response, returning default values", e);
+            Map<String,Object> defaultResult = new HashMap<>();
+            defaultResult.put("is_log_index", false);
+            defaultResult.put("log_message_field", null);
+            defaultResult.put("trace_id_field", null);
+            return defaultResult;
         }
     }
 }

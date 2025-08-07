@@ -37,6 +37,11 @@ import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * Field Description Task: Generates descriptions for index fields using LLM.
+ * This task analyzes index mapping and sample data to provide meaningful descriptions
+ * for each field in the index, helping down-stream tasks understand the purpose and content of fields.
+ */
 @Log4j2
 public class FieldDescriptionTask implements IndexInsightTask {
     
