@@ -27,13 +27,14 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
     
     @Override
-    public void runTaskLogic() {
+    public void runTaskLogic(ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-            collectSampleDocuments();
+            collectSampleDocuments(listener);
         } catch (Exception e) {
             log.error("Failed to execute statistical data task for index {}", indexName, e);
             saveFailedStatus();
+            listener.onFailure(e);
         }
     }
     
@@ -71,7 +72,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return sampleDocuments;
     }
     
-    private void collectSampleDocuments() {
+    private void collectSampleDocuments(ActionListener<IndexInsight> listener) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(5).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
@@ -81,10 +82,11 @@ public class StatisticalDataTask implements IndexInsightTask {
             log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
             
             String statisticalContent = generateStatisticalContent();
-            saveResult(statisticalContent);
+            saveResult(statisticalContent, listener);
         }, e -> {
             log.error("Failed to collect sample documents for index: {}", indexName, e);
             saveFailedStatus();
+            listener.onFailure(e);
         }));
     }
     
@@ -92,8 +94,8 @@ public class StatisticalDataTask implements IndexInsightTask {
         StringBuilder content = new StringBuilder();
         content.append("Sample documents count: ").append(sampleDocuments.length).append("\\n");
         
-        if (sampleDocuments.length > 0) {
-            content.append("Sample document: ").append(sampleDocuments[0].getSourceAsString());
+        for (int i = 0; i < sampleDocuments.length; i++) {
+            content.append("Sample document ").append(i + 1).append(": ").append(sampleDocuments[i].getSourceAsString()).append("\\n");
         }
         
         return content.toString();

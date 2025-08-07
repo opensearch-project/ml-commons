@@ -48,7 +48,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic() {
+    public void runTaskLogic(ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String statisticalContent = getInsightContent(MLIndexInsightType.STATISTICAL_DATA);
@@ -57,14 +57,16 @@ public class IndexDescriptionTask implements IndexInsightTask {
             if (modelId == null || modelId.trim().isEmpty()) {
                 log.error("No model ID configured for index insight");
                 saveFailedStatus();
+                listener.onFailure(new Exception("No model ID configured"));
                 return;
             }
 
             String prompt = generateIndexDescriptionPrompt(statisticalContent);
-            callLLM(prompt, modelId);
+            callLLM(prompt, modelId, listener);
         } catch (Exception e) {
             log.error("Failed to execute index description task for index {}", indexName, e);
             saveFailedStatus();
+            listener.onFailure(e);
         }
     }
 
@@ -157,12 +159,13 @@ public class IndexDescriptionTask implements IndexInsightTask {
         }
     }
 
-    private void callLLM(String prompt, String modelId) {
+    private void callLLM(String prompt, String modelId, ActionListener<IndexInsight> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
             .builder()
             .parameters(Collections.singletonMap("prompt", prompt))
             .build();
 
+        // TODO: use existing agent id
         MLPredictionTaskRequest request = new MLPredictionTaskRequest(
             modelId,
             MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
@@ -179,11 +182,21 @@ public class IndexDescriptionTask implements IndexInsightTask {
 
             String response = extractModelResponse(dataAsMap);
             indexDescription = parseIndexDescription(response);
-            saveResult(indexDescription);
-            log.info("Index description completed for: {}", indexName);
+            saveResult(indexDescription, ActionListener.wrap(
+                insight -> {
+                    log.info("Index description completed for: {}", indexName);
+                    listener.onResponse(insight);
+                },
+                e -> {
+                    log.error("Failed to save index description result for index {}", indexName, e);
+                    saveFailedStatus();
+                    listener.onFailure(e);
+                }
+            ));
         }, e -> {
             log.error("Failed to call LLM for index description: {}", indexName, e);
             saveFailedStatus();
+            listener.onFailure(e);
         }));
     }
 
