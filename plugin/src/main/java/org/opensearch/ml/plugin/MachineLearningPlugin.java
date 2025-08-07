@@ -311,6 +311,7 @@ import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
+import org.opensearch.ml.rest.RestMLDeleteIndexInsightContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteIndexInsightContainerAction;
@@ -323,6 +324,7 @@ import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetControllerAction;
+import org.opensearch.ml.rest.RestMLGetIndexInsightAction;
 import org.opensearch.ml.rest.RestMLGetMemoryAction;
 import org.opensearch.ml.rest.RestMLGetMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLGetIndexInsightAction;
@@ -938,6 +940,9 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(clusterService, settings);
         RestMLPutIndexInsightContainerAction restMLPutIndexInsightContainerAction = new RestMLPutIndexInsightContainerAction(mlFeatureEnabledSetting);
         RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(mlFeatureEnabledSetting);
+        RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(clusterService, settings, mlFeatureEnabledSetting);
+        RestMLPutIndexInsightContainerAction restMLPutIndexInsightContainerAction = new RestMLPutIndexInsightContainerAction(mlFeatureEnabledSetting);
+        RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(mlFeatureEnabledSetting);
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
@@ -1239,7 +1244,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID
+                MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID
             );
         return settings;
     }

@@ -137,7 +137,7 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
                         }
                     });
         } catch (Exception e) {
-
+            listener.onFailure(e);
         }
     }
 
