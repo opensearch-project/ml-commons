@@ -36,7 +36,9 @@ public class IndexInsightContainer implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(INDEX_NAME_FIELD, indexName);
-        builder.field(TENANT_ID_FIELD, tenantId);
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }

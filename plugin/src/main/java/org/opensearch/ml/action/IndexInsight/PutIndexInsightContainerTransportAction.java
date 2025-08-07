@@ -13,16 +13,19 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutResponse;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -54,18 +57,21 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
     private final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLIndicesHandler mlIndicesHandler;
 
     @Inject
     public PutIndexInsightContainerTransportAction(TransportService transportService,
                                                    ActionFilters actionFilters,
                                                    NamedXContentRegistry xContentRegistry,
                                                    MLFeatureEnabledSetting mlFeatureEnabledSetting,
-                                                   Client client, SdkClient sdkClient) {
+                                                   Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
         super(MLIndexInsightContainerPutAction.NAME, transportService, actionFilters, MLIndexInsightContainerPutRequest::new);
         this.client = client;
+
         this.xContentRegistry = xContentRegistry;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.sdkClient = sdkClient;
+        this.mlIndicesHandler = mlIndicesHandler;
     }
 
     @Override
@@ -78,41 +84,34 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
         User user = RestActionUtils.getUserContext(client);
         String tenantId = mlIndexInsightContainerPutRequest.getTenantId();
         IndexInsightContainer indexInsightContainer = IndexInsightContainer.builder().indexName(mlIndexInsightContainerPutRequest.getIndexName()).tenantId(tenantId).build();
-        checkIfBeforeIndexContainer(indexInsightContainer, ActionListener.wrap( r -> {
-            indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
-                        initIndexInsightIndex(mlIndexInsightContainerPutRequest.getIndexName(), ActionListener.wrap(
-                                r2 -> {
-                                    log.info("Successfully created index insight container");
-                                    listener.onResponse(new MLIndexInsightContainerPutResponse());
-                                },
-                                e -> {
-                                    log.error("Failed to create index insight container", e);
-                                    listener.onFailure(e);
-                                }));
-                    },
-                    listener::onFailure
-            ));
+        initMLIndexInsightContainerIndex(ActionListener.wrap(r -> {
+            checkWhetherExist(indexInsightContainer, ActionListener.wrap(r0 -> {
+                indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
+                            initIndexInsightIndex(mlIndexInsightContainerPutRequest.getIndexName(), ActionListener.wrap(
+                                    r2 -> {
+                                        log.info("Successfully created index insight container");
+                                        listener.onResponse(new MLIndexInsightContainerPutResponse());
+                                    },
+                                    e -> {
+                                        log.error("Failed to create index insight container", e);
+                                        listener.onFailure(e);
+                                    }));
+                        },
+                        listener::onFailure
+                ));
+            }, listener::onFailure));
+        }, listener::onFailure));
 
-                }, listener::onFailure
-        ));
 
     }
 
-    private void deleteOriginalIndexInsightIndex(String indexName, ActionListener<Boolean> listener) {
-        client.admin().indices().delete(
-          new DeleteIndexRequest(indexName),
-          ActionListener.wrap(r -> {
-              if (r.isAcknowledged()) {
-                  listener.onResponse(true);
-              } else {
-                  listener.onFailure(new RuntimeException("Failed to delete original index insight data index: " + indexName));
-              }
-          }, listener::onFailure)
-        );
+    private void initMLIndexInsightContainerIndex(ActionListener<Boolean> listener) {
+        mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener);
     }
 
-    private void checkIfBeforeIndexContainer(IndexInsightContainer indexInsightContainer, ActionListener<Boolean> listener){
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+
+    private void checkWhetherExist(IndexInsightContainer indexInsightContainer, ActionListener<Boolean> listener) {
+        try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                     .getDataObjectAsync(
                             GetDataObjectRequest
@@ -121,91 +120,65 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
                                     .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
                                     .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
                                     .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-                        context.restore();
+                    ).whenComplete((r, throwable) -> {
+                        getContext.restore();
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                             log.error("Failed to index index insight container", cause);
-                            if (cause.getCause() instanceof IndexNotFoundException || cause.getCause()  instanceof ResourceNotFoundException) {
-                                listener.onResponse(true);
-                            }
                             listener.onFailure(cause);
                         } else {
-                            try {
-                                GetResponse getResponse = r.getResponse();
-                                if (getResponse.isExists()) {
-                                    listener.onResponse(true);
-                                    return;
-                                }
-                                assert getResponse != null;
-                                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, getResponse.getSourceAsBytesRef())) {
-                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                    IndexInsightContainer returnedContainer = indexInsightContainer.parse(parser);
-                                    String originalIndexName = returnedContainer.getIndexName();
-                                    // delete the original index
-                                    deleteOriginalIndexInsightIndex(originalIndexName, ActionListener.wrap(
-                                            r1 -> {
-                                                log.info("Successfully deleted original index insight data index: {}", originalIndexName);
-                                                listener.onResponse(true);
-                                            },
-                                            e -> {
-                                                log.error("Failed to delete original index insight data index: {}", originalIndexName, e);
-                                                listener.onFailure(e);
-                                            }
-                                    ));
-                                } catch (Exception e) {
-                                    listener.onFailure(e);
-                                }
-                            } catch (Exception e) {
-                                listener.onFailure(e);
+                            GetResponse getResponse = r.getResponse();
+                            if (getResponse.isExists()) {
+                                listener.onFailure(new RuntimeException("Index insight container is already set. If you want to update, please delete it first."));
+                            }
+                            else {
+                                listener.onResponse(true);
                             }
                         }
                     });
         } catch (Exception e) {
-            log.error("Failed to create index insight container", e);
-            listener.onFailure(e);
+
         }
     }
 
     private void indexIndexInsightContainer(IndexInsightContainer indexInsightContainer, ActionListener<Boolean> listener) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient
-                    .putDataObjectAsync(
-                            PutDataObjectRequest
-                                    .builder()
-                                    .tenantId(indexInsightContainer.getTenantId())
-                                    .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
-                                    .dataObject(indexInsightContainer)
-                                    .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
-                                    .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-                        context.restore();
-                        if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            log.error("Failed to index index insight container", cause);
-                            listener.onFailure(cause);
-                        } else {
-                            try {
-                                IndexResponse indexResponse = r.indexResponse();
-                                assert indexResponse != null;
-                                if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                                    String generatedId = indexResponse.getId();
-                                    log.info("Successfully created index insight with ID: {}", generatedId);
-                                    listener.onResponse(true);
-                                } else {
-                                    listener.onFailure(new RuntimeException("Failed to create index insight container"));
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                sdkClient
+                        .putDataObjectAsync(
+                                PutDataObjectRequest
+                                        .builder()
+                                        .tenantId(indexInsightContainer.getTenantId())
+                                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
+                                        .dataObject(indexInsightContainer)
+                                        .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
+                                        .build()
+                        )
+                        .whenComplete((r, throwable) -> {
+                            context.restore();
+                            if (throwable != null) {
+                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                                log.error("Failed to index index insight container", cause);
+                                listener.onFailure(cause);
+                            } else {
+                                try {
+                                    IndexResponse indexResponse = r.indexResponse();
+                                    assert indexResponse != null;
+                                    if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+                                        String generatedId = indexResponse.getId();
+                                        log.info("Successfully created index insight with ID: {}", generatedId);
+                                        listener.onResponse(true);
+                                    } else {
+                                        listener.onFailure(new RuntimeException("Failed to create index insight container"));
+                                    }
+                                } catch (Exception e) {
+                                    listener.onFailure(e);
                                 }
-                            } catch (Exception e) {
-                                listener.onFailure(e);
                             }
-                        }
-                    });
-        } catch (Exception e) {
-            log.error("Failed to create index insight container", e);
-            listener.onFailure(e);
-        }
+                        });
+            } catch (Exception e) {
+                log.error("Failed to create index insight container", e);
+                listener.onFailure(e);
+            }
     }
 
     private void initIndexInsightIndex(String indexName,  ActionListener<Boolean> listener) {
