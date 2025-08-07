@@ -9,10 +9,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.transport.client.Client;
 
@@ -65,7 +67,8 @@ public interface IndexInsightTask {
                     setGeneratingAndRun(listener);
                 } else {
                     // If still generating and not timeout, task is already running
-                    listener.onFailure(new Exception("Task is already running"));
+                    listener.onFailure(new OpenSearchStatusException(
+                        "Index insight is being generated, please wait...", RestStatus.ACCEPTED));
                 }
                 break;
             case COMPLETED:
