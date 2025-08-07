@@ -13,33 +13,30 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 @Getter
-public class MLIndexInsightContainerPutRequest extends ActionRequest {
-    private String indexName;
+public class MLIndexInsightContainerDeleteRequest  extends ActionRequest {
     private String tenantId;
 
-    public MLIndexInsightContainerPutRequest(String indexName, String tenantId){
-        this.indexName = indexName;
+    public MLIndexInsightContainerDeleteRequest(String tenantId){
         this.tenantId = tenantId;
     }
 
-    public MLIndexInsightContainerPutRequest(StreamInput in) throws IOException {
+    public MLIndexInsightContainerDeleteRequest(StreamInput in) throws IOException {
         super(in);
-        this.indexName = in.readString();
         this.tenantId = in.readOptionalString();
     }
 
-    public static MLIndexInsightContainerPutRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLIndexInsightContainerPutRequest) {
-            return (MLIndexInsightContainerPutRequest) actionRequest;
+    public static MLIndexInsightContainerDeleteRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLIndexInsightContainerDeleteRequest) {
+            return (MLIndexInsightContainerDeleteRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLIndexInsightContainerPutRequest(input);
+                return new MLIndexInsightContainerDeleteRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightContainerPutRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightContainerDeleteRequest", e);
         }
 
     }
