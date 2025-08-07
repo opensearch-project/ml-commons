@@ -25,7 +25,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -41,7 +40,6 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -71,7 +69,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     private volatile boolean enableAutomaticDeployment;
 
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportPredictionTaskAction(
@@ -100,7 +97,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> enableAutomaticDeployment = it);
@@ -143,7 +140,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             MLPredictionTaskAction.NAME,
                             client,
                             sdkClient,
-                            resourceSharingClient,
+
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     wrappedListener

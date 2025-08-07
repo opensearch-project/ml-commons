@@ -15,7 +15,6 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
@@ -25,7 +24,6 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -41,7 +39,6 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
     Client client;
     ModelAccessControlHelper modelAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportRegisterModelMetaAction(
@@ -59,7 +56,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         this.client = client;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -102,7 +99,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
                 mlUploadInput.getModelGroupId(),
                 MLRegisterModelMetaAction.NAME,
                 client,
-                resourceSharingClient,
+
                 ActionListener.wrap(access -> {
                     if (access) {
                         createModelGroup(mlUploadInput, listener);

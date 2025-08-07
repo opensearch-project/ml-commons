@@ -53,7 +53,6 @@ import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -76,7 +75,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     ModelAccessControlHelper modelAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportUpdateModelGroupAction(
@@ -102,7 +100,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -156,7 +154,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                     )) {
                                     // NOTE all sharing and revoking must happen through share API exposed by security plugin
                                     // client == null -> feature is disabled, follow old route
-                                    if (resourceSharingClient == null) {
+                                    if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() == null) {
                                         // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
                                         // be stored in model-group index)
                                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {

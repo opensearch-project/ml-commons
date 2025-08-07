@@ -37,6 +37,7 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -133,7 +134,8 @@ public class MLSearchHandler {
             request.source().fetchSource(rebuiltFetchSourceContext);
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
-            if (modelAccessControlHelper.skipModelAccessControl(user)
+            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() == null
+                || modelAccessControlHelper.skipModelAccessControl(user)
                 || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
 
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
@@ -146,6 +148,7 @@ public class MLSearchHandler {
                     .searchDataObjectAsync(searchDataObjectRequest)
                     .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
             } else {
+
                 SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
                 SearchRequest modelGroupSearchRequest = new SearchRequest();
                 sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);

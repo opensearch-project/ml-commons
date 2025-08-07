@@ -27,7 +27,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLControllerGetAction;
@@ -37,7 +36,6 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -55,7 +53,6 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
     MLModelManager mlModelManager;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public GetControllerTransportAction(
@@ -75,7 +72,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -105,7 +102,6 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                                     mlModel.getModelGroupId(),
                                     MLControllerGetAction.NAME,
                                     client,
-                                    resourceSharingClient,
                                     ActionListener.wrap(hasPermission -> {
                                         if (hasPermission) {
                                             wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());

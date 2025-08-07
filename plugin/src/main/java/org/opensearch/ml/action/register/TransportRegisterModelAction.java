@@ -38,7 +38,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -68,7 +67,6 @@ import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -106,7 +104,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportRegisterModelAction(
@@ -147,7 +144,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.mlModelGroupManager = mlModelGroupManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.settings = settings;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
@@ -218,7 +214,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLRegisterModelAction.NAME,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 ActionListener.wrap(access -> {
                     if (access) {
                         doRegister(registerModelInput, listener);

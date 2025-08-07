@@ -37,7 +37,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -63,11 +62,7 @@ public class MLModelChunkUploader {
         this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
-    public void uploadModelChunk(
-        MLUploadModelChunkInput uploadModelChunkInput,
-        ResourceSharingClient resourceSharingClient,
-        ActionListener<MLUploadModelChunkResponse> listener
-    ) {
+    public void uploadModelChunk(MLUploadModelChunkInput uploadModelChunkInput, ActionListener<MLUploadModelChunkResponse> listener) {
         final String modelId = uploadModelChunkInput.getModelId();
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
 
@@ -91,7 +86,6 @@ public class MLModelChunkUploader {
                                 existingModel.getModelGroupId(),
                                 MLUploadModelChunkAction.NAME,
                                 client,
-                                resourceSharingClient,
                                 ActionListener.wrap(access -> {
                                     if (!access) {
                                         log.error("You don't have permissions to perform this operation on this model.");

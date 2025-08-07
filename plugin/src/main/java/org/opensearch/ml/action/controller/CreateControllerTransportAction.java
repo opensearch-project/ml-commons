@@ -40,7 +40,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -55,7 +54,6 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -75,7 +73,6 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
     MLModelCacheHelper mlModelCacheHelper;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public CreateControllerTransportAction(
@@ -99,7 +96,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -125,7 +122,6 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                             mlModel.getModelGroupId(),
                             MLCreateControllerAction.NAME,
                             client,
-                            resourceSharingClient,
                             ActionListener.wrap(hasPermission -> {
                                 if (hasPermission) {
                                     if (mlModel.getModelState() != MLModelState.DEPLOYING) {

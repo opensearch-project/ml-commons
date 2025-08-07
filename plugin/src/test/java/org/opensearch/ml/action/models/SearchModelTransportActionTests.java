@@ -184,7 +184,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(), any());
-        when(modelAccessControlHelper.createSearchSourceBuilder(any(), any())).thenReturn(searchSourceBuilder);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
         verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(2)).search(any(), any());
@@ -196,7 +196,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
-        when(modelAccessControlHelper.createSearchSourceBuilder(any(), any())).thenReturn(searchSourceBuilder);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
         verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(2)).search(any(), any());
@@ -208,7 +208,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
-        when(modelAccessControlHelper.createSearchSourceBuilder(any(), any())).thenReturn(searchSourceBuilder);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
         verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(1)).search(any(), any());
@@ -281,7 +281,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
-        when(modelAccessControlHelper.createSearchSourceBuilder(any(), any())).thenReturn(searchSourceBuilder);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("name", "model_IT")));
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
         verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
@@ -295,7 +295,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
-        when(modelAccessControlHelper.createSearchSourceBuilder(any(), any())).thenReturn(searchSourceBuilder);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name", "model_IT"));
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
         verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
@@ -330,7 +330,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
 
-        when(modelAccessControlHelper.createSearchSourceBuilder(any(), any())).thenReturn(searchSourceBuilder);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name", "model_IT"));
         mlSearchActionRequest = new MLSearchActionRequest(searchRequest, "123456");
 

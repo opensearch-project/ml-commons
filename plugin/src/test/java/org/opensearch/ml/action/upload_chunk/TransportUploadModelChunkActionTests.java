@@ -53,22 +53,12 @@ public class TransportUploadModelChunkActionTests extends OpenSearchTestCase {
     }
 
     public void testTransportUploadModelChunkActionConstructor() {
-        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(
-            transportService,
-            actionFilters,
-            mlModelUploader,
-            mlResourceSharingExtension
-        );
+        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(transportService, actionFilters, mlModelUploader);
         assertNotNull(action);
     }
 
     public void testTransportUploadModelChunkActionDoExecute() {
-        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(
-            transportService,
-            actionFilters,
-            mlModelUploader,
-            mlResourceSharingExtension
-        );
+        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(transportService, actionFilters, mlModelUploader);
         assertNotNull(action);
         MLUploadModelChunkRequest request = prepareRequest();
         action.doExecute(task, request, actionListener);

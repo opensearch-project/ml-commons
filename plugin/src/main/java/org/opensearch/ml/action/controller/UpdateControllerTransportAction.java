@@ -37,7 +37,6 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLDeployControllerAction;
@@ -49,7 +48,6 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -67,7 +65,6 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
     ClusterService clusterService;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public UpdateControllerTransportAction(
@@ -87,7 +84,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -113,7 +110,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                             mlModel.getModelGroupId(),
                             MLUpdateControllerAction.NAME,
                             client,
-                            resourceSharingClient,
+
                             ActionListener.wrap(hasPermission -> {
                                 if (hasPermission) {
                                     mlModelManager.getController(modelId, ActionListener.wrap(controller -> {

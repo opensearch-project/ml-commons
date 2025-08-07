@@ -45,6 +45,7 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -86,19 +87,13 @@ public class ModelAccessControlHelper {
         );
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
-    public void validateModelGroupAccess(
-        User user,
-        String modelGroupId,
-        String action,
-        Client client,
-        ResourceSharingClient resourceSharingClient,
-        ActionListener<Boolean> listener
-    ) {
+    public void validateModelGroupAccess(User user, String modelGroupId, String action, Client client, ActionListener<Boolean> listener) {
         if (modelGroupId == null) {
             listener.onResponse(true);
             return;
         }
-        if (resourceSharingClient != null) {
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -161,14 +156,14 @@ public class ModelAccessControlHelper {
         String action,
         Client client,
         SdkClient sdkClient,
-        ResourceSharingClient resourceSharingClient,
         ActionListener<Boolean> listener
     ) {
         if (modelGroupId == null) {
             listener.onResponse(true);
             return;
         }
-        if (resourceSharingClient != null) {
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -361,26 +356,22 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
-    public SearchSourceBuilder createSearchSourceBuilder(User user, ResourceSharingClient resourceSharingClient) {
-        // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
-        if (resourceSharingClient != null) {
-            return addAccessibleModelGroupsFilter(resourceSharingClient, new SearchSourceBuilder());
+    public SearchSourceBuilder createSearchSourceBuilder(User user) {
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            return addAccessibleModelGroupsFilter(new SearchSourceBuilder());
         }
         return addUserBackendRolesFilter(user, new SearchSourceBuilder());
     }
 
-    public SearchSourceBuilder addAccessibleModelGroupsFilter(
-        ResourceSharingClient resourceSharingClient,
-        SearchSourceBuilder searchSourceBuilder
-    ) {
-
+    public SearchSourceBuilder addAccessibleModelGroupsFilter(SearchSourceBuilder searchSourceBuilder) {
+        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
         resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(modelGroupIds -> {
             if (modelGroupIds.isEmpty()) {
                 // User has no access → return nothing
                 searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
             } else {
                 // Restrict search strictly to these ids
-                searchSourceBuilder.query(QueryBuilders.termsQuery(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds));
+                searchSourceBuilder.query(QueryBuilders.idsQuery().addIds(modelGroupIds.toArray(new String[0])));
             }
         }, failure -> {
             // do nothing to the source or return empty set?

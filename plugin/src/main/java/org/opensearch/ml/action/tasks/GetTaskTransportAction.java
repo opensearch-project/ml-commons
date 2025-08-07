@@ -64,7 +64,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -96,7 +95,6 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -133,8 +131,6 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     volatile Pattern remoteJobFailedStatusRegexPattern;
     private final MLEngine mlEngine;
 
-    private final ResourceSharingClient resourceSharingClient;
-
     // private Map<String, String> decryptedCredential;
 
     @Inject
@@ -168,7 +164,6 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlEngine = mlEngine;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
@@ -380,7 +375,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             MLTaskGetAction.NAME,
                             client,
                             sdkClient,
-                            resourceSharingClient,
+
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     actionListener

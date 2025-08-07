@@ -97,7 +97,6 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
             transportService,
             actionFilters,
             client,
-            Settings.EMPTY,
             sdkClient,
             clusterService,
             modelAccessControlHelper,

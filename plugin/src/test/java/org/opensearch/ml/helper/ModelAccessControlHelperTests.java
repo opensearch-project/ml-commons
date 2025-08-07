@@ -48,7 +48,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -74,9 +73,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     @Mock
     private ThreadPool threadPool;
-
-    @Mock
-    ResourceSharingClient resourceSharingClient;
 
     ThreadContext threadContext;
 
@@ -118,7 +114,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     // TODO Remove when all calls are migrated to SdkClient version
     public void test_UndefinedModelGroupID_NoSdkClient() {
-        modelAccessControlHelper.validateModelGroupAccess(null, null, null, client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(null, null, null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -134,7 +130,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 null,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 actionListener
             );
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -145,7 +141,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     // TODO Remove when all calls are migrated to SdkClient version
     public void test_UndefinedOwner_NoSdkClient() throws IOException {
         getResponse = modelGroupBuilder(null, null, null);
-        modelAccessControlHelper.validateModelGroupAccess(null, null, "testGroupID", client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(null, null, "testGroupID", client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -162,7 +158,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 "testGroupID",
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 actionListener
             );
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -175,7 +171,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         String owner = "owner|IT,HR|myTenant";
         User user = User.parse("owner|IT,HR|myTenant");
         getResponse = modelGroupBuilder(null, AccessMode.RESTRICTED.getValue(), owner);
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Backend roles shouldn't be null", argumentCaptor.getValue().getMessage());
@@ -201,7 +197,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 "testGroupID",
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 latchedActionListener
             );
         latch.await(500, TimeUnit.MILLISECONDS);
@@ -217,7 +213,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.RESTRICTED.getValue(), backendRoles);
         User user = User.parse("owner|IT,HR|myTenant");
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -244,7 +240,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 null,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 latchedActionListener
             );
         latch.await(500, TimeUnit.MILLISECONDS);
@@ -260,7 +256,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.PUBLIC.getValue(), backendRoles);
         User user = User.parse("owner|IT,HR|myTenant");
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -287,7 +283,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 null,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 latchedActionListener
             );
         latch.await(500, TimeUnit.MILLISECONDS);
@@ -303,7 +299,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.PRIVATE.getValue(), backendRoles);
         User user = User.parse("owner|IT,HR|myTenant");
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
@@ -330,7 +326,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 null,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 latchedActionListener
             );
         latch.await(500, TimeUnit.MILLISECONDS);
@@ -346,7 +342,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.PRIVATE.getValue(), backendRoles);
         User user = User.parse("user|IT,HR|myTenant");
-        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, resourceSharingClient, actionListener);
+        modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertFalse(argumentCaptor.getValue());
@@ -373,7 +369,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
                 null,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 latchedActionListener
             );
         latch.await(500, TimeUnit.MILLISECONDS);
@@ -490,7 +486,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     public void test_CreateSearchSourceBuilder() {
         User user = User.parse("owner|IT,HR|myTenant");
-        assertNotNull(modelAccessControlHelper.createSearchSourceBuilder(user, resourceSharingClient));
+        assertNotNull(modelAccessControlHelper.createSearchSourceBuilder(user));
     }
 
     private GetResponse modelGroupBuilder(List<String> backendRoles, String access, String owner) throws IOException {

@@ -126,8 +126,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             clusterService,
             modelAccessControlHelper,
             mlModelGroupManager,
-            mlFeatureEnabledSetting,
-            mlResourceSharingExtension
+            mlFeatureEnabledSetting
         );
         assertNotNull(transportUpdateModelGroupAction);
 

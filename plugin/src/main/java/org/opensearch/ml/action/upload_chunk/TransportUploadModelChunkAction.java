@@ -10,12 +10,10 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -26,7 +24,6 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
     TransportService transportService;
     ActionFilters actionFilters;
     MLModelChunkUploader mlModelChunkUploader;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportUploadModelChunkAction(
@@ -38,7 +35,7 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
         this.transportService = transportService;
         this.actionFilters = actionFilters;
         this.mlModelChunkUploader = mlModelChunkUploader;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -46,6 +43,6 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
         MLUploadModelChunkRequest uploadModelRequest = MLUploadModelChunkRequest.fromActionRequest(request);
         MLUploadModelChunkInput mlUploadChunkInput = uploadModelRequest.getUploadModelChunkInput();
 
-        mlModelChunkUploader.uploadModelChunk(mlUploadChunkInput, resourceSharingClient, listener);
+        mlModelChunkUploader.uploadModelChunk(mlUploadChunkInput, listener);
     }
 }

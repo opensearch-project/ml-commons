@@ -44,7 +44,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
@@ -67,7 +66,6 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -91,7 +89,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     final MLModelGroupManager mlModelGroupManager;
     final MLEngine mlEngine;
     volatile List<String> trustedConnectorEndpointsRegex;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public UpdateModelTransportAction(
@@ -118,7 +115,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -179,7 +176,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         MLUpdateModelAction.NAME,
                                         client,
                                         sdkClient,
-                                        resourceSharingClient,
+
                                         ActionListener.wrap(hasPermission -> {
                                             if (hasPermission) {
                                                 updateRemoteOrTextEmbeddingModel(
@@ -446,7 +443,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     newModelGroupId,
                     MLUpdateModelAction.NAME,
                     client,
-                    resourceSharingClient,
+
                     ActionListener.wrap(hasNewModelGroupPermission -> {
                         if (hasNewModelGroupPermission) {
                             mlModelGroupManager

@@ -27,7 +27,6 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -40,7 +39,6 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
     SdkClient sdkClient;
     ClusterService clusterService;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    final ResourceSharingClient resourceSharingClient;
 
     ModelAccessControlHelper modelAccessControlHelper;
 
@@ -60,7 +58,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -87,10 +85,10 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
             // If resource-sharing feature is enabled, we fetch accessible model-groups and restrict the search to those model-groups only.
-            if (resourceSharingClient != null) {
+            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
                 // If a model-group is shared, then it will have been shared at-least at read access, hence the final result is guaranteed
                 // to only contain model-groups that the user at-least has read access to.
-                modelAccessControlHelper.addAccessibleModelGroupsFilter(resourceSharingClient, request.source());
+                modelAccessControlHelper.addAccessibleModelGroupsFilter(request.source());
             } else if (!modelAccessControlHelper.skipModelAccessControl(user)) {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());

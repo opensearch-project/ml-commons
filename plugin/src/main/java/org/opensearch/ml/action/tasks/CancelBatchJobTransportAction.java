@@ -37,7 +37,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -62,7 +61,6 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.script.ScriptService;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -85,7 +83,6 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     MLTaskManager mlTaskManager;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public CancelBatchJobTransportAction(
@@ -113,7 +110,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -202,7 +199,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                         model.getModelGroupId(),
                         MLCancelBatchJobAction.NAME,
                         client,
-                        resourceSharingClient,
+
                         ActionListener.wrap(access -> {
                             if (!access) {
                                 actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));

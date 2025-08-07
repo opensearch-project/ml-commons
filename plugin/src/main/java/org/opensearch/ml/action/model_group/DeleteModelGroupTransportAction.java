@@ -42,7 +42,6 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -62,7 +61,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public DeleteModelGroupTransportAction(
@@ -82,7 +80,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
     }
 
     @Override
@@ -99,7 +97,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
 
             // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
-            if (resourceSharingClient != null) {
+            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
                 checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
             } else {
                 validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
@@ -118,7 +116,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
-                resourceSharingClient,
+
                 ActionListener
                     .wrap(
                         hasAccess -> handleAccessValidation(hasAccess, modelGroupId, tenantId, listener),

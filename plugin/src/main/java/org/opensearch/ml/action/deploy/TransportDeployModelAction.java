@@ -44,7 +44,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
@@ -64,7 +63,6 @@ import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -94,7 +92,6 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     private volatile boolean allowCustomDeploymentPlan;
     private final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportDeployModelAction(
@@ -130,7 +127,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
         this.settings = settings;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
         clusterService
@@ -186,7 +183,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                             mlModel.getModelGroupId(),
                             MLDeployModelAction.NAME,
                             client,
-                            resourceSharingClient,
+
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     wrappedListener
