@@ -380,4 +380,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
         return field2Desc;
     }
+    
+    @Override
+    public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
+        if (prerequisiteType == MLIndexInsightType.STATISTICAL_DATA) {
+            return new StatisticalDataTask(indexName, client);
+        }
+        throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
+    }
 }

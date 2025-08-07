@@ -106,4 +106,9 @@ public class StatisticalDataTask implements IndexInsightTask {
         
         return content.toString();
     }
+    
+    @Override
+    public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
+        throw new IllegalArgumentException("StatisticalDataTask has no prerequisites");
+    }
 }
