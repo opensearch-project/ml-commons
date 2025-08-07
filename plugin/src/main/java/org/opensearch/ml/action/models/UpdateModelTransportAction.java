@@ -115,7 +115,6 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()

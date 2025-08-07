@@ -101,7 +101,6 @@ public class MLModelGroupManager {
                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(input, user);
                             builder = builder.access(input.getModelAccessMode().getValue());
-
                             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                                 input.setBackendRoles(user.getBackendRoles());
                             }

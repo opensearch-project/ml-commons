@@ -98,7 +98,6 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
                 mlUploadInput.getModelGroupId(),
                 MLRegisterModelMetaAction.NAME,
                 client,
-
                 ActionListener.wrap(access -> {
                     if (access) {
                         createModelGroup(mlUploadInput, listener);
