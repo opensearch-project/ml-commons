@@ -1,7 +1,5 @@
 package org.opensearch.ml.common.indexInsight;
 
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -29,6 +27,8 @@ public interface IndexInsightTask {
 
     long GENERATING_TIMEOUT = 3 * 60 * 1000; // 3 minutes - temporary setting
     long UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours - temporary setting
+
+
     
     /**
      * Execute the index insight task following the new design:
@@ -38,22 +38,22 @@ public interface IndexInsightTask {
      * 4. Run task logic
      * 5. Write back to storage
      */
-    default void execute(ActionListener<IndexInsight> listener) {
+    default void execute(String targetIndex, ActionListener<IndexInsight> listener) {
         String docId = generateDocId();
-        GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, docId);
+        GetRequest getRequest = new GetRequest(targetIndex, docId);
         
         getClient().get(getRequest, ActionListener.wrap(getResponse -> {
             if (getResponse.isExists()) {
-                handleExistingDoc(getResponse, listener);
+                handleExistingDoc(getResponse, targetIndex, listener);
             } else {
-                createGeneratingDoc(docId, listener);
+                createGeneratingDoc(docId, targetIndex, listener);
             }
         }, e -> {
-            createGeneratingDoc(docId, listener);
+            createGeneratingDoc(docId, targetIndex, listener);
         }));
     }
     
-    default void handleExistingDoc(GetResponse getResponse, ActionListener<IndexInsight> listener) {
+    default void handleExistingDoc(GetResponse getResponse, String targetIndex, ActionListener<IndexInsight> listener) {
         Map<String, Object> source = getResponse.getSourceAsMap();
         String currentStatus = (String) source.get("status");
         Long lastUpdateTime = (Long) source.get("last_updated_time");
@@ -64,7 +64,7 @@ public interface IndexInsightTask {
             case GENERATING:
                 // Check if generating timeout
                 if (lastUpdateTime != null && (currentTime - lastUpdateTime) > GENERATING_TIMEOUT) {
-                    setGeneratingAndRun(listener);
+                    setGeneratingAndRun(targetIndex, listener);
                 } else {
                     // If still generating and not timeout, task is already running
                     listener.onFailure(new OpenSearchStatusException(
@@ -74,7 +74,7 @@ public interface IndexInsightTask {
             case COMPLETED:
                 // Check if needs update
                 if (lastUpdateTime != null && (currentTime - lastUpdateTime) > UPDATE_INTERVAL) {
-                    setGeneratingAndRun(listener);
+                    setGeneratingAndRun(targetIndex, listener);
                 } else {
                     // Return existing result
                     IndexInsight insight = IndexInsight.builder()
@@ -89,43 +89,43 @@ public interface IndexInsightTask {
                 break;
             case FAILED:
                 // Retry failed task
-                setGeneratingAndRun(listener);
+                setGeneratingAndRun(targetIndex, listener);
                 break;
         }
     }
     
-    default void createGeneratingDoc(String docId, ActionListener<IndexInsight> listener) {
+    default void createGeneratingDoc(String docId, String targetIndex, ActionListener<IndexInsight> listener) {
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("index_name", getTargetIndex());
         docMap.put("task_type", getTaskType().toString());
         docMap.put("status", IndexInsightTaskStatus.GENERATING.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
-        UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
+        UpdateRequest updateRequest = new UpdateRequest(targetIndex, docId)
             .doc(docMap, MediaTypeRegistry.JSON)
             .docAsUpsert(true);
         
         getClient().update(updateRequest, ActionListener.wrap(r -> {
             setStatus(IndexInsightTaskStatus.GENERATING);
-            checkPrerequisitesAndRun(listener);
+            checkPrerequisitesAndRun(targetIndex, listener);
         }, e -> {
             setStatus(IndexInsightTaskStatus.FAILED);
             listener.onFailure(e);
         }));
     }
     
-    default void setGeneratingAndRun(ActionListener<IndexInsight> listener) {
+    default void setGeneratingAndRun(String targetIndex, ActionListener<IndexInsight> listener) {
         String docId = generateDocId();
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("status", IndexInsightTaskStatus.GENERATING.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
-        UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
+        UpdateRequest updateRequest = new UpdateRequest(targetIndex, docId)
             .doc(docMap, MediaTypeRegistry.JSON)
             .docAsUpsert(true);
         
         getClient().update(updateRequest, ActionListener.wrap(
-            r -> checkPrerequisitesAndRun(listener),
+            r -> checkPrerequisitesAndRun(targetIndex, listener),
             e -> {
                 setStatus(IndexInsightTaskStatus.FAILED);
                 listener.onFailure(e);
@@ -133,17 +133,17 @@ public interface IndexInsightTask {
         ));
     }
     
-    default void checkPrerequisitesAndRun(ActionListener<IndexInsight> listener) {
+    default void checkPrerequisitesAndRun(String targetIndex, ActionListener<IndexInsight> listener) {
         List<MLIndexInsightType> prerequisites = getPrerequisites();
         if (prerequisites.isEmpty()) {
             runTaskLogic(listener);
             return;
         }
         
-        checkAndRunPrerequisites(prerequisites, 0, listener);
+        checkAndRunPrerequisites(prerequisites, 0, targetIndex, listener);
     }
     
-    default void checkAndRunPrerequisites(List<MLIndexInsightType> prerequisites, int index, ActionListener<IndexInsight> listener) {
+    default void checkAndRunPrerequisites(List<MLIndexInsightType> prerequisites, int index, String targetIndex, ActionListener<IndexInsight> listener) {
         if (index >= prerequisites.size()) {
             // All prerequisites satisfied, run current task
             runTaskLogic(listener);
@@ -152,13 +152,13 @@ public interface IndexInsightTask {
         
         MLIndexInsightType prerequisite = prerequisites.get(index);
         String prereqDocId = generateDocId(getTargetIndex(), prerequisite);
-        GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, prereqDocId);
+        GetRequest getRequest = new GetRequest(targetIndex, prereqDocId);
         
         getClient().get(getRequest, ActionListener.wrap(response -> {
             if (!response.isExists()) {
                 // Prerequisite not found - run it
-                runPrerequisite(prerequisite, ActionListener.wrap(
-                    prereqInsight -> checkAndRunPrerequisites(prerequisites, index + 1, listener),
+                runPrerequisite(prerequisite, targetIndex, ActionListener.wrap(
+                    prereqInsight -> checkAndRunPrerequisites(prerequisites, index + 1, targetIndex, listener),
                     e -> {
                         saveFailedStatus();
                         listener.onFailure(new Exception("Failed to run prerequisite: " + prerequisite, e));
@@ -184,8 +184,8 @@ public interface IndexInsightTask {
                 
                 if (prereqLastUpdateTime != null && (currentTime - prereqLastUpdateTime) > UPDATE_INTERVAL) {
                     // Prerequisite expired - run it again
-                    runPrerequisite(prerequisite, ActionListener.wrap(
-                        prereqInsight -> checkAndRunPrerequisites(prerequisites, index + 1, listener),
+                    runPrerequisite(prerequisite, targetIndex, ActionListener.wrap(
+                        prereqInsight -> checkAndRunPrerequisites(prerequisites, index + 1, targetIndex, listener),
                         e -> {
                             saveFailedStatus();
                             listener.onFailure(new Exception("Failed to run expired prerequisite: " + prerequisite, e));
@@ -193,7 +193,7 @@ public interface IndexInsightTask {
                     ));
                 } else {
                     // This prerequisite is satisfied, check next one
-                    checkAndRunPrerequisites(prerequisites, index + 1, listener);
+                    checkAndRunPrerequisites(prerequisites, index + 1, targetIndex, listener);
                 }
             } else {
                 saveFailedStatus();
@@ -205,12 +205,12 @@ public interface IndexInsightTask {
         }));
     }
     
-    default void runPrerequisite(MLIndexInsightType prerequisiteType, ActionListener<IndexInsight> listener) {
+    default void runPrerequisite(MLIndexInsightType prerequisiteType, String targetIndex, ActionListener<IndexInsight> listener) {
         IndexInsightTask prerequisiteTask = createPrerequisiteTask(prerequisiteType);
-        prerequisiteTask.execute(listener);
+        prerequisiteTask.execute(targetIndex, listener);
     }
     
-    default void saveResult(String content, ActionListener<IndexInsight> listener) {
+    default void saveResult(String content, String targetIndex, ActionListener<IndexInsight> listener) {
         String docId = generateDocId();
         long currentTime = Instant.now().toEpochMilli();
         Map<String, Object> docMap = new HashMap<>();
@@ -220,7 +220,7 @@ public interface IndexInsightTask {
         docMap.put("status", IndexInsightTaskStatus.COMPLETED.toString());
         docMap.put("last_updated_time", currentTime);
         
-        UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
+        UpdateRequest updateRequest = new UpdateRequest(targetIndex, docId)
             .doc(docMap, MediaTypeRegistry.JSON)
             .docAsUpsert(true);
         
@@ -241,7 +241,7 @@ public interface IndexInsightTask {
         }));
     }
     
-    default void saveFailedStatus() {
+    default void saveFailedStatus(String targetIndex) {
         String docId = generateDocId();
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("index_name", getTargetIndex());
@@ -249,7 +249,7 @@ public interface IndexInsightTask {
         docMap.put("status", IndexInsightTaskStatus.FAILED.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
-        UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
+        UpdateRequest updateRequest = new UpdateRequest(targetIndex, docId)
             .doc(docMap, MediaTypeRegistry.JSON)
             .docAsUpsert(true);
         

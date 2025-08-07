@@ -165,9 +165,10 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerDeleteRequest.getTenantId(), listener)) {
             return;
         }
-        getIndexInsightContainer(mlIndexInsightContainerDeleteRequest.getTenantId(), ActionListener.wrap(indexName -> {
+        String tenantId = mlIndexInsightContainerDeleteRequest.getTenantId();
+        getIndexInsightContainer(tenantId, ActionListener.wrap(indexName -> {
             deleteOriginalIndexInsightIndex(indexName, ActionListener.wrap(r -> {
-                listener.onResponse(new MLIndexInsightContainerDeleteResponse());
+                deleteIndexInsightContainer(tenantId, ActionListener.wrap(r1 -> {listener.onResponse(new MLIndexInsightContainerDeleteResponse());}, listener::onFailure));
             }, listener::onFailure));
 
         }, listener::onFailure));

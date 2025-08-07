@@ -1,8 +1,10 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_INDEX_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -11,6 +13,7 @@ import java.util.Locale;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -28,9 +31,12 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
 
     private Settings settings;
 
-    public RestMLGetIndexInsightAction(ClusterService clusterService, Settings settings) {
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    public RestMLGetIndexInsightAction(ClusterService clusterService, Settings settings, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.clusterService = clusterService;
         this.settings = settings;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -52,12 +58,16 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
 
     @VisibleForTesting
     MLIndexInsightGetRequest getRequest(RestRequest request) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
+            throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
+        }
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         String indexName = getParameterId(request, PARAMETER_INDEX_ID);
         String insightType = request.param("insight_type");
         if (insightType == null) {
             insightType = "STATISTICAL_DATA";
         }
         MLIndexInsightType type = MLIndexInsightType.fromString(insightType);
-        return new MLIndexInsightGetRequest(indexName, type);
+        return new MLIndexInsightGetRequest(indexName, type, tenantId);
     }
 }

@@ -18,16 +18,19 @@ import lombok.Getter;
 public class MLIndexInsightGetRequest extends ActionRequest {
     String indexName;
     MLIndexInsightType targetIndexInsight;
+    String tenantId;
 
-    public MLIndexInsightGetRequest(String indexName, MLIndexInsightType targetIndexInsight) {
+    public MLIndexInsightGetRequest(String indexName, MLIndexInsightType targetIndexInsight, String tenantId) {
         this.indexName = indexName;
         this.targetIndexInsight = targetIndexInsight;
+        this.tenantId = tenantId;
     }
 
     public MLIndexInsightGetRequest(StreamInput in) throws IOException {
         super(in);
         this.indexName = in.readString();
         this.targetIndexInsight = MLIndexInsightType.fromString(in.readString());
+        this.tenantId = in.readOptionalString();
     }
 
     @Override

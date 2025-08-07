@@ -4,14 +4,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.indexInsight.IndexInsight;
 import org.opensearch.ml.common.indexInsight.IndexInsightAccessControllerHelper;
+import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.indexInsight.IndexInsightTask;
 import org.opensearch.ml.common.indexInsight.IndexInsightTaskStatus;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
@@ -21,10 +25,15 @@ import org.opensearch.ml.common.indexInsight.IndexDescriptionTask;
 import org.opensearch.ml.common.indexInsight.LogRelatedIndexCheckTask;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
 
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -32,9 +41,15 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 
 import lombok.extern.log4j.Log4j2;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
+
 @Log4j2
 public class GetIndexInsightTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightGetResponse> {
     private Client client;
+    private SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
     private MLIndicesHandler mlIndicesHandler;
     private ClusterService clusterService;
@@ -45,6 +60,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         ActionFilters actionFilters,
         NamedXContentRegistry xContentRegistry,
         Client client,
+        SdkClient sdkClient,
         MLIndicesHandler mlIndicesHandler,
         ClusterService clusterService
     ) {
@@ -53,12 +69,14 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         this.xContentRegistry = xContentRegistry;
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
+        this.sdkClient = sdkClient;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLIndexInsightGetResponse> actionListener) {
         MLIndexInsightGetRequest mlIndexInsightGetRequest = MLIndexInsightGetRequest.fromActionRequest(request);
         String indexName = mlIndexInsightGetRequest.getIndexName();
+        String tenantId = mlIndexInsightGetRequest.getTenantId();
         
         // Initialize index insight index if absent
         mlIndicesHandler.initMLIndexInsightIndex(ActionListener.wrap(indexCreated -> {
@@ -68,12 +86,46 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             }
             
             ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
-                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
-                        .runBefore(actionListener, () -> context.restore());
-                    executeTaskAndReturn(mlIndexInsightGetRequest, wrappedListener);
+                try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
+                    sdkClient
+                            .getDataObjectAsync(
+                                    GetDataObjectRequest
+                                            .builder()
+                                            .tenantId(tenantId)
+                                            .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
+                                            .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
+                                            .build()
+                            ).whenComplete((r1, throwable) -> {
+                                getContext.restore();
+                                if (throwable != null) {
+                                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                                    log.error("Failed to index index insight container", cause);
+                                    actionListener.onFailure(cause);
+                                } else {
+                                    GetResponse getResponse = r1.getResponse();
+                                    if (getResponse.isExists()) {
+                                        try (XContentParser parser = jsonXContent
+                                                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())) {
+                                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                            IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
+                                            String targetIndex = indexInsightContainer.getIndexName();
+                                            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                                                ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
+                                                        .runBefore(actionListener, () -> context.restore());
+                                                executeTaskAndReturn(mlIndexInsightGetRequest, targetIndex, wrappedListener);
+                                            } catch (Exception e) {
+                                                log.error("fail to get index insight", e);
+                                                actionListener.onFailure(e);
+                                            }
+                                        } catch (Exception e) {
+                                            actionListener.onFailure(e);
+                                        }
+                                    } else {
+                                        actionListener.onFailure(new RuntimeException("The container is not set yet"));
+                                    }
+                                }
+                            });
                 } catch (Exception e) {
-                    log.error("fail to get index insight", e);
                     actionListener.onFailure(e);
                 }
             }, actionListener::onFailure);
@@ -81,9 +133,9 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         }, actionListener::onFailure));
     }
     
-    private void executeTaskAndReturn(MLIndexInsightGetRequest request, ActionListener<MLIndexInsightGetResponse> listener) {
+    private void executeTaskAndReturn(MLIndexInsightGetRequest request, String targetIndex, ActionListener<MLIndexInsightGetResponse> listener) {
         IndexInsightTask task = createTask(request);
-        task.execute(ActionListener.wrap(
+        task.execute(targetIndex, ActionListener.wrap(
             insight -> {
                 // Task completed, return result directly
                 listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(insight).build());
