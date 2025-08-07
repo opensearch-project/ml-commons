@@ -46,7 +46,7 @@ public class MLIndexInsightGetRequest extends ActionRequest {
                 return new MLIndexInsightGetRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightGetRequest", e);
         }
 
     }

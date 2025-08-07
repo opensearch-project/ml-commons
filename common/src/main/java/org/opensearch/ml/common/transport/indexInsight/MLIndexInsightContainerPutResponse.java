@@ -14,7 +14,8 @@ public class MLIndexInsightContainerPutResponse extends ActionResponse implement
     public MLIndexInsightContainerPutResponse() {
     }
 
-    public MLIndexInsightContainerPutResponse(StreamInput streamInput) {
+    public MLIndexInsightContainerPutResponse(StreamInput in) throws IOException {
+        super(in);
     }
 
 

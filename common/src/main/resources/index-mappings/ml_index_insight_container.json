@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "index_name": {
+      "type": "keyword"
+    }
+  }
+}
