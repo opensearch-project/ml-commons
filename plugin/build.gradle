@@ -38,7 +38,7 @@ java {
 }
 
 lombok {
-    version = "1.18.30"
+    version = "1.18.38"
 }
 
 opensearchplugin {
@@ -228,6 +228,7 @@ integTest {
     if (System.getProperty("test.debug") != null) {
         jvmArgs '-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005'
     }
+    jvmArgs '--add-opens', 'java.base/java.time=ALL-UNNAMED'
 
     // Set this to true this if you want to see the logs in the terminal test output.
     // note: if left false the log output will still show in your IDE
@@ -383,7 +384,21 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.jobs.MLJobRunner',
         'org.opensearch.ml.utils.ParseUtils',
         'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
-        'org.opensearch.ml.jobs.processors.MLJobProcessor'
+        'org.opensearch.ml.jobs.processors.MLJobProcessor',
+        // Memory container related exclusions
+        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction.*',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction.*',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction.*',
+        'org.opensearch.ml.rest.RestMLAddMemoriesAction',
+        'org.opensearch.ml.rest.RestMLSearchMemoriesAction',
+        'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
+        'org.opensearch.ml.rest.RestMLUpdateMemoryAction',
+        'org.opensearch.ml.utils.MemorySearchQueryBuilder'
 ]
 
 jacocoTestCoverageVerification {
@@ -435,6 +450,7 @@ configurations.all {
     resolutionStrategy.force "org.opensearch:opensearch:${opensearch_version}"
     resolutionStrategy.force "org.bouncycastle:bcprov-jdk18on:1.78.1"
     resolutionStrategy.force 'io.projectreactor:reactor-core:3.7.0'
+    resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
@@ -663,13 +679,4 @@ task bwcTestSuite(type: StandaloneRestIntegTestTask) {
 forbiddenPatterns {
     exclude '**/*.pdf'
     exclude '**/*.jpg'
-}
-
-configurations {
-    runtimeClasspath {
-        resolutionStrategy {
-            // CVE-48734: tribuo-clustering-kmeans:'4.2.1 causes a transitive dependency on beanutils:1.94
-            force 'commons-beanutils:commons-beanutils:1.11.0'
-        }
-    }
 }

@@ -132,7 +132,8 @@ public class UpdateAgentTransportActionTests {
             .agentId(agentId)
             .name("agent")
             .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llmModelId("model_id")
+            .llmParameters(new HashMap<>())
             .build();
 
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, "test_tenant_id");
@@ -167,7 +168,8 @@ public class UpdateAgentTransportActionTests {
             .agentId(agentId)
             .name("agent")
             .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llmModelId("model_id")
+            .llmParameters(new HashMap<>())
             .build();
 
         MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
@@ -193,7 +195,8 @@ public class UpdateAgentTransportActionTests {
             .agentId(agentId)
             .name("agent")
             .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llmModelId("model_id")
+            .llmParameters(new HashMap<>())
             .build();
 
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
@@ -227,7 +230,8 @@ public class UpdateAgentTransportActionTests {
             .agentId(agentId)
             .name("updated_agent")
             .description("updated description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llmModelId("model_id")
+            .llmParameters(new HashMap<>())
             .build();
 
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, true, null);
@@ -263,7 +267,8 @@ public class UpdateAgentTransportActionTests {
             .agentId(agentId)
             .name("updated_agent")
             .description("updated description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llmModelId("model_id")
+            .llmParameters(new HashMap<>())
             .build();
 
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, true, null);
@@ -291,7 +296,7 @@ public class UpdateAgentTransportActionTests {
             .name("test")
             .type(MLAgentType.CONVERSATIONAL.name())
             .description("test description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llm(LLMSpec.builder().modelId("model_id").parameters(new HashMap<>()).build())
             .isHidden(isHidden)
             .tenantId(tenantId)
             .createdTime(Instant.now())

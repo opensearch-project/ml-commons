@@ -70,4 +70,36 @@ public class MLCommonsSettingsTests {
     public void testAllowModelUrlDisabledByDefault() {
         assertFalse(MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL.getDefault(null));
     }
+
+    @Test
+    public void testAgenticMemoryDisabledByDefault() {
+        assertFalse(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getDefault(null));
+    }
+
+    @Test
+    public void testAgenticMemorySettingProperties() {
+        // Test setting key
+        assertEquals("plugins.ml_commons.agentic_memory_enabled", MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey());
+
+        // Test setting is dynamic
+        assertTrue(
+            MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED
+                .getProperties()
+                .contains(org.opensearch.common.settings.Setting.Property.Dynamic)
+        );
+
+        // Test setting is node scope
+        assertTrue(
+            MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED
+                .getProperties()
+                .contains(org.opensearch.common.settings.Setting.Property.NodeScope)
+        );
+    }
+
+    @Test
+    public void testAgenticMemoryDisabledMessage() {
+        String expectedMessage =
+            "The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled";
+        assertEquals(expectedMessage, MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE);
+    }
 }

@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -57,10 +58,11 @@ public class ConnectorTool implements Tool {
     private String connectorId;
 
     public ConnectorTool(Client client, String connectorId) {
-        this.client = client;
-        if (connectorId == null) {
-            throw new IllegalArgumentException("connector_id can't be null");
+        if (StringUtils.isBlank(connectorId)) {
+            throw new IllegalArgumentException("Connector ID can't be null or empty");
         }
+
+        this.client = client;
         this.connectorId = connectorId;
 
         outputParser = new Parser() {
@@ -73,23 +75,32 @@ public class ConnectorTool implements Tool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        MLInput mlInput = RemoteInferenceMLInput.builder().algorithm(FunctionName.CONNECTOR).inputDataset(inputDataSet).build();
-        ActionRequest request = new MLExecuteConnectorRequest(connectorId, mlInput);
-
-        client.execute(MLExecuteConnectorAction.INSTANCE, request, ActionListener.wrap(r -> {
-            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
-            modelTensorOutput.getMlModelOutputs();
-            if (outputParser == null) {
-                listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
-            } else {
-                listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        try {
+            if (connectorId.isBlank()) {
+                throw new IllegalArgumentException("Connector is not registered in tool");
             }
-        }, e -> {
-            log.error("Failed to run model " + connectorId, e);
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
+            MLInput mlInput = RemoteInferenceMLInput.builder().algorithm(FunctionName.CONNECTOR).inputDataset(inputDataSet).build();
+            ActionRequest request = new MLExecuteConnectorRequest(connectorId, mlInput);
+
+            client.execute(MLExecuteConnectorAction.INSTANCE, request, ActionListener.wrap(r -> {
+                ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
+                modelTensorOutput.getMlModelOutputs();
+                if (outputParser == null) {
+                    listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
+                } else {
+                    listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+                }
+            }, e -> {
+                log.error("Failed to run model " + connectorId, e);
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to run ConnectorTool with connector: {}", connectorId, e);
             listener.onFailure(e);
-        }));
+        }
     }
 
     @Override
@@ -99,15 +110,12 @@ public class ConnectorTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
-            return false;
-        }
-        return true;
+        return parameters != null && !parameters.isEmpty();
     }
 
     public static class Factory implements Tool.Factory<ConnectorTool> {
         public static final String TYPE = "ConnectorTool";
-        public static final String DEFAULT_DESCRIPTION = "This tool will invoke external service.";
+        public static final String DEFAULT_DESCRIPTION = "Invokes external service. Required: 'connector_id'. Returns: service response.";
         private Client client;
         private static Factory INSTANCE;
 

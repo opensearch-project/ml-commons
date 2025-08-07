@@ -5,7 +5,10 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
+
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -38,13 +41,19 @@ public class VisualizationsTool implements Tool {
     public static final String VERSION = "v1.0";
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
+    public static final String STRICT_FIELD = "strict";
 
     /**
      * default number of visualizations returned
      */
     private static final int DEFAULT_SIZE = 3;
     private static final String DEFAULT_DESCRIPTION =
-        "Use this tool to find user created visualizations. This tool takes the visualization name as input and returns matching visualizations";
+        "Searches for saved visualizations by name. Required: 'input' (visualization name, supports partial matches). Returns: list of matching visualizations with their titles and IDs.";
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
+        + "\"properties\":{\"input\":{\"type\":\"string\",\"description\":\"Visualization name to search for\"}},"
+        + "\"required\":[\"input\"],"
+        + "\"additionalProperties\":false}";
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
     @Setter
     @Getter
     private String description = DEFAULT_DESCRIPTION;
@@ -71,48 +80,58 @@ public class VisualizationsTool implements Tool {
         this.client = client;
         this.index = index;
         this.size = size;
+
+        this.attributes = new HashMap<>();
+        attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(STRICT_FIELD, true);
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.must().add(QueryBuilders.termQuery("type", SAVED_OBJECT_TYPE));
-        boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get("input")));
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
+            BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+            boolQueryBuilder.must().add(QueryBuilders.termQuery("type", SAVED_OBJECT_TYPE));
+            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get("input")));
 
-        SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource().query(boolQueryBuilder);
-        searchSourceBuilder.from(0).size(size);
-        SearchRequest searchRequest = Requests.searchRequest(index).source(searchSourceBuilder);
+            SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource().query(boolQueryBuilder);
+            searchSourceBuilder.from(0).size(size);
+            SearchRequest searchRequest = Requests.searchRequest(index).source(searchSourceBuilder);
 
-        client.search(searchRequest, new ActionListener<>() {
-            @Override
-            public void onResponse(SearchResponse searchResponse) {
-                SearchHits hits = searchResponse.getHits();
-                StringBuilder visBuilder = new StringBuilder();
-                visBuilder.append("Title,Id\n");
-                if (hits.getTotalHits().value() > 0) {
-                    Arrays.stream(hits.getHits()).forEach(h -> {
-                        String id = trimIdPrefix(h.getId());
-                        Map<String, String> visMap = (Map<String, String>) h.getSourceAsMap().get(SAVED_OBJECT_TYPE);
-                        String title = visMap.get("title");
-                        visBuilder.append(String.format(Locale.ROOT, "%s,%s\n", title, id));
-                    });
+            client.search(searchRequest, new ActionListener<>() {
+                @Override
+                public void onResponse(SearchResponse searchResponse) {
+                    SearchHits hits = searchResponse.getHits();
+                    StringBuilder visBuilder = new StringBuilder();
+                    visBuilder.append("Title,Id\n");
+                    if (hits.getTotalHits().value() > 0) {
+                        Arrays.stream(hits.getHits()).forEach(h -> {
+                            String id = trimIdPrefix(h.getId());
+                            Map<String, String> visMap = (Map<String, String>) h.getSourceAsMap().get(SAVED_OBJECT_TYPE);
+                            String title = visMap.get("title");
+                            visBuilder.append(String.format(Locale.ROOT, "%s,%s\n", title, id));
+                        });
 
-                    listener.onResponse((T) visBuilder.toString());
-                } else {
-                    listener.onResponse((T) "No Visualization found");
+                        listener.onResponse((T) visBuilder.toString());
+                    } else {
+                        listener.onResponse((T) "No Visualization found");
+                    }
                 }
-            }
 
-            @Override
-            public void onFailure(Exception e) {
-                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException
-                    || ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
-                    listener.onResponse((T) "No Visualization found");
-                } else {
-                    listener.onFailure(e);
+                @Override
+                public void onFailure(Exception e) {
+                    if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException
+                        || ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
+                        listener.onResponse((T) "No Visualization found");
+                    } else {
+                        listener.onFailure(e);
+                    }
                 }
-            }
-        });
+            });
+        } catch (Exception e) {
+            log.error("Failed to run VisualizationsTool", e);
+            listener.onFailure(e);
+        }
     }
 
     String trimIdPrefix(String id) {
@@ -126,7 +145,10 @@ public class VisualizationsTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters.containsKey("input") && !Strings.isNullOrEmpty(parameters.get("input"));
+        return parameters != null
+            && !parameters.isEmpty()
+            && !Strings.isNullOrEmpty(parameters.get("input"))
+            && parameters.containsKey("input");
     }
 
     public static class Factory implements Tool.Factory<VisualizationsTool> {
@@ -177,6 +199,11 @@ public class VisualizationsTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }

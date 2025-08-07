@@ -32,7 +32,9 @@ import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
@@ -40,12 +42,10 @@ public class IndexMappingTool implements Tool {
     private static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
-            "This tool gets index mapping information from a certain index.",
-            "It takes 1 required argument named 'index' which is a comma-delimited list of one or more indices to get mapping information from, which expands wildcards.",
-            "It takes 1 optional argument named 'local' which means whether to return information from the local node only instead of the cluster manager node (Default is false).",
-            "The tool returns a list of index mappings and settings for each index.",
-            "The mappings are in JSON format under the key 'properties' which includes the field name as a key and a JSON object with field type under the key 'type'.",
-            "The settings are in flattened map with 'index' as the top element and key-value pairs for each setting."
+            "This tool returns index mappings and settings for specified indices.",
+            "Required argument: 'index' - comma-delimited list of one or more indices (supports wildcards like 'my-index-*').",
+            "Optional argument: 'local' - if true, returns info from local node only instead of cluster manager (default: false).",
+            "Response format: For each index, 'mappings' contains field definitions under 'properties' (each field has a 'type'), and 'settings' contains configuration as a flattened key-value map."
         );
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\""
         + "properties\":{\"index\":{\"type\":\"array\",\"description\":\"OpenSearch index name list, separated by comma. "
@@ -91,8 +91,9 @@ public class IndexMappingTool implements Tool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("index"))) {
                 try {
@@ -169,6 +170,7 @@ public class IndexMappingTool implements Tool {
 
             client.admin().indices().getIndex(getIndexRequest, internalListener);
         } catch (Exception e) {
+            log.error("Failed to run IndexMappingTool", e);
             listener.onFailure(e);
         }
     }
@@ -180,7 +182,7 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && parameters.containsKey("index");
+        return parameters != null && !parameters.isEmpty() && parameters.containsKey("index");
     }
 
     /**

@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
+import static org.opensearch.ml.utils.TestHelper.getExecuteToolRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
 
@@ -74,6 +75,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isToolExecuteEnabled()).thenReturn(true);
         restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -137,6 +139,15 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
         assertEquals(FunctionName.AGENT, input.getFunctionName());
+    }
+
+    public void testGetRequestTool() throws IOException {
+        RestRequest request = getExecuteToolRestRequest();
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.TOOL, input.getFunctionName());
     }
 
     public void testPrepareRequest() throws Exception {
@@ -216,6 +227,13 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         RestRequest request = getExecuteAgentRestRequest();
 
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+        assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
+    }
+
+    public void testPrepareRequestToolExecute_disabled() {
+        RestRequest request = getExecuteToolRestRequest();
+
+        when(mlFeatureEnabledSetting.isToolExecuteEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restMLExecuteAction.handleRequest(request, channel, client));
     }
 
@@ -420,5 +438,60 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
             + "}"
             + "}]}";
         assertEquals(expectedJson, response.content().utf8ToString());
+    }
+
+    public void testToolExecutionResponseXContent() throws Exception {
+        RestRequest request = getExecuteToolRestRequest();
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener
+                .onFailure(
+                    new RemoteTransportException("Remote Transport Exception", new IllegalArgumentException("Illegal Argument Exception"))
+                );
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        when(channel.newBuilder()).thenReturn(XContentFactory.jsonBuilder());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.TOOL, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, response.status());
+        assertEquals("application/json; charset=UTF-8", response.contentType());
+        String expectedError =
+            "{\"status\":400,\"error\":{\"type\":\"IllegalArgumentException\",\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\"}}";
+        assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testToolExecutionResponsePlainText() throws Exception {
+        RestRequest request = getExecuteToolRestRequest();
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener
+                .onFailure(
+                    new RemoteTransportException("Remote Transport Exception", new IllegalArgumentException("Illegal Argument Exception"))
+                );
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLExecuteTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLExecuteTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        Input input = argumentCaptor.getValue().getInput();
+        assertEquals(FunctionName.TOOL, input.getFunctionName());
+        ArgumentCaptor<RestResponse> restResponseArgumentCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel, times(1)).sendResponse(restResponseArgumentCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) restResponseArgumentCaptor.getValue();
+        assertEquals(RestStatus.BAD_REQUEST, response.status());
+        assertEquals("text/plain; charset=UTF-8", response.contentType());
+        String expectedError =
+            "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
+        assertEquals(expectedError, response.content().utf8ToString());
     }
 }

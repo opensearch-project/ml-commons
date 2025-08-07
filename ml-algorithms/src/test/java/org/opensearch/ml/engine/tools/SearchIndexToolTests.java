@@ -9,12 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
@@ -36,6 +31,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
@@ -164,7 +162,7 @@ public class SearchIndexToolTests {
         ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argument.capture());
         assertEquals(
-            "SearchIndexTool's two parameters: index and query are required and should in valid format!",
+            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
             argument.getValue().getMessage()
         );
     }
@@ -229,6 +227,29 @@ public class SearchIndexToolTests {
         Map<String, String> parameters = Map.of("input", inputString);
         ActionListener<String> listener = mock(ActionListener.class);
         mockedSearchIndexTool.run(parameters, listener);
+        ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argument.capture());
+        assertEquals(
+            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
+            argument.getValue().getMessage()
+        );
+        Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
+        Mockito.verify(client, Mockito.never()).search(any(), any());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithEmptyIndex() {
+        String inputString = "{\"query\": {\"match_all\": {}}}";
+        Map<String, String> parameters = Map.of("input", inputString);
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+        ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argument.capture());
+        assertEquals(
+            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
+            argument.getValue().getMessage()
+        );
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
         Mockito.verify(client, Mockito.never()).search(any(), any());
     }
@@ -257,4 +278,135 @@ public class SearchIndexToolTests {
         SearchIndexTool searchIndexTool = SearchIndexTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(SearchIndexTool.TYPE, searchIndexTool.getType());
     }
+
+    @Test
+    @SneakyThrows
+    public void testConvertSearchResponseToMap() {
+        // Given a mocked search response
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        // When converting to map
+        Map<String, Object> resultMap = mockedSearchIndexTool.convertSearchResponseToMap(mockedSearchResponse);
+
+        // Then the map should contain expected keys
+        assertFalse(resultMap.isEmpty());
+        assertTrue(resultMap.containsKey("took"));
+        assertTrue(resultMap.containsKey("hits"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithReturnFullResponseTrue() {
+        // Given a mocked search response
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        // When running with return_full_response=true
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "true");
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Then expect ModelTensorOutput result
+        Object result = future.join();
+        assertTrue(result instanceof ModelTensorOutput);
+        ModelTensorOutput output = (ModelTensorOutput) result;
+
+        assertEquals(1, output.getMlModelOutputs().size());
+        ModelTensors tensors = output.getMlModelOutputs().get(0);
+        assertEquals(1, tensors.getMlModelTensors().size());
+
+        ModelTensor tensor = tensors.getMlModelTensors().get(0);
+        assertEquals(mockedSearchIndexTool.getName(), tensor.getName());
+        assertFalse(tensor.getDataAsMap().isEmpty());
+        assertTrue(tensor.getDataAsMap().containsKey("_shards"));
+        assertTrue(tensor.getDataAsMap().containsKey("took"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithReturnFullResponseFalse() {
+        // Given a mocked search response
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        // When running with return_full_response=false
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "false");
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Then expect String result
+        Object result = future.join();
+        assertTrue(result instanceof String);
+        assertFalse(((String) result).isEmpty());
+        assertFalse(((String) result).contains("_shards"));
+        assertFalse(((String) result).contains("took"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithoutReturnFullResponse() {
+        // Given a mocked search response
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        // When running without return_full_response parameter
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Then expect String result (default behavior)
+        Object result = future.join();
+        assertTrue(result instanceof String);
+        assertFalse(((String) result).contains("_shards"));
+        assertFalse(((String) result).contains("took"));
+    }
+
 }

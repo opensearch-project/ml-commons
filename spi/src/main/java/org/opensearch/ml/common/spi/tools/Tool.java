@@ -138,7 +138,7 @@ public interface Tool {
          * @return the default attributes
          */
         default Map<String, Object> getDefaultAttributes() {
-            return null;
+            return Collections.emptyMap();
         }
     }
 }

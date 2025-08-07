@@ -8,7 +8,9 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -16,10 +18,17 @@ import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -53,7 +62,8 @@ public class SearchIndexTool implements Tool {
 
     public static final String TYPE = "SearchIndexTool";
     private static final String DEFAULT_DESCRIPTION =
-        "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
+        "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available. "
+            + "Returns documents matching the query in the provided index.";
 
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
         + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
@@ -65,6 +75,7 @@ public class SearchIndexTool implements Tool {
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+    public static final String RETURN_RAW_RESPONSE = "return_raw_response";
 
     private String name = TYPE;
     private Map<String, Object> attributes;
@@ -127,12 +138,36 @@ public class SearchIndexTool implements Tool {
         return docContent;
     }
 
+    /**
+     * Converts a SearchResponse to a Map representation for easier processing.
+     *
+     * @param searchResponse The search response to convert
+     * @return Map representation of the search response
+     * @throws IOException if conversion fails
+     */
+    public Map<String, Object> convertSearchResponseToMap(SearchResponse searchResponse) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
+
+        // Convert to bytes and then to map
+        BytesReference bytes = BytesReference.bytes(builder);
+        try (
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, BytesReference.toBytes(bytes))
+        ) {
+            return parser.map();
+        }
+    }
+
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get(INPUT_FIELD);
             String index = null;
             String query = null;
+            boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_RAW_RESPONSE, "false"));
             if (!StringUtils.isEmpty(input)) {
                 try {
                     JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
@@ -145,17 +180,20 @@ public class SearchIndexTool implements Tool {
                     log.error("Invalid JSON input: {}", input, e);
                 }
             }
+
             if (StringUtils.isEmpty(index)) {
                 index = parameters.get(INDEX_FIELD);
             }
+
             if (StringUtils.isEmpty(query)) {
                 query = parameters.get(QUERY_FIELD);
             }
+
             if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
                 listener
                     .onFailure(
                         new IllegalArgumentException(
-                            "SearchIndexTool's two parameters: index and query are required and should in valid format!"
+                            "SearchIndexTool's two parameters: index and query are required and should be in valid format"
                         )
                     );
                 return;
@@ -165,7 +203,15 @@ public class SearchIndexTool implements Tool {
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
-
+                if (returnFullResponse) {
+                    List<ModelTensors> outputs = new ArrayList<>();
+                    List<ModelTensor> tensors = new ArrayList<>();
+                    tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
+                    outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+                    listener.onResponse((T) output);
+                    return;
+                }
                 if (hits != null && hits.length > 0) {
                     StringBuilder contextBuilder = new StringBuilder();
                     for (SearchHit hit : hits) {
@@ -194,7 +240,7 @@ public class SearchIndexTool implements Tool {
                 client.search(searchRequest, actionListener);
             }
         } catch (Exception e) {
-            log.error("Failed to search index", e);
+            log.error("Failed to run SearchIndexTool", e);
             listener.onFailure(e);
         }
     }
