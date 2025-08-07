@@ -243,7 +243,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             .getInstance()
             .startConversationalToolCallSpan(
                 params.get(QUESTION),
-                0,
+                1,
                 toolSpec.getType(),
                 toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
                 agentTaskSpan
@@ -402,7 +402,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 .getInstance()
                 .startConversationalToolCallSpan(
                     params.get(QUESTION),
-                    finalI,
+                    finalI + 1,
                     toolSpec.getType(),
                     toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
                     agentTaskSpan
