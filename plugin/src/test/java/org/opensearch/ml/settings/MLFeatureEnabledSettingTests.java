@@ -14,10 +14,12 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_TRACING_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
@@ -74,7 +76,9 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_METRIC_COLLECTION_ENABLED,
                             ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                             ML_COMMONS_TRACING_ENABLED,
-                            ML_COMMONS_AGENT_TRACING_ENABLED
+                            ML_COMMONS_AGENT_TRACING_ENABLED,
+                            ML_COMMONS_CONNECTOR_TRACING_ENABLED,
+                            ML_COMMONS_MODEL_TRACING_ENABLED
                         )
                 )
             );
@@ -121,12 +125,16 @@ public class MLFeatureEnabledSettingTests {
         // Test initial values (not set, should be false)
         assertFalse(mlFeatureEnabledSetting.isTracingEnabled());
         assertFalse(mlFeatureEnabledSetting.isAgentTracingEnabled());
+        assertFalse(mlFeatureEnabledSetting.isConnectorTracingEnabled());
+        assertFalse(mlFeatureEnabledSetting.isModelTracingEnabled());
 
         // Simulate settings change: enable both
         Settings newSettings = Settings
             .builder()
             .put(ML_COMMONS_TRACING_ENABLED.getKey(), true)
             .put(ML_COMMONS_AGENT_TRACING_ENABLED.getKey(), true)
+            .put(ML_COMMONS_CONNECTOR_TRACING_ENABLED.getKey(), true)
+            .put(ML_COMMONS_MODEL_TRACING_ENABLED.getKey(), true)
             .build();
         when(clusterService.getSettings()).thenReturn(newSettings);
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, newSettings);
@@ -134,5 +142,7 @@ public class MLFeatureEnabledSettingTests {
         // Verify updated values
         assertTrue(mlFeatureEnabledSetting.isTracingEnabled());
         assertTrue(mlFeatureEnabledSetting.isAgentTracingEnabled());
+        assertTrue(mlFeatureEnabledSetting.isConnectorTracingEnabled());
+        assertTrue(mlFeatureEnabledSetting.isModelTracingEnabled());
     }
 }

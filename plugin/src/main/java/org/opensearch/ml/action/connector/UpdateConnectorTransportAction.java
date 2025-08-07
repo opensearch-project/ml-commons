@@ -38,6 +38,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -51,6 +52,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -104,6 +106,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             return;
         }
         String connectorId = mlUpdateConnectorAction.getConnectorId();
+        Span updateSpan = MLConnectorTracer.startConnectorUpdateSpan(connectorId);
         String tenantId = mlCreateConnectorInput.getTenantId();
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
@@ -130,14 +133,29 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 .tenantId(tenantId)
                                 .dataObject(connector)
                                 .build();
+                            ActionListener<UpdateResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                                MLConnectorTracer.getInstance().endSpan(updateSpan);
+                                listener.onResponse(response);
+                            }, exception -> {
+                                MLConnectorTracer.handleSpanError(updateSpan, "Failed to update ML connector " + connectorId, exception);
+                                listener.onFailure(exception);
+                            });
                             try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
                                 updateUndeployedConnector(
                                     connectorId,
                                     updateDataObjectRequest,
-                                    ActionListener.runBefore(listener, innerContext::restore)
+                                    ActionListener.runBefore(spanWrappedListener, innerContext::restore)
                                 );
                             }
                         } else {
+                            MLConnectorTracer
+                                .handleSpanError(
+                                    updateSpan,
+                                    "Permission denied: Unable to update the connector with ID " + connectorId,
+                                    new IllegalArgumentException(
+                                        "You don't have permission to update the connector, connector id: " + connectorId
+                                    )
+                                );
                             listener
                                 .onFailure(
                                     new IllegalArgumentException(
@@ -148,10 +166,13 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     }
                 }, exception -> {
                     log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
+                    MLConnectorTracer
+                        .handleSpanError(updateSpan, "Permission denied: Unable to update the connector with ID " + connectorId, exception);
                     listener.onFailure(exception);
                 }));
         } catch (Exception e) {
-            log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
+            log.error("Failed to update ML connector for connector id {}. Details {}", connectorId, e);
+            MLConnectorTracer.handleSpanError(updateSpan, "Failed to update ML connector for connector id " + connectorId, e);
             listener.onFailure(e);
         }
     }

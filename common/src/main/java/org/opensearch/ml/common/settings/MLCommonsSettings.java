@@ -364,4 +364,18 @@ public final class MLCommonsSettings {
     // to switch between real tracer and NoopTracer based on this setting.
     public static final Setting<Boolean> ML_COMMONS_AGENT_TRACING_ENABLED = Setting
         .boolSetting("plugins.ml_commons.agent_tracing_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Feature flag for enabling telemetry connector tracing
+    // This setting is Dynamic because connector tracing can be enabled/disabled at runtime
+    // without requiring a node restart. The MLConnectorTracer singleton can be updated
+    // to switch between real tracer and NoopTracer based on this setting.
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_TRACING_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.connector_tracing_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Feature flag for enabling telemetry model tracing
+    // This setting is Dynamic because model tracing can be enabled/disabled at runtime
+    // without requiring a node restart. The MLModelTracer singleton can be updated
+    // to switch between real tracer and NoopTracer based on this setting.
+    public static final Setting<Boolean> ML_COMMONS_MODEL_TRACING_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.model_tracing_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
