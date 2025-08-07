@@ -1,5 +1,6 @@
 package org.opensearch.ml.common.indexInsight;
 
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID;
 
 import java.util.Arrays;
@@ -15,14 +16,18 @@ import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
+import org.opensearch.ml.common.indexInsight.IndexInsightUtils;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -93,22 +98,22 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic(ActionListener<IndexInsight> listener) {
+    public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
             if (modelId == null || modelId.isBlank()) {
                 log.error("No model ID configured for RCA index check");
-                saveFailedStatus();
+                saveFailedStatus(storageIndex);
                 listener.onFailure(new Exception("No model ID configured"));
                 return;
             }
 
             // Fetch 3 sample docs
-            collectSampleDocString(modelId, listener);
+            collectSampleDocString(modelId, storageIndex, tenantId, listener);
         } catch (Exception ex) {
             log.error("Failed log related check for {}", indexName, ex);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             listener.onFailure(ex);
         }
     }
@@ -124,7 +129,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return sampleDocSting;
     }
 
-    private void collectSampleDocString(String modelId, ActionListener<IndexInsight> listener){
+    private void collectSampleDocString(String modelId, String storageIndex, String tenantId, ActionListener<IndexInsight> listener){
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
@@ -136,17 +141,19 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                         .toList();
                 sampleDocSting = MAPPER.writeValueAsString(samples);
                 log.info("Collected sample documents for index: {}", indexName);
-                
+                getAgentIdToRun(client, storageIndex, ActionListener.wrap(agentId -> {
+                    callLLM(agentId, storageIndex, listener);
+                }, listener::onFailure) );
                 // Build prompt and call LLM
-                callLLM(modelId, listener);
+
             } catch (Exception e) {
                 log.error("Failed to process sample documents for index: {}", indexName, e);
-                saveFailedStatus();
+                saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }
         }, e -> {
             log.error("Failed to collect sample documents for index: {}", indexName, e);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }));
     }
@@ -161,24 +168,23 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return JsonPath.read(data, "$.response");
     }
 
-    private void callLLM(String modelId, ActionListener<IndexInsight> listener) {
+    private void callLLM(String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
         // Build prompt
         String prompt = RCA_TEMPLATE
                 .replace("{indexName}", indexName)
                 .replace("{samples}", sampleDocSting);
 
-        // Call LLM
-        RemoteInferenceInputDataSet input = RemoteInferenceInputDataSet.builder()
-                .parameters(Collections.singletonMap("prompt", prompt))
+        AgentMLInput agentInput = AgentMLInput
+                .AgentMLInputBuilder()
+                .agentId(agentId)
+                .functionName(FunctionName.AGENT)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
                 .build();
-        MLPredictionTaskRequest req = new MLPredictionTaskRequest(
-                modelId,
-                MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(input).build(),
-                null,
-                null
-        );
 
-        client.execute(MLPredictionTaskAction.INSTANCE, req, ActionListener.wrap(mlResp -> {
+        MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
+
+
+        client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(mlResp -> {
             try {
                 ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
                 ModelTensors t = out.getMlModelOutputs().get(0);
@@ -191,25 +197,25 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 logMessageField = (String) parsed.get("log_message_field");
                 traceIdField = (String) parsed.get("trace_id_field");
 
-                saveResult(MAPPER.writeValueAsString(parsed), ActionListener.wrap(
+                saveResult(MAPPER.writeValueAsString(parsed), storageIndex, ActionListener.wrap(
                     insight -> {
                         log.info("Log related check completed for index {}", indexName);
                         listener.onResponse(insight);
                     },
                     e -> {
                         log.error("Failed to save log related check result for index {}", indexName, e);
-                        saveFailedStatus();
+                        saveFailedStatus(storageIndex);
                         listener.onFailure(e);
                     }
                 ));
             } catch (Exception e) {
                 log.error("Error parsing response of log related check for {}", indexName, e);
-                saveFailedStatus();
+                saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }
         }, e -> {
             log.error("Failed to call LLM for log related check: {}", e.getMessage(), e);
-            saveFailedStatus();
+            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }));
     }
