@@ -29,6 +29,11 @@ import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * Index Description Task: Generates comprehensive description of the entire index using LLM.
+ * This task analyzes the overall index structure, field mappings, and sample data to provide
+ * a thorough understanding of what the index stores and its intended purpose.
+ */
 @Log4j2
 public class IndexDescriptionTask implements IndexInsightTask {
     

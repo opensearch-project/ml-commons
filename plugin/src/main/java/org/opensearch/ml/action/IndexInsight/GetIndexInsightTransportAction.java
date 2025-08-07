@@ -32,6 +32,7 @@ import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.indexInsight.StatisticalDataTask;
 import org.opensearch.ml.common.indexInsight.FieldDescriptionTask;
 import org.opensearch.ml.common.indexInsight.IndexDescriptionTask;
+import org.opensearch.ml.common.indexInsight.LogRelatedIndexCheckTask;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
@@ -196,33 +197,14 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                 } catch (Exception e) {
                     throw new IllegalArgumentException("Failed to get mapping for index: " + request.getIndexName(), e);
                 }
+            case LOG_RELATED_INDEX_CHECK:
+                try {
+                    return new LogRelatedIndexCheckTask(request.getIndexName(), client, clusterService);
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Failed to create log related index check task for index: " + request.getIndexName(), e);
+                }
             default:
                 throw new IllegalArgumentException("Unsupported task type: " + request.getTargetIndexInsight());
         }
-    }
-    
-    private void queryAndReturnResult(MLIndexInsightGetRequest request, ActionListener<MLIndexInsightGetResponse> listener) {
-        SearchRequest searchRequest = new SearchRequest(ML_INDEX_INSIGHT_INDEX);
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.must(new TermQueryBuilder(INDEX_NAME_FIELD, request.getIndexName()));
-        boolQueryBuilder.must(new TermQueryBuilder(TASK_TYPE_FIELD, request.getTargetIndexInsight().toString()));
-        searchSourceBuilder.query(boolQueryBuilder);
-        searchRequest.source(searchSourceBuilder);
-        
-        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-            SearchHit[] hits = searchResponse.getHits().getHits();
-            if (hits.length > 0) {
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hits[0].getSourceRef())) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    IndexInsight insight = IndexInsight.parse(parser);
-                    listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(insight).build());
-                } catch (Exception e) {
-                    listener.onFailure(e);
-                }
-            } else {
-                listener.onFailure(new Exception("Task completed but result not found"));
-            }
-        }, listener::onFailure));
     }
 }

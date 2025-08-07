@@ -12,6 +12,12 @@ import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * Statistical Data Task: Collects sample documents from the target index for analysis.
+ * This task serves as the foundation for other index insight tasks by gathering sample data
+ * that provides context about the index structure and content.
+ * Will expand to support additional data types beyond sample documents in the future.
+ */
 @Log4j2
 public class StatisticalDataTask implements IndexInsightTask {
     
