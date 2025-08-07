@@ -58,7 +58,6 @@ services:
       - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -Dopensearch.experimental.feature.telemetry.enabled=true"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - DISABLE_SECURITY_PLUGIN=true
       - opensearch.experimental.feature.telemetry.enabled=true
       - telemetry.feature.tracer.enabled=true
       - telemetry.tracer.enabled=true
@@ -76,13 +75,12 @@ services:
     volumes:
       - opensearch-data1:/usr/share/opensearch/data
       # USE THE BELOW TO MOUNT YOUR LOCAL BUILD TO AN INSTANCE
-      # - <YOUR_ML_COMMONS_DIRECTORY>/plugin/build/distributions:/usr/share/opensearch/<YOUR_NAME> 
-    # command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/<YOUR_NAME>/opensearch-ml-2.16.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+      - <YOUR_ML_COMMONS_DIRECTORY>/plugin/build/distributions:/usr/share/opensearch/<YOUR_NAME> 
     command: >
       bash -c "
       bin/opensearch-plugin remove opensearch-skills; 
       bin/opensearch-plugin remove opensearch-ml; 
-      bin/opensearch-plugin install --batch telemetry-otel --batch file:///usr/share/opensearch/ml-plugin/opensearch-ml-3.1.0.0-SNAPSHOT.zip; 
+      bin/opensearch-plugin install --batch telemetry-otel --batch file:///usr/share/opensearch/<YOUR_NAME>/opensearch-ml-3.1.0.0-SNAPSHOT.zip; 
       OPENSEARCH_LOG4J_CONFIG_FILE=/usr/share/opensearch/config/telemetry-log4j2.xml ./opensearch-docker-entrypoint.sh opensearch"
     ports:
       - 9200:9200
@@ -170,7 +168,7 @@ processors:
         match_type: regexp
         attributes:
           - key: service.type
-            value: agent
+            value: tracer
   batch/traces:
     timeout: 5s
     send_batch_size: 50
@@ -237,6 +235,7 @@ raw-trace-pipeline:
         insecure: true
         username: admin
         password: MyPassword123!
+        # index_type: trace-analytics-raw # Uses default index mappings
         index_type: custom
         index: otel-v1-apm-span-agent
         template_file: ml_agent_trace.json
@@ -337,7 +336,8 @@ curl -X PUT "localhost:9200/_cluster/settings" -H 'Content-Type: application/jso
 {
   "persistent": {
     "plugins.ml_commons.agent_tracing_enabled": true,
-    "plugins.ml_commons.connector_tracing_enabled": true
+    "plugins.ml_commons.connector_tracing_enabled": true,
+    "plugins.ml_commons.model_tracing_enabled": true
   }
 }'
 ```
@@ -387,7 +387,106 @@ Simply copy `trace-graph-vega.json` into the Vega editor in OpenSearch Dashboard
 ![Vega Graph View](images/vega_trace_graph.png)
 *Vega Graph View: This custom graph visualization shows the relationships between services and spans in your trace data, helping you understand dependencies and flow at a glance.*
 
----
+
+## 10. Setup Notes for Non-Docker Environments
+
+If you're setting up agent tracing in a production environment without Docker Compose, consider these important notes:
+
+### 1. Install the Telemetry-OTEL Plugin
+
+Ensure the telemetry-OTEL plugin is installed in your OpenSearch instance:
+
+```bash
+# For OpenSearch 3.1.0
+bin/opensearch-plugin install telemetry-otel
+```
+
+### 2. Configuration Format Differences
+
+When using configuration files instead of environment variables, note that some settings use colons (`:`) instead of equals (`=`):
+
+**Environment Variables (Docker):**
+```yaml
+environment:
+  - opensearch.experimental.feature.telemetry.enabled=true
+  - telemetry.feature.tracer.enabled=true
+  - telemetry.tracer.enabled=true
+  - telemetry.tracer.sampler.probability=1.0
+  - telemetry.otel.tracer.span.exporter.class=io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter
+  - plugins.ml_commons.tracing_enabled=true
+  - plugins.ml_commons.agent_tracing_enabled=true
+```
+
+**Configuration Files (Non-Docker):**
+```yaml
+opensearch.experimental.feature.telemetry.enabled: true
+telemetry.feature.tracer.enabled: true
+telemetry.tracer.enabled: true
+telemetry.tracer.sampler.probability: 1.0
+telemetry.otel.tracer.span.exporter.class: io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter
+plugins.ml_commons.tracing_enabled: true
+plugins.ml_commons.agent_tracing_enabled: true
+
+```
+
+### 3. Configuration File Locations
+
+For non-Docker setups, you'll need to place configuration files in specific locations:
+
+#### OpenTelemetry Collector Configuration
+- **File**: `otel-collector-config.yaml`
+- **Location**: `/etc/otel-collector-config.yaml` (or your preferred location)
+- **Usage**: `otelcol-contrib --config=/path/to/otel-collector-config.yaml`
+
+#### Data Prepper Configuration Files
+- **Main Config**: `data-prepper-config.yaml`
+- **Location**: `/usr/share/data-prepper/config/data-prepper-config.yaml`
+- **Pipelines Config**: `pipelines.yaml`
+- **Location**: `/usr/share/data-prepper/pipelines/pipelines.yaml`
+- **Index Mapping**: `ml_agent_trace.json`
+- **Location**: `/usr/share/data-prepper/ml_agent_trace.json`
+
+### 4. Security Considerations for Production
+
+For production environments, you should **remove or configure** the `ssl: false` settings:
+
+#### OpenTelemetry Collector Configuration
+```yaml
+# Production: Configure proper TLS
+exporters:
+  otlp/data-prepper:
+    endpoint: data-prepper:21890
+    tls:
+      ca_file: /path/to/ca.crt
+      cert_file: /path/to/client.crt
+      key_file: /path/to/client.key
+```
+
+#### Data Prepper Configuration
+```yaml
+# Production: Enable SSL
+ssl: true
+# Configure certificates and authentication
+```
+
+#### OpenSearch Configuration
+```yaml
+# Production: Enable security
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.transport.enabled: true
+# Configure certificates and authentication
+```
+
+#### Docker Compose (Production)
+```yaml
+# Production: Use proper TLS certificates
+environment:
+  - plugins.security.ssl.http.enabled=true
+  - plugins.security.ssl.transport.enabled=true
+  # Add certificate paths and authentication
+```
+
+**Note**: The `ssl: false` settings in the tutorial are for development convenience. Production deployments should use proper TLS certificates and authentication mechanisms.
 
 ## Troubleshooting
 

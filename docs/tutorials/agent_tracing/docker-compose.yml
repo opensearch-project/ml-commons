@@ -10,7 +10,6 @@ services:
       - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -Dopensearch.experimental.feature.telemetry.enabled=true"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - DISABLE_SECURITY_PLUGIN=true
       - opensearch.experimental.feature.telemetry.enabled=true
       - telemetry.feature.tracer.enabled=true
       - telemetry.tracer.enabled=true
@@ -18,7 +17,6 @@ services:
       - telemetry.otel.tracer.span.exporter.class=io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter
       - plugins.ml_commons.tracing_enabled=true
       - plugins.ml_commons.agent_tracing_enabled=true
-      - plugins.ml_commons.connector_tracing_enabled=true
     ulimits:
       memlock:
         soft: -1
