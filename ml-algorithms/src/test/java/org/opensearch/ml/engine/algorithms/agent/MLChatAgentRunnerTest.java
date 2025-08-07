@@ -1510,6 +1510,7 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(result.containsKey(AgentUtils.RESPONSE_FORMAT_INSTRUCTION));
         Assert.assertTrue(result.containsKey(AgentUtils.TOOL_RESPONSE));
     }
+
     /**
      * Tests exception handling in the main run method.
      * 

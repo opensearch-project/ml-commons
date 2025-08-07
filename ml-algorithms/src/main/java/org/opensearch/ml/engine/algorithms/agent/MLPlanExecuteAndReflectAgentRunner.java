@@ -293,10 +293,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             // planner prompt for the first call
             usePlannerPromptTemplate(allParams);
 
-        String memoryId = allParams.get(MEMORY_ID_FIELD);
-        String memoryType = mlAgent.getMemory().getType();
-        String appType = mlAgent.getAppType();
-        int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
+            String memoryId = allParams.get(MEMORY_ID_FIELD);
+            String memoryType = mlAgent.getMemory().getType();
+            String appType = mlAgent.getAppType();
+            int messageHistoryLimit = Integer
+                .parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
             // todo: use chat history instead of completed steps
             ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
@@ -511,14 +512,15 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             reactParams.put(MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
                         }
 
-                reactParams.put(SYSTEM_PROMPT_FIELD, allParams.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT));
-                reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
-                reactParams.put(MAX_ITERATION, allParams.getOrDefault(EXECUTOR_MAX_ITERATIONS_FIELD, DEFAULT_REACT_MAX_ITERATIONS));
-                reactParams
-                    .put(
-                        MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
-                        allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
-                    );
+                        reactParams
+                            .put(SYSTEM_PROMPT_FIELD, allParams.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT));
+                        reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
+                        reactParams.put(MAX_ITERATION, allParams.getOrDefault(EXECUTOR_MAX_ITERATIONS_FIELD, DEFAULT_REACT_MAX_ITERATIONS));
+                        reactParams
+                            .put(
+                                MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
+                                allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
+                            );
 
                         AgentMLInput agentInput = AgentMLInput
                             .AgentMLInputBuilder()
@@ -606,8 +608,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                     }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
                                 }
 
-                    completedSteps.add(String.format("\nStep %d: %s\n", stepsExecuted + 1, stepToExecute));
-                    completedSteps.add(String.format("\nStep %d Result: %s\n", stepsExecuted + 1, results.get(STEP_RESULT_FIELD)));
+                                completedSteps.add(String.format("\nStep %d: %s\n", stepsExecuted + 1, stepToExecute));
+                                completedSteps
+                                    .add(String.format("\nStep %d Result: %s\n", stepsExecuted + 1, results.get(STEP_RESULT_FIELD)));
 
                                 saveTraceData(
                                     (ConversationIndexMemory) memory,

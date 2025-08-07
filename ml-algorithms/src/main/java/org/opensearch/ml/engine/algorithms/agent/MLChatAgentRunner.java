@@ -345,6 +345,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+        Map<String, String> lastToolParams = new ConcurrentHashMap<>();
 
         Span llmCallSpan = MLAgentTracer
             .getInstance()
@@ -1016,39 +1017,5 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
         }
-    }
-
-    private void handleMaxIterationsReached(
-        String sessionId,
-        ActionListener<Object> listener,
-        String question,
-        String parentInteractionId,
-        boolean verbose,
-        boolean traceDisabled,
-        List<ModelTensors> traceTensors,
-        ConversationIndexMemory conversationIndexMemory,
-        AtomicInteger traceNumber,
-        Map<String, Object> additionalInfo,
-        AtomicReference<String> lastThought,
-        int maxIterations,
-        Map<String, Tool> tools
-    ) {
-        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
-            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
-            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
-        sendFinalAnswer(
-            sessionId,
-            listener,
-            question,
-            parentInteractionId,
-            verbose,
-            traceDisabled,
-            traceTensors,
-            conversationIndexMemory,
-            traceNumber,
-            additionalInfo,
-            incompleteResponse
-        );
-        cleanUpResource(tools);
     }
 }
