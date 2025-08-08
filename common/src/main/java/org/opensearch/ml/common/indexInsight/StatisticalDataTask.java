@@ -1,5 +1,6 @@
 package org.opensearch.ml.common.indexInsight;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -8,16 +9,21 @@ import java.util.Map;
 import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.AggregatorFactories;
+import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
 import org.opensearch.search.aggregations.bucket.sampler.SamplerAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.terms.LongTerms;
 import org.opensearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.opensearch.search.aggregations.metrics.CardinalityAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.InternalTopHits;
 import org.opensearch.search.aggregations.metrics.MaxAggregationBuilder;
 import org.opensearch.search.aggregations.metrics.MinAggregationBuilder;
 import org.opensearch.search.aggregations.metrics.TopHitsAggregationBuilder;
@@ -28,6 +34,7 @@ import org.opensearch.transport.client.Client;
 import lombok.extern.log4j.Log4j2;
 
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFieldNamesTypes;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 /**
  * Statistical Data Task: Collects sample documents from the target index for analysis.
@@ -39,6 +46,7 @@ import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFie
 public class StatisticalDataTask implements IndexInsightTask {
 
     public static int termSize = 5;
+    private static List<String> prefixs = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     
     private final MLIndexInsightType taskType = MLIndexInsightType.STATISTICAL_DATA;
     private final String indexName;
@@ -122,9 +130,10 @@ public class StatisticalDataTask implements IndexInsightTask {
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
+                Map<String, Object> result = parseSearchResult(searchResponse);
                 log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
 
-                String statisticalContent = generateStatisticalContent();
+                String statisticalContent = gson.toJson(result);
                 saveResult(statisticalContent, targetIndex, listener);
             }, e -> {
                 log.error("Failed to collect sample documents for index: {}", indexName, e);
@@ -211,4 +220,49 @@ public class StatisticalDataTask implements IndexInsightTask {
 
         return sourceBuilder;
     }
+
+    private Map<String, Object> parseSearchResult(SearchResponse searchResponse) {
+        Map<String, Aggregation> aggregationMap = ((InternalSampler)searchResponse.getAggregations().getAsMap().get("sample")).getAggregations().getAsMap();
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<String, Aggregation> entry : aggregationMap.entrySet()) {
+            String key = entry.getKey();
+            Aggregation aggregation = entry.getValue();
+            if (key.equals("example_doc")) {
+                SearchHit[] hits = ((InternalTopHits) aggregation).getHits().getHits();
+                List<Object> values = new ArrayList<>();
+                for (SearchHit hit : hits) {
+                    values.add(hit.getSourceAsMap());
+                }
+                result.put(key, values);
+            } else {
+                for (String prefix: prefixs) {
+                    if (key.startsWith(prefix)) {
+                        String targetField = key.substring(prefix.length());
+                        String aggregationType = key.substring(0, prefix.length() - 1);
+                        Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
+                        Object targetValue;
+                        if (prefix.equals("unique_terms_")) {
+                            // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
+                            Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                            List<Map<String, Object>> buckets = (List<Map<String, Object>>) aggResult.get("buckets");
+
+                            List<Object> values = new ArrayList<>();
+                            for (Map<String, Object> bucket : buckets) {
+                                values.add(bucket.get("key"));
+                            }
+                            targetValue = values;
+                        } else {
+                            Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                            targetValue = aggResult.get("value");
+                        }
+                        result.computeIfAbsent(targetField, k -> new HashMap<>());
+                        ((Map<String, Object>)result.get(targetField)).put(aggregationType, targetValue);
+                        break;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
 }
