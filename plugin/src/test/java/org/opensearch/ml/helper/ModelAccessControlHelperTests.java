@@ -414,11 +414,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertNotNull(modelAccessControlHelper.addUserBackendRolesFilter(user, builder));
     }
 
-    public void test_CreateSearchSourceBuilder() {
-        User user = User.parse("owner|IT,HR|myTenant");
-        assertNotNull(modelAccessControlHelper.createSearchSourceBuilder(user));
-    }
-
     private GetResponse modelGroupBuilder(List<String> backendRoles, String access, String owner) throws IOException {
         MLModelGroup mlModelGroup = MLModelGroup
             .builder()

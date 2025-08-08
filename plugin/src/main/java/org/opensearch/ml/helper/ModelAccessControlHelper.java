@@ -7,20 +7,28 @@ package org.opensearch.ml.helper;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.action.handler.MLSearchHandler.rewriteQueryBuilder;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -44,6 +52,7 @@ import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -53,7 +62,9 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
@@ -356,27 +367,107 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
-    public SearchSourceBuilder createSearchSourceBuilder(User user) {
-        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
-            return addAccessibleModelGroupsFilter(new SearchSourceBuilder());
+    private QueryBuilder mergeWithAccessFilter(QueryBuilder existing, Set<String> ids) {
+        QueryBuilder accessFilter = (ids == null || ids.isEmpty())
+            ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()) // deny-all
+            : QueryBuilders.idsQuery().addIds(ids.toArray(new String[0])); // use termsQuery(field, ids) if not _id
+
+        if (existing == null)
+            return QueryBuilders.boolQuery().filter(accessFilter);
+        if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(accessFilter);
+            return existing;
         }
-        return addUserBackendRolesFilter(user, new SearchSourceBuilder());
+        return QueryBuilders.boolQuery().must(existing).filter(accessFilter);
     }
 
-    public SearchSourceBuilder addAccessibleModelGroupsFilter(SearchSourceBuilder searchSourceBuilder) {
-        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-        resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(modelGroupIds -> {
-            if (modelGroupIds.isEmpty()) {
-                // User has no access → return nothing
-                searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
-            } else {
-                // Restrict search strictly to these ids
-                searchSourceBuilder.query(QueryBuilders.idsQuery().addIds(modelGroupIds.toArray(new String[0])));
-            }
-        }, failure -> {
-            // do nothing to the source or return empty set?
-            searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
+    public void addAccessibleModelGroupsFilterAndSearch(
+        String tenantId,
+        SearchRequest request,
+        SdkClient sdkClient,
+        ActionListener<SearchResponse> wrappedListener
+    ) {
+
+        ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        // filter by accessible model-groups
+        rsc.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
+            modelGroupGateAndSearch(tenantId, request, sdkClient, ids, /*useBackendRoles*/ request.source(), wrappedListener);
+        }, e -> {
+            // Fail-safe: deny-all and still return a response
+            SearchSourceBuilder reqSrc = request.source() != null ? request.source() : new SearchSourceBuilder();
+            reqSrc.query(mergeWithAccessFilter(reqSrc.query(), Collections.emptySet()));
+            request.source(reqSrc);
+
+            SearchDataObjectRequest finalSearch = SearchDataObjectRequest
+                .builder()
+                .indices(request.indices())
+                .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
+                .build();
+
+            sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
         }));
-        return searchSourceBuilder;
     }
+
+    public void modelGroupGateAndSearch(
+        String tenantId,
+        SearchRequest request,
+        SdkClient sdkClient,
+        @Nullable Set<String> modelGroupIds,
+        SearchSourceBuilder sourceBuilder,
+        ActionListener<SearchResponse> wrappedListener
+    ) {
+
+        // build discovery source
+        sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD }, null);
+        sourceBuilder.size(10_000);
+
+        if (modelGroupIds != null) {
+            // RSC pre-filter → merge as filter (doesn't affect scoring)
+            sourceBuilder.query(mergeWithAccessFilter(sourceBuilder.query(), modelGroupIds));
+        }
+
+        SearchRequest modelGroupSearchReq = new SearchRequest().indices(CommonValue.ML_MODEL_GROUP_INDEX).source(sourceBuilder);
+
+        SearchDataObjectRequest mgSearch = SearchDataObjectRequest
+            .builder()
+            .indices(modelGroupSearchReq.indices())
+            .searchSourceBuilder(modelGroupSearchReq.source())
+            .tenantId(tenantId)
+            .build();
+
+        sdkClient.searchDataObjectAsync(mgSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.wrap(mgResp -> {
+            long total = Optional
+                .ofNullable(mgResp)
+                .map(SearchResponse::getHits)
+                .map(SearchHits::getTotalHits)
+                .map(TotalHits::value)
+                .orElse(0L);
+
+            List<String> mGIds = new ArrayList<>();
+            if (total > 0) {
+                Arrays.stream(mgResp.getHits().getHits()).forEach(h -> mGIds.add(h.getId()));
+            }
+
+            // Apply the model-group constraint to the ORIGINAL request
+            SearchSourceBuilder reqSrc = request.source() != null ? request.source() : new SearchSourceBuilder();
+            reqSrc.query(rewriteQueryBuilder(reqSrc.query(), total > 0 ? mGIds : null));
+            request.source(reqSrc);
+
+            // Final search
+            SearchDataObjectRequest finalSearch = SearchDataObjectRequest
+                .builder()
+                .indices(request.indices())
+                .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
+                .build();
+
+            sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
+
+        }, e -> {
+            log.error("Fail to search model groups!", e);
+            wrappedListener.onFailure(e);
+        })));
+    }
+
 }
