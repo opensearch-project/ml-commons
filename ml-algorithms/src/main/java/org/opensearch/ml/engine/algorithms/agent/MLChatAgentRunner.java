@@ -29,6 +29,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDat
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
@@ -72,7 +73,6 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
-import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -781,7 +781,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StringSubstitutor promptSubstitutor = new StringSubstitutor(tmpParameters, "${parameters.", "}");
         prompt = promptSubstitutor.replace(prompt);
         prompt = AgentUtils.addPrefixSuffixToPrompt(tmpParameters, prompt);
-        prompt = AgentUtils.addToolsToPrompt(tools, tmpParameters, ToolUtils.getToolNames(tools), prompt);
+        prompt = AgentUtils.addToolsToPrompt(tools, tmpParameters, getToolNames(tools), prompt);
         prompt = AgentUtils.addIndicesToPrompt(tmpParameters, prompt);
         prompt = AgentUtils.addExamplesToPrompt(tmpParameters, prompt);
         prompt = AgentUtils.addChatHistoryToPrompt(tmpParameters, prompt);

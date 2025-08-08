@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 
 import java.util.ArrayList;
@@ -100,7 +101,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -145,7 +146,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
                     Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                    Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
+                    Tool tool = createTool(toolFactories, executeParams, toolSpec);
                     if (finalI < toolSpecs.size()) {
                         tool.run(executeParams, nextStepListener);
                     }

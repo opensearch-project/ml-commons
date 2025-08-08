@@ -8,7 +8,6 @@ package org.opensearch.ml.common.utils;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +18,6 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.Tool;
 
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
@@ -101,30 +99,6 @@ public class ToolUtils {
         return executeParams;
     }
 
-    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> executeParams, MLToolSpec toolSpec) {
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Map<String, Object> toolParams = new HashMap<>();
-        toolParams.putAll(executeParams);
-        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
-        if (runtimeResources != null) {
-            toolParams.putAll(runtimeResources);
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        String toolName = getToolName(toolSpec);
-        tool.setName(toolName);
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        if (executeParams.containsKey(toolName + ".description")) {
-            tool.setDescription(executeParams.get(toolName + ".description"));
-        }
-
-        return tool;
-    }
-
     public static Object filterToolOutput(Map<String, String> toolParams, Object response) {
         if (toolParams != null && toolParams.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
             try {
@@ -158,16 +132,8 @@ public class ToolUtils {
         }
     }
 
-    public static List<String> getToolNames(Map<String, Tool> tools) {
-        final List<String> inputTools = new ArrayList<>();
-        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = entry.getValue().getName();
-            inputTools.add(toolName);
-        }
-        return inputTools;
-    }
-
     public static String getToolName(MLToolSpec toolSpec) {
         return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
     }
+
 }

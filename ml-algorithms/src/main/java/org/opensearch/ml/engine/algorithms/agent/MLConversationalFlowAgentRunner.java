@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
@@ -180,7 +181,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -350,7 +351,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
         Map<String, String> toolExecutionParameters = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
-        Tool tool = ToolUtils.createTool(toolFactories, toolExecutionParameters, toolSpec);
+        Tool tool = createTool(toolFactories, toolExecutionParameters, toolSpec);
         if (finalI < toolSpecs.size()) {
             tool.run(toolExecutionParameters, nextStepListener);
         }

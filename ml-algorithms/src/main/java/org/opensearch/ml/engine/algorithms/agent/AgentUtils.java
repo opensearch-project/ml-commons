@@ -15,7 +15,6 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.common.utils.ToolUtils.buildToolParameters;
-import static org.opensearch.ml.common.utils.ToolUtils.createTool;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
@@ -958,5 +957,38 @@ public class AgentUtils {
         }
 
         return DEFAULT_DATETIME_PREFIX + formatter.format(now);
+    }
+
+    public static List<String> getToolNames(Map<String, Tool> tools) {
+        final List<String> inputTools = new ArrayList<>();
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            String toolName = entry.getValue().getName();
+            inputTools.add(toolName);
+        }
+        return inputTools;
+    }
+
+    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> executeParams, MLToolSpec toolSpec) {
+        if (!toolFactories.containsKey(toolSpec.getType())) {
+            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
+        }
+        Map<String, Object> toolParams = new HashMap<>();
+        toolParams.putAll(executeParams);
+        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
+        if (runtimeResources != null) {
+            toolParams.putAll(runtimeResources);
+        }
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+        String toolName = getToolName(toolSpec);
+        tool.setName(toolName);
+
+        if (toolSpec.getDescription() != null) {
+            tool.setDescription(toolSpec.getDescription());
+        }
+        if (executeParams.containsKey(toolName + ".description")) {
+            tool.setDescription(executeParams.get(toolName + ".description"));
+        }
+
+        return tool;
     }
 }
