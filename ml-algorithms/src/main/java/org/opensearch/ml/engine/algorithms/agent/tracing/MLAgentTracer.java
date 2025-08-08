@@ -1367,13 +1367,13 @@ public class MLAgentTracer extends MLTracer {
             Map<?, ?> outputMap = (Map<?, ?>) output;
             Object response = outputMap.get(RESPONSE_FIELD);
             if (response != null) {
-                return response.toString();
+                return StringUtils.toJson(response);
             }
             Object result = outputMap.get(OUTPUT_FIELD);
             if (result != null) {
-                return result.toString();
+                return StringUtils.toJson(result);
             }
-            return outputMap.toString();
+            return StringUtils.toJson(outputMap);
         }
         return output.toString();
     }

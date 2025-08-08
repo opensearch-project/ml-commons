@@ -191,6 +191,9 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         }
 
         MLToolSpec toolSpec = toolSpecs.getFirst();
+        if (toolSpec == null) {
+            throw new IllegalArgumentException("Tool spec cannot be null. Check if toolSpecs list contains null elements.");
+        }
         Span toolCallSpan = MLAgentTracer
             .getInstance()
             .startConversationalToolCallSpan(
