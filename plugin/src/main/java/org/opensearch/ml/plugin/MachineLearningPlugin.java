@@ -940,9 +940,17 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(clusterService, settings);
         RestMLPutIndexInsightContainerAction restMLPutIndexInsightContainerAction = new RestMLPutIndexInsightContainerAction(mlFeatureEnabledSetting);
         RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(mlFeatureEnabledSetting);
-        RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(clusterService, settings, mlFeatureEnabledSetting);
-        RestMLPutIndexInsightContainerAction restMLPutIndexInsightContainerAction = new RestMLPutIndexInsightContainerAction(mlFeatureEnabledSetting);
-        RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(mlFeatureEnabledSetting);
+        RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(
+            clusterService,
+            settings,
+            mlFeatureEnabledSetting
+        );
+        RestMLPutIndexInsightContainerAction restMLPutIndexInsightContainerAction = new RestMLPutIndexInsightContainerAction(
+            mlFeatureEnabledSetting
+        );
+        RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(
+            mlFeatureEnabledSetting
+        );
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
@@ -1065,8 +1073,8 @@ public class MachineLearningPlugin extends Plugin
                 restMLRemoveMcpToolsAction,
                 restMLListMcpToolsAction,
                 restMLMcpToolsUpdateAction,
-                    restMLPutIndexInsightContainerAction,
-                    restMLDeleteIndexInsightContainerAction
+                restMLPutIndexInsightContainerAction,
+                restMLDeleteIndexInsightContainerAction
             );
     }
 

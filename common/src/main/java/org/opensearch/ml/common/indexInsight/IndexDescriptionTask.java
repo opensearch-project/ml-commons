@@ -34,7 +34,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class IndexDescriptionTask implements IndexInsightTask {
-    
+
     private final MLIndexInsightType taskType = MLIndexInsightType.INDEX_DESCRIPTION;
     private final String indexName;
     private final MappingMetadata mappingMetadata;
@@ -185,17 +185,14 @@ public class IndexDescriptionTask implements IndexInsightTask {
 
             String response = extractModelResponse(dataAsMap);
             indexDescription = parseIndexDescription(response);
-            saveResult(indexDescription, storageIndex, ActionListener.wrap(
-                insight -> {
-                    log.info("Index description completed for: {}", indexName);
-                    listener.onResponse(insight);
-                },
-                e -> {
-                    log.error("Failed to save index description result for index {}", indexName, e);
-                    saveFailedStatus(storageIndex);
-                    listener.onFailure(e);
-                }
-            ));
+            saveResult(indexDescription, storageIndex, ActionListener.wrap(insight -> {
+                log.info("Index description completed for: {}", indexName);
+                listener.onResponse(insight);
+            }, e -> {
+                log.error("Failed to save index description result for index {}", indexName, e);
+                saveFailedStatus(storageIndex);
+                listener.onFailure(e);
+            }));
         }, e -> {
             log.error("Failed to call LLM for index description: {}", indexName, e);
             saveFailedStatus(storageIndex);
@@ -224,7 +221,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
     private String parseIndexDescription(String modelResponse) {
         return modelResponse.trim();
     }
-    
+
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
         if (prerequisiteType == MLIndexInsightType.STATISTICAL_DATA) {

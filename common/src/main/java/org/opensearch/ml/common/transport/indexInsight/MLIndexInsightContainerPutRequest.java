@@ -1,23 +1,24 @@
 package org.opensearch.ml.common.transport.indexInsight;
 
-import lombok.Getter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import lombok.Getter;
 
 @Getter
 public class MLIndexInsightContainerPutRequest extends ActionRequest {
     private String indexName;
     private String tenantId;
 
-    public MLIndexInsightContainerPutRequest(String indexName, String tenantId){
+    public MLIndexInsightContainerPutRequest(String indexName, String tenantId) {
         this.indexName = indexName;
         this.tenantId = tenantId;
     }

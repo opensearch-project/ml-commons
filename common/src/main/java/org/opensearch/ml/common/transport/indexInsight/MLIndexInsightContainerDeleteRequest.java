@@ -1,22 +1,23 @@
 package org.opensearch.ml.common.transport.indexInsight;
 
-import lombok.Getter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import lombok.Getter;
 
 @Getter
-public class MLIndexInsightContainerDeleteRequest  extends ActionRequest {
+public class MLIndexInsightContainerDeleteRequest extends ActionRequest {
     private String tenantId;
 
-    public MLIndexInsightContainerDeleteRequest(String tenantId){
+    public MLIndexInsightContainerDeleteRequest(String tenantId) {
         this.tenantId = tenantId;
     }
 

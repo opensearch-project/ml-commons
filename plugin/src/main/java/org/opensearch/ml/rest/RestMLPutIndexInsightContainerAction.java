@@ -1,7 +1,14 @@
 package org.opensearch.ml.rest;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -12,18 +19,11 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
-import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 public class RestMLPutIndexInsightContainerAction extends BaseRestHandler {
     private static final String ML_PUT_INDEX_INSIGHT_CONTAINER_ACTION = "ml_put_index_insight_container_action";
-
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -39,13 +39,13 @@ public class RestMLPutIndexInsightContainerAction extends BaseRestHandler {
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest restRequest, NodeClient client) throws IOException {
         MLIndexInsightContainerPutRequest mlIndexInsightContainerPutRequest = getRequest(restRequest);
-        return channel -> client.execute(MLIndexInsightContainerPutAction.INSTANCE, mlIndexInsightContainerPutRequest, new RestToXContentListener<>(channel));
+        return channel -> client
+            .execute(MLIndexInsightContainerPutAction.INSTANCE, mlIndexInsightContainerPutRequest, new RestToXContentListener<>(channel));
     }
 
     @Override
     public List<Route> routes() {
-        return ImmutableList
-                .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/index_insight_container/", ML_BASE_URI)));
+        return ImmutableList.of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/index_insight_container/", ML_BASE_URI)));
     }
 
     @VisibleForTesting
