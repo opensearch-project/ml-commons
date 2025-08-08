@@ -236,14 +236,75 @@ plugins.ml_commons.agent_tracing_enabled: true
 
 ```
 
-### 3. Configuration File Locations
+### 3. OpenTelemetry Collector Installation and Setup
+
+For non-Docker setups, you need to install and configure the OpenTelemetry Collector:
+
+#### Download and Install OpenTelemetry Collector
+```bash
+# Download the latest OpenTelemetry Collector
+wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.131.1/otelcol-contrib_0.131.1_linux_amd64.tar.gz
+
+# Extract the archive
+tar -xzf otelcol-contrib_linux_amd64.tar.gz
+
+# Move to system path and make executable
+sudo mv otelcol-contrib /usr/local/bin/
+sudo chmod +x /usr/local/bin/otelcol-contrib
+
+# Create configuration directory
+mkdir -p ~/otel-collector
+cd ~/otel-collector
+```
+
+#### Create OpenTelemetry Collector Configuration
+```bash
+cat > otel-collector-config.yaml << 'EOF'
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  filter/traces:
+    spans:
+      include:
+        match_type: regexp
+        attributes:
+          - key: service.type
+            value: tracer
+  batch/traces:
+    timeout: 5s
+    send_batch_size: 50
+
+exporters:
+  debug:
+    verbosity: detailed
+  otlp/data-prepper:
+    endpoint: localhost:21890
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [filter/traces, batch/traces]
+      exporters: [debug, otlp/data-prepper]
+EOF
+```
+
+#### Run OpenTelemetry Collector
+```bash
+otelcol-contrib --config=~/otel-collector/otel-collector-config.yaml
+```
+
+### 4. Configuration File Locations
 
 For non-Docker setups, you'll need to place configuration files in specific locations:
-
-#### OpenTelemetry Collector Configuration
-- **File**: [`otel-collector-config.yaml`](otel-collector-config.yaml)
-- **Location**: `/etc/otel-collector-config.yaml` (or your preferred location)
-- **Usage**: `otelcol-contrib --config=/path/to/otel-collector-config.yaml`
 
 #### Data Prepper Configuration Files
 - **Main Config**: [`data-prepper-config.yaml`](data-prepper-config.yaml)
