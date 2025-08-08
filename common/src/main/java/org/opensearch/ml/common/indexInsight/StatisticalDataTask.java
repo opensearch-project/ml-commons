@@ -5,13 +5,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
+import org.opensearch.search.aggregations.AggregationBuilders;
+import org.opensearch.search.aggregations.AggregatorFactories;
+import org.opensearch.search.aggregations.bucket.sampler.SamplerAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.CardinalityAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.MaxAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.MinAggregationBuilder;
+import org.opensearch.search.aggregations.metrics.TopHitsAggregationBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.sort.SortOrder;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -26,6 +37,8 @@ import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFie
  */
 @Log4j2
 public class StatisticalDataTask implements IndexInsightTask {
+
+    public static int termSize = 5;
     
     private final MLIndexInsightType taskType = MLIndexInsightType.STATISTICAL_DATA;
     private final String indexName;
@@ -92,7 +105,9 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     private void collectSampleDocuments(String targetIndex, ActionListener<IndexInsight> listener) {
+
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(indexName);
+
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
 
             Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
@@ -101,26 +116,25 @@ public class StatisticalDataTask implements IndexInsightTask {
             }
             String firstIndexName = (String) mappings.keySet().toArray()[0];
             Map<String, String> fieldsToType = new HashMap<>();
-            extractFieldNamesTypes(mappings.get(firstIndexName).getSourceAsMap(), fieldsToType, "", false);
+            extractFieldNamesTypes((Map<String, Object>) mappings.get(firstIndexName).getSourceAsMap().get("properties"), fieldsToType, "", false);
+            SearchRequest searchRequest = new SearchRequest(indexName);
+            searchRequest.source(buildQuery(fieldsToType));
 
+            client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+                sampleDocuments = searchResponse.getHits().getHits();
+                log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
+
+                String statisticalContent = generateStatisticalContent();
+                saveResult(statisticalContent, targetIndex, listener);
+            }, e -> {
+                log.error("Failed to collect sample documents for index: {}", indexName, e);
+                saveFailedStatus(targetIndex);
+                listener.onFailure(e);
+            }));
 
                 }, e -> {}));
 
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.size(5).query(new MatchAllQueryBuilder());
-        SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
-        
-        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-            sampleDocuments = searchResponse.getHits().getHits();
-            log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
-            
-            String statisticalContent = generateStatisticalContent();
-            saveResult(statisticalContent, targetIndex, listener);
-        }, e -> {
-            log.error("Failed to collect sample documents for index: {}", indexName, e);
-            saveFailedStatus(targetIndex);
-            listener.onFailure(e);
-        }));
+
     }
     
     private String generateStatisticalContent() {
@@ -137,5 +151,64 @@ public class StatisticalDataTask implements IndexInsightTask {
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
         throw new IllegalArgumentException("StatisticalDataTask has no prerequisites");
+    }
+
+    public SearchSourceBuilder buildQuery(Map<String, String> fields) {
+        AggregatorFactories.Builder subAggs = new AggregatorFactories.Builder();
+
+        for (Map.Entry<String, String> field : fields.entrySet()) {
+            String name = field.getKey();
+            String type = field.getValue();
+            String fieldUsed = name;
+
+            if ("text".equals(type)) {
+                fieldUsed = name + ".keyword";
+            }
+
+            if (List.of("text", "keyword", "integer", "long", "float", "double", "short").contains(type)) {
+                TermsAggregationBuilder termsAgg = AggregationBuilders
+                        .terms("unique_terms_" + name)
+                        .field(fieldUsed)
+                        .size(termSize);
+
+                CardinalityAggregationBuilder countAgg = AggregationBuilders
+                        .cardinality("unique_count_" + name)
+                        .field(fieldUsed);
+
+                subAggs.addAggregator(termsAgg);
+                subAggs.addAggregator(countAgg);
+            } else if ("date".equals(type)) {
+                MinAggregationBuilder minAgg = AggregationBuilders
+                        .min("min_value_" + name)
+                        .field(fieldUsed);
+                MaxAggregationBuilder maxAgg = AggregationBuilders
+                        .max("max_value_" + name)
+                        .field(fieldUsed);
+
+                subAggs.addAggregator(minAgg);
+                subAggs.addAggregator(maxAgg);
+            }
+        }
+
+        // Add top hits example_docs
+        TopHitsAggregationBuilder topHitsAgg = AggregationBuilders
+                .topHits("example_docs")
+                .size(5);
+        subAggs.addAggregator(topHitsAgg);
+
+        // Wrap everything in a Sampler aggregation
+        SamplerAggregationBuilder samplerAgg = AggregationBuilders
+                .sampler("sample")
+                .shardSize(100000)
+                .subAggregations(subAggs);
+
+        // Build search source
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
+                .query(QueryBuilders.matchAllQuery())
+                .sort("_doc", SortOrder.DESC)
+                .size(0)
+                .aggregation(samplerAgg);
+
+        return sourceBuilder;
     }
 }
