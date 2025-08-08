@@ -1,18 +1,19 @@
 package org.opensearch.ml.common.indexInsight;
 
-import lombok.Builder;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
+import lombok.Builder;
+import lombok.Getter;
 
 @Getter
 public class IndexInsightContainer implements ToXContentObject, Writeable {
