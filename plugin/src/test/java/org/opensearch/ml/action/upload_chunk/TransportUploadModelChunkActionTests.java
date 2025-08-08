@@ -49,7 +49,7 @@ public class TransportUploadModelChunkActionTests extends OpenSearchTestCase {
             ActionListener<MLUploadModelChunkResponse> listener = invocation.getArgument(1);
             listener.onResponse(response);
             return null;
-        }).when(mlModelUploader).uploadModelChunk(any(), any(), any());
+        }).when(mlModelUploader).uploadModelChunk(any(), any());
     }
 
     public void testTransportUploadModelChunkActionConstructor() {
