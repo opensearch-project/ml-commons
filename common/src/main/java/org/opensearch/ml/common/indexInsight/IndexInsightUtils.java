@@ -1,18 +1,18 @@
 package org.opensearch.ml.common.indexInsight;
 
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGNET_NAME;
+
+import java.util.Map;
+
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.transport.client.Client;
-import java.util.Map;
-
-import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGNET_NAME;
 
 public class IndexInsightUtils {
     public static void getAgentIdToRun(Client client, String tenantId, ActionListener<String> actionListener) {
-        MLConfigGetRequest mlConfigGetRequest =
-                new MLConfigGetRequest(INDEX_INSIGHT_AGNET_NAME, tenantId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(INDEX_INSIGHT_AGNET_NAME, tenantId);
         client.execute(MLConfigGetAction.INSTANCE, mlConfigGetRequest, ActionListener.wrap(r -> {
             MLConfig mlConfig = r.getMlConfig();
             actionListener.onResponse(mlConfig.getConfiguration().getAgentId());
@@ -28,10 +28,10 @@ public class IndexInsightUtils {
      *                      cannot be included, but for CreateAnomalyDetectorTool, `fields` must be included.
      */
     public static void extractFieldNamesTypes(
-            Map<String, Object> mappingSource,
-            Map<String, String> fieldsToType,
-            String prefix,
-            boolean includeFields
+        Map<String, Object> mappingSource,
+        Map<String, String> fieldsToType,
+        String prefix,
+        boolean includeFields
     ) {
         if (prefix.length() > 0) {
             prefix += ".";

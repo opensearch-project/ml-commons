@@ -1,7 +1,10 @@
 package org.opensearch.ml.action.IndexInsight;
 
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -30,14 +33,13 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
+import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 
 @Getter
 @Log4j2
-public class DeleteIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightContainerDeleteResponse> {
+public class DeleteIndexInsightContainerTransportAction extends
+    HandledTransportAction<ActionRequest, MLIndexInsightContainerDeleteResponse> {
     private Client client;
     private final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
@@ -45,11 +47,15 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
     private final MLIndicesHandler mlIndicesHandler;
 
     @Inject
-    public DeleteIndexInsightContainerTransportAction(TransportService transportService,
-                                                   ActionFilters actionFilters,
-                                                   NamedXContentRegistry xContentRegistry,
-                                                   MLFeatureEnabledSetting mlFeatureEnabledSetting,
-                                                   Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
+    public DeleteIndexInsightContainerTransportAction(
+        TransportService transportService,
+        ActionFilters actionFilters,
+        NamedXContentRegistry xContentRegistry,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        Client client,
+        SdkClient sdkClient,
+        MLIndicesHandler mlIndicesHandler
+    ) {
         super(MLIndexInsightContainerDeleteAction.NAME, transportService, actionFilters, MLIndexInsightContainerDeleteRequest::new);
         this.client = client;
 
@@ -60,92 +66,90 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
     }
 
     private void deleteOriginalIndexInsightIndex(String indexName, ActionListener<Boolean> listener) {
-        client.admin().indices().delete(
-                new DeleteIndexRequest(indexName),
-                ActionListener.wrap(r -> {
-                    if (r.isAcknowledged()) {
-                        listener.onResponse(true);
-                    } else {
-                        listener.onFailure(new RuntimeException("Failed to delete original index insight data index: " + indexName));
-                    }
-                }, listener::onFailure)
-        );
+        client.admin().indices().delete(new DeleteIndexRequest(indexName), ActionListener.wrap(r -> {
+            if (r.isAcknowledged()) {
+                listener.onResponse(true);
+            } else {
+                listener.onFailure(new RuntimeException("Failed to delete original index insight data index: " + indexName));
+            }
+        }, listener::onFailure));
     }
 
-    private void getIndexInsightContainer(String tenantId, ActionListener<String> listener){
+    private void getIndexInsightContainer(String tenantId, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                    .getDataObjectAsync(
-                            GetDataObjectRequest
-                                    .builder()
-                                    .tenantId(tenantId)
-                                    .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
-                                    .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
-                                    .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-                        context.restore();
-                        if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            listener.onFailure(cause);
-                        } else {
-                            try {
-                                GetResponse getResponse = r.getResponse();
-                                if (getResponse.isExists()) {
-                                    try (XContentParser parser = jsonXContent
-                                            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())) {
-                                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                        IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-                                        listener.onResponse(indexInsightContainer.getIndexName());
-                                    } catch (Exception e) {
-                                        listener.onFailure(e);
-                                    }
-                                } else {
-                                    listener.onFailure(new RuntimeException("The container is not set yet"));
+                .getDataObjectAsync(
+                    GetDataObjectRequest
+                        .builder()
+                        .tenantId(tenantId)
+                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
+                        .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            GetResponse getResponse = r.getResponse();
+                            if (getResponse.isExists()) {
+                                try (
+                                    XContentParser parser = jsonXContent
+                                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
+                                    listener.onResponse(indexInsightContainer.getIndexName());
+                                } catch (Exception e) {
+                                    listener.onFailure(e);
                                 }
-
-                            } catch (Exception e) {
-                                listener.onFailure(e);
+                            } else {
+                                listener.onFailure(new RuntimeException("The container is not set yet"));
                             }
+
+                        } catch (Exception e) {
+                            listener.onFailure(e);
                         }
-                    });
+                    }
+                });
         } catch (Exception e) {
             log.error("Failed to create index insight container", e);
             listener.onFailure(e);
         }
     }
 
-
     private void deleteIndexInsightContainer(String tenantId, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
-                    .deleteDataObjectAsync(
-                            DeleteDataObjectRequest
-                                    .builder()
-                                    .tenantId(tenantId)
-                                    .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
-                                    .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
-                                    .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-                        context.restore();
-                        if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            listener.onFailure(cause);
-                        } else {
-                            try {
-                                DeleteResponse deleteResponse = r.deleteResponse();
-                                if (deleteResponse.status() == RestStatus.ACCEPTED) {
-                                    listener.onResponse(true);
-                                } else {
-                                    listener.onFailure(new RuntimeException("The container is not set yet"));
-                                }
-
-                            } catch (Exception e) {
-                                listener.onFailure(e);
+                .deleteDataObjectAsync(
+                    DeleteDataObjectRequest
+                        .builder()
+                        .tenantId(tenantId)
+                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
+                        .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            DeleteResponse deleteResponse = r.deleteResponse();
+                            if (deleteResponse.status() == RestStatus.ACCEPTED) {
+                                listener.onResponse(true);
+                            } else {
+                                listener.onFailure(new RuntimeException("The container is not set yet"));
                             }
+
+                        } catch (Exception e) {
+                            listener.onFailure(e);
                         }
-                    });
+                    }
+                });
         } catch (Exception e) {
             log.error("Failed to create index insight container", e);
             listener.onFailure(e);
@@ -154,14 +158,18 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLIndexInsightContainerDeleteResponse> listener) {
-        MLIndexInsightContainerDeleteRequest mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest.fromActionRequest(request);
+        MLIndexInsightContainerDeleteRequest mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest
+            .fromActionRequest(request);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerDeleteRequest.getTenantId(), listener)) {
             return;
         }
         String tenantId = mlIndexInsightContainerDeleteRequest.getTenantId();
         getIndexInsightContainer(tenantId, ActionListener.wrap(indexName -> {
             deleteOriginalIndexInsightIndex(indexName, ActionListener.wrap(r -> {
-                deleteIndexInsightContainer(tenantId, ActionListener.wrap(r1 -> {listener.onResponse(new MLIndexInsightContainerDeleteResponse());}, listener::onFailure));
+                deleteIndexInsightContainer(
+                    tenantId,
+                    ActionListener.wrap(r1 -> { listener.onResponse(new MLIndexInsightContainerDeleteResponse()); }, listener::onFailure)
+                );
             }, listener::onFailure));
 
         }, listener::onFailure));

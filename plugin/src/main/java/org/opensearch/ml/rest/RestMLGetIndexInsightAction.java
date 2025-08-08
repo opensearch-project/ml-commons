@@ -47,7 +47,12 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/insights/{%s}/{insight_type}", ML_BASE_URI, PARAMETER_INDEX_ID)));
+            .of(
+                new Route(
+                    RestRequest.Method.GET,
+                    String.format(Locale.ROOT, "%s/insights/{%s}/{insight_type}", ML_BASE_URI, PARAMETER_INDEX_ID)
+                )
+            );
     }
 
     @Override
