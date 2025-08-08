@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.tools;
+package org.opensearch.ml.common.utils;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -20,7 +20,6 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.utils.StringUtils;
 
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;

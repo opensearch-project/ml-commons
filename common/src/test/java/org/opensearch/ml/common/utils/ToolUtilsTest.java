@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.tools;
+package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,8 +12,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_REQUIRED_PARAMS;
-import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_REQUIRED_PARAMS;
+import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -14,6 +14,9 @@ import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.opensearch.ml.common.utils.ToolUtils.buildToolParameters;
+import static org.opensearch.ml.common.utils.ToolUtils.createTool;
+import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
@@ -28,7 +31,6 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_D
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
-import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -81,7 +83,6 @@ import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.tools.McpSseTool;
-import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -838,8 +839,8 @@ public class AgentUtils {
             return;
         }
         for (MLToolSpec toolSpec : toolSpecs) {
-            Map<String, String> toolParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-            Tool tool = ToolUtils.createTool(toolFactories, toolParams, toolSpec);
+            Map<String, String> toolParams = buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+            Tool tool = createTool(toolFactories, toolParams, toolSpec);
             tools.put(tool.getName(), tool);
             if (toolSpec.getAttributes() != null) {
                 if (tool.getAttributes() == null) {
