@@ -50,11 +50,13 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -99,11 +101,18 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+        Span agentTaskSpan = MLAgentTracer.getInstance().startConversationalFlowAgentTaskSpan(mlAgent.getName(), params.get(QUESTION));
         String appType = mlAgent.getAppType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
         if (appType == null || mlAgent.getMemory() == null) {
-            runAgent(mlAgent, params, listener, null, memoryId, parentInteractionId);
+            runAgent(mlAgent, params, ActionListener.wrap(result -> {
+                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                listener.onResponse(result);
+            }, e -> {
+                MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e);
+                listener.onFailure(e);
+            }), null, memoryId, parentInteractionId, agentTaskSpan);
             return;
         }
 
@@ -144,12 +153,22 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                 }
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), parentInteractionId);
+                runAgent(mlAgent, params, ActionListener.wrap(result -> {
+                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                    listener.onResponse(result);
+                }, e -> {
+                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e);
+                    listener.onFailure(e);
+                }), memory, memory.getConversationId(), parentInteractionId, agentTaskSpan);
             }, e -> {
                 log.error("Failed to get chat history", e);
+                MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to get chat history", e);
                 listener.onFailure(e);
             }), messageHistoryLimit);
-        }, listener::onFailure));
+        }, e -> {
+            MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to create memory", e);
+            listener.onFailure(e);
+        }));
     }
 
     private void runAgent(
@@ -158,10 +177,11 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         ActionListener<Object> listener,
         ConversationIndexMemory memory,
         String memoryId,
-        String parentInteractionId
+        String parentInteractionId,
+        Span agentTaskSpan
     ) {
 
-        StepListener<Object> firstStepListener = null;
+        final StepListener<Object> firstStepListener = new StepListener<>();
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();
         Map<String, String> firstToolExecuteParams = null;
@@ -184,7 +204,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
-                firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
                 firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
@@ -208,7 +227,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         finalI,
                         output,
                         mlAgent.getTenantId(),
-                        nextStepListener
+                        nextStepListener,
+                        agentTaskSpan
                     );
                 }, e -> {
                     log.error("Failed to run flow agent", e);
@@ -217,9 +237,24 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 previousStepListener = nextStepListener;
             }
         }
+
+        MLToolSpec toolSpec = toolSpecs.getFirst();
+        if (toolSpec == null) {
+            throw new IllegalArgumentException("Tool spec cannot be null. Check if toolSpecs list contains null elements.");
+        }
+        Span toolCallSpan = MLAgentTracer
+            .getInstance()
+            .startConversationalToolCallSpan(
+                params.get(QUESTION),
+                1,
+                toolSpec.getType(),
+                toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
+                agentTaskSpan
+            );
+
         if (toolSpecs.size() == 1) {
             firstTool.run(firstToolExecuteParams, ActionListener.wrap(output -> {
-                MLToolSpec toolSpec = toolSpecs.get(0);
+                MLAgentTracer.updateSpanWithTool(toolCallSpan, output, params.get(QUESTION));
                 processOutput(
                     params,
                     listener,
@@ -235,11 +270,21 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     1,
                     output,
                     mlAgent.getTenantId(),
-                    null
+                    null,
+                    agentTaskSpan
                 );
-            }, e -> { listener.onFailure(e); }));
+            }, e -> {
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run first tool", e);
+                listener.onFailure(e);
+            }));
         } else {
-            firstTool.run(firstToolExecuteParams, firstStepListener);
+            firstTool.run(firstToolExecuteParams, ActionListener.wrap(output -> {
+                MLAgentTracer.updateSpanWithTool(toolCallSpan, output, params.get(QUESTION));
+                firstStepListener.onResponse(output);
+            }, e -> {
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run first tool", e);
+                firstStepListener.onFailure(e);
+            }));
         }
     }
 
@@ -259,7 +304,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         int finalI,
         Object output,
         String tenantId,
-        StepListener<Object> nextStepListener
+        StepListener<Object> nextStepListener,
+        Span agentTaskSpan
     ) throws IOException,
         PrivilegedActionException {
         String toolName = getToolName(previousToolSpec);
@@ -285,6 +331,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
 
         if (finalI == toolSpecs.size()) {
+            agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
             ActionListener updateListener = ActionListener.<UpdateResponse>wrap(r -> {
                 log.info("Updated additional info for interaction {} of flow agent.", r.getId());
                 listener.onResponse(flowAgentOutput);
@@ -321,7 +368,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             }
         } else {
             if (memory == null) {
-                runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
+                runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener, agentTaskSpan);
             } else {
                 saveMessage(
                     params,
@@ -333,7 +380,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     traceNumber,
                     traceDisabled,
                     ActionListener.wrap(r -> {
-                        runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
+                        runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener, agentTaskSpan);
                     }, e -> {
                         log.error("Failed to update root interaction ", e);
                         listener.onFailure(e);
@@ -348,12 +395,29 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         List<MLToolSpec> toolSpecs,
         int finalI,
         String tenantId,
-        StepListener<Object> nextStepListener
+        StepListener<Object> nextStepListener,
+        Span agentTaskSpan
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
         Tool tool = createTool(toolFactories, params, toolSpec, tenantId);
         if (finalI < toolSpecs.size()) {
-            tool.run(getToolExecuteParams(toolSpec, params, tenantId), nextStepListener);
+            Span toolCallSpan = MLAgentTracer
+                .getInstance()
+                .startConversationalToolCallSpan(
+                    params.get(QUESTION),
+                    finalI + 1,
+                    toolSpec.getType(),
+                    toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
+                    agentTaskSpan
+                );
+
+            tool.run(getToolExecuteParams(toolSpec, params, tenantId), ActionListener.wrap(output -> {
+                MLAgentTracer.updateSpanWithTool(toolCallSpan, output, params.get(QUESTION));
+                nextStepListener.onResponse(output);
+            }, e -> {
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run next step", e);
+                nextStepListener.onFailure(e);
+            }));
         }
     }
 

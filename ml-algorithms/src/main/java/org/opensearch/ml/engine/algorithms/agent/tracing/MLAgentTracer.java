@@ -214,6 +214,18 @@ public class MLAgentTracer extends MLTracer {
      * @param userTask The user task or question.
      * @return A map of attributes for the agent task span.
      */
+    public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
+        return createAgentTaskAttributes(agentName, userTask, null, null);
+    }
+
+    /**
+     * Creates attributes for an agent task span.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @param agentId The agent id.
+     * @param modelId The model id.
+     * @return A map of attributes for the agent task span.
+     */
     public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask, String agentId, String modelId) {
         Map<String, String> attributes = new HashMap<>();
         attributes.put(ATTR_SERVICE_TYPE, SERVICE_TYPE_TRACER);
@@ -976,6 +988,26 @@ public class MLAgentTracer extends MLTracer {
     }
 
     /**
+     * Starts a conversational flow agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startConversationalFlowAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_CONV_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask));
+    }
+
+    /**
+     * Starts a flow agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startFlowAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask, null, null));
+    }
+
+    /**
      * Extracts token information from ModelTensorOutput using the robust provider-specific logic.
      * @param modelTensorOutput The model output to extract tokens from.
      * @param parameters The parameters used for the LLM call (for provider detection).
@@ -1299,6 +1331,51 @@ public class MLAgentTracer extends MLTracer {
     public static void setSpanTaskAndResult(Span span, String task, String result) {
         setSpanTask(span, task);
         setSpanResult(span, result);
+    }
+
+    /**
+     * Updates the span with the tool call result.
+     * @param toolCallSpan The span to update.
+     * @param output The output of the tool call.
+     * @param question The question that prompted the tool call.
+     */
+    public static void updateSpanWithTool(Span toolCallSpan, Object output, String question) {
+        try {
+            String outputResponse = parseResponse(output);
+            toolCallSpan.addAttribute(ATTR_TASK, question);
+            toolCallSpan.addAttribute(ATTR_RESULT, outputResponse);
+            getInstance().endSpan(toolCallSpan);
+        } catch (Exception e) {
+            toolCallSpan.setError(e);
+            getInstance().endSpan(toolCallSpan);
+        }
+    }
+
+    /**
+     * Parses the response object to extract the output string.
+     * @param output The output object to parse.
+     * @return The parsed response string.
+     */
+    private static String parseResponse(Object output) {
+        if (output == null) {
+            return "";
+        }
+        if (output instanceof String) {
+            return (String) output;
+        }
+        if (output instanceof Map) {
+            Map<?, ?> outputMap = (Map<?, ?>) output;
+            Object response = outputMap.get(RESPONSE_FIELD);
+            if (response != null) {
+                return StringUtils.toJson(response);
+            }
+            Object result = outputMap.get(OUTPUT_FIELD);
+            if (result != null) {
+                return StringUtils.toJson(result);
+            }
+            return StringUtils.toJson(outputMap);
+        }
+        return output.toString();
     }
 
     /**

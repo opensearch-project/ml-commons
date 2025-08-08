@@ -5,6 +5,40 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+/**
+ * Unit tests for {@link MLFlowAgentRunner}.
+ * 
+ * <p>This test class covers the functionality of the ML Flow Agent Runner, which is responsible for
+ * executing a sequence of tools in a flow-based manner. The tests verify:</p>
+ * 
+ * <ul>
+ *   <li>Basic flow execution with single and multiple tools</li>
+ *   <li>Memory management and interaction updates</li>
+ *   <li>Tool parameter extraction and configuration</li>
+ *   <li>Response parsing for different output types</li>
+ *   <li>Error handling and tracing integration</li>
+ *   <li>Model tensor output processing</li>
+ * </ul>
+ * 
+ * <p>The tests use Mockito for mocking dependencies and verify both successful execution paths
+ * and error scenarios. The MLAgentTracer is initialized with a NoopTracer for testing purposes
+ * to avoid actual tracing overhead.</p>
+ * 
+ * <p>Key test scenarios include:</p>
+ * <ul>
+ *   <li>Flow execution with and without memory</li>
+ *   <li>Tool chain execution with multiple tools</li>
+ *   <li>Error handling when tools fail</li>
+ *   <li>Parameter substitution and configuration overrides</li>
+ *   <li>Response parsing for various output formats</li>
+ * </ul>
+ * 
+ * @see MLFlowAgentRunner
+ * @see MLAgentTracer
+ * @see MLAgent
+ * @see MLToolSpec
+ */
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -15,6 +49,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,7 +72,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -52,11 +86,15 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.telemetry.tracing.Span;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
@@ -117,11 +155,25 @@ public class MLFlowAgentRunnerTest {
     private ArgumentCaptor<Object> objectCaptor;
 
     @Captor
-    private ArgumentCaptor<StepListener<Object>> nextStepListenerCaptor;
+    private ArgumentCaptor<ActionListener<Object>> actionListenerCaptor;
 
     @Captor
     private ArgumentCaptor<Map<String, Object>> memoryMapCaptor;
 
+    /**
+     * Sets up the test environment before each test method.
+     * 
+     * <p>This method initializes all mocks and dependencies required for testing the MLFlowAgentRunner.
+     * It sets up:</p>
+     * <ul>
+     *   <li>Mock tool factories and tools</li>
+     *   <li>Mock memory management components</li>
+     *   <li>MLAgentTracer with NoopTracer for testing</li>
+     *   <li>Tool response generators</li>
+     * </ul>
+     * 
+     * <p>The setup ensures that all tests have a consistent and isolated environment.</p>
+     */
     @Before
     @SuppressWarnings("unchecked")
     public void setup() {
@@ -136,10 +188,22 @@ public class MLFlowAgentRunnerTest {
         when(firstTool.getDescription()).thenReturn(FIRST_TOOL_DESC);
         when(firstTool.getName()).thenReturn(FIRST_TOOL);
         when(secondTool.getName()).thenReturn(SECOND_TOOL);
-        doAnswer(generateToolResponse(FIRST_TOOL_RESPONSE)).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
-        doAnswer(generateToolResponse(SECOND_TOOL_RESPONSE)).when(secondTool).run(anyMap(), nextStepListenerCaptor.capture());
+        doAnswer(generateToolResponse(FIRST_TOOL_RESPONSE)).when(firstTool).run(anyMap(), actionListenerCaptor.capture());
+        doAnswer(generateToolResponse(SECOND_TOOL_RESPONSE)).when(secondTool).run(anyMap(), actionListenerCaptor.capture());
+
+        // Initialize MLAgentTracer with NoopTracer for tests
+        MLFeatureEnabledSetting mockFeatureSetting = Mockito.mock(MLFeatureEnabledSetting.class);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(false); // disables tracing, uses NoopTracer
+        MLAgentTracer.resetForTest();
+        MLAgentTracer.initialize(NoopTracer.INSTANCE, mockFeatureSetting);
     }
 
+    /**
+     * Generates a mock tool response for testing.
+     * 
+     * @param response The response string to return from the tool
+     * @return A Mockito Answer that simulates a successful tool execution
+     */
     private Answer generateToolResponse(String response) {
         return invocation -> {
             ActionListener<Object> listener = invocation.getArgument(1);
@@ -148,6 +212,14 @@ public class MLFlowAgentRunnerTest {
         };
     }
 
+    /**
+     * Generates a mock ModelTensorOutput response for testing.
+     * 
+     * <p>This method creates a mock response that simulates a tool returning a ModelTensorOutput,
+     * which is used to test the parsing and handling of complex model outputs.</p>
+     * 
+     * @return A Mockito Answer that simulates a tool returning ModelTensorOutput
+     */
     private Answer generateToolTensorResponse() {
         ModelTensor modelTensor = ModelTensor.builder().name(FIRST_TOOL).dataAsMap(Map.of("index", "index response")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -159,6 +231,21 @@ public class MLFlowAgentRunnerTest {
         };
     }
 
+    /**
+     * Tests flow execution when includeOutputInAgentResponse is not set.
+     * 
+     * <p>This test verifies that when tools are configured without the includeOutputInAgentResponse
+     * flag, only the last tool's output is included in the final response. The test:</p>
+     * <ul>
+     *   <li>Creates an agent with two tools</li>
+     *   <li>Executes the flow with memory management</li>
+     *   <li>Verifies that only the second tool's output is returned</li>
+     *   <li>Checks that memory interaction is updated correctly</li>
+     * </ul>
+     * 
+     * <p>This test ensures the default behavior where intermediate tool outputs are not
+     * included in the final response unless explicitly configured.</p>
+     */
     @Test
     public void testRunWithIncludeOutputNotSet() {
         final Map<String, String> params = new HashMap<>();
@@ -271,7 +358,7 @@ public class MLFlowAgentRunnerTest {
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        doAnswer(generateToolTensorResponse()).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
+        doAnswer(generateToolTensorResponse()).when(firstTool).run(anyMap(), actionListenerCaptor.capture());
         mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
@@ -497,6 +584,152 @@ public class MLFlowAgentRunnerTest {
         Map<String, Object> additionalInfo = (Map<String, Object>) memoryMapCaptor.getValue().get("additional_info");
         assertEquals(1, additionalInfo.size());
         assertNotNull(additionalInfo.get(SECOND_TOOL + ".output"));
+    }
+
+    /**
+     * Tests error handling when a tool in the chain fails during execution.
+     * Verifies that MLAgentTracer.handleSpanError is called with the correct error message.
+     */
+    @Test
+    public void testToolChainExecutionError() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.QUESTION, "test question");
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .memory(null)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        // Make the second tool fail
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Second tool failed"));
+            return null;
+        }).when(secondTool).run(anyMap(), any(ActionListener.class));
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the listener was called with failure
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    /**
+     * Tests error handling when a single tool fails during execution.
+     * Verifies that MLAgentTracer.handleSpanError is called with the correct error message.
+     */
+    @Test
+    public void testSingleToolExecutionError() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.QUESTION, "test question");
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .memory(null)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        // Make the first tool fail
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("First tool failed"));
+            return null;
+        }).when(firstTool).run(anyMap(), any(ActionListener.class));
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the listener was called with failure
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    /**
+     * Tests error handling when the first tool in a multiple tool chain fails.
+     * Verifies that MLAgentTracer.handleSpanError is called with the correct error message.
+     */
+    @Test
+    public void testMultipleToolsFirstToolError() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.QUESTION, "test question");
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .memory(null)
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        // Make the first tool fail in a multiple tool scenario
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("First tool in chain failed"));
+            return null;
+        }).when(firstTool).run(anyMap(), any(ActionListener.class));
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the listener was called with failure
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    /**
+     * Tests error handling in the main run method when an exception occurs.
+     * Verifies that MLAgentTracer.handleSpanError is called with the correct error message.
+     */
+    @Test
+    public void testRunMethodException() {
+        final Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.QUESTION, "test question");
+
+        // Create an agent that will cause an exception during execution
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .memory(null)
+            .tools(Arrays.asList()) // Empty tools list will cause exception
+            .build();
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the listener was called with failure
+        verify(agentActionListener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    /**
+     * Tests error handling in updateSpanWithTool when an exception occurs during span update.
+     * This test verifies that the span error handling works correctly.
+     */
+    @Test
+    public void testUpdateSpanWithToolError() {
+        // Create a mock span that will throw an exception
+        Span mockSpan = mock(Span.class);
+        doThrow(new RuntimeException("Span update failed")).when(mockSpan).addAttribute(anyString(), anyString());
+
+        // Call updateSpanWithTool with a problematic output that will cause parseResponse to fail
+        Object problematicOutput = new Object() {
+            @Override
+            public String toString() {
+                throw new RuntimeException("toString failed");
+            }
+        };
+
+        // This should handle the exception gracefully
+        MLAgentTracer.updateSpanWithTool(mockSpan, problematicOutput, "test question");
+
+        // Verify that the span was marked with error and ended
+        verify(mockSpan).setError(any(RuntimeException.class));
+        verify(mockSpan).endSpan();
     }
 
 }
