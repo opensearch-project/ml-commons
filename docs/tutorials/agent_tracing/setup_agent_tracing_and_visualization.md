@@ -7,6 +7,8 @@ This tutorial explains how to configure and set up agent tracing and visualizati
 - Docker and Docker Compose installed
 - Basic understanding of OpenSearch and OpenTelemetry concepts
 
+**⚠️ Security Note**: This tutorial uses `ssl: false` configurations throughout for development convenience. These settings are **NOT recommended for production environments**. For production deployments, you should configure proper TLS certificates and authentication mechanisms.
+
 
 ## 1. Configuration Setup
 
@@ -18,15 +20,18 @@ cd opensearch-tracing
 
 ### Create Configuration Files
 Create the following configuration files in your directory:
-- `docker-compose.yml`: Defines the services
-- `otel-collector-config.yaml`: Configures the OpenTelemetry collector
-- `pipelines.yaml`: Configures Data Prepper pipelines
-- `data-prepper-config.yaml`: Basic Data Prepper configuration
+- [`docker-compose.yml`](docker-compose.yml): Defines the services
+- [`otel-collector-config.yaml`](otel-collector-config.yaml): Configures the OpenTelemetry collector
+- [`pipelines.yaml`](pipelines.yaml): Configures Data Prepper pipelines
+- [`data-prepper-config.yaml`](data-prepper-config.yaml): Basic Data Prepper configuration
+- [`ml_agent_trace.json`](ml_agent_trace.json): Custom index mapping for agent traces
 
 
 ## 2. Docker Compose File Setup
 
-The `docker-compose.yml` file orchestrates all the services required for agent tracing and visualization, including OpenSearch, OpenSearch Dashboards, Data Prepper, and the OpenTelemetry Collector.
+The [`docker-compose.yml`](docker-compose.yml) file orchestrates all the services required for agent tracing and visualization, including OpenSearch, OpenSearch Dashboards, Data Prepper, and the OpenTelemetry Collector.
+
+**⚠️ Development Configuration**: The configuration files in this tutorial use `ssl: false` and basic authentication for development simplicity. For production use, you must configure proper TLS certificates and security settings.
 
 ### Key Points
 - **Volume Mounts:**
@@ -42,104 +47,12 @@ The `docker-compose.yml` file orchestrates all the services required for agent t
     - `plugins.ml_commons.tracing_enabled=true`
     - `plugins.ml_commons.agent_tracing_enabled=true`
 
-### Minimal Example
-Below is a minimal working example of the relevant parts of a `docker-compose.yml` for this setup:
-
-```yaml
-version: '3'
-services:
-  opensearch-node1:
-    image: opensearchproject/opensearch:3.1.0
-    container_name: opensearch-node1
-    environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node1
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -Dopensearch.experimental.feature.telemetry.enabled=true"
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - opensearch.experimental.feature.telemetry.enabled=true
-      - telemetry.feature.tracer.enabled=true
-      - telemetry.tracer.enabled=true
-      - telemetry.tracer.sampler.probability=1.0
-      - telemetry.otel.tracer.span.exporter.class=io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter
-      - plugins.ml_commons.tracing_enabled=true
-      - plugins.ml_commons.agent_tracing_enabled=true
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
-        hard: 65536
-    volumes:
-      - opensearch-data1:/usr/share/opensearch/data
-      # USE THE BELOW TO MOUNT YOUR LOCAL BUILD TO AN INSTANCE
-      - <YOUR_ML_COMMONS_DIRECTORY>/plugin/build/distributions:/usr/share/opensearch/<YOUR_NAME> 
-    command: >
-      bash -c "
-      bin/opensearch-plugin remove opensearch-skills; 
-      bin/opensearch-plugin remove opensearch-ml; 
-      bin/opensearch-plugin install --batch telemetry-otel --batch file:///usr/share/opensearch/<YOUR_NAME>/opensearch-ml-3.1.0.0-SNAPSHOT.zip; 
-      OPENSEARCH_LOG4J_CONFIG_FILE=/usr/share/opensearch/config/telemetry-log4j2.xml ./opensearch-docker-entrypoint.sh opensearch"
-    ports:
-      - 9200:9200
-      - 9600:9600 # required for Performance Analyzer
-    networks:
-      - opensearch-net
-    depends_on:
-      - otel-collector
-    extra_hosts:
-      - "localhost:172.17.0.1"  # This maps localhost to the Docker host IP
-
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:3.1.0
-    container_name: opensearch-dashboards
-    ports:
-      - 5601:5601
-    expose:
-      - "5601"
-    environment:
-      OPENSEARCH_HOSTS: '["http://opensearch-node1:9200"]'
-      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
-    networks:
-      - opensearch-net
-    depends_on:
-      - opensearch-node1
-
-  data-prepper:
-    restart: unless-stopped
-    container_name: data-prepper
-    image: opensearchproject/data-prepper:2
-    volumes:
-      - ./data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml
-      - ./pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml
-      - <PATH_TO_INDEX_MAPPING>/ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
-    ports:
-      - "21890:21890"
-    networks:
-      - opensearch-net
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    container_name: otel-collector
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    ports:
-      - "4317:4317"  # OTLP gRPC port
-      - "4318:4318"  # OTLP HTTP port
-    networks:
-      - opensearch-net
-    depends_on:
-      - data-prepper
-
-volumes:
-  opensearch-data1:
-
-networks:
-  opensearch-net:
-```
+### Configuration Details
+The Docker Compose file includes:
+- **OpenSearch Node**: Configured with telemetry features enabled
+- **OpenSearch Dashboards**: For trace visualization
+- **Data Prepper**: For trace processing and storage
+- **OpenTelemetry Collector**: For trace collection and forwarding
 
 **Note:**
 - Adjust the file paths on the left side of the `volumes` section to match your actual directory structure.
@@ -151,160 +64,32 @@ networks:
 
 The OpenTelemetry Collector receives traces from OpenSearch agents and forwards them to Data Prepper.
 
-Create `otel-collector-config.yaml`:
-```yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-      http:
-        endpoint: 0.0.0.0:4318
-
-processors:
-  filter/traces:
-    spans:
-      include:
-        match_type: regexp
-        attributes:
-          - key: service.type
-            value: tracer
-  batch/traces:
-    timeout: 5s
-    send_batch_size: 50
-
-exporters:
-  debug:
-    verbosity: detailed
-  otlp/data-prepper:
-    endpoint: data-prepper:21890
-    tls:
-      insecure: true
-
-service:
-  pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [filter/traces, batch/traces]
-      exporters: [debug, otlp/data-prepper]
-```
+The [`otel-collector-config.yaml`](otel-collector-config.yaml) file configures:
+- **Receivers**: OTLP gRPC and HTTP endpoints
+- **Processors**: Trace filtering and batching
+- **Exporters**: Debug output and Data Prepper forwarding
+- **Service Pipelines**: Trace processing pipeline
 
 
 ## 4. Configure Data Prepper
 
 Data Prepper processes and transforms the traces before sending them to OpenSearch.
 
-Create `pipelines.yaml`:
-```yaml
-entry-pipeline:
-  workers: 8
-  source:
-    otel_trace_source:
-      ssl: false
-      authentication:
-        unauthenticated:
-  buffer:
-    bounded_blocking:
-      buffer_size: 512
-      batch_size: 8
-  sink:
-    - pipeline:
-        name: "raw-trace-pipeline"
-    - pipeline:
-        name: "service-map-pipeline"
+### Pipeline Configuration
+The [`pipelines.yaml`](pipelines.yaml) file defines:
+- **Entry Pipeline**: Receives traces from OpenTelemetry Collector
+- **Raw Trace Pipeline**: Processes and stores traces in OpenSearch
+- **Service Map Pipeline**: Creates service dependency maps
 
-raw-trace-pipeline:
-  workers: 8
-  source:
-    pipeline:
-      name: "entry-pipeline"
-  buffer:
-    bounded_blocking:
-      buffer_size: 512
-      batch_size: 64
-  processor:
-    - otel_trace_raw:
-        # flatten_attributes: false # functionality to be implemented by data prepper in the future
-    - otel_trace_group:
-        hosts: [ "http://opensearch-node1:9200" ]
-        username: "admin"
-        password: "MyPassword123!"
-  sink:
-    - opensearch:
-        hosts: ["http://opensearch-node1:9200"]
-        insecure: true
-        username: admin
-        password: MyPassword123!
-        # index_type: trace-analytics-raw # Uses default index mappings
-        index_type: custom
-        index: otel-v1-apm-span-agent
-        template_file: ml_agent_trace.json
-        template_type: index-template
+### Data Prepper Configuration
+The [`data-prepper-config.yaml`](data-prepper-config.yaml) file contains basic configuration settings.
 
-service-map-pipeline:
-  workers: 8
-  source:
-    pipeline:
-      name: "entry-pipeline"
-  processor:
-    - service_map_stateful:
-        window_duration: 360
-  buffer:
-    bounded_blocking:
-      buffer_size: 512
-      batch_size: 8
-  sink:
-    - opensearch:
-        hosts: ["http://opensearch-node1:9200"]
-        insecure: true
-        username: admin
-        password: MyPassword123!
-        index_type: trace-analytics-service-map
-```
-
-Create `data-prepper-config.yaml`:
-```yaml
-ssl: false
-```
 
 ## 5. Index Mapping Configuration
 
 ### Custom Index Mapping File
 
-The `ml_agent_trace.json` file contains the custom index mapping for agent traces and connector traces. This file defines the structure and field types for the `otel-v1-apm-span-agent` index where your agent traces will be stored.
-
-#### Locating the Index Mapping File
-
-The `ml_agent_trace.json` file is provided in this tutorial folder at:
-```
-ml-commons/docs/tutorials/agent_tracing/ml_agent_trace.json
-```
-
-#### Copying and Mounting the Index Mapping
-
-1. **Copy the file** from the tutorial folder to your configuration directory:
-   ```bash
-   cp ml-commons/docs/tutorials/agent_tracing/ml_agent_trace.json ./ml_agent_trace.json
-   ```
-
-2. **Update the volume mount** in your `docker-compose.yml`:
-   ```yaml
-   data-prepper:
-     volumes:
-       - ./ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
-   ```
-
-#### Alternative: Custom Index Mapping
-
-If you need to customize the index mapping for your specific use case, you can:
-
-1. **Create your own mapping file** based on the provided `ml_agent_trace.json` from this tutorial
-2. **Modify the volume mount** to point to your custom file:
-   ```yaml
-   data-prepper:
-     volumes:
-       - ./your-custom-mapping.json:/usr/share/data-prepper/ml_agent_trace.json
-   ```
+The [`ml_agent_trace.json`](ml_agent_trace.json) file contains the custom index mapping for agent traces and connector traces. This file defines the structure and field types for the `otel-v1-apm-span-agent` index where your agent traces will be stored.
 
 #### Important Notes
 
@@ -320,6 +105,25 @@ Start all services:
 ```bash
 docker-compose up -d
 ```
+
+**Note 1: Initial Connection Warnings**
+When Data Prepper starts, you may see connection warnings like this:
+```
+[raw-trace-pipeline-sink-worker-4-thread-1] WARN  org.opensearch.dataprepper.plugins.sink.opensearch.OpenSearchSink - Failed to initialize OpenSearch sink, retrying: Connection refused
+```
+
+This is normal behavior. Data Prepper needs to wait for the OpenSearch cluster to be fully up and running. Eventually, you should see this success message:
+```
+[entry-pipeline-sink-worker-2-thread-1] INFO  org.opensearch.dataprepper.plugins.source.oteltrace.OTelTraceSource - Started otel_trace_source on port 21890...
+```
+
+**Note 2: Expected Error Logs**
+You may see error logs like this in Data Prepper:
+```
+[raw-trace-pipeline-processor-worker-3-thread-1] ERROR org.opensearch.dataprepper.plugins.processor.oteltracegroup.OTelTraceGroupProcessor - Search request for traceGroup failed for traceIds: [] due to OpenSearch exception [type=index_not_found_exception, reason=no such index [otel-v1-apm-span]]
+```
+
+These errors are expected and can be safely ignored. They occur because we're using custom static mappings instead of the default Data Prepper index mappings. The system will work correctly despite these warnings.
 
 Verify services are running:
 ```bash
@@ -350,7 +154,7 @@ Use this API to turn agent tracing on or off without restarting your cluster, as
 
 - Open OpenSearch Dashboards at [http://localhost:5601](http://localhost:5601)
 - Navigate to **Observability → Traces**
-- You should see agent traces appearing as you execute agents
+- You should see agent traces around ~3-5 minutes after agent execution
 
 
 ## 9. Understanding the Visualizations
@@ -377,11 +181,11 @@ After clicking into one specific trace (agent execution) you arrive at the Trace
 
 In addition to Trace Analytics, OpenSearch Dashboards also supports [Vega](https://vega.github.io/vega/) visualizations for advanced, custom graphing. You can use Vega to create interactive graphs of your trace data, such as service dependency graphs or span relationships.
 
-Simply copy `trace-graph-vega.json` into the Vega editor in OpenSearch Dashboards and change the `traceId` to be the traceId of the run that was just executed.
+The [`trace-graph-vega.json`](trace-graph-vega.json) file contains a Vega specification for creating trace graphs. Simply copy this file into the Vega editor in OpenSearch Dashboards and change the `traceId` to be the traceId of the run that was just executed.
 
 > **How to use:**
 > 1. Go to **OpenSearch Dashboards → Visualize → Create visualization → Vega**.
-> 2. Paste the Vega spec into the editor.
+> 2. Paste the Vega spec from [`trace-graph-vega.json`](trace-graph-vega.json) into the editor.
 > 3. Adjust the data and layout as needed for your trace data.
 
 ![Vega Graph View](images/vega_trace_graph.png)
@@ -434,59 +238,28 @@ plugins.ml_commons.agent_tracing_enabled: true
 For non-Docker setups, you'll need to place configuration files in specific locations:
 
 #### OpenTelemetry Collector Configuration
-- **File**: `otel-collector-config.yaml`
+- **File**: [`otel-collector-config.yaml`](otel-collector-config.yaml)
 - **Location**: `/etc/otel-collector-config.yaml` (or your preferred location)
 - **Usage**: `otelcol-contrib --config=/path/to/otel-collector-config.yaml`
 
 #### Data Prepper Configuration Files
-- **Main Config**: `data-prepper-config.yaml`
+- **Main Config**: [`data-prepper-config.yaml`](data-prepper-config.yaml)
 - **Location**: `/usr/share/data-prepper/config/data-prepper-config.yaml`
-- **Pipelines Config**: `pipelines.yaml`
+- **Pipelines Config**: [`pipelines.yaml`](pipelines.yaml)
 - **Location**: `/usr/share/data-prepper/pipelines/pipelines.yaml`
-- **Index Mapping**: `ml_agent_trace.json`
+- **Index Mapping**: [`ml_agent_trace.json`](ml_agent_trace.json)
 - **Location**: `/usr/share/data-prepper/ml_agent_trace.json`
 
-### 4. Security Considerations for Production
+### 4. Startup Order
 
-For production environments, you should **remove or configure** the `ssl: false` settings:
+**Critical**: The components must be started in the following order to ensure proper initialization:
 
-#### OpenTelemetry Collector Configuration
-```yaml
-# Production: Configure proper TLS
-exporters:
-  otlp/data-prepper:
-    endpoint: data-prepper:21890
-    tls:
-      ca_file: /path/to/ca.crt
-      cert_file: /path/to/client.crt
-      key_file: /path/to/client.key
-```
+1. **Data Prepper** - Start first to ensure the trace processing pipeline is ready
+2. **OpenTelemetry Collector** - Start after Data Prepper to establish the trace forwarding connection
+3. **OpenSearch Cluster** - Start after both Data Prepper and Collector are running
+4. **OpenSearch Dashboards** - Start last after the cluster is fully operational
 
-#### Data Prepper Configuration
-```yaml
-# Production: Enable SSL
-ssl: true
-# Configure certificates and authentication
-```
-
-#### OpenSearch Configuration
-```yaml
-# Production: Enable security
-plugins.security.ssl.http.enabled: true
-plugins.security.ssl.transport.enabled: true
-# Configure certificates and authentication
-```
-
-#### Docker Compose (Production)
-```yaml
-# Production: Use proper TLS certificates
-environment:
-  - plugins.security.ssl.http.enabled=true
-  - plugins.security.ssl.transport.enabled=true
-  # Add certificate paths and authentication
-```
-
-**Note**: The `ssl: false` settings in the tutorial are for development convenience. Production deployments should use proper TLS certificates and authentication mechanisms.
+**Important Note**: Data Prepper also depends on the OpenSearch cluster to be running, as it needs to write processed traces to OpenSearch indices. This is why Data Prepper is configured with `restart: unless-stopped` in the Docker Compose file - it will automatically restart and retry connections until OpenSearch is available.
 
 ## Troubleshooting
 

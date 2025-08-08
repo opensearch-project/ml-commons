@@ -30,13 +30,13 @@ raw-trace-pipeline:
     - otel_trace_group:
         hosts: [ "http://opensearch-node1:9200" ]
         username: "admin"
-        password: "MyPassword123!"
+        password: "<PASSWORD>"
   sink:
     - opensearch:
         hosts: ["http://opensearch-node1:9200"]
         insecure: true
         username: admin
-        password: MyPassword123!
+        password: "<PASSWORD>"
         # index_type: trace-analytics-raw # Uses default index mappings
         index_type: custom
         index: otel-v1-apm-span-agent
@@ -60,5 +60,5 @@ service-map-pipeline:
         hosts: ["http://opensearch-node1:9200"]
         insecure: true
         username: admin
-        password: MyPassword123!
+        password: "<PASSWORD>"
         index_type: trace-analytics-service-map
