@@ -69,14 +69,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         String indexName = mlIndexInsightGetRequest.getIndexName();
         String tenantId = mlIndexInsightGetRequest.getTenantId();
 
-        // Initialize index insight index if absent
-        mlIndicesHandler.initMLIndexInsightIndex(ActionListener.wrap(indexCreated -> {
-            if (!indexCreated) {
-                actionListener.onFailure(new Exception("Failed to create index insight index"));
-                return;
-            }
-
-            ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
+        ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
                 try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
                     sdkClient
                         .getDataObjectAsync(
@@ -126,9 +119,8 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                 } catch (Exception e) {
                     actionListener.onFailure(e);
                 }
-            }, actionListener::onFailure);
-            IndexInsightAccessControllerHelper.verifyAccessController(client, actionAfterDryRun, indexName);
-        }, actionListener::onFailure));
+        }, actionListener::onFailure);
+        IndexInsightAccessControllerHelper.verifyAccessController(client, actionAfterDryRun, indexName);
     }
 
     private void executeTaskAndReturn(

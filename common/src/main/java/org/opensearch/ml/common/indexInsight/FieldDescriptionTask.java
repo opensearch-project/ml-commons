@@ -1,13 +1,14 @@
 package org.opensearch.ml.common.indexInsight;
 
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID;
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -20,12 +21,12 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
@@ -60,17 +61,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
     public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-            String statisticalContent = getInsightContent(MLIndexInsightType.STATISTICAL_DATA);
-
-            String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
-            if (modelId == null || modelId.trim().isEmpty()) {
-                log.error("No model ID configured for index insight");
-                saveFailedStatus(storageIndex);
-                listener.onFailure(new Exception("No model ID configured"));
-                return;
-            }
-
-            batchProcessFields(statisticalContent, modelId, storageIndex, listener);
+            String statisticalContent = getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA);
+            getAgentIdToRun(
+                client,
+                storageIndex,
+                ActionListener.wrap(agentId -> { batchProcessFields(statisticalContent, agentId, storageIndex, listener); }, listener::onFailure)
+            );
         } catch (Exception e) {
             log.error("Failed to execute field description task for index {}", indexName, e);
             saveFailedStatus(storageIndex);
@@ -112,9 +108,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
         return fieldDescriptions;
     }
 
-    private String getInsightContent(MLIndexInsightType taskType) {
+    private String getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType) {
         String docId = generateDocId(indexName, taskType);
-        GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, docId);
+        GetRequest getRequest = new GetRequest(storageIndex, docId);
 
         try {
             GetResponse response = client.get(getRequest).actionGet();
@@ -123,10 +119,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
             }
             return "";
         } catch (Exception e) {
-            log.warn("Failed to get insight content for {} task of index {}", taskType, indexName, e);
+            log.warn("Failed to get insight content for {} task of index {} from container {}", taskType, indexName, storageIndex, e);
             return "";
         }
     }
+
+
 
     private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
         for (Map.Entry<String, Object> entry : properties.entrySet()) {
@@ -142,7 +140,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
     }
 
-    private void batchProcessFields(String statisticalContent, String modelId, String storageIndex, ActionListener<IndexInsight> listener) {
+    private void batchProcessFields(String statisticalContent, String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         if (mappingSource == null) {
             log.error("No mapping properties found for index: {}", indexName);
@@ -180,7 +178,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             countDownLatch.countDown();
             if (countDownLatch.getCount() == 0 && isCompleted.compareAndSet(false, true)) {
                 // All-or-nothing strategy: only save results if ALL batches succeed
-                // If any batch fails, the entire task is marked as failed and no partial results are saved in ML_INDEX_INSIGHT_INDEX
+                // If any batch fails, the entire task is marked as failed and no partial results are saved
                 if (!hasErrors.get()) {
                     fieldDescriptions = resultsMap;
                     saveResult(resultsMap.toString(), storageIndex, ActionListener.wrap(insight -> {
@@ -207,7 +205,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         });
 
         for (List<String> batch : batches) {
-            processBatch(batch, statisticalContent, modelId, batchListener);
+            processBatch(batch, statisticalContent, agentId, batchListener);
         }
     }
 
@@ -238,33 +236,37 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private void processBatch(
         List<String> batchFields,
         String statisticalContent,
-        String modelId,
+        String agentId,
         ActionListener<Map<String, Object>> listener
     ) {
         String prompt = generateBatchPrompt(batchFields, statisticalContent);
 
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
-            .builder()
-            .parameters(Collections.singletonMap("prompt", prompt))
+        AgentMLInput agentInput = AgentMLInput
+            .AgentMLInputBuilder()
+            .agentId(agentId)
+            .functionName(FunctionName.AGENT)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
             .build();
 
-        MLPredictionTaskRequest request = new MLPredictionTaskRequest(
-            modelId,
-            MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build(),
-            null,
-            null
-        );
+        MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
-        client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(mlTaskResponse -> {
-            log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), indexName);
-            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
-            ModelTensors modelTensors = modelTensorOutput.getMlModelOutputs().get(0);
-            ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
-            Map<String, Object> dataAsMap = (Map<String, Object>) modelTensor.getDataAsMap();
-
-            String response = extractModelResponse(dataAsMap);
-            Map<String, Object> batchResult = parseFieldDescription(response);
-            listener.onResponse(batchResult);
+        client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(mlResp -> {
+            try {
+                log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), indexName);
+                ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
+                ModelTensors t = out.getMlModelOutputs().get(0);
+                ModelTensor mt = t.getMlModelTensors().get(0);
+                Map<String, Object> data = (Map<String, Object>) mt.getDataAsMap();
+                if (Objects.isNull(data)) {
+                    data = gson.fromJson(mt.getResult(), Map.class);
+                }
+                String response = extractModelResponse(data);
+                Map<String, Object> batchResult = parseFieldDescription(response);
+                listener.onResponse(batchResult);
+            } catch (Exception e) {
+                log.error("Error parsing response for batch in index {}: {}", indexName, e.getMessage());
+                listener.onFailure(e);
+            }
         }, e -> {
             log.error("Failed to call LLM for batch in index {}: {}", indexName, e.getMessage());
             listener.onFailure(e);
@@ -341,19 +343,14 @@ public class FieldDescriptionTask implements IndexInsightTask {
     /**
      * Auto-detects LLM response format and extracts the response text.
      */
-    private String extractModelResponse(Map<String, Object> dataAsMap) {
-        // Try OpenAI format
-        if (dataAsMap.containsKey("choices")) {
-            return JsonPath.read(dataAsMap, "$.choices[0].message.content");
+    private String extractModelResponse(Map<String, Object> data) {
+        if (data.containsKey("choices")) {
+            return JsonPath.read(data, "$.choices[0].message.content");
         }
-
-        // Try Bedrock Claude format
-        if (dataAsMap.containsKey("output")) {
-            return JsonPath.read(dataAsMap, "$.output.message.content[0].text");
+        if (data.containsKey("content")) {
+            return JsonPath.read(data, "$.content[0].text");
         }
-
-        // Fallback to generic response field
-        return JsonPath.read(dataAsMap, "$.response");
+        return JsonPath.read(data, "$.response");
     }
 
     private Map<String, Object> parseFieldDescription(String modelResponse) {
