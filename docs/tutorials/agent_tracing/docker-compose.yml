@@ -10,6 +10,7 @@ services:
       - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m -Dopensearch.experimental.feature.telemetry.enabled=true"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=<PASSWORD>
+      - DISABLE_SECURITY_PLUGIN=true
       - opensearch.experimental.feature.telemetry.enabled=true
       - telemetry.feature.tracer.enabled=true
       - telemetry.tracer.enabled=true
