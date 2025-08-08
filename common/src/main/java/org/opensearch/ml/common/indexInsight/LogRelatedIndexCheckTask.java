@@ -2,12 +2,14 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.cluster.service.ClusterService;
@@ -101,16 +103,9 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-            String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
-            if (modelId == null || modelId.isBlank()) {
-                log.error("No model ID configured for RCA index check");
-                saveFailedStatus(storageIndex);
-                listener.onFailure(new Exception("No model ID configured"));
-                return;
-            }
 
             // Fetch 3 sample docs
-            collectSampleDocString(modelId, storageIndex, tenantId, listener);
+            collectSampleDocString(storageIndex, tenantId, listener);
         } catch (Exception ex) {
             log.error("Failed log related check for {}", indexName, ex);
             saveFailedStatus(storageIndex);
@@ -129,7 +124,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return sampleDocSting;
     }
 
-    private void collectSampleDocString(String modelId, String storageIndex, String tenantId, ActionListener<IndexInsight> listener){
+    private void collectSampleDocString(String storageIndex, String tenantId, ActionListener<IndexInsight> listener){
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
@@ -162,8 +157,8 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         if (data.containsKey("choices")) {
             return JsonPath.read(data, "$.choices[0].message.content");
         }
-        if (data.containsKey("output")) {
-            return JsonPath.read(data, "$.output.message.content[0].text");
+        if (data.containsKey("content")) {
+            return JsonPath.read(data, "$.content[0].text");
         }
         return JsonPath.read(data, "$.response");
     }
@@ -190,6 +185,9 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 ModelTensors t = out.getMlModelOutputs().get(0);
                 ModelTensor mt = t.getMlModelTensors().get(0);
                 Map<String,Object> data = (Map<String, Object>) mt.getDataAsMap();
+                if (Objects.isNull(data)) {
+                    data = gson.fromJson(mt.getResult(), Map.class);
+                }
                 String text = extractModelResponse(data);
                 Map<String,Object> parsed = parseCheckResponse(text);
 
