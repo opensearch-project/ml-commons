@@ -132,7 +132,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     if (finalI == toolSpecs.size()) {
-                        agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
+                        agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, filteredOutput);
                         if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
                             MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                             listener.onResponse(flowAgentOutput);

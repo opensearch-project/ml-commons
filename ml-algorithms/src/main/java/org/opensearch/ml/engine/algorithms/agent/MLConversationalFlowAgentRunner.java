@@ -201,7 +201,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
                 Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
-                firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
             } else {
@@ -330,7 +329,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
 
         if (finalI == toolSpecs.size()) {
-            agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
+            agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, filteredOutput);
             ActionListener updateListener = ActionListener.<UpdateResponse>wrap(r -> {
                 log.info("Updated additional info for interaction {} of flow agent.", r.getId());
                 listener.onResponse(flowAgentOutput);
@@ -410,7 +409,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
                     agentTaskSpan
                 );
-            
+
             tool.run(toolExecutionParameters, ActionListener.wrap(output -> {
                 MLAgentTracer.updateSpanWithTool(toolCallSpan, output, params.get(QUESTION));
                 nextStepListener.onResponse(output);

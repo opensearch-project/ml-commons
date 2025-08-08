@@ -94,9 +94,9 @@ import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.noop.NoopTracer;
-import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
