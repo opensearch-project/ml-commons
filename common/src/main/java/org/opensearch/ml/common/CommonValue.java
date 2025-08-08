@@ -33,7 +33,6 @@ public class CommonValue {
     public static String HOT_BOX_TYPE = "hot";
     // warm node
     public static String WARM_BOX_TYPE = "warm";
-    public static final String ML_INDEX_INSIGHT_INDEX = ".plugins-ml-index-insight";
     public static final String ML_INDEX_INSIGHT_CONTAINER_INDEX = ".plugins-ml-index-insight-container";
     public static final String ML_MODEL_GROUP_INDEX = ".plugins-ml-model-group";
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
@@ -70,7 +69,6 @@ public class CommonValue {
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
-    public static final String ML_INDEX_INSIGHT_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight.json";
     public static final String ML_INDEX_INSIGHT_CONTAINER_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_container.json";
 
     // Calculate Versions independently of OpenSearch core version
@@ -116,5 +114,5 @@ public class CommonValue {
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
     public static final String FIXED_INDEX_INSIGHT_CONTAINER_ID = "index_insight_container";
-    public static final String INDEX_INSIGHT_AGNET_NAME = "os_index_insight_agent";
+    public static final String INDEX_INSIGHT_AGENT_NAME = "os_index_insight_agent";
 }
