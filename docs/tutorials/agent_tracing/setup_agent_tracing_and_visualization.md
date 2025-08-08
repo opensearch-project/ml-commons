@@ -34,6 +34,9 @@ The [`docker-compose.yml`](docker-compose.yml) file orchestrates all the service
 **⚠️ Development Configuration**: The configuration files in this tutorial use `ssl: false` and basic authentication for development simplicity. For production use, you must configure proper TLS certificates and security settings.
 
 ### Key Points
+- **Version Consistency:**
+  - Ensure all OpenSearch services use the same version (e.g., 3.1.0 for OpenSearch, Dashboards, and plugins)
+  - Version mismatches can cause compatibility issues and unexpected behavior
 - **Volume Mounts:**
   - Data Prepper expects its configuration files to be mounted directly to `/usr/share/data-prepper/config/data-prepper-config.yaml` and `/usr/share/data-prepper/pipelines/pipelines.yaml` inside the container.
   - Incorrect mount paths (such as mounting into subdirectories) will cause Data Prepper to fail to start.
