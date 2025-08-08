@@ -1,3 +1,5 @@
+# Sample Docker Compose configuration for agent tracing setup
+# This is an example configuration for development purposes
 version: '3'
 services:
   opensearch-node1:
@@ -33,7 +35,8 @@ services:
       bash -c "
       bin/opensearch-plugin remove opensearch-skills; 
       bin/opensearch-plugin remove opensearch-ml; 
-      bin/opensearch-plugin install --batch telemetry-otel --batch file:///usr/share/opensearch/<YOUR_NAME>/opensearch-ml-3.1.0.0-SNAPSHOT.zip;
+      bin/opensearch-plugin install --batch telemetry-otel;
+      bin/opensearch-plugin install --batch file:///usr/share/opensearch/<YOUR_NAME>/opensearch-ml-3.1.0.0-SNAPSHOT.zip;
       OPENSEARCH_LOG4J_CONFIG_FILE=/usr/share/opensearch/config/telemetry-log4j2.xml ./opensearch-docker-entrypoint.sh opensearch"
     ports:
       - 9200:9200

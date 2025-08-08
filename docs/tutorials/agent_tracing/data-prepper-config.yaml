@@ -1,1 +1,3 @@
+# Sample Data Prepper configuration for agent tracing
+# This is an example configuration for development purposes
 ssl: false

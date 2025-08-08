@@ -1,3 +1,5 @@
+# Sample OpenTelemetry Collector configuration for agent tracing
+# This is an example configuration for development purposes
 receivers:
   otlp:
     protocols:

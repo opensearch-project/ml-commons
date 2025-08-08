@@ -1,3 +1,5 @@
+# Sample Data Prepper pipelines configuration for agent tracing
+# This is an example configuration for development purposes
 entry-pipeline:
   workers: 8
   source:

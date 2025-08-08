@@ -126,7 +126,8 @@ You may see error logs like this in Data Prepper:
 [raw-trace-pipeline-processor-worker-3-thread-1] ERROR org.opensearch.dataprepper.plugins.processor.oteltracegroup.OTelTraceGroupProcessor - Search request for traceGroup failed for traceIds: [] due to OpenSearch exception [type=index_not_found_exception, reason=no such index [otel-v1-apm-span]]
 ```
 
-These errors are expected and can be safely ignored. They occur because we're using custom static mappings instead of the default Data Prepper index mappings. The system will work correctly despite these warnings.
+These errors are expected and can be safely ignored. They occur because we're using custom static mappings instead of the default Data Prepper index mappings. The system will work correctly despite these warnings. There is no current robust solution to correct these errors, but remember these error messages are harmless and don't affect functionality.
+
 
 Verify services are running:
 ```bash
@@ -153,14 +154,18 @@ Note: The `plugins.ml_commons.agent_tracing_enabled` setting only takes effect i
 Use this API to turn agent tracing on or off without restarting your cluster, as long as tracing is enabled globally.
 
 
-## 8. View Traces
+## 8. Run an Agent to Generate Traces
+
+When you build and run agents normally, they automatically create traces as long as the tracing settings are enabled. For example, when you create a plan-execute-reflect agent following the [tutorial](https://docs.opensearch.org/latest/tutorials/gen-ai/agents/build-plan-execute-reflect-agent/) or run it as shown in the [intelligent troubleshooting blog post](https://opensearch.org/blog/intelligent-troubleshooting-using-opensearch-3-0s-plan-execute-reflect-agent/), the agent will generate comprehensive traces that capture every step of its execution. After execution, traces should appear in OpenSearch Dashboards within 3-5 minutes.
+
+## 9. View Traces
 
 - Open OpenSearch Dashboards at [http://localhost:5601](http://localhost:5601)
 - Navigate to **Observability → Traces**
 - You should see agent traces around ~3-5 minutes after agent execution
 
 
-## 9. Understanding the Visualizations
+## 10. Understanding the Visualizations
 
 The traces visualization provides several main views to help you analyze and understand your trace data:
 
@@ -195,7 +200,7 @@ The [`trace-graph-vega.json`](trace-graph-vega.json) file contains a Vega specif
 *Vega Graph View: This custom graph visualization shows the relationships between services and spans in your trace data, helping you understand dependencies and flow at a glance.*
 
 
-## 10. Setup Notes for Non-Docker Environments
+## 11. Setup Notes for Non-Docker Environments
 
 If you're setting up agent tracing in a production environment without Docker Compose, consider these important notes:
 
