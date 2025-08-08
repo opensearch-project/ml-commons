@@ -1,6 +1,6 @@
 package org.opensearch.ml.common.indexInsight;
 
-import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGNET_NAME;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
 
 import java.util.Map;
 
@@ -12,7 +12,7 @@ import org.opensearch.transport.client.Client;
 
 public class IndexInsightUtils {
     public static void getAgentIdToRun(Client client, String tenantId, ActionListener<String> actionListener) {
-        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(INDEX_INSIGHT_AGNET_NAME, tenantId);
+        MLConfigGetRequest mlConfigGetRequest = new MLConfigGetRequest(INDEX_INSIGHT_AGENT_NAME, tenantId);
         client.execute(MLConfigGetAction.INSTANCE, mlConfigGetRequest, ActionListener.wrap(r -> {
             MLConfig mlConfig = r.getMlConfig();
             actionListener.onResponse(mlConfig.getConfiguration().getAgentId());
