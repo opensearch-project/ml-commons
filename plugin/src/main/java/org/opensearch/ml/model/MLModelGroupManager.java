@@ -35,7 +35,6 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
-import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -60,7 +59,6 @@ public class MLModelGroupManager {
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public MLModelGroupManager(
@@ -68,15 +66,13 @@ public class MLModelGroupManager {
         Client client,
         SdkClient sdkClient,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
-        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     public void createModelGroup(MLRegisterModelGroupInput input, ActionListener<String> listener) {
@@ -101,6 +97,7 @@ public class MLModelGroupManager {
                     } else {
                         MLModelGroup.MLModelGroupBuilder builder = MLModelGroup.builder();
                         MLModelGroup mlModelGroup;
+                        // TODO: Remove security-related entries from MLModelGroup builder
                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(input, user);
                             builder = builder.access(input.getModelAccessMode().getValue());
