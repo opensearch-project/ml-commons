@@ -18,10 +18,10 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.ToolUtils.buildToolParameters;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
-import static org.opensearch.ml.engine.tools.ToolUtils.buildToolParameters;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -55,10 +55,10 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
-import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
