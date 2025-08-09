@@ -159,7 +159,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         mlControllerDeleteRequest = MLControllerDeleteRequest.builder().modelId("testModelId").build();
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -213,7 +213,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testDeleteControllerWithModelAccessControlNoPermission() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -238,7 +238,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -255,7 +255,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testDeleteControllerWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -277,7 +277,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener
                 .onFailure(
                     new RuntimeException("Permission denied: Unable to delete the model controller with the provided model. Details: ")

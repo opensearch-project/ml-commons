@@ -244,7 +244,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("testModelID"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -334,7 +334,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -359,7 +359,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -388,7 +388,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -419,7 +419,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());

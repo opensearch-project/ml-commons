@@ -167,7 +167,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
@@ -206,7 +206,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
@@ -229,7 +229,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
@@ -252,7 +252,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());

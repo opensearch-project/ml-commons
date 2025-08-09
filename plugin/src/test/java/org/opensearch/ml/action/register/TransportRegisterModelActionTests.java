@@ -209,7 +209,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertNotNull(transportRegisterModelAction);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -289,7 +289,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_userHasNoAccessException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -453,7 +453,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Test
     public void test_ValidationFailedException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -703,7 +703,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -751,7 +751,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());

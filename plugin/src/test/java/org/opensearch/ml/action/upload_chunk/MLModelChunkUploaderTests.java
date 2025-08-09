@@ -92,7 +92,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         }).when(executorService).execute(any(Runnable.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -181,7 +181,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testDoExecute_userHasNoAccessException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());

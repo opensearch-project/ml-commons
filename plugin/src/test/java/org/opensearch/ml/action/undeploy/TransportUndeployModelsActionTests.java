@@ -451,7 +451,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     public void testDoExecute() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
@@ -483,7 +483,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     public void testDoExecute_modelAccessControl_notEnabled() {
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(false);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
@@ -501,7 +501,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_validate_false() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());

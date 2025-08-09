@@ -293,7 +293,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         })
@@ -301,7 +301,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .validateModelGroupAccess(any(), eq("test_model_group_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         })
@@ -319,7 +319,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         // TODO eventually remove if migrated to sdkClient
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         })
@@ -327,7 +327,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(true);
             return null;
         })
@@ -601,7 +601,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithModelAccessControlNoPermission() throws InterruptedException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onResponse(false);
             return null;
         })
@@ -624,7 +624,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener
                 .onFailure(
                     new RuntimeException(
@@ -646,7 +646,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithRegisterToNewModelGroupModelAccessControlNoPermission() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         })
@@ -665,7 +665,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateModelWithRegisterToNewModelGroupModelAccessControlOtherException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener
                 .onFailure(
                     new RuntimeException(

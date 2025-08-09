@@ -91,7 +91,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -160,7 +160,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_userHasNoAccessException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -177,7 +177,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Test
     public void test_ValidationFailedException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
@@ -210,7 +210,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_NoAccessWhenModelNameAlreadyExists() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
