@@ -23,6 +23,7 @@ import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 

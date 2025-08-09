@@ -58,6 +58,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
