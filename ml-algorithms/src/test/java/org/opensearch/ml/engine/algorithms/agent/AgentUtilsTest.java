@@ -9,12 +9,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
@@ -32,6 +34,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
@@ -76,6 +79,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -1748,5 +1752,113 @@ public class AgentUtilsTest extends MLStaticMockBase {
         // Verify
         assertEquals("Find population of Seattle in 2025", toolParams.get("input"));
         assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+    }
+
+    @Test
+    public void testCreateTool_Success() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("TestTool")
+            .description("Original description")
+            .parameters(Map.of("param1", "value1"))
+            .runtimeResources(Map.of("resource1", "value2"))
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("TestTool.param2", "value3");
+        params.put("TestTool.description", "Custom description");
+
+        Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, toolSpec, "test_tenant");
+        createTool(toolFactories, toolParameters, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("param2").equals("value3")
+                && toolParams.get("resource1").equals("value2")
+                && toolParams.get(TENANT_ID_FIELD).equals("test_tenant");
+        }));
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Custom description");
+    }
+
+    @Test
+    public void testCreateTool_ToolNotFound() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
+
+        assertThrows(IllegalArgumentException.class, () -> createTool(toolFactories, new HashMap<>(), toolSpec));
+    }
+
+    @Test
+    public void testCreateTool_WithDescription() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").description("Tool description").build();
+
+        Map<String, String> params = new HashMap<>();
+
+        Tool result = createTool(toolFactories, params, toolSpec);
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Tool description");
+        assertEquals(mockTool, result);
+    }
+
+    @Test
+    public void testCreateTool_WithRuntimeResources() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        Map<String, Object> runtimeResources = new HashMap<>();
+        runtimeResources.put("resource1", "value1");
+        runtimeResources.put("resource2", 42);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(runtimeResources).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        createTool(toolFactories, params, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("resource1").equals("value1")
+                && toolParams.get("resource2").equals(42);
+        }));
+    }
+
+    @Test
+    public void testCreateTool_WithNullRuntimeResources() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(null).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        createTool(toolFactories, params, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> ((Map<String, Object>) toolParamsMap).get("param1").equals("value1")));
     }
 }

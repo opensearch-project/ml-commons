@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.tools;
+package org.opensearch.ml.common.utils;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +18,6 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.utils.StringUtils;
 
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
@@ -38,6 +35,19 @@ public class ToolUtils {
     public static final String TOOL_OUTPUT_FILTERS_FIELD = "output_filter";
     public static final String TOOL_REQUIRED_PARAMS = "required_parameters";
 
+    /**
+     * Extracts required parameters based on tool attributes specification.
+     * <p>
+     * The method performs the following:
+     * <ul>
+     *     <li>If required parameters are specified in attributes, only those parameters are extracted</li>
+     *     <li>If no required parameters are specified, all parameters are returned</li>
+     * </ul>
+     *
+     * @param parameters The input parameters map to extract from
+     * @param attributes The attributes map containing required parameter specifications
+     * @return Map containing only the required parameters
+     */
     public static Map<String, String> extractRequiredParameters(Map<String, String> parameters, Map<String, ?> attributes) {
         Map<String, String> extractedParameters = new HashMap<>();
         if (parameters == null) {
@@ -56,6 +66,26 @@ public class ToolUtils {
         return extractedParameters;
     }
 
+    /**
+     * Extracts and processes input parameters, including handling "input" parameter.
+     * <p>
+     * The method performs the following steps:
+     * <ol>
+     *     <li>Extracts required parameters based on tool attributes specification</li>
+     *     <li>If an "input" parameter exists:
+     *         <ul>
+     *             <li>Substitutes any parameter placeholders</li>
+     *             <li>Parses it as a JSON map</li>
+     *             <li>Merges the parsed values with other parameters</li>
+     *         </ul>
+     *     </li>
+     * </ol>
+     *
+     * @param parameters The raw input parameters
+     * @param attributes The tool attributes containing parameter specifications
+     * @return Map of processed input parameters
+     * @throws IllegalArgumentException if input JSON parsing fails
+     */
     public static Map<String, String> extractInputParameters(Map<String, String> parameters, Map<String, ?> attributes) {
         Map<String, String> extractedParameters = ToolUtils.extractRequiredParameters(parameters, attributes);
         if (extractedParameters.containsKey("input")) {
@@ -73,6 +103,22 @@ public class ToolUtils {
         return extractedParameters;
     }
 
+    /**
+     * Builds the final parameter map for tool execution.
+     * <p>
+     * The method performs the following steps:
+     * <ol>
+     *     <li>Combines tool specification parameters with input parameters</li>
+     *     <li>Processes tool-specific parameter prefixes</li>
+     *     <li>Applies configuration overrides from tool specification</li>
+     *     <li>Adds tenant identification</li>
+     * </ol>
+     *
+     * @param parameters The input parameters to process
+     * @param toolSpec The tool specification containing default parameters and configuration
+     * @param tenantId The identifier for the tenant
+     * @return Map of processed parameters ready for tool execution
+     */
     public static Map<String, String> buildToolParameters(Map<String, String> parameters, MLToolSpec toolSpec, String tenantId) {
         Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
@@ -102,30 +148,14 @@ public class ToolUtils {
         return executeParams;
     }
 
-    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> executeParams, MLToolSpec toolSpec) {
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Map<String, Object> toolParams = new HashMap<>();
-        toolParams.putAll(executeParams);
-        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
-        if (runtimeResources != null) {
-            toolParams.putAll(runtimeResources);
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        String toolName = getToolName(toolSpec);
-        tool.setName(toolName);
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        if (executeParams.containsKey(toolName + ".description")) {
-            tool.setDescription(executeParams.get(toolName + ".description"));
-        }
-
-        return tool;
-    }
-
+    /**
+     * Filters tool output based on specified output filters in tool parameters.
+     * Uses JSONPath expressions to extract specific portions of the response.
+     *
+     * @param toolParams The tool parameters containing output filter specifications
+     * @param response The raw tool response to filter
+     * @return Filtered output if successful, original response if filtering fails
+     */
     public static Object filterToolOutput(Map<String, String> toolParams, Object response) {
         if (toolParams != null && toolParams.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
             try {
@@ -142,6 +172,20 @@ public class ToolUtils {
         return response;
     }
 
+    /**
+     * Parses different types of tool responses into a JSON string representation.
+     * <p>
+     * Handles the following special cases:
+     * <ul>
+     *     <li>ModelTensors - converts to XContent JSON representation</li>
+     *     <li>ModelTensor - converts to XContent JSON representation</li>
+     *     <li>ModelTensorOutput - converts to XContent JSON representation</li>
+     *     <li>Other types - converts to generic JSON string</li>
+     * </ul>
+     *
+     * @param output The tool output object to parse
+     * @return JSON string representation of the output
+     */
     public static String parseResponse(Object output) {
         try {
             if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
@@ -159,16 +203,15 @@ public class ToolUtils {
         }
     }
 
-    public static List<String> getToolNames(Map<String, Tool> tools) {
-        final List<String> inputTools = new ArrayList<>();
-        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = entry.getValue().getName();
-            inputTools.add(toolName);
-        }
-        return inputTools;
-    }
-
+    /**
+     * Gets the tool name from a tool specification.
+     * Returns the specified name if available, otherwise returns the tool type.
+     *
+     * @param toolSpec The tool specification
+     * @return The name of the tool
+     */
     public static String getToolName(MLToolSpec toolSpec) {
         return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
     }
+
 }

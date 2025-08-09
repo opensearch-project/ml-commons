@@ -3,17 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.tools;
+package org.opensearch.ml.common.utils;
 
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_REQUIRED_PARAMS;
-import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_REQUIRED_PARAMS;
+import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,53 +19,8 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.agent.MLToolSpec;
-import org.opensearch.ml.common.spi.tools.Tool;
 
 public class ToolUtilsTest {
-
-    @Test
-    public void testCreateTool_Success() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        Tool.Factory factory = mock(Tool.Factory.class);
-        Tool mockTool = mock(Tool.class);
-        when(factory.create(any())).thenReturn(mockTool);
-        toolFactories.put("test_tool", factory);
-
-        MLToolSpec toolSpec = MLToolSpec
-            .builder()
-            .type("test_tool")
-            .name("TestTool")
-            .description("Original description")
-            .parameters(Map.of("param1", "value1"))
-            .runtimeResources(Map.of("resource1", "value2"))
-            .build();
-
-        Map<String, String> params = new HashMap<>();
-        params.put("TestTool.param2", "value3");
-        params.put("TestTool.description", "Custom description");
-
-        Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, toolSpec, "test_tenant");
-        ToolUtils.createTool(toolFactories, toolParameters, toolSpec);
-
-        verify(factory).create(argThat(toolParamsMap -> {
-            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
-            return toolParams.get("param1").equals("value1")
-                && toolParams.get("param2").equals("value3")
-                && toolParams.get("resource1").equals("value2")
-                && toolParams.get(TENANT_ID_FIELD).equals("test_tenant");
-        }));
-
-        verify(mockTool).setName("TestTool");
-        verify(mockTool).setDescription("Custom description");
-    }
-
-    @Test
-    public void testCreateTool_ToolNotFound() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
-
-        assertThrows(IllegalArgumentException.class, () -> ToolUtils.createTool(toolFactories, new HashMap<>(), toolSpec));
-    }
 
     @Test
     public void testExtractRequiredParameters_WithRequiredParameters() {
@@ -217,70 +169,6 @@ public class ToolUtilsTest {
         assertEquals(2, result.size());
         assertEquals("value1", result.get("param1"));
         assertEquals("test_tenant", result.get(TENANT_ID_FIELD));
-    }
-
-    @Test
-    public void testCreateTool_WithDescription() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        Tool.Factory factory = mock(Tool.Factory.class);
-        Tool mockTool = mock(Tool.class);
-        when(factory.create(any())).thenReturn(mockTool);
-        toolFactories.put("test_tool", factory);
-
-        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").description("Tool description").build();
-
-        Map<String, String> params = new HashMap<>();
-
-        Tool result = ToolUtils.createTool(toolFactories, params, toolSpec);
-
-        verify(mockTool).setName("TestTool");
-        verify(mockTool).setDescription("Tool description");
-        assertEquals(mockTool, result);
-    }
-
-    @Test
-    public void testCreateTool_WithRuntimeResources() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        Tool.Factory factory = mock(Tool.Factory.class);
-        Tool mockTool = mock(Tool.class);
-        when(factory.create(any())).thenReturn(mockTool);
-        toolFactories.put("test_tool", factory);
-
-        Map<String, Object> runtimeResources = new HashMap<>();
-        runtimeResources.put("resource1", "value1");
-        runtimeResources.put("resource2", 42);
-
-        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(runtimeResources).build();
-
-        Map<String, String> params = new HashMap<>();
-        params.put("param1", "value1");
-
-        ToolUtils.createTool(toolFactories, params, toolSpec);
-
-        verify(factory).create(argThat(toolParamsMap -> {
-            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
-            return toolParams.get("param1").equals("value1")
-                && toolParams.get("resource1").equals("value1")
-                && toolParams.get("resource2").equals(42);
-        }));
-    }
-
-    @Test
-    public void testCreateTool_WithNullRuntimeResources() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        Tool.Factory factory = mock(Tool.Factory.class);
-        Tool mockTool = mock(Tool.class);
-        when(factory.create(any())).thenReturn(mockTool);
-        toolFactories.put("test_tool", factory);
-
-        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(null).build();
-
-        Map<String, String> params = new HashMap<>();
-        params.put("param1", "value1");
-
-        ToolUtils.createTool(toolFactories, params, toolSpec);
-
-        verify(factory).create(argThat(toolParamsMap -> ((Map<String, Object>) toolParamsMap).get("param1").equals("value1")));
     }
 
     @Test
