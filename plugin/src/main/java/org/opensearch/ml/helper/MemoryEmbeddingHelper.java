@@ -209,7 +209,7 @@ public class MemoryEmbeddingHelper {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(model -> {
                 MLModelState modelState = model.getModelState();
-                if (modelState != MLModelState.DEPLOYED) {
+                if (modelState != MLModelState.DEPLOYED && modelState != MLModelState.PARTIALLY_DEPLOYED) {
                     listener
                         .onFailure(
                             new IllegalStateException(
