@@ -368,9 +368,4 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.agentic_memory_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
         "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
-
-    // Model ID for Index Insight feature
-    public static final Setting<String> ML_COMMONS_INDEX_INSIGHT_MODEL_ID = Setting
-        .simpleString("plugins.ml_commons.index_insight.model_id", Setting.Property.NodeScope, Setting.Property.Dynamic);
-
 }
