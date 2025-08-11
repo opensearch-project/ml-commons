@@ -283,7 +283,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
 
         // Search for similar facts and make memory decisions
-        if (facts.size() > 0 && storageConfig != null && storageConfig.getLlmModelId() != null) {
+        if (!facts.isEmpty() && storageConfig != null && storageConfig.getLlmModelId() != null) {
             log.debug("Searching for similar facts in session to make memory decisions");
             memorySearchService
                 .searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, ActionListener.wrap(allSearchResults -> {

@@ -48,7 +48,10 @@ public class MemorySearchService {
         List<FactSearchResult> allResults = new ArrayList<>();
         int maxInferSize = storageConfig != null && storageConfig.getMaxInferSize() != null ? storageConfig.getMaxInferSize() : 5;
 
-        searchFactsSequentially(facts, 0, sessionId, indexName, storageConfig, maxInferSize, allResults, listener);
+        // Limit the number of facts to process based on maxInferSize
+        List<String> factsToProcess = facts.size() > maxInferSize ? facts.subList(0, maxInferSize) : facts;
+
+        searchFactsSequentially(factsToProcess, 0, sessionId, indexName, storageConfig, maxInferSize, allResults, listener);
     }
 
     private void searchFactsSequentially(
