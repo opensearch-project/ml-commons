@@ -60,7 +60,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
             String prompt = generateIndexDescriptionPrompt(statisticalContent);
             getAgentIdToRun(
                 client,
-                storageIndex,
+                tenantId,
                 ActionListener.wrap(agentId -> { callLLM(prompt, agentId, storageIndex, listener); }, listener::onFailure)
             );
         } catch (Exception e) {
