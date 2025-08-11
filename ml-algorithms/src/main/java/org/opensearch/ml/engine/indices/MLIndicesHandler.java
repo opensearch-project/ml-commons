@@ -30,6 +30,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
@@ -44,12 +45,17 @@ public class MLIndicesHandler {
 
     ClusterService clusterService;
     Client client;
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
 
     static {
         for (MLIndex mlIndex : MLIndex.values()) {
             indexMappingUpdated.put(mlIndex.getIndexName(), new AtomicBoolean(false));
         }
+    }
+
+    public static boolean doesMultiTenantIndexExists(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
+        return isMultiTenancyEnabled || clusterService.state().metadata().hasIndex(indexName);
     }
 
     public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
@@ -105,7 +111,7 @@ public class MLIndicesHandler {
         String mapping = index.getMapping();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            if (!clusterService.state().metadata().hasIndex(indexName)) {
+            if (!MLIndicesHandler.doesMultiTenantIndexExists(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName)) {
                 ActionListener<CreateIndexResponse> actionListener = ActionListener.wrap(r -> {
                     if (r.isAcknowledged()) {
                         log.info("create index:{}", indexName);

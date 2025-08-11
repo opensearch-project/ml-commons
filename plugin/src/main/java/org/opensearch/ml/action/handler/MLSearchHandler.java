@@ -39,6 +39,8 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -65,17 +67,20 @@ public class MLSearchHandler {
     private ModelAccessControlHelper modelAccessControlHelper;
 
     private ClusterService clusterService;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public MLSearchHandler(
         Client client,
         NamedXContentRegistry xContentRegistry,
         ModelAccessControlHelper modelAccessControlHelper,
-        ClusterService clusterService
+        ClusterService clusterService,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     /**
@@ -132,7 +137,12 @@ public class MLSearchHandler {
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             if (modelAccessControlHelper.skipModelAccessControl(user)
-                || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
+                || !MLIndicesHandler
+                    .doesMultiTenantIndexExists(
+                        clusterService,
+                        mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                        CommonValue.ML_MODEL_GROUP_INDEX
+                    )) {
 
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()

@@ -35,6 +35,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
@@ -74,6 +75,9 @@ public class MLIndicesHandlerTest {
     @Mock
     private ThreadPool threadPool;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     Settings settings;
     ThreadContext threadContext;
     MLIndicesHandler indicesHandler;
@@ -102,7 +106,7 @@ public class MLIndicesHandlerTest {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        indicesHandler = new MLIndicesHandler(clusterService, client);
+        indicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
     }
 
     @Test

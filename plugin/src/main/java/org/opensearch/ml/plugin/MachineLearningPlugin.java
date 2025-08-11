@@ -599,7 +599,7 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
 
-        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 
         SdkClient sdkClient = SdkClientFactory
             .createSdkClient(
@@ -802,7 +802,13 @@ public class MachineLearningPlugin extends Plugin
         MLToolExecutor toolExecutor = new MLToolExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories);
         MLEngineClassLoader.register(FunctionName.TOOL, toolExecutor);
 
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(
+            client,
+            xContentRegistry,
+            modelAccessControlHelper,
+            clusterService,
+            mlFeatureEnabledSetting
+        );
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
             client,

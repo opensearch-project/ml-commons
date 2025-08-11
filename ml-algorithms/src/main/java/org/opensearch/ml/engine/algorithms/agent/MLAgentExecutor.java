@@ -68,6 +68,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
@@ -173,7 +174,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             .fetchSourceContext(fetchSourceContext)
             .build();
 
-        if (clusterService.state().metadata().hasIndex(ML_AGENT_INDEX)) {
+        if (MLIndicesHandler.doesMultiTenantIndexExists(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))
