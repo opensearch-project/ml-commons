@@ -143,7 +143,9 @@ public class StatisticalDataTask implements IndexInsightTask {
 
                 // Create ordered result with example_docs at the end
                 Map<String, Object> orderedResult = new LinkedHashMap<>();
-                result.entrySet().stream()
+                result
+                    .entrySet()
+                    .stream()
                     .filter(entry -> !entry.getKey().equals("example_docs"))
                     .forEach(entry -> orderedResult.put(entry.getKey(), entry.getValue()));
                 if (result.containsKey("example_docs")) {
