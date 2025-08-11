@@ -45,6 +45,8 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     public static int termSize = 5;
     private static List<String> prefixs = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
+    private static List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
+    private static List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
 
     private final MLIndexInsightType taskType = MLIndexInsightType.STATISTICAL_DATA;
     private final String indexName;
@@ -122,18 +124,16 @@ public class StatisticalDataTask implements IndexInsightTask {
             }
             String firstIndexName = (String) mappings.keySet().toArray()[0];
             Map<String, String> fieldsToType = new HashMap<>();
-            extractFieldNamesTypes(
-                (Map<String, Object>) mappings.get(firstIndexName).getSourceAsMap().get("properties"),
-                fieldsToType,
-                "",
-                false
-            );
+            Map<String, Object> mappingSource = (Map<String, Object>) mappings.get(firstIndexName).getSourceAsMap().get("properties");
+            extractFieldNamesTypes(mappingSource, fieldsToType, "", false);
             SearchRequest searchRequest = new SearchRequest(indexName);
             searchRequest.source(buildQuery(fieldsToType));
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
-                Map<String, Object> result = parseSearchResult(searchResponse);
+                Map<String, Object> result = new HashMap<>();
+                result.put("distribution", parseSearchResult(searchResponse));
+                result.put("mapping", mappingSource);
                 log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
 
                 // Create ordered result with example_docs at the end
@@ -152,7 +152,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                 listener.onFailure(e);
             }));
 
-        }, e -> {}));
+        }, listener::onFailure));
 
     }
 
@@ -184,14 +184,15 @@ public class StatisticalDataTask implements IndexInsightTask {
                 fieldUsed = name + ".keyword";
             }
 
-            if (List.of("text", "keyword", "integer", "long", "float", "double", "short").contains(type)) {
+            if (UNIQUE_TERMS_LIST.contains(type)) {
                 TermsAggregationBuilder termsAgg = AggregationBuilders.terms("unique_terms_" + name).field(fieldUsed).size(termSize);
 
                 CardinalityAggregationBuilder countAgg = AggregationBuilders.cardinality("unique_count_" + name).field(fieldUsed);
 
                 subAggs.addAggregator(termsAgg);
                 subAggs.addAggregator(countAgg);
-            } else if ("date".equals(type)) {
+            }
+            if (MIN_MAX_LIST.contains(type)) {
                 MinAggregationBuilder minAgg = AggregationBuilders.min("min_value_" + name).field(fieldUsed);
                 MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_value_" + name).field(fieldUsed);
 
@@ -251,7 +252,11 @@ public class StatisticalDataTask implements IndexInsightTask {
                             targetValue = values;
                         } else {
                             Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
-                            targetValue = aggResult.get("value");
+                            if (aggResult.containsKey("value_as_string")) {
+                                targetValue = aggResult.get("value_as_string");
+                            } else {
+                                targetValue = aggResult.get("value");
+                            }
                         }
                         result.computeIfAbsent(targetField, k -> new HashMap<>());
                         ((Map<String, Object>) result.get(targetField)).put(aggregationType, targetValue);
