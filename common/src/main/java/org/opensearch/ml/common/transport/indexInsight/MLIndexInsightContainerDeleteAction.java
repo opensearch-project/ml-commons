@@ -6,12 +6,13 @@
 package org.opensearch.ml.common.transport.indexInsight;
 
 import org.opensearch.action.ActionType;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 
-public class MLIndexInsightContainerDeleteAction extends ActionType<MLIndexInsightContainerDeleteResponse> {
+public class MLIndexInsightContainerDeleteAction extends ActionType<AcknowledgedResponse> {
     public static final MLIndexInsightContainerDeleteAction INSTANCE = new MLIndexInsightContainerDeleteAction();
     public static final String NAME = "cluster:admin/opensearch/ml/indexInsightContainer/delete";
 
     public MLIndexInsightContainerDeleteAction() {
-        super(NAME, MLIndexInsightContainerDeleteResponse::new);
+        super(NAME, AcknowledgedResponse::new);
     }
 }

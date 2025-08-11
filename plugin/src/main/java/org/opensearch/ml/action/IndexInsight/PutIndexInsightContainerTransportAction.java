@@ -22,6 +22,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -32,7 +33,6 @@ import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -47,7 +47,7 @@ import org.opensearch.transport.client.Client;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class PutIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightContainerPutResponse> {
+public class PutIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
     private Client client;
     private final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
@@ -74,7 +74,7 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLIndexInsightContainerPutResponse> listener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
         MLIndexInsightContainerPutRequest mlIndexInsightContainerPutRequest = MLIndexInsightContainerPutRequest.fromActionRequest(request);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerPutRequest.getTenantId(), listener)) {
             return;
@@ -92,7 +92,7 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
                 indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
                     initIndexInsightIndex(mlIndexInsightContainerPutRequest.getIndexName(), ActionListener.wrap(r2 -> {
                         log.info("Successfully created index insight container");
-                        listener.onResponse(new MLIndexInsightContainerPutResponse());
+                        listener.onResponse(new AcknowledgedResponse(true));
                     }, e -> {
                         log.error("Failed to create index insight container", e);
                         listener.onFailure(e);

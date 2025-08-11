@@ -67,11 +67,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String statisticalContent = getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA);
-            getAgentIdToRun(
-                client,
-                tenantId,
-                ActionListener.wrap(agentId -> { batchProcessFields(statisticalContent, agentId, storageIndex, listener); }, listener::onFailure)
-            );
+            getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
+                batchProcessFields(statisticalContent, agentId, storageIndex, listener);
+            }, listener::onFailure));
         } catch (Exception e) {
             log.error("Failed to execute field description task for index {}", indexName, e);
             saveFailedStatus(storageIndex);
@@ -128,8 +126,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
             return "";
         }
     }
-
-
 
     private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
         for (Map.Entry<String, Object> entry : properties.entrySet()) {

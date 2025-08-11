@@ -16,6 +16,7 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -27,7 +28,6 @@ import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -43,8 +43,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Getter
 @Log4j2
-public class DeleteIndexInsightContainerTransportAction extends
-    HandledTransportAction<ActionRequest, MLIndexInsightContainerDeleteResponse> {
+public class DeleteIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
     private Client client;
     private final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
@@ -162,7 +161,7 @@ public class DeleteIndexInsightContainerTransportAction extends
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLIndexInsightContainerDeleteResponse> listener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
         MLIndexInsightContainerDeleteRequest mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest
             .fromActionRequest(request);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerDeleteRequest.getTenantId(), listener)) {
@@ -173,7 +172,7 @@ public class DeleteIndexInsightContainerTransportAction extends
             deleteOriginalIndexInsightIndex(indexName, ActionListener.wrap(r -> {
                 deleteIndexInsightContainer(
                     tenantId,
-                    ActionListener.wrap(r1 -> { listener.onResponse(new MLIndexInsightContainerDeleteResponse()); }, listener::onFailure)
+                    ActionListener.wrap(r1 -> { listener.onResponse(new AcknowledgedResponse(true)); }, listener::onFailure)
                 );
             }, listener::onFailure));
 

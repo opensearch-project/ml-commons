@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
@@ -124,8 +123,6 @@ public class IndexDescriptionTask implements IndexInsightTask {
             return "";
         }
     }
-
-
 
     private String generateIndexDescriptionPrompt(String statisticalContent) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
