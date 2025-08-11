@@ -51,6 +51,7 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobType;
@@ -73,7 +74,7 @@ import lombok.extern.log4j.Log4j2;
  * MLTaskManager is responsible for managing MLTask.
  */
 @Log4j2
-public class MLTaskManager {
+public class MLTaskManager implements SettingsChangeListener {
     public static int TASK_SEMAPHORE_TIMEOUT = 5000; // 5 seconds
     private final Map<String, MLTaskCache> taskCaches;
     private final Client client;
@@ -549,37 +550,41 @@ public class MLTaskManager {
 
         try {
             MLJobParameter jobParameter = new MLJobParameter(
-                MLJobType.BATCH_TASK_UPDATE.name(),
-                new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES),
-                20L,
-                null,
-                MLJobType.BATCH_TASK_UPDATE
+                    MLJobType.BATCH_TASK_UPDATE.name(),
+                    new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES),
+                    20L,
+                    null,
+                    MLJobType.BATCH_TASK_UPDATE,
+                    true
             );
 
             IndexRequest indexRequest = new IndexRequest()
-                .index(CommonValue.ML_JOBS_INDEX)
-                .id(MLJobType.BATCH_TASK_UPDATE.name())
-                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
-                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                    .index(CommonValue.ML_JOBS_INDEX)
+                    .id(MLJobType.BATCH_TASK_UPDATE.name())
+                    .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-            startJob(indexRequest, MLJobType.BATCH_TASK_UPDATE, () -> this.taskPollingJobStarted = true);
+            indexJob(indexRequest, MLJobType.BATCH_TASK_UPDATE, () -> this.taskPollingJobStarted = true);
         } catch (IOException e) {
             log.error("Failed to index task polling job", e);
         }
     }
 
-    public void startStatsCollectorJob() {
-        if (statsCollectorJobStarted) {
-            return;
-        }
+    @Override
+    public void onStaticMetricCollectionEnabledChanged(boolean isEnabled) {
+        log.info("Static metric collection setting changed to: {}", isEnabled);
+        indexStatsCollectorJob(isEnabled);
+    }
 
+    public void indexStatsCollectorJob(boolean enabled) {
         try {
             MLJobParameter jobParameter = new MLJobParameter(
                 MLJobType.STATS_COLLECTOR.name(),
                 new IntervalSchedule(Instant.now(), 5, ChronoUnit.MINUTES),
                 60L,
                 null,
-                MLJobType.STATS_COLLECTOR
+                MLJobType.STATS_COLLECTOR,
+                enabled
             );
 
             IndexRequest indexRequest = new IndexRequest()
@@ -588,7 +593,7 @@ public class MLTaskManager {
                 .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
                 .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-            startJob(indexRequest, MLJobType.STATS_COLLECTOR, () -> this.statsCollectorJobStarted = true);
+            indexJob(indexRequest, MLJobType.STATS_COLLECTOR, () -> {});
         } catch (IOException e) {
             log.error("Failed to index stats collection job", e);
         }
@@ -601,7 +606,7 @@ public class MLTaskManager {
      * @param jobType the type of job being started
      * @param successCallback callback to execute on successful job indexing
      */
-    private void startJob(IndexRequest indexRequest, MLJobType jobType, Runnable successCallback) {
+    private void indexJob(IndexRequest indexRequest, MLJobType jobType, Runnable successCallback) {
         mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
             if (success) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {

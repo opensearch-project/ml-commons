@@ -404,7 +404,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).index(any(), any());
 
-        mlTaskManager.startStatsCollectorJob();
+        mlTaskManager.indexStatsCollectorJob(true);
 
         ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(client).index(indexRequestCaptor.capture(), any());
@@ -429,7 +429,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).index(any(), any());
 
-        mlTaskManager.startStatsCollectorJob();
+        mlTaskManager.indexStatsCollectorJob(true);
 
         verify(client).index(any(), any());
     }
