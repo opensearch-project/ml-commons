@@ -550,19 +550,19 @@ public class MLTaskManager implements SettingsChangeListener {
 
         try {
             MLJobParameter jobParameter = new MLJobParameter(
-                    MLJobType.BATCH_TASK_UPDATE.name(),
-                    new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES),
-                    20L,
-                    null,
-                    MLJobType.BATCH_TASK_UPDATE,
-                    true
+                MLJobType.BATCH_TASK_UPDATE.name(),
+                new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES),
+                20L,
+                null,
+                MLJobType.BATCH_TASK_UPDATE,
+                true
             );
 
             IndexRequest indexRequest = new IndexRequest()
-                    .index(CommonValue.ML_JOBS_INDEX)
-                    .id(MLJobType.BATCH_TASK_UPDATE.name())
-                    .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
-                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.BATCH_TASK_UPDATE.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
             indexJob(indexRequest, MLJobType.BATCH_TASK_UPDATE, () -> this.taskPollingJobStarted = true);
         } catch (IOException e) {
