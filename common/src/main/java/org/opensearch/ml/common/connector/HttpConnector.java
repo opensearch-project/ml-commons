@@ -346,6 +346,7 @@ public class HttpConnector extends AbstractConnector {
             String payload = connectorAction.get().getRequestBody();
             payload = fillNullParameters(parameters, payload);
             parseParameters(parameters);
+            payload = removeMissingParameterFields(payload, parameters);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
@@ -356,6 +357,27 @@ public class HttpConnector extends AbstractConnector {
         }
         return (T) parameters.get("http_body");
     }
+
+    private String removeMissingParameterFields(String payload, Map<String, String> params) {
+        // Match: "xxx": "${parameters.yyy}" or "xxx": {parameters.yyy}
+        Pattern pattern = Pattern.compile(
+                "\\s*\"[^\"]+\"\\s*:\\s*(\"?\\$?\\{parameters\\.([^}]+)\\}\"?)\\s*,?"
+        );
+        Matcher matcher = pattern.matcher(payload);
+        StringBuffer sb = new StringBuffer();
+
+        while (matcher.find()) {
+            String paramName = matcher.group(2); // yyy
+            if (!params.containsKey(paramName)) {
+                matcher.appendReplacement(sb, "");
+            } else {
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0)));
+            }
+        }
+        matcher.appendTail(sb);
+        return sb.toString().replaceAll(",\\s*}", "}").replaceAll(",\\s*]", "]");
+    }
+
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
         List<String> bodyParams = findStringParametersWithNullDefaultValue(payload);
