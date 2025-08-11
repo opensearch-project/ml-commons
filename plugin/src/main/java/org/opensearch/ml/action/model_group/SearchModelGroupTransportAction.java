@@ -100,7 +100,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by {}", user.getBackendRoles());
             }
-            search(tenantId, request, listener);
+            search(tenantId, request, doubleWrappedListener);
         } catch (Exception e) {
             log.error("Failed to search", e);
             listener.onFailure(e);
