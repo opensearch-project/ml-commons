@@ -5,11 +5,12 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
+import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
-import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
-import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
-import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
-import static org.opensearch.ml.engine.tools.ToolUtils.parseResponse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,9 +32,9 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
-import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -100,7 +101,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -145,7 +146,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
                     Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                    Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
+                    Tool tool = createTool(toolFactories, executeParams, toolSpec);
                     if (finalI < toolSpecs.size()) {
                         tool.run(executeParams, nextStepListener);
                     }

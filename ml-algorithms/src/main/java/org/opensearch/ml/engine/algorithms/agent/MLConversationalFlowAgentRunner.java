@@ -9,14 +9,15 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
+import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
-import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
-import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
-import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
-import static org.opensearch.ml.engine.tools.ToolUtils.parseResponse;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -45,10 +46,10 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
-import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -180,7 +181,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -350,7 +351,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
         Map<String, String> toolExecutionParameters = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
-        Tool tool = ToolUtils.createTool(toolFactories, toolExecutionParameters, toolSpec);
+        Tool tool = createTool(toolFactories, toolExecutionParameters, toolSpec);
         if (finalI < toolSpecs.size()) {
             tool.run(toolExecutionParameters, nextStepListener);
         }
