@@ -143,10 +143,10 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
                     } else {
                         try {
                             DeleteResponse deleteResponse = r.deleteResponse();
-                            if (deleteResponse.status() == RestStatus.ACCEPTED) {
+                            if (deleteResponse.status() == RestStatus.OK) {
                                 listener.onResponse(true);
                             } else {
-                                listener.onFailure(new RuntimeException("The container is not set yet"));
+                                listener.onFailure(new RuntimeException("Fail to delete index insight container"));
                             }
 
                         } catch (Exception e) {
