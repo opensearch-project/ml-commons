@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
