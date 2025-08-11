@@ -174,7 +174,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             .fetchSourceContext(fetchSourceContext)
             .build();
 
-        if (MLIndicesHandler.doesMultiTenantIndexExists(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
+        if (MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))

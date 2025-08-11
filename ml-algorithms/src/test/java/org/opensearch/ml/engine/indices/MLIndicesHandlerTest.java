@@ -1,6 +1,8 @@
 package org.opensearch.ml.engine.indices;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
@@ -11,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
@@ -107,6 +110,28 @@ public class MLIndicesHandlerTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         indicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
+    }
+
+    @Test
+    public void doesMultiTenantIndexExist_multiTenancyEnabled_returnsTrue() {
+        assertTrue(MLIndicesHandler.doesMultiTenantIndexExist(null, true, null));
+        MLIndicesHandler mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
+        assertTrue(mlIndicesHandler.doesIndexExists(ML_CONFIG_INDEX));
+    }
+
+    @Test
+    public void doesMultiTenantIndexExist_multiTenancyDisabledSearchesClusterService_returnsValidSearchResult() {
+        assertFalse(MLIndicesHandler.doesMultiTenantIndexExist(clusterService, false, null));
+
+        String sampleIndexName = "test-index";
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        MLIndicesHandler mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
+
+        when(clusterService.state().metadata().hasIndex(sampleIndexName)).thenReturn(true);
+        assertTrue(mlIndicesHandler.doesIndexExists(sampleIndexName));
+
+        when(clusterService.state().metadata().hasIndex(sampleIndexName)).thenReturn(false);
+        assertFalse(mlIndicesHandler.doesIndexExists(sampleIndexName));
     }
 
     @Test

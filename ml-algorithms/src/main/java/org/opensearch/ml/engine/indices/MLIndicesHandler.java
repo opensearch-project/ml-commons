@@ -33,6 +33,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -65,7 +67,7 @@ public class MLIndicesHandler {
      * @implNote It is recommended that if your environment enables multi tenancy, your plugin indices are
      * pre-populated otherwise this method will result in unwanted early returns without checking the clusterService
      */
-    public static boolean doesMultiTenantIndexExists(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
+    public static boolean doesMultiTenantIndexExist(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
         return isMultiTenancyEnabled || clusterService.state().metadata().hasIndex(indexName);
     }
 
@@ -122,7 +124,7 @@ public class MLIndicesHandler {
         String mapping = index.getMapping();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            if (!MLIndicesHandler.doesMultiTenantIndexExists(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName)) {
+            if (!MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName)) {
                 ActionListener<CreateIndexResponse> actionListener = ActionListener.wrap(r -> {
                     if (r.isAcknowledged()) {
                         log.info("create index:{}", indexName);
@@ -235,6 +237,11 @@ public class MLIndicesHandler {
             }
         }
         listener.onResponse(newVersion > oldVersion);
+    }
+
+    @VisibleForTesting
+    public boolean doesIndexExists(String indexName) {
+        return MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName);
     }
 
 }

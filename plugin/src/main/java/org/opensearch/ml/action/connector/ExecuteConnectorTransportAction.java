@@ -76,7 +76,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         String connectorAction = ConnectorAction.ActionType.EXECUTE.name();
 
         if (MLIndicesHandler
-            .doesMultiTenantIndexExists(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
+            .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.

@@ -201,7 +201,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                             Connector connector = model.getConnector();
                             executeConnector(connector, mlInput, actionListener);
                         } else if (MLIndicesHandler
-                            .doesMultiTenantIndexExists(
+                            .doesMultiTenantIndexExist(
                                 clusterService,
                                 mlFeatureEnabledSetting.isMultiTenancyEnabled(),
                                 ML_CONNECTOR_INDEX

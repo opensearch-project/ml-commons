@@ -392,7 +392,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                                             actionListener
                                         );
                                     } else if (MLIndicesHandler
-                                        .doesMultiTenantIndexExists(
+                                        .doesMultiTenantIndexExist(
                                             clusterService,
                                             mlFeatureEnabledSetting.isMultiTenancyEnabled(),
                                             ML_CONNECTOR_INDEX

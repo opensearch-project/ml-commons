@@ -138,7 +138,7 @@ public class MLSearchHandler {
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             if (modelAccessControlHelper.skipModelAccessControl(user)
                 || !MLIndicesHandler
-                    .doesMultiTenantIndexExists(
+                    .doesMultiTenantIndexExist(
                         clusterService,
                         mlFeatureEnabledSetting.isMultiTenancyEnabled(),
                         CommonValue.ML_MODEL_GROUP_INDEX
