@@ -64,7 +64,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             String statisticalContent = getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA);
             getAgentIdToRun(
                 client,
-                storageIndex,
+                tenantId,
                 ActionListener.wrap(agentId -> { batchProcessFields(statisticalContent, agentId, storageIndex, listener); }, listener::onFailure)
             );
         } catch (Exception e) {
