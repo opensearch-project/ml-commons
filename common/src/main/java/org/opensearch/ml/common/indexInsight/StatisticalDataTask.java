@@ -6,6 +6,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -60,7 +61,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     public void runTaskLogic(String targetIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-            collectSampleDocuments(targetIndex, listener);
+            collectStatisticalData(targetIndex, listener);
         } catch (Exception e) {
             log.error("Failed to execute statistical data task for index {}", indexName, e);
             saveFailedStatus(targetIndex);
@@ -109,7 +110,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return getMappingsRequest;
     }
 
-    private void collectSampleDocuments(String targetIndex, ActionListener<IndexInsight> listener) {
+    private void collectStatisticalData(String targetIndex, ActionListener<IndexInsight> listener) {
 
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(indexName);
 
@@ -135,10 +136,18 @@ public class StatisticalDataTask implements IndexInsightTask {
                 Map<String, Object> result = parseSearchResult(searchResponse);
                 log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
 
-                String statisticalContent = gson.toJson(result);
+                // Create ordered result with example_docs at the end
+                Map<String, Object> orderedResult = new LinkedHashMap<>();
+                result.entrySet().stream()
+                    .filter(entry -> !entry.getKey().equals("example_docs"))
+                    .forEach(entry -> orderedResult.put(entry.getKey(), entry.getValue()));
+                if (result.containsKey("example_docs")) {
+                    orderedResult.put("example_docs", result.get("example_docs"));
+                }
+                String statisticalContent = gson.toJson(orderedResult);
                 saveResult(statisticalContent, targetIndex, listener);
             }, e -> {
-                log.error("Failed to collect sample documents for index: {}", indexName, e);
+                log.error("Failed to collect statistical data for index: {}", indexName, e);
                 saveFailedStatus(targetIndex);
                 listener.onFailure(e);
             }));
@@ -216,7 +225,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         for (Map.Entry<String, Aggregation> entry : aggregationMap.entrySet()) {
             String key = entry.getKey();
             Aggregation aggregation = entry.getValue();
-            if (key.equals("example_doc")) {
+            if (key.equals("example_docs")) {
                 SearchHit[] hits = ((InternalTopHits) aggregation).getHits().getHits();
                 List<Object> values = new ArrayList<>();
                 for (SearchHit hit : hits) {

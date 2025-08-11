@@ -98,9 +98,13 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-
-            // Fetch 3 sample docs
-            collectSampleDocString(storageIndex, tenantId, listener);
+            collectSampleDocString(ActionListener.wrap(sampleDocs -> {
+                getAgentIdToRun(
+                    client,
+                    tenantId,
+                    ActionListener.wrap(agentId -> callLLM(agentId, storageIndex, listener), listener::onFailure)
+                );
+            }, listener::onFailure));
         } catch (Exception ex) {
             log.error("Failed log related check for {}", indexName, ex);
             saveFailedStatus(storageIndex);
@@ -143,7 +147,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return sampleDocSting;
     }
 
-    private void collectSampleDocString(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    private void collectSampleDocString(ActionListener<String> listener) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
         SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
@@ -156,21 +160,13 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                     .toList();
                 sampleDocSting = MAPPER.writeValueAsString(samples);
                 log.info("Collected sample documents for index: {}", indexName);
-                getAgentIdToRun(
-                    client,
-                    storageIndex,
-                    ActionListener.wrap(agentId -> { callLLM(agentId, storageIndex, listener); }, listener::onFailure)
-                );
-                // Build prompt and call LLM
-
+                listener.onResponse(sampleDocSting);
             } catch (Exception e) {
                 log.error("Failed to process sample documents for index: {}", indexName, e);
-                saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }
         }, e -> {
             log.error("Failed to collect sample documents for index: {}", indexName, e);
-            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }));
     }
