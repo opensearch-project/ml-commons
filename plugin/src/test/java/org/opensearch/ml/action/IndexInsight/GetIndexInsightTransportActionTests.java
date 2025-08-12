@@ -144,4 +144,39 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         assertEquals(argumentCaptor.getValue().getIndexInsight().getIndex(), "test_index");
     }
 
+    @Test
+    public void testGetIndexInsight_FailToAccess() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+        IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
+
+        doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
+        IndexInsight insight = new IndexInsight("test_index", "test content", IndexInsightTaskStatus.COMPLETED, MLIndexInsightType.INDEX_DESCRIPTION, Instant.ofEpochMilli(0));
+        doAnswer(invocation -> {
+            ActionListener<IndexInsight> listener = invocation.getArgument(2);
+            listener.onResponse(insight);
+            return null;
+        }).when(indexInsightTask).execute(any(), any(), any());
+
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new);
+            return null;
+        }).when(client).search(any(), any());
+
+        getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
+        ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertEquals(argumentCaptor.getValue().getIndexInsight().getIndex(), "test_index");
+    }
+
 }
