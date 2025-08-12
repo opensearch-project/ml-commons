@@ -217,7 +217,11 @@ public class SearchIndexTool implements Tool {
                     tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
                     outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
                     ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
-                    listener.onResponse((T) outputParser.parse(output));
+                    if (outputParser != null) {
+                        listener.onResponse((T) outputParser.parse(output));
+                    } else {
+                        listener.onResponse((T) output);
+                    }
                     return;
                 }
                 if (hits != null && hits.length > 0) {
@@ -227,7 +231,11 @@ public class SearchIndexTool implements Tool {
                         String doc = GSON.toJson(docContent);
                         contextBuilder.append(doc).append("\n");
                     }
-                    listener.onResponse((T) outputParser.parse(contextBuilder.toString()));
+                    if (outputParser != null) {
+                        listener.onResponse((T) outputParser.parse(contextBuilder.toString()));
+                    } else {
+                        listener.onResponse((T) contextBuilder.toString());
+                    }
                 } else {
                     listener.onResponse((T) "");
                 }
