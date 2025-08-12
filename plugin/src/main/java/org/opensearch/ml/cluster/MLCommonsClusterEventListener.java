@@ -91,7 +91,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         for (DiscoveryNode node : state.nodes()) {
             if (node.isDataNode() && Version.V_3_1_0.onOrAfter(node.getVersion())) {
                 if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()) {
-                    mlTaskManager.startStatsCollectorJob();
+                    mlTaskManager.indexStatsCollectorJob(true);
                 }
 
                 if (clusterService.state().getMetadata().hasIndex(TASK_POLLING_JOB_INDEX)) {
