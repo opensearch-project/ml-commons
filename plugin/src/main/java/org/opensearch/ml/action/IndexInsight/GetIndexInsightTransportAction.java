@@ -137,7 +137,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         }, listener::onFailure));
     }
 
-    private IndexInsightTask createTask(MLIndexInsightGetRequest request) {
+    IndexInsightTask createTask(MLIndexInsightGetRequest request) {
         switch (request.getTargetIndexInsight()) {
             case STATISTICAL_DATA:
                 try {

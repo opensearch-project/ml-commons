@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import lombok.Builder;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -19,6 +20,7 @@ import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 
 import lombok.Getter;
 
+@Builder
 @Getter
 public class MLIndexInsightGetRequest extends ActionRequest {
     String indexName;

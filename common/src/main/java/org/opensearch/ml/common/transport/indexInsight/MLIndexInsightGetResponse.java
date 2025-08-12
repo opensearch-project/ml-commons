@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import lombok.Getter;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
@@ -22,6 +23,7 @@ import org.opensearch.ml.common.indexInsight.IndexInsight;
 import lombok.Builder;
 
 public class MLIndexInsightGetResponse extends ActionResponse implements ToXContentObject {
+    @Getter
     private IndexInsight indexInsight;
 
     @Builder
