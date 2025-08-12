@@ -67,8 +67,8 @@ public class MLIndicesHandler {
      * @param isMultiTenancyEnabled whether multi-tenancy is enabled
      * @param indexName - the index to search
      * @return boolean indicating the existence of an index. Returns true if multitenancy is enabled.
-     * @implNote It is recommended that if your environment enables multi tenancy, your plugin indices are
-     * pre-populated otherwise this method will result in unwanted early returns without checking the clusterService
+     * @implNote This method assumes if your environment enables multi tenancy, then your plugin indices are
+     * pre-populated. If this is incorrect, it will result in unwanted early returns without checking the clusterService.
      */
     public static boolean doesMultiTenantIndexExist(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
         return isMultiTenancyEnabled || clusterService.state().metadata().hasIndex(indexName);
