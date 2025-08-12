@@ -111,6 +111,8 @@ public abstract class AbstractConnector implements Connector {
         if (response instanceof String && isJson((String) response)) {
             Map<String, Object> data = StringUtils.fromJson((String) response, ML_MAP_RESPONSE_KEY);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
+        } else if (response instanceof Map) {
+            modelTensors.add(ModelTensor.builder().name("response").dataAsMap((Map<String, ?>) response).build());
         } else {
             Map<String, Object> map = new HashMap<>();
             map.put("response", response);
