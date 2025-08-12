@@ -193,40 +193,50 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
-                modelAccessControlHelper.validateModelGroupAccess(user, model.getModelGroupId(), MLCancelBatchJobAction.NAME, client, ActionListener.wrap(access -> {
-                    if (!access) {
-                        actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
-                    } else {
-                        if (model.getConnector() != null) {
-                            Connector connector = model.getConnector();
-                            executeConnector(connector, mlInput, actionListener);
-                        } else if (MLIndicesHandler
-                            .doesMultiTenantIndexExist(
-                                clusterService,
-                                mlFeatureEnabledSetting.isMultiTenancyEnabled(),
-                                ML_CONNECTOR_INDEX
-                            )) {
-                            ActionListener<Connector> listener = ActionListener
-                                .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
-                                    log.error("Failed to get connector {}", model.getConnectorId(), e);
-                                    actionListener.onFailure(e);
-                                });
-                            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                connectorAccessControlHelper
-                                    .getConnector(
-                                        client,
-                                        model.getConnectorId(),
-                                        ActionListener.runBefore(listener, threadContext::restore)
-                                    );
+                modelAccessControlHelper
+                    .validateModelGroupAccess(
+                        user,
+                        model.getModelGroupId(),
+                        MLCancelBatchJobAction.NAME,
+                        client,
+                        ActionListener.wrap(access -> {
+                            if (!access) {
+                                actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
+                            } else {
+                                if (model.getConnector() != null) {
+                                    Connector connector = model.getConnector();
+                                    executeConnector(connector, mlInput, actionListener);
+                                } else if (MLIndicesHandler
+                                    .doesMultiTenantIndexExist(
+                                        clusterService,
+                                        mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                                        ML_CONNECTOR_INDEX
+                                    )) {
+                                    ActionListener<Connector> listener = ActionListener
+                                        .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
+                                            log.error("Failed to get connector {}", model.getConnectorId(), e);
+                                            actionListener.onFailure(e);
+                                        });
+                                    try (
+                                        ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()
+                                    ) {
+                                        connectorAccessControlHelper
+                                            .getConnector(
+                                                client,
+                                                model.getConnectorId(),
+                                                ActionListener.runBefore(listener, threadContext::restore)
+                                            );
+                                    }
+                                } else {
+                                    actionListener
+                                        .onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                                }
                             }
-                        } else {
-                            actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
-                        }
-                    }
-                }, e -> {
-                    log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
-                    actionListener.onFailure(e);
-                }));
+                        }, e -> {
+                            log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
+                            actionListener.onFailure(e);
+                        })
+                    );
             }, e -> {
                 log.error("Failed to retrieve the ML model with the given ID", e);
                 actionListener

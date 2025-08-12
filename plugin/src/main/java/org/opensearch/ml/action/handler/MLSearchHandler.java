@@ -140,11 +140,11 @@ public class MLSearchHandler {
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             boolean skip = modelAccessControlHelper.skipModelAccessControl(user);
             boolean hasIndex = !MLIndicesHandler
-                    .doesMultiTenantIndexExist(
-                            clusterService,
-                            mlFeatureEnabledSetting.isMultiTenancyEnabled(),
-                            CommonValue.ML_MODEL_GROUP_INDEX
-                    );
+                .doesMultiTenantIndexExist(
+                    clusterService,
+                    mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                    CommonValue.ML_MODEL_GROUP_INDEX
+                );
             boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
             if (skip || !hasIndex) {
