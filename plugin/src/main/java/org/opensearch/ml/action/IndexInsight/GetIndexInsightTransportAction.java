@@ -87,7 +87,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                         getContext.restore();
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            log.error("Failed to index index insight container", cause);
+                            log.error("Failed to get index insight container", cause);
                             actionListener.onFailure(cause);
                         } else {
                             GetResponse getResponse = r1.getResponse();
@@ -135,7 +135,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         }, listener::onFailure));
     }
 
-    private IndexInsightTask createTask(MLIndexInsightGetRequest request) {
+    IndexInsightTask createTask(MLIndexInsightGetRequest request) {
         switch (request.getTargetIndexInsight()) {
             case STATISTICAL_DATA:
                 try {

@@ -25,7 +25,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLIndex;
@@ -34,7 +33,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -80,7 +78,6 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
             return;
         }
 
-        User user = RestActionUtils.getUserContext(client);
         String tenantId = mlIndexInsightContainerPutRequest.getTenantId();
         IndexInsightContainer indexInsightContainer = IndexInsightContainer
             .builder()

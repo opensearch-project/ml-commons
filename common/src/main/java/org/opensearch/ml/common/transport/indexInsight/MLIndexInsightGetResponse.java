@@ -20,8 +20,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.indexInsight.IndexInsight;
 
 import lombok.Builder;
+import lombok.Getter;
 
 public class MLIndexInsightGetResponse extends ActionResponse implements ToXContentObject {
+    @Getter
     private IndexInsight indexInsight;
 
     @Builder
