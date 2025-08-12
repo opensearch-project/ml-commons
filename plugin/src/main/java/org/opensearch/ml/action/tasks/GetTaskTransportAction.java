@@ -82,6 +82,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.S3Utils;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -391,7 +392,12 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                                             remoteJob,
                                             actionListener
                                         );
-                                    } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+                                    } else if (MLIndicesHandler
+                                        .doesMultiTenantIndexExist(
+                                            clusterService,
+                                            mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                                            ML_CONNECTOR_INDEX
+                                        )) {
                                         ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                                             executeConnector(
                                                 connector,

@@ -170,4 +170,19 @@ public class MLFeatureEnabledSettingTests {
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
         assertFalse(setting.isAgenticMemoryEnabled());
     }
+
+    @Test
+    public void testStaticMetricCollectionSettingChangeNotifiesListeners() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.metrics_static_collection_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        SettingsChangeListener mockListener = mock(SettingsChangeListener.class);
+        setting.addListener(mockListener);
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.metrics_static_collection_enabled", true).build());
+
+        verify(mockListener).onStaticMetricCollectionEnabledChanged(true);
+        assertTrue(setting.isStaticMetricCollectionEnabled());
+    }
 }
