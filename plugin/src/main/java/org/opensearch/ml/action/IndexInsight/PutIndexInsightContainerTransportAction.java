@@ -80,7 +80,6 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
             return;
         }
 
-        User user = RestActionUtils.getUserContext(client);
         String tenantId = mlIndexInsightContainerPutRequest.getTenantId();
         IndexInsightContainer indexInsightContainer = IndexInsightContainer
             .builder()
