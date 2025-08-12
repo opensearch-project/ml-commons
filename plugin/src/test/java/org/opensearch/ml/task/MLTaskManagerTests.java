@@ -469,4 +469,24 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.updateMLTaskDirectly("task_id", updatedFields, listener);
         verify(listener).onResponse(any(UpdateResponse.class));
     }
+
+    public void testOnStaticMetricCollectionEnabledChanged() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.onStaticMetricCollectionEnabledChanged(true);
+        verify(mlTaskManager).indexStatsCollectorJob(true);
+
+        mlTaskManager.onStaticMetricCollectionEnabledChanged(false);
+        verify(mlTaskManager).indexStatsCollectorJob(false);
+    }
 }
