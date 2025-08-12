@@ -106,6 +106,12 @@ public class MLFeatureEnabledSetting {
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_ENABLED, it -> isAgenticSearchEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> isMcpConnectorEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_MEMORY_ENABLED, it -> isAgenticMemoryEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
+            isStaticMetricCollectionEnabled = it;
+            for (SettingsChangeListener listener : listeners) {
+                listener.onStaticMetricCollectionEnabledChanged(it);
+            }
+        });
     }
 
     /**
