@@ -84,7 +84,7 @@ dependencies {
 	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.11.0'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.18.0'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: "${versions.commonslang}"
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
@@ -426,7 +426,7 @@ check.dependsOn jacocoTestCoverageVerification
 configurations.all {
     exclude group: "org.jetbrains", module: "annotations"
     exclude group: "com.google.guava", module: "failureaccess"
-    resolutionStrategy.force 'org.apache.commons:commons-lang3:3.18.0'
+    resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
