@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.IndexInsight;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -166,17 +167,52 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(indexInsightTask).execute(any(), any(), any());
 
-        SearchResponse searchResponse = mock(SearchResponse.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new);
+            listener.onFailure(new IllegalArgumentException("You don't have access"));
             return null;
         }).when(client).search(any(), any());
 
         getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
-        ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-        assertEquals(argumentCaptor.getValue().getIndexInsight().getIndex(), "test_index");
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
+        assertEquals("You don't have access to this index", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testGetIndexInsight_ContainerNotInitialized() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+        IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
+
+        doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
+        IndexInsight insight = new IndexInsight("test_index", "test content", IndexInsightTaskStatus.COMPLETED, MLIndexInsightType.INDEX_DESCRIPTION, Instant.ofEpochMilli(0));
+        doAnswer(invocation -> {
+            ActionListener<IndexInsight> listener = invocation.getArgument(2);
+            listener.onResponse(insight);
+            return null;
+        }).when(indexInsightTask).execute(any(), any(), any());
+
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals("The container is not set yet", argumentCaptor.getValue().getMessage());
     }
 
 }

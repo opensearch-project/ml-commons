@@ -89,7 +89,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                         getContext.restore();
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            log.error("Failed to index index insight container", cause);
+                            log.error("Failed to get index insight container", cause);
                             actionListener.onFailure(cause);
                         } else {
                             GetResponse getResponse = r1.getResponse();
