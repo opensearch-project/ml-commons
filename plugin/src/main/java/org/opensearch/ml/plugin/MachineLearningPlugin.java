@@ -497,7 +497,9 @@ public class MachineLearningPlugin extends Plugin
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
 
-        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
+
+        mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 
         SdkClient sdkClient = SdkClientFactory
             .createSdkClient(
@@ -562,7 +564,7 @@ public class MachineLearningPlugin extends Plugin
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
-        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
+
         mlModelManager = new MLModelManager(
             clusterService,
             scriptService,
@@ -679,7 +681,8 @@ public class MachineLearningPlugin extends Plugin
             xContentRegistry,
             toolFactories,
             memoryFactoryMap,
-            mlFeatureEnabledSetting.isMultiTenancyEnabled()
+            mlFeatureEnabledSetting,
+            encryptor
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
         MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
@@ -689,7 +692,7 @@ public class MachineLearningPlugin extends Plugin
 
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService, mlFeatureEnabledSetting);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
             client,

@@ -43,11 +43,14 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
@@ -85,6 +88,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
     private volatile Boolean isMultiTenancyEnabled;
+    private Encryptor encryptor;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public MLAgentExecutor(
         Client client,
@@ -94,7 +99,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
-        Boolean isMultiTenancyEnabled
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        Encryptor encryptor
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -103,7 +109,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
-        this.isMultiTenancyEnabled = isMultiTenancyEnabled;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.encryptor = encryptor;
+        this.isMultiTenancyEnabled = mlFeatureEnabledSetting.isMultiTenancyEnabled();
     }
 
     @Override
@@ -142,7 +150,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             .fetchSourceContext(fetchSourceContext)
             .build();
 
-        if (clusterService.state().metadata().hasIndex(ML_AGENT_INDEX)) {
+        if (MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))
