@@ -136,22 +136,11 @@ public class StatisticalDataTask implements IndexInsightTask {
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
-                Map<String, Object> result = new HashMap<>();
-                result.put("distribution", parseSearchResult(searchResponse));
+                Map<String, Object> result = new LinkedHashMap<>();
                 result.put("mapping", mappingSource);
-                log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
+                result.put("distribution", parseSearchResult(searchResponse));
 
-                // Create ordered result with example_docs at the end
-                Map<String, Object> orderedResult = new LinkedHashMap<>();
-                result
-                    .entrySet()
-                    .stream()
-                    .filter(entry -> !entry.getKey().equals("example_docs"))
-                    .forEach(entry -> orderedResult.put(entry.getKey(), entry.getValue()));
-                if (result.containsKey("example_docs")) {
-                    orderedResult.put("example_docs", result.get("example_docs"));
-                }
-                String statisticalContent = gson.toJson(orderedResult);
+                String statisticalContent = gson.toJson(result);
                 saveResult(statisticalContent, targetIndex, listener);
             }, e -> {
                 log.error("Failed to collect statistical data for index: {}", indexName, e);
@@ -229,17 +218,17 @@ public class StatisticalDataTask implements IndexInsightTask {
         Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
             .getAggregations()
             .getAsMap();
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
+        List<Object> exampleDocs = null;
         for (Map.Entry<String, Aggregation> entry : aggregationMap.entrySet()) {
             String key = entry.getKey();
             Aggregation aggregation = entry.getValue();
             if (key.equals("example_docs")) {
                 SearchHit[] hits = ((InternalTopHits) aggregation).getHits().getHits();
-                List<Object> values = new ArrayList<>();
+                exampleDocs = new ArrayList<>(hits.length);
                 for (SearchHit hit : hits) {
-                    values.add(hit.getSourceAsMap());
+                    exampleDocs.add(hit.getSourceAsMap());
                 }
-                result.put(key, values);
             } else {
                 for (String prefix : prefixs) {
                     if (key.startsWith(prefix)) {
@@ -271,6 +260,9 @@ public class StatisticalDataTask implements IndexInsightTask {
                     }
                 }
             }
+        }
+        if (exampleDocs != null) {
+            result.put("example_docs", exampleDocs);
         }
         return result;
     }
