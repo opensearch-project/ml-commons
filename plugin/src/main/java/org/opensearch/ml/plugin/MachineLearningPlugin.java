@@ -599,6 +599,7 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
 
+        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
         mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 
         SdkClient sdkClient = SdkClientFactory
@@ -665,7 +666,6 @@ public class MachineLearningPlugin extends Plugin
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
-        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
         mlModelManager = new MLModelManager(
             clusterService,
             scriptService,

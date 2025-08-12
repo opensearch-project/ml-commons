@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import lombok.NonNull;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
@@ -44,9 +45,11 @@ import lombok.extern.log4j.Log4j2;
 @RequiredArgsConstructor
 @Log4j2
 public class MLIndicesHandler {
-
+    @NonNull
     ClusterService clusterService;
+    @NonNull
     Client client;
+    @NonNull
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
 
