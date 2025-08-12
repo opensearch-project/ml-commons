@@ -10,7 +10,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,9 +55,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
     private Map<String, Object> fieldDescriptions;
 
-    public FieldDescriptionTask(String indexName, MappingMetadata mappingMetadata, Client client, ClusterService clusterService) {
+    public FieldDescriptionTask(String indexName, Client client, ClusterService clusterService) {
         this.indexName = indexName;
-        this.mappingMetadata = mappingMetadata;
+        this.mappingMetadata = clusterService.state().metadata().index(indexName).mapping();
         this.client = client;
         this.clusterService = clusterService;
     }
@@ -182,7 +182,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 // If any batch fails, the entire task is marked as failed and no partial results are saved
                 if (!hasErrors.get()) {
                     fieldDescriptions = resultsMap;
-                    saveResult(resultsMap.toString(), storageIndex, ActionListener.wrap(insight -> {
+                    saveResult(gson.toJson(resultsMap), storageIndex, ActionListener.wrap(insight -> {
                         log.info("Field description completed for: {}", indexName);
                         listener.onResponse(insight);
                     }, e -> {
@@ -285,60 +285,85 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
         prompt.append("\\n");
         // Filter statistical data based on current batch fields
-        String relevantStatisticalData = extractRelevantStatisticalData(statisticalContent, batchFields);
-        if (relevantStatisticalData != null && !relevantStatisticalData.isEmpty()) {
-            prompt.append("Statistical Data:\\n");
-            prompt.append(relevantStatisticalData).append("\\n\\n");
+        Map<String, Object> relevantStatisticalData = extractRelevantStatisticalData(statisticalContent, batchFields);
+        if (!relevantStatisticalData.isEmpty()) {
+            if (relevantStatisticalData.containsKey("mapping")) {
+                prompt.append("Field Mapping:\\n").append(relevantStatisticalData.get("mapping")).append("\\n\\n");
+            }
+            if (relevantStatisticalData.containsKey("distribution")) {
+                prompt.append("Field Distribution:\\n").append(relevantStatisticalData.get("distribution")).append("\\n\\n");
+            }
+            if (relevantStatisticalData.containsKey("example_docs")) {
+                prompt.append("Example Documents:\\n").append(relevantStatisticalData.get("example_docs")).append("\\n\\n");
+            }
         }
 
         prompt.append("For each field listed above, provide a brief description of what it contains and its purpose.\\n");
-        prompt.append("Format as: field_name: description");
+        prompt.append("For each field, provide description in the following format EXACTLY:\\n");
+        prompt.append("field_name: description");
 
         return prompt.toString();
     }
 
-    private String extractRelevantStatisticalData(String statisticalContent, List<String> batchFields) {
+    private Map<String, Object> extractRelevantStatisticalData(String statisticalContent, List<String> batchFields) {
+        Map<String, Object> result = new LinkedHashMap<>();
         if (statisticalContent == null || statisticalContent.isEmpty() || batchFields.isEmpty()) {
-            return "";
+            return result;
         }
 
         try {
-            // Extract sample document from statistical content (format: line1=count, line2=Sample document: {json})
-            String[] lines = statisticalContent.split("\\n");
-            if (lines.length < 2 || !lines[1].startsWith("Sample document: ")) {
-                return "";
+            Map<String, Object> statisticalData = JsonPath.read(statisticalContent, "$");
+            Map<String, Object> mapping = (Map<String, Object>) statisticalData.get("mapping");
+            Map<String, Object> distribution = (Map<String, Object>) statisticalData.get("distribution");
+
+            // Extract relevant mapping
+            Map<String, Object> relevantMapping = new LinkedHashMap<>();
+            for (String field : batchFields) {
+                if (mapping != null && mapping.containsKey(field)) {
+                    relevantMapping.put(field, mapping.get(field));
+                }
+            }
+            if (!relevantMapping.isEmpty()) {
+                result.put("mapping", relevantMapping);
             }
 
-            String sampleDocJson = lines[1].substring("Sample document: ".length());
-            // Parse JSON and extract only relevant fields
-            Map<String, Object> sampleDoc = JsonPath.read(sampleDocJson, "$");
-            Map<String, Object> relevantData = new HashMap<>();
-
+            // Extract relevant distribution
+            Map<String, Object> relevantDistribution = new LinkedHashMap<>();
             for (String field : batchFields) {
-                try {
-                    Object value = JsonPath.read(sampleDoc, "$." + field);
-                    relevantData.put(field, value);
-                } catch (Exception e) {
-                    // Field not found in sample document, skip
+                if (distribution != null && distribution.containsKey(field)) {
+                    relevantDistribution.put(field, distribution.get(field));
+                }
+            }
+            if (!relevantDistribution.isEmpty()) {
+                result.put("distribution", relevantDistribution);
+            }
+
+            // Extract example docs from distribution
+            if (distribution != null && distribution.containsKey("example_docs")) {
+                List<Map<String, Object>> exampleDocs = (List<Map<String, Object>>) distribution.get("example_docs");
+                if (exampleDocs != null && !exampleDocs.isEmpty()) {
+                    List<Map<String, Object>> relevantExampleDocs = new ArrayList<>();
+                    for (Map<String, Object> doc : exampleDocs) {
+                        Map<String, Object> relevantFields = new LinkedHashMap<>();
+                        for (String field : batchFields) {
+                            if (doc.containsKey(field)) {
+                                relevantFields.put(field, doc.get(field));
+                            }
+                        }
+                        if (!relevantFields.isEmpty()) {
+                            relevantExampleDocs.add(relevantFields);
+                        }
+                    }
+                    if (!relevantExampleDocs.isEmpty()) {
+                        result.put("example_docs", relevantExampleDocs);
+                    }
                 }
             }
 
-            if (relevantData.isEmpty()) {
-                return "";
-            }
-
-            StringBuilder result = new StringBuilder();
-            result.append("Sample data for relevant fields:\\n");
-            for (Map.Entry<String, Object> entry : relevantData.entrySet()) {
-                result.append("- ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\\n");
-            }
-
-            return result.toString();
-
         } catch (Exception e) {
             log.warn("Failed to extract relevant statistical data for batch fields: {}", e.getMessage());
-            return "";
         }
+        return result;
     }
 
     /**
@@ -355,7 +380,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     private Map<String, Object> parseFieldDescription(String modelResponse) {
-        Map<String, Object> field2Desc = new HashMap<>();
+        Map<String, Object> field2Desc = new LinkedHashMap<>();
         String[] lines = modelResponse.trim().split("\\n");
 
         for (String line : lines) {
@@ -364,7 +389,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
             if (parts.length == 2) {
                 String name = parts[0].trim();
                 String desc = parts[1].trim();
-                field2Desc.put(name, desc);
+                if (!desc.isEmpty()) {
+                    field2Desc.put(name, desc);
+                }
             }
         }
 

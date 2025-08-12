@@ -14,7 +14,6 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -23,7 +22,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.indexInsight.FieldDescriptionTask;
-import org.opensearch.ml.common.indexInsight.IndexDescriptionTask;
 import org.opensearch.ml.common.indexInsight.IndexInsightAccessControllerHelper;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.indexInsight.IndexInsightTask;
@@ -146,20 +144,8 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                     throw new IllegalArgumentException("Failed to create statistical data task for index: " + request.getIndexName(), e);
                 }
             case FIELD_DESCRIPTION:
-                // Need to get mapping metadata for field description task
                 try {
-                    String indexName = request.getIndexName();
-                    MappingMetadata mappingMetadata = clusterService.state().metadata().index(indexName).mapping();
-                    return new FieldDescriptionTask(indexName, mappingMetadata, client, clusterService);
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("Failed to get mapping for index: " + request.getIndexName(), e);
-                }
-            case INDEX_DESCRIPTION:
-                // Need to get mapping metadata for index description task
-                try {
-                    String indexName = request.getIndexName();
-                    MappingMetadata mappingMetadata = clusterService.state().metadata().index(indexName).mapping();
-                    return new IndexDescriptionTask(indexName, mappingMetadata, client, clusterService);
+                    return new FieldDescriptionTask(request.getIndexName(), client, clusterService);
                 } catch (Exception e) {
                     throw new IllegalArgumentException("Failed to get mapping for index: " + request.getIndexName(), e);
                 }
