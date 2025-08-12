@@ -1,15 +1,28 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.IndexInsight;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -20,11 +33,9 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
-import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -33,19 +44,7 @@ import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
-import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
-
-public class DeleteIndexInsightContainerTransportActionTests  extends OpenSearchTestCase {
+public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
@@ -85,7 +84,6 @@ public class DeleteIndexInsightContainerTransportActionTests  extends OpenSearch
     @Mock
     private Throwable throwable;
 
-
     DeleteIndexInsightContainerTransportAction deleteIndexInsightContainerTransportAction;
     MLIndexInsightContainerDeleteRequest mlIndexInsightContainerDeleteRequest;
     ThreadContext threadContext;
@@ -93,11 +91,18 @@ public class DeleteIndexInsightContainerTransportActionTests  extends OpenSearch
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest.builder().
-                tenantId(null).build();
+        mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest.builder().tenantId(null).build();
 
         deleteIndexInsightContainerTransportAction = spy(
-                new DeleteIndexInsightContainerTransportAction(transportService, actionFilters, xContentRegistry, mlFeatureEnabledSetting, client, sdkClient, mlIndicesHandler)
+            new DeleteIndexInsightContainerTransportAction(
+                transportService,
+                actionFilters,
+                xContentRegistry,
+                mlFeatureEnabledSetting,
+                client,
+                sdkClient,
+                mlIndicesHandler
+            )
         );
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);

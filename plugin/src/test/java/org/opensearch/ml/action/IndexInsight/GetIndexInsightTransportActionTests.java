@@ -5,7 +5,19 @@
 
 package org.opensearch.ml.action.IndexInsight;
 
-import org.junit.Assert;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,7 +36,6 @@ import org.opensearch.ml.common.indexInsight.IndexInsightTask;
 import org.opensearch.ml.common.indexInsight.IndexInsightTaskStatus;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -34,19 +45,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -88,8 +86,6 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     @Mock
     private Throwable throwable;
 
-
-
     GetIndexInsightTransportAction getIndexInsightTransportAction;
     MLIndexInsightGetRequest mlIndexInsightGetRequest;
     ThreadContext threadContext;
@@ -97,11 +93,23 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlIndexInsightGetRequest = MLIndexInsightGetRequest.builder().indexName("test_index_name").
-                targetIndexInsight(MLIndexInsightType.STATISTICAL_DATA).tenantId(null).build();
+        mlIndexInsightGetRequest = MLIndexInsightGetRequest
+            .builder()
+            .indexName("test_index_name")
+            .targetIndexInsight(MLIndexInsightType.STATISTICAL_DATA)
+            .tenantId(null)
+            .build();
 
         getIndexInsightTransportAction = spy(
-                new GetIndexInsightTransportAction(transportService, actionFilters, xContentRegistry, client, sdkClient, mlIndicesHandler, clusterService)
+            new GetIndexInsightTransportAction(
+                transportService,
+                actionFilters,
+                xContentRegistry,
+                client,
+                sdkClient,
+                mlIndicesHandler,
+                clusterService
+            )
         );
 
         Settings settings = Settings.builder().build();
@@ -125,7 +133,13 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
 
         doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
-        IndexInsight insight = new IndexInsight("test_index", "test content", IndexInsightTaskStatus.COMPLETED, MLIndexInsightType.INDEX_DESCRIPTION, Instant.ofEpochMilli(0));
+        IndexInsight insight = new IndexInsight(
+            "test_index",
+            "test content",
+            IndexInsightTaskStatus.COMPLETED,
+            MLIndexInsightType.INDEX_DESCRIPTION,
+            Instant.ofEpochMilli(0)
+        );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
             listener.onResponse(insight);
@@ -160,7 +174,13 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
 
         doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
-        IndexInsight insight = new IndexInsight("test_index", "test content", IndexInsightTaskStatus.COMPLETED, MLIndexInsightType.INDEX_DESCRIPTION, Instant.ofEpochMilli(0));
+        IndexInsight insight = new IndexInsight(
+            "test_index",
+            "test content",
+            IndexInsightTaskStatus.COMPLETED,
+            MLIndexInsightType.INDEX_DESCRIPTION,
+            Instant.ofEpochMilli(0)
+        );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
             listener.onResponse(insight);
@@ -194,7 +214,13 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
 
         doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
-        IndexInsight insight = new IndexInsight("test_index", "test content", IndexInsightTaskStatus.COMPLETED, MLIndexInsightType.INDEX_DESCRIPTION, Instant.ofEpochMilli(0));
+        IndexInsight insight = new IndexInsight(
+            "test_index",
+            "test content",
+            IndexInsightTaskStatus.COMPLETED,
+            MLIndexInsightType.INDEX_DESCRIPTION,
+            Instant.ofEpochMilli(0)
+        );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
             listener.onResponse(insight);

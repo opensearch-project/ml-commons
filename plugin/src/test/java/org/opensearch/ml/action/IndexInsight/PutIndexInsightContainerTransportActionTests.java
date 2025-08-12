@@ -1,4 +1,21 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.IndexInsight;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -10,22 +27,15 @@ import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
-import org.opensearch.ml.common.indexInsight.IndexInsight;
-import org.opensearch.ml.common.indexInsight.IndexInsightTask;
-import org.opensearch.ml.common.indexInsight.IndexInsightTaskStatus;
-import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
@@ -36,20 +46,6 @@ import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
 
 public class PutIndexInsightContainerTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -91,7 +87,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     @Mock
     private Throwable throwable;
 
-
     PutIndexInsightContainerTransportAction putIndexInsightContainerTransportAction;
     MLIndexInsightContainerPutRequest mlIndexInsightContainerPutRequest;
     ThreadContext threadContext;
@@ -99,11 +94,18 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlIndexInsightContainerPutRequest = MLIndexInsightContainerPutRequest.builder().indexName("test_index_name").
-                tenantId(null).build();
+        mlIndexInsightContainerPutRequest = MLIndexInsightContainerPutRequest.builder().indexName("test_index_name").tenantId(null).build();
 
         putIndexInsightContainerTransportAction = spy(
-                new PutIndexInsightContainerTransportAction(transportService, actionFilters, xContentRegistry, mlFeatureEnabledSetting, client, sdkClient, mlIndicesHandler)
+            new PutIndexInsightContainerTransportAction(
+                transportService,
+                actionFilters,
+                xContentRegistry,
+                mlFeatureEnabledSetting,
+                client,
+                sdkClient,
+                mlIndicesHandler
+            )
         );
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
@@ -122,7 +124,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
 
@@ -132,8 +133,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
         CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
 
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
-
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
@@ -170,7 +169,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
 
@@ -180,8 +178,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
         CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
 
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
-
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
@@ -207,7 +203,10 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
-        assertEquals(argumentCaptor.getValue().getMessage(), "Index insight container is already set. If you want to update, please delete it first.");
+        assertEquals(
+            argumentCaptor.getValue().getMessage(),
+            "Index insight container is already set. If you want to update, please delete it first."
+        );
     }
 
     @Test
@@ -218,7 +217,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
 
@@ -228,8 +226,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
         CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
 
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
-
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.NOOP);
@@ -266,7 +262,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
 
@@ -276,8 +271,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
         CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
 
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
-
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
@@ -314,7 +307,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
 
@@ -324,8 +316,6 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
         CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
 
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
-
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
