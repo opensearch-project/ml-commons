@@ -27,42 +27,29 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
 
     private static final String IRIS_INDEX = "iris_data";
     private String queryPlanningModelId;
-    private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
-    private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
-    private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
-    private static final String GITHUB_CI_AWS_REGION = "us-west-2";
-    private final String bedrockClaudeModelConnectorEntity = "{\n"
-        + "    \"name\": \"Amazon Bedrock Claude 3.7-sonnet connector\",\n"
-        + "    \"description\": \"connector for base agent with tools\",\n"
+    private static final String OPENAI_KEY = System.getenv("OPENAI_KEY");
+    private final String openaiConnectorEntity = "{\n"
+        + "    \"name\": \"My openai connector: gpt-4o\",\n"
+        + "    \"description\": \"The connector to openai chat model\",\n"
         + "    \"version\": 1,\n"
-        + "    \"protocol\": \"aws_sigv4\",\n"
+        + "    \"protocol\": \"http\",\n"
         + "    \"parameters\": {\n"
-        + "      \"region\": \""
-        + GITHUB_CI_AWS_REGION
-        + "\",\n"
-        + "      \"service_name\": \"bedrock\",\n"
-        + "      \"model\": \"us.anthropic.claude-3-7-sonnet-20250219-v1:0\"\n"
+        + "      \"model\": \"gpt-4o\"\n"
         + "    },\n"
         + "    \"credential\": {\n"
-        + "      \"access_key\":\" "
-        + AWS_ACCESS_KEY_ID
-        + "\",\n"
-        + "      \"secret_key\": \""
-        + AWS_SECRET_ACCESS_KEY
-        + "\",\n"
-        + "      \"session_token\": \""
-        + AWS_SESSION_TOKEN
+        + "      \"openAI_key\": \""
+        + OPENAI_KEY
         + "\"\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "      {\n"
         + "        \"action_type\": \"predict\",\n"
         + "        \"method\": \"POST\",\n"
-        + "        \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse\",\n"
+        + "        \"url\": \"https://api.openai.com/v1/chat/completions\",\n"
         + "        \"headers\": {\n"
-        + "          \"content-type\": \"application/json\"\n"
+        + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "        },\n"
-        + "        \"request_body\": \"{ \\\"system\\\": [{\\\"text\\\": \\\"${parameters.system_prompt}\\\"}], \\\"messages\\\": [{\\\"role\\\":\\\"user\\\",\\\"content\\\":[{\\\"text\\\":\\\"${parameters.query_text}\\\"}]}]}\"\n"
+        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.user_prompt}\\\"}]}\"\n"
         + "      }\n"
         + "    ]\n"
         + "}";
@@ -70,7 +57,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException, InterruptedException {
         ingestIrisIndexData();
-        if (AWS_ACCESS_KEY_ID == null) {
+        if (OPENAI_KEY == null) {
             return;
         }
         // enable agentic search
@@ -85,14 +72,14 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
 
     @Test
     public void testAgentWithQueryPlanningTool_DefaultPrompt() throws IOException {
-        if (AWS_ACCESS_KEY_ID == null) {
+        if (OPENAI_KEY == null) {
             return;
         }
         String agentName = "Test_QueryPlanningAgent_DefaultPrompt";
         String agentId = registerAgentWithQueryPlanningTool(agentName, queryPlanningModelId);
         assertNotNull(agentId);
 
-        String query = "{\"parameters\": {\"query_text\": \"How many iris flowers of type setosa are there?\"}}";
+        String query = "{\"parameters\": {\"query_text\": \"List 5 iris flowers of type setosa\"}}";
         Response response = executeAgent(agentId, query);
         String responseBody = TestHelper.httpEntityToString(response.getEntity());
 
@@ -139,8 +126,8 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
     }
 
     private String registerQueryPlanningModel() throws IOException, InterruptedException {
-        String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
-        return registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, true);
+        String openaiModelName = "openai gpt-4o model " + randomAlphaOfLength(5);
+        return registerRemoteModel(openaiConnectorEntity, openaiModelName, true);
     }
 
     private void ingestIrisIndexData() throws IOException {
