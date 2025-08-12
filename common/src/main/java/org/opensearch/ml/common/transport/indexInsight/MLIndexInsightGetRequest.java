@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.transport.indexInsight;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -15,6 +17,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 
 import lombok.Builder;
@@ -41,8 +44,26 @@ public class MLIndexInsightGetRequest extends ActionRequest {
     }
 
     @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        out.writeString(this.indexName);
+        out.writeString(this.targetIndexInsight.name());
+        out.writeOptionalString(tenantId);
+    }
+
+    @Override
     public ActionRequestValidationException validate() {
-        return null;
+        ActionRequestValidationException exception = null;
+
+        if (this.indexName == null) {
+            exception = addValidationError("Index insight's target index can't be null", exception);
+        }
+
+        if (this.targetIndexInsight == null) {
+            exception = addValidationError("Index insight's target type can't be null", exception);
+        }
+
+        return exception;
     }
 
     public static MLIndexInsightGetRequest fromActionRequest(ActionRequest actionRequest) {

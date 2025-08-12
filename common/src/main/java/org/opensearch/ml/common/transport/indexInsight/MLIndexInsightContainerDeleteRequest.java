@@ -15,6 +15,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -31,6 +32,12 @@ public class MLIndexInsightContainerDeleteRequest extends ActionRequest {
     public MLIndexInsightContainerDeleteRequest(StreamInput in) throws IOException {
         super(in);
         this.tenantId = in.readOptionalString();
+    }
+
+    @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        out.writeOptionalString(tenantId);
     }
 
     public static MLIndexInsightContainerDeleteRequest fromActionRequest(ActionRequest actionRequest) {
