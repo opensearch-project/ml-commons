@@ -22,6 +22,7 @@ import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIE
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_FIELDS_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SYSTEM_PROMPT_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_PROMPT_FIELD;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -318,10 +319,40 @@ public class QueryPlanningToolTests {
         assertTrue(capturedParams.containsKey(INDEX_MAPPING_FIELD));
         assertTrue(capturedParams.containsKey(QUERY_FIELDS_FIELD));
         assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
+        assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
 
         // Processed parameters should be JSON strings
         assertTrue(capturedParams.get(INDEX_MAPPING_FIELD).startsWith("\""));
         assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
+    }
+
+    @Test
+    public void testUserPromptParameterProcessing() {
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("query_text", "test query");
+        parameters.put(USER_PROMPT_FIELD, "custom user prompt");
+        // No system_prompt or user_prompt - should use defaults
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        tool.run(parameters, listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool).run(captor.capture(), any());
+
+        Map<String, String> capturedParams = captor.getValue();
+
+        // User prompt should be processed
+        assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
+        assertEquals("custom user prompt", capturedParams.get(USER_PROMPT_FIELD));
     }
 
     @Test
