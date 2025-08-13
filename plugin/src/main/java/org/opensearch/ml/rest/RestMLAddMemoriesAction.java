@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORIES_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
@@ -77,11 +78,5 @@ public class RestMLAddMemoriesAction extends BaseRestHandler {
         mlAddMemoryInput.setMemoryContainerId(memoryContainerId);
 
         return new MLAddMemoriesRequest(mlAddMemoryInput);
-    }
-
-    private static void ensureExpectedToken(XContentParser.Token expected, XContentParser.Token actual, XContentParser parser) {
-        if (actual != expected) {
-            throw new IllegalArgumentException("Expected token [" + expected + "] but found [" + actual + "]");
-        }
     }
 }
