@@ -8,7 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
-import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SYSTEM_PROMPT;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_USER_PROMPT;
 
 import java.util.List;
 import java.util.Map;
@@ -20,7 +20,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.ToolUtils;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -39,10 +38,13 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String MODEL_ID_FIELD = "model_id";
     private final MLModelTool queryGenerationTool;
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String USER_PROMPT_FIELD = "user_prompt";
     public static final String INDEX_MAPPING_FIELD = "index_mapping";
     public static final String QUERY_FIELDS_FIELD = "query_fields";
     private static final String GENERATION_TYPE_FIELD = "generation_type";
     private static final String LLM_GENERATED_TYPE_FIELD = "llmGenerated";
+    private static final String DEFAULT_SYSTEM_PROMPT =
+        "You are an OpenSearch Query DSL generation assistant, translating natural language questions to OpenSeach DSL Queries";
     @Getter
     private final String generationType;
     @Setter
@@ -51,7 +53,6 @@ public class QueryPlanningTool implements WithModelTool {
     @Getter
     @Setter
     private Map<String, Object> attributes;
-    @VisibleForTesting
     static String DEFAULT_DESCRIPTION = "Use this tool to generate opensearch query dsl for a given natural language question.";
     @Getter
     @Setter
@@ -71,6 +72,9 @@ public class QueryPlanningTool implements WithModelTool {
         }
         if (!parameters.containsKey(SYSTEM_PROMPT_FIELD)) {
             parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_SYSTEM_PROMPT);
+        }
+        if (!parameters.containsKey(USER_PROMPT_FIELD)) {
+            parameters.put(USER_PROMPT_FIELD, DEFAULT_USER_PROMPT);
         }
         if (parameters.containsKey(INDEX_MAPPING_FIELD)) {
             parameters.put(INDEX_MAPPING_FIELD, gson.toJson(parameters.get(INDEX_MAPPING_FIELD)));
