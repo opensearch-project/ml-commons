@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORIES_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 
@@ -29,6 +30,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
@@ -50,12 +52,16 @@ public class RestMLAddMemoriesActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLAddMemoriesAction = new RestMLAddMemoriesAction();
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        restMLAddMemoriesAction = new RestMLAddMemoriesAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));

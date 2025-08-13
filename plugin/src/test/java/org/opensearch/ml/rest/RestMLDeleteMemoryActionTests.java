@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DELETE_MEMORY_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
@@ -29,6 +30,7 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
 import org.opensearch.rest.RestChannel;
@@ -49,12 +51,16 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLDeleteMemoryAction = new RestMLDeleteMemoryAction();
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        restMLDeleteMemoryAction = new RestMLDeleteMemoryAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));

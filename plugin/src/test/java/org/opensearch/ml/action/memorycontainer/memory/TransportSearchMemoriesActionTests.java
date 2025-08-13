@@ -119,6 +119,9 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
+        // Mock ML feature settings
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
         // Setup mock container with semantic storage
         mockContainer = MLMemoryContainer
             .builder()
@@ -761,8 +764,14 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         verify(actionListener, never()).onResponse(any());
 
         Exception capturedError = errorCaptor.getValue();
-        assertTrue(capturedError instanceof org.opensearch.OpenSearchException);
-        assertTrue(capturedError.getMessage().contains("Failed to parse search response"));
+        assertTrue(
+            "Expected OpenSearchException but got: " + capturedError.getClass().getName(),
+            capturedError instanceof org.opensearch.OpenSearchException
+        );
+        assertTrue(
+            "Expected message to contain 'Failed to parse search response' but got: " + capturedError.getMessage(),
+            capturedError.getMessage().contains("Failed to parse search response")
+        );
         assertNotNull(capturedError.getCause());
 
         // Verify that search was called but parsing failed

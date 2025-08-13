@@ -100,6 +100,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
+        // Mock ML feature settings
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
         // Setup mock container
         mockContainer = MLMemoryContainer
             .builder()

@@ -61,6 +61,7 @@ public class RestMLSearchMemoriesActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
