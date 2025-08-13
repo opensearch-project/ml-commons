@@ -139,7 +139,7 @@ public class MLSearchHandler {
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             boolean skip = modelAccessControlHelper.skipModelAccessControl(user);
-            boolean hasIndex = !MLIndicesHandler
+            boolean hasIndex = MLIndicesHandler
                 .doesMultiTenantIndexExist(
                     clusterService,
                     mlFeatureEnabledSetting.isMultiTenancyEnabled(),
