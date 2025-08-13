@@ -678,18 +678,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     ) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         List<ModelTensor> tensors = new ArrayList<>();
-        
+
         tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
         tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
-        
+
         if (reactAgentMemoryId != null && !reactAgentMemoryId.isEmpty()) {
             tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build());
         }
-        
+
         if (reactParentInteractionId != null && !reactParentInteractionId.isEmpty()) {
             tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD).result(reactParentInteractionId).build());
         }
-        
+
         modelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
         return modelTensors;
     }
