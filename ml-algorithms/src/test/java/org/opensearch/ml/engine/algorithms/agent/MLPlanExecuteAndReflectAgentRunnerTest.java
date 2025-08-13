@@ -612,6 +612,16 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
         assertEquals(executorMemoryId, tensors.getMlModelTensors().get(2).getResult());
         assertEquals(executorParentId, tensors.getMlModelTensors().get(3).getResult());
+
+        result = MLPlanExecuteAndReflectAgentRunner
+                .createModelTensors(sessionId, parentInteractionId, "", "");
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        tensors = result.get(0);
+        assertEquals(2, tensors.getMlModelTensors().size());
+        assertEquals(sessionId, tensors.getMlModelTensors().get(0).getResult());
+        assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
     }
 
     @Test
