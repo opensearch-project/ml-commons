@@ -125,16 +125,8 @@ public class MemoryOperationsService {
                     break;
 
                 case NONE:
-                    results
-                        .add(
-                            MemoryResult
-                                .builder()
-                                .memoryId(decision.getId())
-                                .memory(decision.getText())
-                                .event(MemoryEvent.NONE)
-                                .oldMemory(null)
-                                .build()
-                        );
+                    // NONE events are not included in the response
+                    // They represent facts that didn't change and don't need user visibility
                     break;
             }
         }

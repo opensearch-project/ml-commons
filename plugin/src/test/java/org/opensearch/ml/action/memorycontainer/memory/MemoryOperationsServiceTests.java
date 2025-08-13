@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -20,6 +22,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -253,7 +256,73 @@ public class MemoryOperationsServiceTests {
 
         memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
 
-        verify(operationsListener).onResponse(any(List.class));
+        // Verify that NONE events result in an empty response list (no operations to execute)
+        ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(operationsListener).onResponse(resultsCaptor.capture());
+        List<MemoryResult> results = resultsCaptor.getValue();
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    public void testExecuteMemoryOperations_MixedDecisionsExcludesNone() {
+        // Create mixed decisions: ADD, UPDATE, DELETE, and NONE
+        MemoryDecision addDecision = mock(MemoryDecision.class);
+        when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
+        when(addDecision.getText()).thenReturn("New fact");
+
+        MemoryDecision updateDecision = mock(MemoryDecision.class);
+        when(updateDecision.getEvent()).thenReturn(MemoryEvent.UPDATE);
+        when(updateDecision.getId()).thenReturn("memory-2");
+        when(updateDecision.getText()).thenReturn("Updated fact");
+        when(updateDecision.getOldMemory()).thenReturn("Old fact");
+
+        MemoryDecision deleteDecision = mock(MemoryDecision.class);
+        when(deleteDecision.getEvent()).thenReturn(MemoryEvent.DELETE);
+        when(deleteDecision.getId()).thenReturn("memory-3");
+        when(deleteDecision.getText()).thenReturn("Deleted fact");
+
+        MemoryDecision noneDecision = mock(MemoryDecision.class);
+        when(noneDecision.getEvent()).thenReturn(MemoryEvent.NONE);
+        when(noneDecision.getId()).thenReturn("memory-4");
+        when(noneDecision.getText()).thenReturn("Unchanged fact");
+
+        List<MemoryDecision> decisions = Arrays.asList(addDecision, updateDecision, deleteDecision, noneDecision);
+        String indexName = "memory-index";
+        String sessionId = "session-123";
+        User user = null;
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getAgentId()).thenReturn("agent-123");
+        when(input.getTags()).thenReturn(new HashMap<>());
+        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(false);
+        BulkItemResponse addItem = mock(BulkItemResponse.class);
+        when(addItem.getOpType()).thenReturn(org.opensearch.action.DocWriteRequest.OpType.INDEX);
+        when(addItem.isFailed()).thenReturn(false);
+        when(addItem.getId()).thenReturn("new-memory-id");
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { addItem });
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+
+        // Verify that only ADD, UPDATE, DELETE are included in results (not NONE)
+        ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(operationsListener).onResponse(resultsCaptor.capture());
+        List<MemoryResult> results = resultsCaptor.getValue();
+
+        // Should have 3 results (ADD, UPDATE, DELETE) but not NONE
+        assertEquals(3, results.size());
+
+        // Verify the events in the results
+        assertEquals(MemoryEvent.ADD, results.get(0).getEvent());
+        assertEquals(MemoryEvent.UPDATE, results.get(1).getEvent());
+        assertEquals(MemoryEvent.DELETE, results.get(2).getEvent());
     }
 
     @Test

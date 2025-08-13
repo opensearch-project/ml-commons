@@ -383,20 +383,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.utils.ParseUtils',
         'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
         'org.opensearch.ml.jobs.processors.MLJobProcessor',
-        // Memory container related exclusions
         'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction.*',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction.*',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction.*',
-        'org.opensearch.ml.rest.RestMLAddMemoriesAction',
-        'org.opensearch.ml.rest.RestMLSearchMemoriesAction',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
-        'org.opensearch.ml.rest.RestMLUpdateMemoryAction',
-        'org.opensearch.ml.utils.MemorySearchQueryBuilder'
+        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*'
 ]
 
 jacocoTestCoverageVerification {
