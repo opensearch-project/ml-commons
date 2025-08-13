@@ -128,7 +128,7 @@ public interface IndexInsightTask {
     default void checkPrerequisitesAndRun(String targetIndex, String tenantId, ActionListener<IndexInsight> listener) {
         List<MLIndexInsightType> prerequisites = getPrerequisites();
         if (prerequisites.isEmpty()) {
-            runTaskLogic(targetIndex, tenantId, listener);
+            runTask(targetIndex, tenantId, listener);
             return;
         }
 
@@ -144,7 +144,7 @@ public interface IndexInsightTask {
     ) {
         if (index >= prerequisites.size()) {
             // All prerequisites satisfied, run current task
-            runTaskLogic(storageIndex, tenantId, listener);
+            runTask(storageIndex, tenantId, listener);
             return;
         }
 
@@ -315,7 +315,7 @@ public interface IndexInsightTask {
     /**
      * Run the specific task logic (to be implemented by each task)
      */
-    void runTaskLogic(String targetIndex, String tenantId, ActionListener<IndexInsight> listener);
+    void runTask(String targetIndex, String tenantId, ActionListener<IndexInsight> listener);
 
     /**
      * Create prerequisite task instance (to be implemented by each task)

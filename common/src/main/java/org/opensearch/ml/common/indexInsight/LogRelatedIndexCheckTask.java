@@ -100,7 +100,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             collectSampleDocString(ActionListener.wrap(sampleDocs -> {

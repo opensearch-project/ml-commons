@@ -65,7 +65,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic(String targetIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    public void runTask(String targetIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             collectStatisticalData(targetIndex, listener);

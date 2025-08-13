@@ -20,7 +20,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
@@ -53,7 +52,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private final Client client;
     private final ClusterService clusterService;
     private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
-    private Map<String, Object> fieldDescriptions;
 
     public FieldDescriptionTask(String indexName, Client client, ClusterService clusterService) {
         this.indexName = indexName;
@@ -63,13 +61,18 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTaskLogic(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         status = IndexInsightTaskStatus.GENERATING;
         try {
-            String statisticalContent = getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA);
-            getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
-                batchProcessFields(statisticalContent, agentId, storageIndex, listener);
-            }, listener::onFailure));
+            getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA, ActionListener.wrap(statisticalContent -> {
+                getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
+                    batchProcessFields(statisticalContent, agentId, storageIndex, listener);
+                }, listener::onFailure));
+            }, e -> {
+                log.error("Failed to get statistical content for index {}", indexName, e);
+                saveFailedStatus(storageIndex);
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
             log.error("Failed to execute field description task for index {}", indexName, e);
             saveFailedStatus(storageIndex);
@@ -107,24 +110,17 @@ public class FieldDescriptionTask implements IndexInsightTask {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
     }
 
-    public Map<String, Object> getFieldDescriptions() {
-        return fieldDescriptions;
-    }
-
-    private String getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType) {
+    private void getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType, ActionListener<String> listener) {
         String docId = generateDocId(indexName, taskType);
         GetRequest getRequest = new GetRequest(storageIndex, docId);
 
-        try {
-            GetResponse response = client.get(getRequest).actionGet();
-            if (response.isExists()) {
-                return response.getSourceAsMap().get("content").toString();
-            }
-            return "";
-        } catch (Exception e) {
+        client.get(getRequest, ActionListener.wrap(response -> {
+            String content = response.isExists() ? response.getSourceAsMap().get("content").toString() : "";
+            listener.onResponse(content);
+        }, e -> {
             log.warn("Failed to get insight content for {} task of index {} from container {}", taskType, indexName, storageIndex, e);
-            return "";
-        }
+            listener.onResponse("");
+        }));
     }
 
     private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
@@ -143,7 +139,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
     private void batchProcessFields(String statisticalContent, String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
-        if (mappingSource == null) {
+        if (mappingSource == null || mappingSource.isEmpty()) {
             log.error("No mapping properties found for index: {}", indexName);
             saveFailedStatus(storageIndex);
             return;
@@ -154,7 +150,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
         if (allFields.isEmpty()) {
             log.warn("No fields found for index: {}", indexName);
-            fieldDescriptions = Collections.emptyMap();
             saveResult("", storageIndex, ActionListener.wrap(insight -> {
                 log.info("Empty field description completed for: {}", indexName);
                 listener.onResponse(insight);
@@ -168,20 +163,18 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
         List<List<String>> batches = createBatches(allFields, BATCH_SIZE);
         CountDownLatch countDownLatch = new CountDownLatch(batches.size());
-        ConcurrentHashMap<String, Object> resultsMap = new ConcurrentHashMap<>();
+        Map<String, Object> resultsMap = new ConcurrentHashMap<>();
         AtomicBoolean hasErrors = new AtomicBoolean(false);
-        AtomicBoolean isCompleted = new AtomicBoolean(false);
 
         ActionListener<Map<String, Object>> batchListener = ActionListener.wrap(batchResult -> {
             if (batchResult != null) {
                 resultsMap.putAll(batchResult);
             }
             countDownLatch.countDown();
-            if (countDownLatch.getCount() == 0 && isCompleted.compareAndSet(false, true)) {
+            if (countDownLatch.getCount() == 0) {
                 // All-or-nothing strategy: only save results if ALL batches succeed
                 // If any batch fails, the entire task is marked as failed and no partial results are saved
                 if (!hasErrors.get()) {
-                    fieldDescriptions = resultsMap;
                     saveResult(gson.toJson(resultsMap), storageIndex, ActionListener.wrap(insight -> {
                         log.info("Field description completed for: {}", indexName);
                         listener.onResponse(insight);
@@ -199,7 +192,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             countDownLatch.countDown();
             hasErrors.set(true);
             log.error("Batch processing failed for index {}: {}", indexName, e.getMessage());
-            if (countDownLatch.getCount() == 0 && isCompleted.compareAndSet(false, true)) {
+            if (countDownLatch.getCount() == 0) {
                 saveFailedStatus(storageIndex);
                 listener.onFailure(new Exception("Batch processing failed"));
             }
