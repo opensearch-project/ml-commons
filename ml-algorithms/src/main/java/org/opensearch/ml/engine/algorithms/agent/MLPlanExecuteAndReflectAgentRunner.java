@@ -618,7 +618,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             String toolDescription = entry.getValue().getDescription();
             toolsPrompt.append(String.format("Tool %d - %s: %s\n\n", ++toolNumber, toolName, toolDescription));
         }
-        toolsPrompt.append("No other tools are available. Do not invent tools. Only use tools for the plan.\n\n");
+        toolsPrompt.append("No other tools are available. Do not invent tools. Only use tools to create the plan.\n\n");
         allParams.put(DEFAULT_PROMPT_TOOLS_FIELD, toolsPrompt.toString());
         populatePrompt(allParams);
         cleanUpResource(tools);

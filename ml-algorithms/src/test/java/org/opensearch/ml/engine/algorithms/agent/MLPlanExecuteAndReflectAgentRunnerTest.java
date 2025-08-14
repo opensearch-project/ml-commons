@@ -578,7 +578,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             "In this environment, you have access to the tools listed below. Use these tools to create your plan, and do not reference or use any tools not listed here.\n"
                 + "Tool 1 - tool1: description1\n"
                 + "\n"
-                + "No other tools are available. Do not invent tools. Only use tools for the plan.\n"
+                + "No other tools are available. Do not invent tools. Only use tools to create the plan.\n"
                 + "\n",
             testParams.get(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD)
         );
