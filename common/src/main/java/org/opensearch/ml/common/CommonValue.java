@@ -113,6 +113,9 @@ public class CommonValue {
 
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
-    public static final String FIXED_INDEX_INSIGHT_CONTAINER_ID = "index_insight_container";
+    public static final String FIXED_INDEX_INSIGHT_CONTAINER_ID = "index_insight_container"; // This is the doc id of the container doc in
+                                                                                             // the system index. It defines where we store
+                                                                                             // the index insight, it should be always
+                                                                                             // single one.
     public static final String INDEX_INSIGHT_AGENT_NAME = "os_index_insight_agent";
 }

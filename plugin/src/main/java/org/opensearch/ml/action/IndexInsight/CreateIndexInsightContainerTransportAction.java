@@ -92,6 +92,8 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
             .indexName(mlIndexInsightContainerCreateRequest.getIndexName())
             .tenantId(tenantId)
             .build();
+        // The container is a doc in system index, and it defines where we store the index insight. The index insight is an user index
+        // inside user's cluster.
         checkWhetherExist(indexInsightContainer, ActionListener.wrap(r -> {
             indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
                 initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getIndexName(), ActionListener.wrap(r2 -> {
@@ -103,27 +105,7 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
                 }));
             }, listener::onFailure));
         }, listener::onFailure));
-        /*
-        initMLIndexInsightContainerIndex(ActionListener.wrap(r -> {
-            checkWhetherExist(indexInsightContainer, ActionListener.wrap(r0 -> {
-                indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
-                    initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getIndexName(), ActionListener.wrap(r2 -> {
-                        log.info("Successfully created index insight container");
-                        listener.onResponse(new AcknowledgedResponse(true));
-                    }, e -> {
-                        log.error("Failed to create index insight container", e);
-                        listener.onFailure(e);
-                    }));
-                }, listener::onFailure));
-            }, listener::onFailure));
-        }, listener::onFailure));
-        
-         */
 
-    }
-
-    private void initMLIndexInsightContainerIndex(ActionListener<Boolean> listener) {
-        mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener);
     }
 
     private void checkWhetherExist(IndexInsightContainer indexInsightContainer, ActionListener<Boolean> listener) {
@@ -143,7 +125,9 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         log.error("Failed to index index insight container", cause);
                         if (cause.getCause() instanceof IndexNotFoundException) {
-                            mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener);
+                            mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener); // If the container index
+                                                                                                             // hasn't initialized,
+                                                                                                             // initialize it.
                             return;
                         }
                         listener.onFailure(cause);
