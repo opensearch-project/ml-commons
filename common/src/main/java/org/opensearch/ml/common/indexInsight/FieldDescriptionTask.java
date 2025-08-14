@@ -280,7 +280,10 @@ public class FieldDescriptionTask implements IndexInsightTask {
             }
         }
 
-        prompt.append("For each field listed above, provide a brief description of what it contains and its purpose.\\n");
+        prompt
+            .append(
+                "For each field listed above, provide a brief description of what it contains and its purpose. The description should not mention specific values from any example documents or include specific examples.\\n"
+            );
         prompt.append("For each field, provide description in the following format EXACTLY:\\n");
         prompt.append("field_name: description");
 
