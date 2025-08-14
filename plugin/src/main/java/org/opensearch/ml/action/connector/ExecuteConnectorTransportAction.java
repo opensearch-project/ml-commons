@@ -26,7 +26,9 @@ import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -43,6 +45,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
     EncryptorImpl encryptor;
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public ExecuteConnectorTransportAction(
@@ -53,7 +56,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         ScriptService scriptService,
         NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        EncryptorImpl encryptor
+        EncryptorImpl encryptor,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLConnectorDeleteRequest::new);
         this.client = client;
@@ -62,6 +66,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.encryptor = encryptor;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -70,7 +75,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         String connectorId = executeConnectorRequest.getConnectorId();
         String connectorAction = ConnectorAction.ActionType.EXECUTE.name();
 
-        if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+        if (MLIndicesHandler
+            .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.

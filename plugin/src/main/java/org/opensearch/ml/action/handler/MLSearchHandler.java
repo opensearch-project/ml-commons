@@ -40,6 +40,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -59,6 +60,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLSearchHandler {
     private final Client client;
+    private final boolean isMultiTenancyEnabled;
     private NamedXContentRegistry xContentRegistry;
 
     private ModelAccessControlHelper modelAccessControlHelper;
@@ -69,12 +71,14 @@ public class MLSearchHandler {
         Client client,
         NamedXContentRegistry xContentRegistry,
         ModelAccessControlHelper modelAccessControlHelper,
-        ClusterService clusterService
+        ClusterService clusterService,
+        boolean isMultiTenancyEnabled
     ) {
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
+        this.isMultiTenancyEnabled = isMultiTenancyEnabled;
     }
 
     /**
@@ -131,7 +135,7 @@ public class MLSearchHandler {
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
             if (modelAccessControlHelper.skipModelAccessControl(user)
-                || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
+                || !MLIndicesHandler.doesMultiTenantIndexExist(clusterService, isMultiTenancyEnabled, CommonValue.ML_MODEL_GROUP_INDEX)) {
 
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()
