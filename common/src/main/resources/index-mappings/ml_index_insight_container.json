@@ -5,6 +5,9 @@
   "properties": {
     "index_name": {
       "type": "keyword"
+    },
+    "tenantId": {
+      "type": "keyword"
     }
   }
 }
