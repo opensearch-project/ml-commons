@@ -18,6 +18,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -30,8 +31,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateAction;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -44,8 +45,13 @@ import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * This action will put a container object into system index, then
+ * Create an index to store index insight using the provided index name if not exists.
+ */
+
 @Log4j2
-public class PutIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
+public class CreateIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
     private Client client;
     private final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
@@ -53,7 +59,7 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
     private final MLIndicesHandler mlIndicesHandler;
 
     @Inject
-    public PutIndexInsightContainerTransportAction(
+    public CreateIndexInsightContainerTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         NamedXContentRegistry xContentRegistry,
@@ -62,7 +68,7 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
         SdkClient sdkClient,
         MLIndicesHandler mlIndicesHandler
     ) {
-        super(MLIndexInsightContainerPutAction.NAME, transportService, actionFilters, MLIndexInsightContainerPutRequest::new);
+        super(MLIndexInsightContainerCreateAction.NAME, transportService, actionFilters, MLIndexInsightContainerCreateRequest::new);
         this.client = client;
 
         this.xContentRegistry = xContentRegistry;
@@ -73,21 +79,22 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
-        MLIndexInsightContainerPutRequest mlIndexInsightContainerPutRequest = MLIndexInsightContainerPutRequest.fromActionRequest(request);
-        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerPutRequest.getTenantId(), listener)) {
+        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = MLIndexInsightContainerCreateRequest
+            .fromActionRequest(request);
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerCreateRequest.getTenantId(), listener)) {
             return;
         }
 
-        String tenantId = mlIndexInsightContainerPutRequest.getTenantId();
+        String tenantId = mlIndexInsightContainerCreateRequest.getTenantId();
         IndexInsightContainer indexInsightContainer = IndexInsightContainer
             .builder()
-            .indexName(mlIndexInsightContainerPutRequest.getIndexName())
+            .indexName(mlIndexInsightContainerCreateRequest.getIndexName())
             .tenantId(tenantId)
             .build();
         initMLIndexInsightContainerIndex(ActionListener.wrap(r -> {
             checkWhetherExist(indexInsightContainer, ActionListener.wrap(r0 -> {
                 indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
-                    initIndexInsightIndex(mlIndexInsightContainerPutRequest.getIndexName(), ActionListener.wrap(r2 -> {
+                    initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getIndexName(), ActionListener.wrap(r2 -> {
                         log.info("Successfully created index insight container");
                         listener.onResponse(new AcknowledgedResponse(true));
                     }, e -> {
@@ -191,31 +198,28 @@ public class PutIndexInsightContainerTransportAction extends HandledTransportAct
         // Use keyword type for ID fields that need exact matching
         properties.put(INDEX_NAME_FIELD, Map.of("type", "keyword"));
         properties.put(CONTENT_FIELD, Map.of("type", "text"));
-        properties.put(STATUS_FIELD, Map.of("type", "text"));
+        properties.put(STATUS_FIELD, Map.of("type", "keyword"));
         properties.put(TASK_TYPE_FIELD, Map.of("type", "text")); // Keep as text for full-text search
         properties.put(LAST_UPDATE_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
         indexMappings.put("properties", properties);
         client
             .admin()
             .indices()
-            .create(
-                new org.opensearch.action.admin.indices.create.CreateIndexRequest(indexName).settings(indexSettings).mapping(indexMappings),
-                ActionListener.wrap(response -> {
-                    if (response.isAcknowledged()) {
-                        log.info("Successfully created index insight data index: {}", indexName);
-                        listener.onResponse(true);
-                    } else {
-                        listener.onFailure(new RuntimeException("Failed to create index insight data index: " + indexName));
-                    }
-                }, e -> {
-                    if (e instanceof org.opensearch.ResourceAlreadyExistsException) {
-                        log.info("index insight data index already exists: {}", indexName);
-                        listener.onResponse(true);
-                    } else {
-                        log.error("Error creating index insight data index: {}", indexName, e);
-                        listener.onFailure(e);
-                    }
-                })
-            );
+            .create(new CreateIndexRequest(indexName).settings(indexSettings).mapping(indexMappings), ActionListener.wrap(response -> {
+                if (response.isAcknowledged()) {
+                    log.info("Successfully created index insight data index: {}", indexName);
+                    listener.onResponse(true);
+                } else {
+                    listener.onFailure(new RuntimeException("Failed to create index insight data index: " + indexName));
+                }
+            }, e -> {
+                if (e instanceof org.opensearch.ResourceAlreadyExistsException) {
+                    log.info("index insight data index already exists: {}", indexName);
+                    listener.onResponse(true);
+                } else {
+                    log.error("Error creating index insight data index: {}", indexName, e);
+                    listener.onFailure(e);
+                }
+            }));
     }
 }

@@ -24,16 +24,16 @@ import lombok.Getter;
 
 @Builder
 @Getter
-public class MLIndexInsightContainerPutRequest extends ActionRequest {
+public class MLIndexInsightContainerCreateRequest extends ActionRequest {
     private String indexName;
     private String tenantId;
 
-    public MLIndexInsightContainerPutRequest(String indexName, String tenantId) {
+    public MLIndexInsightContainerCreateRequest(String indexName, String tenantId) {
         this.indexName = indexName;
         this.tenantId = tenantId;
     }
 
-    public MLIndexInsightContainerPutRequest(StreamInput in) throws IOException {
+    public MLIndexInsightContainerCreateRequest(StreamInput in) throws IOException {
         super(in);
         this.indexName = in.readString();
         this.tenantId = in.readOptionalString();
@@ -46,18 +46,18 @@ public class MLIndexInsightContainerPutRequest extends ActionRequest {
         out.writeOptionalString(tenantId);
     }
 
-    public static MLIndexInsightContainerPutRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLIndexInsightContainerPutRequest) {
-            return (MLIndexInsightContainerPutRequest) actionRequest;
+    public static MLIndexInsightContainerCreateRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLIndexInsightContainerCreateRequest) {
+            return (MLIndexInsightContainerCreateRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLIndexInsightContainerPutRequest(input);
+                return new MLIndexInsightContainerCreateRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightContainerPutRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightContainerCreateRequest", e);
         }
 
     }

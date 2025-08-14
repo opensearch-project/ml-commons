@@ -35,7 +35,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerPutRequest;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
@@ -47,7 +47,7 @@ import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
-public class PutIndexInsightContainerTransportActionTests extends OpenSearchTestCase {
+public class CreateIndexInsightContainerTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
@@ -87,17 +87,21 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     @Mock
     private Throwable throwable;
 
-    PutIndexInsightContainerTransportAction putIndexInsightContainerTransportAction;
-    MLIndexInsightContainerPutRequest mlIndexInsightContainerPutRequest;
+    CreateIndexInsightContainerTransportAction createIndexInsightContainerTransportAction;
+    MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest;
     ThreadContext threadContext;
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlIndexInsightContainerPutRequest = MLIndexInsightContainerPutRequest.builder().indexName("test_index_name").tenantId(null).build();
+        mlIndexInsightContainerCreateRequest = MLIndexInsightContainerCreateRequest
+            .builder()
+            .indexName("test_index_name")
+            .tenantId(null)
+            .build();
 
-        putIndexInsightContainerTransportAction = spy(
-            new PutIndexInsightContainerTransportAction(
+        createIndexInsightContainerTransportAction = spy(
+            new CreateIndexInsightContainerTransportAction(
                 transportService,
                 actionFilters,
                 xContentRegistry,
@@ -117,7 +121,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testPutIndexInsightContainer_Successful() {
+    public void testCreateIndexInsightContainer_Successful() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -153,7 +157,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        putIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerPutRequest, actionListener);
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
 
         ArgumentCaptor<AcknowledgedResponse> argumentCaptor = ArgumentCaptor.forClass(AcknowledgedResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -162,7 +166,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testPutIndexInsightContainer_ContainerNotExist() {
+    public void testCreateIndexInsightContainer_ContainerNotExist() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -198,7 +202,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        putIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerPutRequest, actionListener);
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -210,7 +214,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testPutIndexInsightContainer_FailToIndexContainer() {
+    public void testCreateIndexInsightContainer_FailToIndexContainer() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -246,7 +250,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        putIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerPutRequest, actionListener);
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -255,7 +259,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testPutIndexInsightContainer_IndexAlreadyCreated() {
+    public void testCreateIndexInsightContainer_IndexAlreadyCreated() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -291,7 +295,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        putIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerPutRequest, actionListener);
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
 
         ArgumentCaptor<AcknowledgedResponse> argumentCaptor = ArgumentCaptor.forClass(AcknowledgedResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -300,7 +304,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testPutIndexInsightContainer_FailToCreateIndexContainer() {
+    public void testCreateIndexInsightContainer_FailToCreateIndexContainer() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -336,7 +340,7 @@ public class PutIndexInsightContainerTransportActionTests extends OpenSearchTest
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        putIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerPutRequest, actionListener);
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
