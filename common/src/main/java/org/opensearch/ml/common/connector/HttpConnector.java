@@ -358,7 +358,7 @@ public class HttpConnector extends AbstractConnector {
         return (T) parameters.get("http_body");
     }
 
-    private String removeMissingParameterFields(String payload, Map<String, String> params) {
+    public String removeMissingParameterFields(String payload, Map<String, String> params) {
         // Match: "xxx": "${parameters.yyy}" or "xxx": {parameters.yyy}
         Pattern pattern = Pattern.compile(
                 "\\s*\"[^\"]+\"\\s*:\\s*(\"?\\$?\\{parameters\\.([^}]+)\\}\"?)\\s*,?"

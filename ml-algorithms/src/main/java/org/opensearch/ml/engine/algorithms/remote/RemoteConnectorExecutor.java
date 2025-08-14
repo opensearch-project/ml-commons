@@ -5,23 +5,20 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+//import static org.opensearch.ml.common.dataset.SearchQueryInputDataset.xContentRegistry;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -33,13 +30,12 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.*;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -50,7 +46,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+//import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -200,22 +196,30 @@ public interface RemoteConnectorExecutor {
 
         MLAlgoParams algoParams = mlInput.getParameters();
         if (algoParams != null) {
-            Map<String, String> parametersMap = new HashMap<>();
-            String algoParamsStr = algoParams.toString();
-            Pattern pattern = Pattern.compile("\\(([^)]+)\\)");
-            Matcher matcher = pattern.matcher(algoParamsStr);
-            if (matcher.find()) {
-                String bracketContent = matcher.group(1);
-                pattern = Pattern.compile("(\\w+)=([^,\\s]+)");
-                matcher = pattern.matcher(bracketContent);
-                while (matcher.find()) {
-                    String fieldName = matcher.group(1);
-                    String fieldValue = matcher.group(2);
-                    parametersMap.put(fieldName, fieldValue);
-                }
+            try {
+                Map<String, String> parametersMap = getParams(mlInput);
+                parameters.putAll(parametersMap);
+            } catch (IOException e) {
+                actionListener.onFailure(e);
             }
-            parameters.putAll(parametersMap);
         }
+//        if (algoParams != null) {
+//            Map<String, String> parametersMap = new HashMap<>();
+//            String algoParamsStr = algoParams.toString();
+//            Pattern pattern = Pattern.compile("\\(([^)]+)\\)");
+//            Matcher matcher = pattern.matcher(algoParamsStr);
+//            if (matcher.find()) {
+//                String bracketContent = matcher.group(1);
+//                pattern = Pattern.compile("(\\w+)=([^,\\s]+)");
+//                matcher = pattern.matcher(bracketContent);
+//                while (matcher.find()) {
+//                    String fieldName = matcher.group(1);
+//                    String fieldValue = matcher.group(2);
+//                    parametersMap.put(fieldName, fieldValue);
+//                }
+//            }
+//            parameters.putAll(parametersMap);
+//        }
 
         RemoteInferenceInputDataSet inputData = processInput(action, mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {
@@ -255,6 +259,23 @@ public interface RemoteConnectorExecutor {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
         }
+    }
+
+    default Map<String, String> getParams(MLInput mlInput) throws IOException {
+        Map<String, String> result = new HashMap<>();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        mlInput.getParameters().toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.flush();
+        String json = builder.toString();
+
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> tempMap = mapper.readValue(json, Map.class);
+
+        HashMap<String, String> paramMap = new HashMap<>();
+        for (Map.Entry<String, Object> entry : tempMap.entrySet()) {
+            paramMap.put(entry.getKey(), entry.getValue() != null ? entry.getValue().toString() : null);
+        }
+        return paramMap;
     }
 
     default BackoffPolicy getRetryBackoffPolicy(ConnectorClientConfig connectorClientConfig) {

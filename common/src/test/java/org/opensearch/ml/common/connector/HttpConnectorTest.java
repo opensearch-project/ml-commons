@@ -407,4 +407,54 @@ public class HttpConnectorTest {
         Assert.assertEquals("test_tenant", connector.getTenantId());
     }
 
+    @Test
+    public void removeMissingParameterFields() {
+        HttpConnector connector = createHttpConnector();
+        Map<String, String> params = new HashMap<>();
+        params.put("input", "test value");
+        params.put("sparseEmbeddingFormat", "WORD");
+        params.put("content_type", "query");
+
+        String payload = "{\"input\": ${parameters.input}, \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\" }}";
+        String expected = "{\"input\": ${parameters.input}, \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\" }}";
+        String result = connector.removeMissingParameterFields(payload, params);
+        Assert.assertEquals(expected, result);
+    }
+
+    @Test
+    public void removeMissingParameterFields_MissingParameters() {
+        HttpConnector connector = createHttpConnector();
+        Map<String, String> params = new HashMap<>();
+        params.put("input", "test value");
+
+        String payload = "{\"input\": ${parameters.input}, \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\"}}";
+        String expected = "{\"input\": ${parameters.input}, \"parameters\": {}}";
+        String result = connector.removeMissingParameterFields(payload, params);
+        Assert.assertEquals(expected, result);
+    }
+
+    @Test
+    public void removeMissingParameterFields_MissingAll() {
+        HttpConnector connector = createHttpConnector();
+        Map<String, String> params = new HashMap<>();
+
+        String payload = "{\"input\": ${parameters.input}, \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\"}}";
+        String expected = "{ \"parameters\": {}}";
+        String result = connector.removeMissingParameterFields(payload, params);
+        Assert.assertEquals(expected, result);
+    }
+
+    @Test
+    public void removeMissingParameterFields_Nest() {
+        HttpConnector connector = createHttpConnector();
+        Map<String, String> params = new HashMap<>();
+        params.put("input", "test value");
+
+        // Case 1: Payload with valid parameter placeholders
+        String payload = "{\"input\": \"${parameters.input}\", \"parameters\": {\"nested\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\"}}}";
+        String expected = "{\"input\": \"${parameters.input}\", \"parameters\": {\"nested\": {}}}";
+        String result = connector.removeMissingParameterFields(payload, params);
+        Assert.assertEquals(expected, result);
+    }
+
 }

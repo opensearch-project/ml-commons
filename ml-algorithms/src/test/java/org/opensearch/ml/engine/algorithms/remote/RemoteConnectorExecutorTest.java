@@ -17,7 +17,9 @@ import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Assert;
@@ -39,6 +41,8 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -168,5 +172,64 @@ public class RemoteConnectorExecutorTest {
                 () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
+    }
+
+    @Test
+    public void executeGetParams_MissingParameter() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+                .builder()
+                .parameters(Map.of("input", "${parameters.input}"))
+                .actionType(PREDICT)
+                .build();
+        String actionType = inputDataSet.getActionType().toString();
+        AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
+                .builder()
+                .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+                .embeddingContentType(null)
+                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).parameters(inputParams).inputDataset(inputDataSet).build();
+
+        try {
+            Map<String, String> paramsMap = executor.getParams(mlInput);
+            Map<String, String> expectedMap = new HashMap<>();
+            expectedMap.put("sparse_embedding_format", "WORD");
+            Assert.assertEquals(expectedMap, paramsMap);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void executeGetParams_PassingParameter() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+                .builder()
+                .parameters(Map.of("input", "${parameters.input}"))
+                .actionType(PREDICT)
+                .build();
+        String actionType = inputDataSet.getActionType().toString();
+        AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
+                .builder()
+                .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+                .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.PASSAGE)
+                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).parameters(inputParams).inputDataset(inputDataSet).build();
+
+        try {
+            Map<String, String> paramsMap = executor.getParams(mlInput);
+            Map<String, String> expectedMap = new HashMap<>();
+            expectedMap.put("sparse_embedding_format", "WORD");
+            expectedMap.put("content_type", "PASSAGE");
+            Assert.assertEquals(expectedMap, paramsMap);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
