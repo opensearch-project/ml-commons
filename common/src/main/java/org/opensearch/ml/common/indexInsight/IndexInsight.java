@@ -57,9 +57,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
             status = IndexInsightTaskStatus.fromString(input.readOptionalString());
         }
         taskType = MLIndexInsightType.fromString(input.readOptionalString());
-
-        lastUpdatedTime = Instant.ofEpochMilli(input.readLong());
-
+        lastUpdatedTime = input.readInstant();
     }
 
     public static IndexInsight parse(XContentParser parser) throws IOException {

@@ -98,11 +98,11 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-                                    String targetIndex = indexInsightContainer.getIndexName();
+                                    String storageIndex = indexInsightContainer.getIndexName();
                                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                                         ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
                                             .runBefore(actionListener, () -> context.restore());
-                                        executeTaskAndReturn(mlIndexInsightGetRequest, targetIndex, tenantId, wrappedListener);
+                                        executeTaskAndReturn(mlIndexInsightGetRequest, storageIndex, tenantId, wrappedListener);
                                     } catch (Exception e) {
                                         log.error("fail to get index insight", e);
                                         actionListener.onFailure(e);
@@ -124,12 +124,12 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
 
     private void executeTaskAndReturn(
         MLIndexInsightGetRequest request,
-        String targetIndex,
+        String storageIndex,
         String tenantId,
         ActionListener<MLIndexInsightGetResponse> listener
     ) {
         IndexInsightTask task = createTask(request);
-        task.execute(targetIndex, tenantId, ActionListener.wrap(insight -> {
+        task.execute(storageIndex, tenantId, ActionListener.wrap(insight -> {
             // Task completed, return result directly
             listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(insight).build());
         }, listener::onFailure));
@@ -138,26 +138,11 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
     IndexInsightTask createTask(MLIndexInsightGetRequest request) {
         switch (request.getTargetIndexInsight()) {
             case STATISTICAL_DATA:
-                try {
-                    return new StatisticalDataTask(request.getIndexName(), client);
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("Failed to create statistical data task for index: " + request.getIndexName(), e);
-                }
+                return new StatisticalDataTask(request.getIndexName(), client);
             case FIELD_DESCRIPTION:
-                try {
-                    return new FieldDescriptionTask(request.getIndexName(), client, clusterService);
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("Failed to get mapping for index: " + request.getIndexName(), e);
-                }
+                return new FieldDescriptionTask(request.getIndexName(), client);
             case LOG_RELATED_INDEX_CHECK:
-                try {
-                    return new LogRelatedIndexCheckTask(request.getIndexName(), client, clusterService);
-                } catch (Exception e) {
-                    throw new IllegalArgumentException(
-                        "Failed to create log related index check task for index: " + request.getIndexName(),
-                        e
-                    );
-                }
+                return new LogRelatedIndexCheckTask(request.getIndexName(), client);
             default:
                 throw new IllegalArgumentException("Unsupported task type: " + request.getTargetIndexInsight());
         }

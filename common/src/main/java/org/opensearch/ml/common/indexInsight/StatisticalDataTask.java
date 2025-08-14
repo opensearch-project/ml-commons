@@ -95,10 +95,6 @@ public class StatisticalDataTask implements IndexInsightTask {
         return Collections.emptyList();
     }
 
-    public SearchHit[] getSampleDocuments() {
-        return sampleDocuments;
-    }
-
     private GetMappingsRequest buildGetMappingRequest(String indexName) {
         String[] indices = new String[] { indexName };
         GetMappingsRequest getMappingsRequest = new GetMappingsRequest();
@@ -143,17 +139,6 @@ public class StatisticalDataTask implements IndexInsightTask {
 
         }, listener::onFailure));
 
-    }
-
-    private String generateStatisticalContent() {
-        StringBuilder content = new StringBuilder();
-        content.append("Sample documents count: ").append(sampleDocuments.length).append("\\n");
-
-        for (int i = 0; i < sampleDocuments.length; i++) {
-            content.append("Sample document ").append(i + 1).append(": ").append(sampleDocuments[i].getSourceAsString()).append("\\n");
-        }
-
-        return content.toString();
     }
 
     @Override

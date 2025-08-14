@@ -8,7 +8,6 @@ package org.opensearch.ml.common.indexInsight;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_UPDATE_INTERVAL;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -23,9 +22,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.transport.client.Client;
-
-import com.google.common.hash.Hashing;
-import com.jayway.jsonpath.JsonPath;
 
 /**
  * Interface representing an index insight execution task
@@ -68,7 +64,9 @@ public interface IndexInsightTask {
                 } else {
                     // If still generating and not timeout, task is already running
                     listener
-                        .onFailure(new OpenSearchStatusException("Index insight is being generated, please wait...", RestStatus.ACCEPTED));
+                        .onFailure(
+                            new OpenSearchStatusException("Index insight is being generated, please wait...", RestStatus.TOO_MANY_REQUESTS)
+                        );
                 }
                 break;
             case COMPLETED:
@@ -180,25 +178,23 @@ public interface IndexInsightTask {
     }
 
     default String generateDocId() {
-        return generateDocId(getSourceIndex(), getTaskType());
-    }
-
-    default String generateDocId(String sourceIndex, MLIndexInsightType taskType) {
-        String combined = sourceIndex + "_" + taskType.toString();
-        return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
+        return IndexInsightUtils.generateDocId(getSourceIndex(), getTaskType());
     }
 
     /**
-     * Auto-detects LLM response format and extracts the response text.
+     * Get insight content from storage for a specific task type
      */
-    default String extractModelResponse(Map<String, Object> data) {
-        if (data.containsKey("choices")) {
-            return JsonPath.read(data, "$.choices[0].message.content");
-        }
-        if (data.containsKey("content")) {
-            return JsonPath.read(data, "$.content[0].text");
-        }
-        return JsonPath.read(data, "$.response");
+    default void getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType, ActionListener<String> listener) {
+        String docId = IndexInsightUtils.generateDocId(getSourceIndex(), taskType);
+        GetRequest getRequest = new GetRequest(storageIndex, docId);
+
+        getClient().get(getRequest, ActionListener.wrap(response -> {
+            String content = response.isExists() ? response.getSourceAsMap().get("content").toString() : "";
+            listener.onResponse(content);
+        }, e -> {
+            // Return empty content on failure instead of propagating error
+            listener.onResponse("");
+        }));
     }
 
     /**

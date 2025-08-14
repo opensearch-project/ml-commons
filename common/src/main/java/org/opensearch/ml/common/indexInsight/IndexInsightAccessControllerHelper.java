@@ -16,19 +16,19 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class IndexInsightAccessControllerHelper {
     // Verify the access by dry run
-    public static void verifyAccessController(Client client, ActionListener<Boolean> actionListener, String targetIndex) {
-        SearchRequest searchRequest = constructSimpleQueryRequest(targetIndex);
+    public static void verifyAccessController(Client client, ActionListener<Boolean> actionListener, String sourceIndex) {
+        SearchRequest searchRequest = constructSimpleQueryRequest(sourceIndex);
         client.search(searchRequest, ActionListener.wrap(r -> { actionListener.onResponse(true); }, e -> {
             log.error("You don't have access to this index");
             actionListener.onFailure(new IllegalArgumentException("You don't have access to this index"));
         }));
     }
 
-    public static SearchRequest constructSimpleQueryRequest(String targetIndex) {
+    public static SearchRequest constructSimpleQueryRequest(String sourceIndex) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(new MatchAllQueryBuilder());
         searchSourceBuilder.size(1);
-        SearchRequest searchRequest = new SearchRequest(targetIndex);
+        SearchRequest searchRequest = new SearchRequest(sourceIndex);
         searchRequest.source(searchSourceBuilder);
         return searchRequest;
     }

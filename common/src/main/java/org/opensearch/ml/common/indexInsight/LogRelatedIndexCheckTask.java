@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.indexInsight;
 
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
@@ -13,20 +14,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.MatchAllQueryBuilder;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -36,7 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.log4j.Log4j2;
 
-/** Check whether the index is log-related for downstream Task：Log-based RCA analysis
+/** Check whether the index is log-related for downstream task：Log-based RCA analysis
 1. Judge whether the index is related to log
 2. Whether there is a column containing the whole log message
 3. Whether there is a column serve as trace id which combine a set of logs into one flow
@@ -47,9 +38,8 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     private final MLIndexInsightType taskType = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
     private final String sourceIndex;
     private final Client client;
-    private final ClusterService clusterService;
 
-    private String sampleDocSting;
+    private String sampleDocString;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String RCA_TEMPLATE =
@@ -88,10 +78,9 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             - Your judgment should be based on both semantics and field patterns (e.g., field names like "message", "log", "trace", "span", etc).
             """;
 
-    public LogRelatedIndexCheckTask(String sourceIndex, Client client, ClusterService clusterService) {
+    public LogRelatedIndexCheckTask(String sourceIndex, Client client) {
         this.sourceIndex = sourceIndex;
         this.client = client;
-        this.clusterService = clusterService;
     }
 
     @Override
@@ -101,7 +90,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 getAgentIdToRun(
                     client,
                     tenantId,
-                    ActionListener.wrap(agentId -> callLLM(agentId, storageIndex, listener), listener::onFailure)
+                    ActionListener.wrap(agentId -> performLogAnalysis(agentId, storageIndex, listener), listener::onFailure)
                 );
             }, listener::onFailure));
         } catch (Exception ex) {
@@ -132,10 +121,6 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         return client;
     }
 
-    public String getSampleDocString() {
-        return sampleDocSting;
-    }
-
     private void collectSampleDocString(ActionListener<String> listener) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
@@ -147,9 +132,9 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                     .stream(searchResponse.getHits().getHits())
                     .map(SearchHit::getSourceAsMap)
                     .toList();
-                sampleDocSting = gson.toJson(samples);
+                sampleDocString = gson.toJson(samples);
                 log.info("Collected sample documents for index: {}", sourceIndex);
-                listener.onResponse(sampleDocSting);
+                listener.onResponse(sampleDocString);
             } catch (Exception e) {
                 log.error("Failed to process sample documents for index: {}", sourceIndex, e);
                 listener.onFailure(e);
@@ -160,31 +145,12 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         }));
     }
 
-    private void callLLM(String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
-        // Build prompt
-        String prompt = RCA_TEMPLATE.replace("{indexName}", sourceIndex).replace("{samples}", sampleDocSting);
+    private void performLogAnalysis(String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
+        String prompt = RCA_TEMPLATE.replace("{indexName}", sourceIndex).replace("{samples}", sampleDocString);
 
-        AgentMLInput agentInput = AgentMLInput
-            .AgentMLInputBuilder()
-            .agentId(agentId)
-            .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
-            .build();
-
-        MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
-
-        client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(mlResp -> {
+        callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {
             try {
-                ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
-                ModelTensors t = out.getMlModelOutputs().get(0);
-                ModelTensor mt = t.getMlModelTensors().get(0);
-                Map<String, Object> data = (Map<String, Object>) mt.getDataAsMap();
-                if (Objects.isNull(data)) {
-                    data = gson.fromJson(mt.getResult(), Map.class);
-                }
-                String text = extractModelResponse(data);
-                Map<String, Object> parsed = parseCheckResponse(text);
-
+                Map<String, Object> parsed = parseCheckResponse(response);
                 saveResult(MAPPER.writeValueAsString(parsed), storageIndex, ActionListener.wrap(insight -> {
                     log.info("Log related check completed for index {}", sourceIndex);
                     listener.onResponse(insight);

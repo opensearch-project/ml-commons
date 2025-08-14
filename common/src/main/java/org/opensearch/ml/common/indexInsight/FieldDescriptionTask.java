@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.indexInsight;
 
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
@@ -13,23 +14,12 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
@@ -48,12 +38,10 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private final MLIndexInsightType taskType = MLIndexInsightType.FIELD_DESCRIPTION;
     private final String sourceIndex;
     private final Client client;
-    private final ClusterService clusterService;
 
-    public FieldDescriptionTask(String sourceIndex, Client client, ClusterService clusterService) {
+    public FieldDescriptionTask(String sourceIndex, Client client) {
         this.sourceIndex = sourceIndex;
         this.client = client;
-        this.clusterService = clusterService;
     }
 
     @Override
@@ -93,19 +81,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
     @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
-    }
-
-    private void getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType, ActionListener<String> listener) {
-        String docId = generateDocId(sourceIndex, taskType);
-        GetRequest getRequest = new GetRequest(storageIndex, docId);
-
-        client.get(getRequest, ActionListener.wrap(response -> {
-            String content = response.isExists() ? response.getSourceAsMap().get("content").toString() : "";
-            listener.onResponse(content);
-        }, e -> {
-            log.warn("Failed to get insight content for {} task of index {} from container {}", taskType, sourceIndex, storageIndex, e);
-            listener.onResponse("");
-        }));
     }
 
     private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
@@ -228,36 +203,16 @@ public class FieldDescriptionTask implements IndexInsightTask {
     ) {
         String prompt = generateBatchPrompt(batchFields, statisticalContent);
 
-        AgentMLInput agentInput = AgentMLInput
-            .AgentMLInputBuilder()
-            .agentId(agentId)
-            .functionName(FunctionName.AGENT)
-            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
-            .build();
-
-        MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
-
-        client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(mlResp -> {
+        callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {
             try {
                 log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), sourceIndex);
-                ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
-                ModelTensors t = out.getMlModelOutputs().get(0);
-                ModelTensor mt = t.getMlModelTensors().get(0);
-                Map<String, Object> data = (Map<String, Object>) mt.getDataAsMap();
-                if (Objects.isNull(data)) {
-                    data = gson.fromJson(mt.getResult(), Map.class);
-                }
-                String response = extractModelResponse(data);
                 Map<String, Object> batchResult = parseFieldDescription(response);
                 listener.onResponse(batchResult);
             } catch (Exception e) {
                 log.error("Error parsing response for batch in index {}: {}", sourceIndex, e.getMessage());
                 listener.onFailure(e);
             }
-        }, e -> {
-            log.error("Failed to call LLM for batch in index {}: {}", sourceIndex, e.getMessage());
-            listener.onFailure(e);
-        }));
+        }, listener::onFailure));
     }
 
     private String generateBatchPrompt(List<String> batchFields, String statisticalContent) {
