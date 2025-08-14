@@ -137,7 +137,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test_index",
             "test content",
             IndexInsightTaskStatus.COMPLETED,
-            MLIndexInsightType.INDEX_DESCRIPTION,
+            MLIndexInsightType.STATISTICAL_DATA,
             Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {
@@ -178,7 +178,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test_index",
             "test content",
             IndexInsightTaskStatus.COMPLETED,
-            MLIndexInsightType.INDEX_DESCRIPTION,
+            MLIndexInsightType.STATISTICAL_DATA,
             Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {
@@ -218,7 +218,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test_index",
             "test content",
             IndexInsightTaskStatus.COMPLETED,
-            MLIndexInsightType.INDEX_DESCRIPTION,
+            MLIndexInsightType.STATISTICAL_DATA,
             Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {

@@ -61,10 +61,12 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
         assertEquals(indexInsight.get("index_name"), "target_index");
         assertEquals(indexInsight.get("status"), "COMPLETED");
         assertEquals(indexInsight.get("task_type"), "STATISTICAL_DATA");
-        assertEquals(
-            indexInsight.get("content"),
-            "{\"mapping\":{\"field1\":{\"type\":\"long\"},\"field2\":{\"type\":\"keyword\"}},\"distribution\":{\"field1\":{\"min_value\":200.0,\"unique_count\":1.0,\"unique_terms\":[200.0],\"max_value\":200.0},\"example_docs\":[{\"field1\":200,\"field2\":\"text\"}],\"field2\":{\"unique_count\":1.0,\"unique_terms\":[\"text\"]}}}"
-        );
+        Map<String, Object> targetContent = gson
+            .fromJson(
+                "{\"mapping\":{\"field1\":{\"type\":\"long\"},\"field2\":{\"type\":\"keyword\"}},\"distribution\":{\"field1\":{\"min_value\":200.0,\"unique_count\":1.0,\"unique_terms\":[200.0],\"max_value\":200.0},\"example_docs\":[{\"field1\":200,\"field2\":\"text\"}],\"field2\":{\"unique_count\":1.0,\"unique_terms\":[\"text\"]}}}",
+                Map.class
+            );
+        assertEquals(gson.fromJson((String) indexInsight.get("content"), Map.class), targetContent);
 
     }
 
