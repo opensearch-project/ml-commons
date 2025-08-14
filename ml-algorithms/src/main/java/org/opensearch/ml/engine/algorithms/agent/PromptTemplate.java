@@ -30,7 +30,7 @@ public class PromptTemplate {
         + "} \n"
         + "Objective: ${parameters."
         + USER_PROMPT_FIELD
-        + "} \n\nRemember: Respond only in JSON following the required schema.";
+        + "} \n\nRemember: Respond only in JSON format following the required schema.";
 
     public static final String DEFAULT_REFLECT_PROMPT_TEMPLATE = "${parameters."
         + DEFAULT_PROMPT_TOOLS_FIELD
@@ -49,7 +49,7 @@ public class PromptTemplate {
         + "}] \n\n"
         + "${parameters."
         + REFLECT_PROMPT_FIELD
-        + "} \n\n.Remember: Respond only in JSON following the required schema.";
+        + "} \n\n.Remember: Respond only in JSON format following the required schema.";
 
     public static final String DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
         + DEFAULT_PROMPT_TOOLS_FIELD
@@ -62,7 +62,7 @@ public class PromptTemplate {
         + "}``` \n\n"
         + "You have currently executed the following steps: \n[${parameters."
         + COMPLETED_STEPS_FIELD
-        + "}] \n\nRemember: Respond only in JSON following the required schema.";
+        + "}] \n\nRemember: Respond only in JSON format following the required schema.";
 
     public static final String DEFAULT_PLANNER_PROMPT =
         "For the given objective, generate a step-by-step plan composed of simple, self-contained steps. The final step should directly yield the final answer. Avoid unnecessary steps.";
