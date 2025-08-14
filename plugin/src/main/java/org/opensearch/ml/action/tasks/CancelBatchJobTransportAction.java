@@ -55,6 +55,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -199,7 +200,12 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                         if (model.getConnector() != null) {
                             Connector connector = model.getConnector();
                             executeConnector(connector, mlInput, actionListener);
-                        } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+                        } else if (MLIndicesHandler
+                            .doesMultiTenantIndexExist(
+                                clusterService,
+                                mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+                                ML_CONNECTOR_INDEX
+                            )) {
                             ActionListener<Connector> listener = ActionListener
                                 .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
                                     log.error("Failed to get connector {}", model.getConnectorId(), e);

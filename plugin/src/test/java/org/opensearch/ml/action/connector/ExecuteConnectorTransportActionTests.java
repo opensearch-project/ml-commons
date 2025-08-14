@@ -35,6 +35,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -75,6 +76,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     ThreadPool threadPool;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setup() {
@@ -109,7 +112,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             scriptService,
             xContentRegistry,
             connectorAccessControlHelper,
-            encryptor
+            encryptor,
+            mlFeatureEnabledSetting
         );
     }
 
