@@ -47,34 +47,32 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
     private final MLIndexInsightType taskType = MLIndexInsightType.FIELD_DESCRIPTION;
-    private final String indexName;
+    private final String sourceIndex;
     private final MappingMetadata mappingMetadata;
     private final Client client;
     private final ClusterService clusterService;
-    private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
 
-    public FieldDescriptionTask(String indexName, Client client, ClusterService clusterService) {
-        this.indexName = indexName;
-        this.mappingMetadata = clusterService.state().metadata().index(indexName).mapping();
+    public FieldDescriptionTask(String sourceIndex, Client client, ClusterService clusterService) {
+        this.sourceIndex = sourceIndex;
+        this.mappingMetadata = clusterService.state().metadata().index(sourceIndex).mapping();
         this.client = client;
         this.clusterService = clusterService;
     }
 
     @Override
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        status = IndexInsightTaskStatus.GENERATING;
         try {
             getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA, ActionListener.wrap(statisticalContent -> {
                 getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
                     batchProcessFields(statisticalContent, agentId, storageIndex, listener);
                 }, listener::onFailure));
             }, e -> {
-                log.error("Failed to get statistical content for index {}", indexName, e);
+                log.error("Failed to get statistical content for index {}", sourceIndex, e);
                 saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to execute field description task for index {}", indexName, e);
+            log.error("Failed to execute field description task for index {}", sourceIndex, e);
             saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }
@@ -86,18 +84,8 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public String getTargetIndex() {
-        return indexName;
-    }
-
-    @Override
-    public IndexInsightTaskStatus getStatus() {
-        return status;
-    }
-
-    @Override
-    public void setStatus(IndexInsightTaskStatus status) {
-        this.status = status;
+    public String getSourceIndex() {
+        return sourceIndex;
     }
 
     @Override
@@ -111,14 +99,14 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     private void getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType, ActionListener<String> listener) {
-        String docId = generateDocId(indexName, taskType);
+        String docId = generateDocId(sourceIndex, taskType);
         GetRequest getRequest = new GetRequest(storageIndex, docId);
 
         client.get(getRequest, ActionListener.wrap(response -> {
             String content = response.isExists() ? response.getSourceAsMap().get("content").toString() : "";
             listener.onResponse(content);
         }, e -> {
-            log.warn("Failed to get insight content for {} task of index {} from container {}", taskType, indexName, storageIndex, e);
+            log.warn("Failed to get insight content for {} task of index {} from container {}", taskType, sourceIndex, storageIndex, e);
             listener.onResponse("");
         }));
     }
@@ -140,8 +128,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private void batchProcessFields(String statisticalContent, String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         if (mappingSource == null || mappingSource.isEmpty()) {
-            log.error("No mapping properties found for index: {}", indexName);
+            log.error("No mapping properties found for index: {}", sourceIndex);
             saveFailedStatus(storageIndex);
+            listener.onFailure(new IllegalStateException("No mapping properties found for index: " + sourceIndex));
             return;
         }
 
@@ -149,12 +138,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
         extractAllFieldNames(mappingSource, "", allFields);
 
         if (allFields.isEmpty()) {
-            log.warn("No fields found for index: {}", indexName);
+            log.warn("No fields found for index: {}", sourceIndex);
             saveResult("", storageIndex, ActionListener.wrap(insight -> {
-                log.info("Empty field description completed for: {}", indexName);
+                log.info("Empty field description completed for: {}", sourceIndex);
                 listener.onResponse(insight);
             }, e -> {
-                log.error("Failed to save empty field description result for index {}", indexName, e);
+                log.error("Failed to save empty field description result for index {}", sourceIndex, e);
                 saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }));
@@ -176,10 +165,10 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 // If any batch fails, the entire task is marked as failed and no partial results are saved
                 if (!hasErrors.get()) {
                     saveResult(gson.toJson(resultsMap), storageIndex, ActionListener.wrap(insight -> {
-                        log.info("Field description completed for: {}", indexName);
+                        log.info("Field description completed for: {}", sourceIndex);
                         listener.onResponse(insight);
                     }, e -> {
-                        log.error("Failed to save field description result for index {}", indexName, e);
+                        log.error("Failed to save field description result for index {}", sourceIndex, e);
                         saveFailedStatus(storageIndex);
                         listener.onFailure(e);
                     }));
@@ -191,7 +180,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }, e -> {
             countDownLatch.countDown();
             hasErrors.set(true);
-            log.error("Batch processing failed for index {}: {}", indexName, e.getMessage());
+            log.error("Batch processing failed for index {}: {}", sourceIndex, e.getMessage());
             if (countDownLatch.getCount() == 0) {
                 saveFailedStatus(storageIndex);
                 listener.onFailure(new Exception("Batch processing failed"));
@@ -246,7 +235,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
         client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(mlResp -> {
             try {
-                log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), indexName);
+                log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), sourceIndex);
                 ModelTensorOutput out = (ModelTensorOutput) mlResp.getOutput();
                 ModelTensors t = out.getMlModelOutputs().get(0);
                 ModelTensor mt = t.getMlModelTensors().get(0);
@@ -258,11 +247,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 Map<String, Object> batchResult = parseFieldDescription(response);
                 listener.onResponse(batchResult);
             } catch (Exception e) {
-                log.error("Error parsing response for batch in index {}: {}", indexName, e.getMessage());
+                log.error("Error parsing response for batch in index {}: {}", sourceIndex, e.getMessage());
                 listener.onFailure(e);
             }
         }, e -> {
-            log.error("Failed to call LLM for batch in index {}: {}", indexName, e.getMessage());
+            log.error("Failed to call LLM for batch in index {}: {}", sourceIndex, e.getMessage());
             listener.onFailure(e);
         }));
     }
@@ -270,7 +259,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private String generateBatchPrompt(List<String> batchFields, String statisticalContent) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("Please analyze the following OpenSearch index fields and provide descriptions:\\n\\n");
-        prompt.append("Index Name: ").append(indexName).append("\\n\\n");
+        prompt.append("Index Name: ").append(sourceIndex).append("\\n\\n");
 
         prompt.append("Fields to describe:\\n");
         for (String field : batchFields) {
@@ -359,19 +348,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
         return result;
     }
 
-    /**
-     * Auto-detects LLM response format and extracts the response text.
-     */
-    private String extractModelResponse(Map<String, Object> data) {
-        if (data.containsKey("choices")) {
-            return JsonPath.read(data, "$.choices[0].message.content");
-        }
-        if (data.containsKey("content")) {
-            return JsonPath.read(data, "$.content[0].text");
-        }
-        return JsonPath.read(data, "$.response");
-    }
-
     private Map<String, Object> parseFieldDescription(String modelResponse) {
         Map<String, Object> field2Desc = new LinkedHashMap<>();
         String[] lines = modelResponse.trim().split("\\n");
@@ -394,7 +370,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
         if (prerequisiteType == MLIndexInsightType.STATISTICAL_DATA) {
-            return new StatisticalDataTask(indexName, client);
+            return new StatisticalDataTask(sourceIndex, client);
         }
         throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
     }

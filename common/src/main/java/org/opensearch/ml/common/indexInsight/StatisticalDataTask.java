@@ -48,30 +48,28 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class StatisticalDataTask implements IndexInsightTask {
 
-    public static int termSize = 5;
-    private static List<String> prefixs = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
-    private static List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
-    private static List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
+    private static final int TERM_SIZE = 5;
+    private static final List<String> PREFIXS = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
+    private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
+    private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
 
     private final MLIndexInsightType taskType = MLIndexInsightType.STATISTICAL_DATA;
-    private final String indexName;
+    private final String sourceIndex;
     private final Client client;
-    private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
     private SearchHit[] sampleDocuments;
 
-    public StatisticalDataTask(String indexName, Client client) {
-        this.indexName = indexName;
+    public StatisticalDataTask(String sourceIndex, Client client) {
+        this.sourceIndex = sourceIndex;
         this.client = client;
     }
 
     @Override
-    public void runTask(String targetIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        status = IndexInsightTaskStatus.GENERATING;
+    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         try {
-            collectStatisticalData(targetIndex, listener);
+            collectStatisticalData(storageIndex, listener);
         } catch (Exception e) {
-            log.error("Failed to execute statistical data task for index {}", indexName, e);
-            saveFailedStatus(targetIndex);
+            log.error("Failed to execute statistical data task for index {}", sourceIndex, e);
+            saveFailedStatus(storageIndex);
             listener.onFailure(e);
         }
     }
@@ -82,18 +80,8 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
-    public String getTargetIndex() {
-        return indexName;
-    }
-
-    @Override
-    public IndexInsightTaskStatus getStatus() {
-        return status;
-    }
-
-    @Override
-    public void setStatus(IndexInsightTaskStatus status) {
-        this.status = status;
+    public String getSourceIndex() {
+        return sourceIndex;
     }
 
     @Override
@@ -117,21 +105,21 @@ public class StatisticalDataTask implements IndexInsightTask {
         return getMappingsRequest;
     }
 
-    private void collectStatisticalData(String targetIndex, ActionListener<IndexInsight> listener) {
+    private void collectStatisticalData(String storageIndex, ActionListener<IndexInsight> listener) {
 
-        GetMappingsRequest getMappingsRequest = buildGetMappingRequest(indexName);
+        GetMappingsRequest getMappingsRequest = buildGetMappingRequest(sourceIndex);
 
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
 
             Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
             if (mappings.isEmpty()) {
-                throw new IllegalArgumentException("No matching mapping with index name: " + indexName);
+                throw new IllegalArgumentException("No matching mapping with index name: " + sourceIndex);
             }
             String firstIndexName = (String) mappings.keySet().toArray()[0];
             Map<String, String> fieldsToType = new HashMap<>();
             Map<String, Object> mappingSource = (Map<String, Object>) mappings.get(firstIndexName).getSourceAsMap().get("properties");
             extractFieldNamesTypes(mappingSource, fieldsToType, "", false);
-            SearchRequest searchRequest = new SearchRequest(indexName);
+            SearchRequest searchRequest = new SearchRequest(sourceIndex);
             searchRequest.source(buildQuery(fieldsToType));
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
@@ -141,10 +129,10 @@ public class StatisticalDataTask implements IndexInsightTask {
                 result.put("distribution", parseSearchResult(searchResponse));
 
                 String statisticalContent = gson.toJson(result);
-                saveResult(statisticalContent, targetIndex, listener);
+                saveResult(statisticalContent, storageIndex, listener);
             }, e -> {
-                log.error("Failed to collect statistical data for index: {}", indexName, e);
-                saveFailedStatus(targetIndex);
+                log.error("Failed to collect statistical data for index: {}", sourceIndex, e);
+                saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }));
 
@@ -181,7 +169,7 @@ public class StatisticalDataTask implements IndexInsightTask {
             }
 
             if (UNIQUE_TERMS_LIST.contains(type)) {
-                TermsAggregationBuilder termsAgg = AggregationBuilders.terms("unique_terms_" + name).field(fieldUsed).size(termSize);
+                TermsAggregationBuilder termsAgg = AggregationBuilders.terms("unique_terms_" + name).field(fieldUsed).size(TERM_SIZE);
 
                 CardinalityAggregationBuilder countAgg = AggregationBuilders.cardinality("unique_count_" + name).field(fieldUsed);
 
@@ -230,7 +218,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                     exampleDocs.add(hit.getSourceAsMap());
                 }
             } else {
-                for (String prefix : prefixs) {
+                for (String prefix : PREFIXS) {
                     if (key.startsWith(prefix)) {
                         String targetField = key.substring(prefix.length());
                         String aggregationType = key.substring(0, prefix.length() - 1);

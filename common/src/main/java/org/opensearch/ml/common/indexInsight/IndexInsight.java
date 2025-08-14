@@ -10,7 +10,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import java.io.IOException;
 import java.time.Instant;
 
-import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -47,15 +46,14 @@ public class IndexInsight implements ToXContentObject, Writeable {
     }
 
     public IndexInsight(StreamInput input) throws IOException {
-        Version streamInputVersion = input.getVersion();
-        index = input.readString();
+        index = input.readOptionalString();
         if (input.readBoolean()) {
-            content = input.readString();
+            content = input.readOptionalString();
         }
         if (input.readBoolean()) {
-            status = IndexInsightTaskStatus.fromString(input.readString());
+            status = IndexInsightTaskStatus.fromString(input.readOptionalString());
         }
-        taskType = MLIndexInsightType.fromString(input.readString());
+        taskType = MLIndexInsightType.fromString(input.readOptionalString());
 
         lastUpdatedTime = Instant.ofEpochMilli(input.readLong());
 
@@ -104,20 +102,20 @@ public class IndexInsight implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(index);
+        out.writeOptionalString(index);
         if (content != null && !content.isEmpty()) {
             out.writeBoolean(true);
-            out.writeString(content);
+            out.writeOptionalString(content);
         } else {
             out.writeBoolean(false);
         }
         if (status != null) {
             out.writeBoolean(true);
-            out.writeString(status.toString());
+            out.writeOptionalString(status.toString());
         } else {
             out.writeBoolean(false);
         }
-        out.writeString(taskType.toString());
+        out.writeOptionalString(taskType.toString());
         out.writeInstant(lastUpdatedTime);
     }
 

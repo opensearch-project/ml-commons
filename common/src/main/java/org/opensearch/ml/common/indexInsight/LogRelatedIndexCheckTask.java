@@ -46,15 +46,11 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class LogRelatedIndexCheckTask implements IndexInsightTask {
     private final MLIndexInsightType taskType = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
-    private final String indexName;
+    private final String sourceIndex;
     private final Client client;
     private final ClusterService clusterService;
-    private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
 
     private String sampleDocSting;
-    private boolean isLogIndex;
-    private String logMessageField;
-    private String traceIdField;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String RCA_TEMPLATE =
@@ -93,15 +89,14 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             - Your judgment should be based on both semantics and field patterns (e.g., field names like "message", "log", "trace", "span", etc).
             """;
 
-    public LogRelatedIndexCheckTask(String indexName, Client client, ClusterService clusterService) {
-        this.indexName = indexName;
+    public LogRelatedIndexCheckTask(String sourceIndex, Client client, ClusterService clusterService) {
+        this.sourceIndex = sourceIndex;
         this.client = client;
         this.clusterService = clusterService;
     }
 
     @Override
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        status = IndexInsightTaskStatus.GENERATING;
         try {
             collectSampleDocString(ActionListener.wrap(sampleDocs -> {
                 getAgentIdToRun(
@@ -111,7 +106,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 );
             }, listener::onFailure));
         } catch (Exception ex) {
-            log.error("Failed log related check for {}", indexName, ex);
+            log.error("Failed log related check for {}", sourceIndex, ex);
             saveFailedStatus(storageIndex);
             listener.onFailure(ex);
         }
@@ -124,18 +119,8 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     }
 
     @Override
-    public String getTargetIndex() {
-        return indexName;
-    }
-
-    @Override
-    public IndexInsightTaskStatus getStatus() {
-        return status;
-    }
-
-    @Override
-    public void setStatus(IndexInsightTaskStatus s) {
-        status = s;
+    public String getSourceIndex() {
+        return sourceIndex;
     }
 
     @Override
@@ -155,7 +140,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     private void collectSampleDocString(ActionListener<String> listener) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
-        SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
+        SearchRequest searchRequest = new SearchRequest(new String[] { sourceIndex }, searchSourceBuilder);
 
         client.search(searchRequest, ActionListener.wrap(searchResponse -> {
             try {
@@ -163,32 +148,22 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                     .stream(searchResponse.getHits().getHits())
                     .map(SearchHit::getSourceAsMap)
                     .toList();
-                sampleDocSting = MAPPER.writeValueAsString(samples);
-                log.info("Collected sample documents for index: {}", indexName);
+                sampleDocSting = gson.toJson(samples);
+                log.info("Collected sample documents for index: {}", sourceIndex);
                 listener.onResponse(sampleDocSting);
             } catch (Exception e) {
-                log.error("Failed to process sample documents for index: {}", indexName, e);
+                log.error("Failed to process sample documents for index: {}", sourceIndex, e);
                 listener.onFailure(e);
             }
         }, e -> {
-            log.error("Failed to collect sample documents for index: {}", indexName, e);
+            log.error("Failed to collect sample documents for index: {}", sourceIndex, e);
             listener.onFailure(e);
         }));
     }
 
-    private String extractModelResponse(Map<String, Object> data) {
-        if (data.containsKey("choices")) {
-            return JsonPath.read(data, "$.choices[0].message.content");
-        }
-        if (data.containsKey("content")) {
-            return JsonPath.read(data, "$.content[0].text");
-        }
-        return JsonPath.read(data, "$.response");
-    }
-
     private void callLLM(String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
         // Build prompt
-        String prompt = RCA_TEMPLATE.replace("{indexName}", indexName).replace("{samples}", sampleDocSting);
+        String prompt = RCA_TEMPLATE.replace("{indexName}", sourceIndex).replace("{samples}", sampleDocSting);
 
         AgentMLInput agentInput = AgentMLInput
             .AgentMLInputBuilder()
@@ -211,20 +186,16 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 String text = extractModelResponse(data);
                 Map<String, Object> parsed = parseCheckResponse(text);
 
-                isLogIndex = Boolean.TRUE.equals(parsed.get("is_log_index"));
-                logMessageField = (String) parsed.get("log_message_field");
-                traceIdField = (String) parsed.get("trace_id_field");
-
                 saveResult(MAPPER.writeValueAsString(parsed), storageIndex, ActionListener.wrap(insight -> {
-                    log.info("Log related check completed for index {}", indexName);
+                    log.info("Log related check completed for index {}", sourceIndex);
                     listener.onResponse(insight);
                 }, e -> {
-                    log.error("Failed to save log related check result for index {}", indexName, e);
+                    log.error("Failed to save log related check result for index {}", sourceIndex, e);
                     saveFailedStatus(storageIndex);
                     listener.onFailure(e);
                 }));
             } catch (Exception e) {
-                log.error("Error parsing response of log related check for {}", indexName, e);
+                log.error("Error parsing response of log related check for {}", sourceIndex, e);
                 saveFailedStatus(storageIndex);
                 listener.onFailure(e);
             }
