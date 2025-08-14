@@ -28,6 +28,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -91,6 +92,18 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
             .indexName(mlIndexInsightContainerCreateRequest.getIndexName())
             .tenantId(tenantId)
             .build();
+        checkWhetherExist(indexInsightContainer, ActionListener.wrap(r -> {
+            indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
+                initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getIndexName(), ActionListener.wrap(r2 -> {
+                    log.info("Successfully created index insight container");
+                    listener.onResponse(new AcknowledgedResponse(true));
+                }, e -> {
+                    log.error("Failed to create index insight container", e);
+                    listener.onFailure(e);
+                }));
+            }, listener::onFailure));
+        }, listener::onFailure));
+        /*
         initMLIndexInsightContainerIndex(ActionListener.wrap(r -> {
             checkWhetherExist(indexInsightContainer, ActionListener.wrap(r0 -> {
                 indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
@@ -104,6 +117,8 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
                 }, listener::onFailure));
             }, listener::onFailure));
         }, listener::onFailure));
+        
+         */
 
     }
 
@@ -127,6 +142,10 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         log.error("Failed to index index insight container", cause);
+                        if (cause.getCause() instanceof IndexNotFoundException) {
+                            mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener);
+                            return;
+                        }
                         listener.onFailure(cause);
                     } else {
                         GetResponse getResponse = r.getResponse();

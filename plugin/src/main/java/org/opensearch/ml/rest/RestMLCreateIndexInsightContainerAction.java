@@ -28,7 +28,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 public class RestMLCreateIndexInsightContainerAction extends BaseRestHandler {
-    private static final String ML_PUT_INDEX_INSIGHT_CONTAINER_ACTION = "ml_put_index_insight_container_action";
+    private static final String ML_CREATE_INDEX_INSIGHT_CONTAINER_ACTION = "ml_create_index_insight_container_action";
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -38,7 +38,7 @@ public class RestMLCreateIndexInsightContainerAction extends BaseRestHandler {
 
     @Override
     public String getName() {
-        return ML_PUT_INDEX_INSIGHT_CONTAINER_ACTION;
+        return ML_CREATE_INDEX_INSIGHT_CONTAINER_ACTION;
     }
 
     @Override
