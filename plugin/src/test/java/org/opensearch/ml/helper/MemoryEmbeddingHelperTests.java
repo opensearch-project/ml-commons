@@ -294,6 +294,21 @@ public class MemoryEmbeddingHelperTests {
     }
 
     @Test
+    public void testValidateEmbeddingModelStatePartiallyDeployed() {
+        when(mlModel.getModelState()).thenReturn(MLModelState.PARTIALLY_DEPLOYED);
+        
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("model-123"), any());
+
+        helper.validateEmbeddingModelState("model-123", FunctionName.TEXT_EMBEDDING, booleanListener);
+
+        verify(booleanListener).onResponse(true);
+    }
+
+    @Test
     public void testValidateEmbeddingModelStateNotDeployed() {
         when(mlModel.getModelState()).thenReturn(MLModelState.REGISTERED);
         
@@ -312,7 +327,45 @@ public class MemoryEmbeddingHelperTests {
     }
 
     @Test
+    public void testValidateEmbeddingModelStateDeploying() {
+        when(mlModel.getModelState()).thenReturn(MLModelState.DEPLOYING);
+        
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("model-123"), any());
+
+        helper.validateEmbeddingModelState("model-123", FunctionName.TEXT_EMBEDDING, booleanListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(booleanListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalStateException);
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("DEPLOYED"));
+    }
+
+    @Test
     public void testValidateEmbeddingModelStateRemoteModel() {
+        // Set up a model that has REMOTE algorithm but any state (e.g., REGISTERED)
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getModelState()).thenReturn(MLModelState.REGISTERED);
+        
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("model-123"), any());
+
+        // Pass TEXT_EMBEDDING as modelType to avoid early return, but model itself is REMOTE
+        helper.validateEmbeddingModelState("model-123", FunctionName.TEXT_EMBEDDING, booleanListener);
+        
+        verify(booleanListener).onResponse(true);
+        verify(mlModelManager).getModel(eq("model-123"), any());
+    }
+
+    @Test
+    public void testValidateEmbeddingModelStateRemoteModelTypeEarlyReturn() {
+        // Test the early return path when modelType itself is REMOTE
         helper.validateEmbeddingModelState("remote-model", FunctionName.REMOTE, booleanListener);
         verify(booleanListener).onResponse(true);
         verify(mlModelManager, never()).getModel(any(), any());
