@@ -37,6 +37,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -58,6 +59,8 @@ public class ModelGuardrail extends Guardrail {
     private String responseAccept;
     private NamedXContentRegistry xContentRegistry;
     private Client client;
+    private SdkClient sdkClient;
+    private String tenantId;
     private Pattern regexAcceptPattern;
 
     @Builder(toBuilder = true)
@@ -141,9 +144,11 @@ public class ModelGuardrail extends Guardrail {
     }
 
     @Override
-    public void init(NamedXContentRegistry xContentRegistry, Client client) {
+    public void init(NamedXContentRegistry xContentRegistry, Client client, SdkClient sdkClient, String tenantId) {
         this.xContentRegistry = xContentRegistry;
         this.client = client;
+        this.sdkClient = sdkClient;
+        this.tenantId = tenantId;
         regexAcceptPattern = Pattern.compile(responseAccept);
     }
 
