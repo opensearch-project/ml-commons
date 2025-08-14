@@ -15,7 +15,7 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 /**
- * A post-processing function for calling a remote ml commons instancethat preserves the original neural sparse response structure
+ * A post-processing function for calling a remote ml commons instance that preserves the original neural sparse response structure
  * to avoid double-wrapping when receiving responses from another ML-Commons instance.
  */
 public class RemoteMlCommonsPassthroughPostProcessFunction extends ConnectorPostProcessFunction<Map<String, Object>> {
@@ -26,7 +26,6 @@ public class RemoteMlCommonsPassthroughPostProcessFunction extends ConnectorPost
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public List<ModelTensor> process(Map<String, Object> input, MLResultDataType dataType) {
         // Check if this is an ML-Commons response with inference_results
@@ -41,7 +40,9 @@ public class RemoteMlCommonsPassthroughPostProcessFunction extends ConnectorPost
                     for (Map<String, Object> output : outputs) {
                         // This inner map should represent a model tensor, so we try to parse and instantiate a new one.
                         ModelTensor modelTensor = createModelTensorFromMap(output);
-                        modelTensors.add(modelTensor);
+                        if (modelTensor != null) {
+                            modelTensors.add(modelTensor);
+                        }
                     }
                 }
             }
@@ -59,8 +60,11 @@ public class RemoteMlCommonsPassthroughPostProcessFunction extends ConnectorPost
      * Creates a ModelTensor from a Map<String, Object> representation based on the API format
      * of the /_predict API
      */
-    @SuppressWarnings("unchecked")
     private ModelTensor createModelTensorFromMap(Map<String, Object> map) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+
         String name = (String) map.getOrDefault(ModelTensor.NAME_FIELD, OUTPUT_FIELD);
         String result = (String) map.get(ModelTensor.RESULT_FIELD);
         Map<String, Object> dataAsMap = (Map<String, Object>) map.get(ModelTensor.DATA_AS_MAP_FIELD);
@@ -82,8 +86,7 @@ public class RemoteMlCommonsPassthroughPostProcessFunction extends ConnectorPost
         long[] shape = null;
         if (map.containsKey(ModelTensor.SHAPE_FIELD)) {
             Object shapeObj = map.get(ModelTensor.SHAPE_FIELD);
-            if (shapeObj instanceof List) {
-                List<?> shapeList = (List<?>) shapeObj;
+            if (shapeObj instanceof List<?> shapeList) {
                 shape = new long[shapeList.size()];
                 for (int i = 0; i < shapeList.size(); i++) {
                     Object item = shapeList.get(i);
@@ -98,8 +101,7 @@ public class RemoteMlCommonsPassthroughPostProcessFunction extends ConnectorPost
         Number[] data = null;
         if (map.containsKey(ModelTensor.DATA_FIELD)) {
             Object dataObj = map.get(ModelTensor.DATA_FIELD);
-            if (dataObj instanceof List) {
-                List<?> dataList = (List<?>) dataObj;
+            if (dataObj instanceof List<?> dataList) {
                 data = new Number[dataList.size()];
                 for (int i = 0; i < dataList.size(); i++) {
                     Object item = dataList.get(i);

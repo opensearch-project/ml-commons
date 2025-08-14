@@ -56,7 +56,7 @@ public class RemoteMlCommonsPassthroughPostProcessFunctionTest {
         assertEquals(innerDataAsMap, tensor.getDataAsMap());
 
         // Verify the nested sparse data structure
-        Map<String, Object> dataAsMap =  (Map<String, Object>) tensor.getDataAsMap();
+        Map<String, Object> dataAsMap = (Map<String, Object>) tensor.getDataAsMap();
         List<Map<String, Object>> response = (List<Map<String, Object>>) dataAsMap.get("response");
         assertEquals(1, response.size());
         assertEquals(0.35982144, (Double) response.get(0).get("hello"), 0.0001);
@@ -88,7 +88,7 @@ public class RemoteMlCommonsPassthroughPostProcessFunctionTest {
         assertEquals(1, result.size());
         ModelTensor tensor = result.get(0);
         assertEquals("sentence_embedding", tensor.getName());
-        assertEquals(3, tensor.getShape().length);
+        assertEquals(1, tensor.getShape().length);
         assertEquals(3L, tensor.getShape()[0]);
         assertEquals(3, tensor.getData().length);
         assertEquals(0.5400895, tensor.getData()[0].doubleValue(), 0.0001);
