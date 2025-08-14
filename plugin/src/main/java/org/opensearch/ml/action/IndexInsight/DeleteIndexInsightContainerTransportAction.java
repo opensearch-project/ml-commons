@@ -69,6 +69,25 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
         this.mlIndicesHandler = mlIndicesHandler;
     }
 
+    @Override
+    protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
+        MLIndexInsightContainerDeleteRequest mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest
+            .fromActionRequest(request);
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerDeleteRequest.getTenantId(), listener)) {
+            return;
+        }
+        String tenantId = mlIndexInsightContainerDeleteRequest.getTenantId();
+        getIndexInsightContainer(tenantId, ActionListener.wrap(indexName -> {
+            deleteOriginalIndexInsightIndex(indexName, ActionListener.wrap(r -> {
+                deleteIndexInsightContainer(
+                    tenantId,
+                    ActionListener.wrap(r1 -> { listener.onResponse(new AcknowledgedResponse(true)); }, listener::onFailure)
+                );
+            }, listener::onFailure));
+
+        }, listener::onFailure));
+    }
+
     private void deleteOriginalIndexInsightIndex(String indexName, ActionListener<Boolean> listener) {
         client.admin().indices().delete(new DeleteIndexRequest(indexName), ActionListener.wrap(r -> {
             if (r.isAcknowledged()) {
@@ -160,22 +179,4 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
         }
     }
 
-    @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
-        MLIndexInsightContainerDeleteRequest mlIndexInsightContainerDeleteRequest = MLIndexInsightContainerDeleteRequest
-            .fromActionRequest(request);
-        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerDeleteRequest.getTenantId(), listener)) {
-            return;
-        }
-        String tenantId = mlIndexInsightContainerDeleteRequest.getTenantId();
-        getIndexInsightContainer(tenantId, ActionListener.wrap(indexName -> {
-            deleteOriginalIndexInsightIndex(indexName, ActionListener.wrap(r -> {
-                deleteIndexInsightContainer(
-                    tenantId,
-                    ActionListener.wrap(r1 -> { listener.onResponse(new AcknowledgedResponse(true)); }, listener::onFailure)
-                );
-            }, listener::onFailure));
-
-        }, listener::onFailure));
-    }
 }

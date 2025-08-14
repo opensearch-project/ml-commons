@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.STATISTICAL_DATA;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_INDEX_ID;
@@ -75,7 +76,7 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
         String indexName = getParameterId(request, PARAMETER_INDEX_ID);
         String insightType = request.param("insight_type");
         if (insightType == null) {
-            insightType = "STATISTICAL_DATA";
+            insightType = STATISTICAL_DATA.name();
         }
         MLIndexInsightType type = MLIndexInsightType.fromString(insightType);
         return new MLIndexInsightGetRequest(indexName, type, tenantId);
