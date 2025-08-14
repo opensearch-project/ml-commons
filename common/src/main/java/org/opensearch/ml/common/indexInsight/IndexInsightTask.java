@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.jayway.jsonpath.JsonPath;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -26,6 +25,7 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.hash.Hashing;
+import com.jayway.jsonpath.JsonPath;
 
 /**
  * Interface representing an index insight execution task

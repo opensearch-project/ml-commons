@@ -33,7 +33,6 @@ import org.opensearch.transport.client.Client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
 
