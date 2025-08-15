@@ -27,7 +27,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -81,7 +80,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     Client client;
     SdkClient sdkClient;
 
-    Settings settings;
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
@@ -99,7 +97,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         ThreadPool threadPool,
         Client client,
         SdkClient sdkClient,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
@@ -120,7 +117,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
-        this.settings = settings;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -344,6 +340,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
+                            MLUndeployModelsAction.NAME,
                             client,
                             sdkClient,
                             listener

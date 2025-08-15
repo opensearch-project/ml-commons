@@ -14,18 +14,25 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
@@ -46,12 +53,15 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
@@ -62,6 +72,9 @@ import lombok.extern.log4j.Log4j2;
 public class ModelAccessControlHelper {
 
     private volatile Boolean modelAccessControlEnabled;
+
+    @Inject
+    public MLResourceSharingExtension mlResourceSharingExtension;
 
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
@@ -83,8 +96,30 @@ public class ModelAccessControlHelper {
         );
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
-    public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
-        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+    public void validateModelGroupAccess(User user, String modelGroupId, String action, Client client, ActionListener<Boolean> listener) {
+        if (modelGroupId == null) {
+            listener.onResponse(true);
+            return;
+        }
+
+        if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
             return;
         }
@@ -128,13 +163,33 @@ public class ModelAccessControlHelper {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         String tenantId,
         String modelGroupId,
+        String action,
         Client client,
         SdkClient sdkClient,
         ActionListener<Boolean> listener
     ) {
-        if (modelGroupId == null
-            || (!mlFeatureEnabledSetting.isMultiTenancyEnabled()
-                && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)))) {
+        if (modelGroupId == null) {
+            listener.onResponse(true);
+            return;
+        }
+        if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (!mlFeatureEnabledSetting.isMultiTenancyEnabled() && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user))) {
             listener.onResponse(true);
             return;
         }
@@ -149,7 +204,7 @@ public class ModelAccessControlHelper {
             sdkClient.getDataObjectAsync(getModelGroupRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse gr = r.getResponse();
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent
@@ -311,7 +366,44 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
-    public SearchSourceBuilder createSearchSourceBuilder(User user) {
-        return addUserBackendRolesFilter(user, new SearchSourceBuilder());
+    public QueryBuilder mergeWithAccessFilter(QueryBuilder existing, Set<String> ids) {
+        QueryBuilder accessFilter = (ids == null || ids.isEmpty())
+            ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()) // deny-all
+            : QueryBuilders.idsQuery().addIds(ids.toArray(new String[0])); // use termsQuery(field, ids) if not _id
+
+        if (existing == null)
+            return QueryBuilders.boolQuery().filter(accessFilter);
+        if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(accessFilter);
+            return existing;
+        }
+        return QueryBuilders.boolQuery().must(existing).filter(accessFilter);
     }
+
+    public void addAccessibleModelGroupsFilterAndSearch(
+        String tenantId,
+        SearchRequest request,
+        SdkClient sdkClient,
+        Consumer<Set<String>> onSuccess,
+        ActionListener<SearchResponse> wrappedListener
+    ) {
+        ResourceSharingClient resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        // filter by accessible model-groups
+        resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(onSuccess::accept, e -> {
+            // Fail-safe: deny-all and still return a response
+            SearchSourceBuilder reqSrc = request.source() != null ? request.source() : new SearchSourceBuilder();
+            reqSrc.query(mergeWithAccessFilter(reqSrc.query(), Collections.emptySet()));
+            request.source(reqSrc);
+
+            SearchDataObjectRequest finalSearch = SearchDataObjectRequest
+                .builder()
+                .indices(request.indices())
+                .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
+                .build();
+
+            sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
+        }));
+    }
+
 }

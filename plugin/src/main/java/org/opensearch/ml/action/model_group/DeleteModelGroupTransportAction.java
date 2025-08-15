@@ -32,6 +32,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -60,6 +61,9 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Inject(optional = true)
+    public MLResourceSharingExtension mlResourceSharingExtension;
 
     @Inject
     public DeleteModelGroupTransportAction(
@@ -93,7 +97,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+
+            // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
+            if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
+                checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
+            } else {
+                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            }
         }
     }
 
@@ -105,6 +115,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 mlFeatureEnabledSetting,
                 tenantId,
                 modelGroupId,
+                MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
                 ActionListener
