@@ -37,10 +37,10 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
@@ -122,15 +122,6 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         // Simplify the merged query for tests
         when(modelAccessControlHelper.mergeWithAccessFilter(any(QueryBuilder.class), any(Set.class)))
             .thenAnswer(inv -> QueryBuilders.termQuery("dummy", "value"));
-    }
-
-    @Override
-    public void tearDown() throws Exception {
-        try {
-            ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
-        } finally {
-            super.tearDown();
-        }
     }
 
     /** Helper: empty SDK response that can be converted to SearchResponse by the utils wrapper */
@@ -266,7 +257,8 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testResourceSharingEnabled_successPath_filtersByAccessibleIds_andCallsSdkClient() {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
-        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        MLResourceSharingExtension extension = mock(MLResourceSharingExtension.class);
+        extension.assignResourceSharingClient(rsc);
 
         ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
 
@@ -299,7 +291,8 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testResourceSharingEnabled_failSafePath_usesEmptySet_andCallsSdkClient() {
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
-        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        MLResourceSharingExtension extension = mock(MLResourceSharingExtension.class);
+        extension.assignResourceSharingClient(rsc);
 
         ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
 
@@ -331,7 +324,8 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         SearchRequest sr = new SearchRequest(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, new SearchSourceBuilder());
         MLSearchActionRequest req = new MLSearchActionRequest(sr, "tenant-4");
 
-        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        MLResourceSharingExtension extension = mock(MLResourceSharingExtension.class);
+        extension.assignResourceSharingClient(null);
 
         CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
         when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);

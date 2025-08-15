@@ -20,11 +20,11 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -46,6 +46,9 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     ModelAccessControlHelper modelAccessControlHelper;
+
+    @Inject(optional = true)
+    public MLResourceSharingExtension mlResourceSharingExtension;
 
     @Inject
     public SearchModelGroupTransportAction(
@@ -89,7 +92,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
             // If resource-sharing feature is enabled, we fetch accessible model-groups and restrict the search to those model-groups only.
-            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
                 // If a model-group is shared, then it will have been shared at-least at read access, hence the final result is guaranteed
                 // to only contain model-groups that the user at-least has read access to.
                 addAccessibleModelGroupsFilterAndSearch(tenantId, request, doubleWrappedListener);
@@ -113,7 +116,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         ActionListener<SearchResponse> wrappedListener
     ) {
         SearchSourceBuilder sourceBuilder = request.source() != null ? request.source() : new SearchSourceBuilder();
-        ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        ResourceSharingClient rsc = mlResourceSharingExtension.getResourceSharingClient();
         // filter by accessible model-groups
         rsc.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
             sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), ids));

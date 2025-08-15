@@ -10,12 +10,13 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import java.util.Set;
 
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.security.spi.resources.ResourceProvider;
 import org.opensearch.security.spi.resources.ResourceSharingExtension;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 
 public class MLResourceSharingExtension implements ResourceSharingExtension {
+
+    private ResourceSharingClient resourceSharingClient;
 
     @Override
     public Set<ResourceProvider> getResourceProviders() {
@@ -24,6 +25,11 @@ public class MLResourceSharingExtension implements ResourceSharingExtension {
 
     @Override
     public void assignResourceSharingClient(ResourceSharingClient resourceSharingClient) {
-        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
+        this.resourceSharingClient = resourceSharingClient;
+    }
+
+    @Override
+    public ResourceSharingClient getResourceSharingClient() {
+        return resourceSharingClient;
     }
 }

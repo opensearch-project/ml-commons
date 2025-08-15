@@ -22,6 +22,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -38,13 +39,13 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -71,6 +72,9 @@ public class MLSearchHandler {
     private ClusterService clusterService;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Inject(optional = true)
+    public MLResourceSharingExtension mlResourceSharingExtension;
+
     public MLSearchHandler(
         Client client,
         NamedXContentRegistry xContentRegistry,
@@ -87,7 +91,8 @@ public class MLSearchHandler {
 
     /**
      * Fetch all the models from the model group index, and then create a combined query to model version index.
-     * @param sdkClient sdkclient a wrapper of the client
+     *
+     * @param sdkClient                  sdkclient a wrapper of the client
      * @param request
      * @param actionListener
      */
@@ -145,7 +150,7 @@ public class MLSearchHandler {
                     mlFeatureEnabledSetting.isMultiTenancyEnabled(),
                     CommonValue.ML_MODEL_GROUP_INDEX
                 );
-            boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
+            boolean rsClientPresent = mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null;
 
             if (skip || !hasIndex) {
                 // No gating at all
