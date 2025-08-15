@@ -19,6 +19,7 @@ import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.rest.RestBaseAgentToolsIT;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -77,9 +78,9 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
     @SneakyThrows
     private void checkForModelUndeployedStatus(String modelId) {
-        Predicate<Response> condition = response -> {
+        Predicate<String> condition = responseStr -> {
             try {
-                Map<String, Object> responseInMap = parseResponseToMap(response);
+                Map<String, Object> responseInMap = StringUtils.gson.fromJson(responseStr, Map.class);
                 MLModelState state = MLModelState.from(responseInMap.get(MLModel.MODEL_STATE_FIELD).toString());
                 return MLModelState.UNDEPLOYED.equals(state);
             } catch (Exception e) {
@@ -90,14 +91,23 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
     }
 
     @SneakyThrows
-    protected Response waitResponseMeetingCondition(String method, String endpoint, String jsonEntity, Predicate<Response> condition) {
+    protected Response waitResponseMeetingCondition(String method, String endpoint, String jsonEntity, Predicate<String> condition) {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             Response response = TestHelper.makeRequest(client(), method, endpoint, null, jsonEntity, null);
             assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
-            if (condition.test(response)) {
+            String entityString = TestHelper.httpEntityToString(response.getEntity());
+            if (condition.test(entityString)) {
                 return response;
             }
-            logger.info("The {}-th attempt on {}:{} . response: {}", attempt, method, endpoint, response.toString());
+            logger
+                .info(
+                    "The {}-th attempt on {}:{} . response: {}, responseBody: {}",
+                    attempt,
+                    method,
+                    endpoint,
+                    response.toString(),
+                    entityString
+                );
             Thread.sleep(DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND);
         }
         fail(
