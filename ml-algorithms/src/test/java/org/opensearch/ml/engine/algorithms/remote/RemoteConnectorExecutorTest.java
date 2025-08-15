@@ -181,17 +181,22 @@ public class RemoteConnectorExecutorTest {
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
-                .builder()
-                .parameters(Map.of("input", "${parameters.input}"))
-                .actionType(PREDICT)
-                .build();
+            .builder()
+            .parameters(Map.of("input", "${parameters.input}"))
+            .actionType(PREDICT)
+            .build();
         String actionType = inputDataSet.getActionType().toString();
         AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
-                .builder()
-                .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
-                .embeddingContentType(null)
-                .build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).parameters(inputParams).inputDataset(inputDataSet).build();
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .embeddingContentType(null)
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(inputParams)
+            .inputDataset(inputDataSet)
+            .build();
 
         try {
             Map<String, String> paramsMap = executor.getParams(mlInput);
@@ -210,17 +215,22 @@ public class RemoteConnectorExecutorTest {
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
-                .builder()
-                .parameters(Map.of("input", "${parameters.input}"))
-                .actionType(PREDICT)
-                .build();
+            .builder()
+            .parameters(Map.of("input", "${parameters.input}"))
+            .actionType(PREDICT)
+            .build();
         String actionType = inputDataSet.getActionType().toString();
         AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
-                .builder()
-                .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
-                .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.PASSAGE)
-                .build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).parameters(inputParams).inputDataset(inputDataSet).build();
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.PASSAGE)
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(inputParams)
+            .inputDataset(inputDataSet)
+            .build();
 
         try {
             Map<String, String> paramsMap = executor.getParams(mlInput);

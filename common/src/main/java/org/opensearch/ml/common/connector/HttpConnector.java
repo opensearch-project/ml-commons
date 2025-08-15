@@ -358,13 +358,15 @@ public class HttpConnector extends AbstractConnector {
         return (T) parameters.get("http_body");
     }
 
+    /**
+     * Removes fields from the given JSON payload string that correspond to parameters
+     * not present in the provided parameter map.
+     */
     public String removeMissingParameterFields(String payload, Map<String, String> params) {
         if (params == null) {
             return payload;
         }
-        Pattern pattern = Pattern.compile(
-                "\\s*\"[^\"]+\"\\s*:\\s*(\"?\\$?\\{parameters\\.([^}]+)\\}\"?)\\s*,?"
-        );
+        Pattern pattern = Pattern.compile("\\s*\"[^\"]+\"\\s*:\\s*(\"?\\$?\\{parameters\\.([^}]+)\\}\"?)\\s*,?");
         Matcher matcher = pattern.matcher(payload);
         StringBuffer sb = new StringBuffer();
 
@@ -379,7 +381,6 @@ public class HttpConnector extends AbstractConnector {
         matcher.appendTail(sb);
         return sb.toString().replaceAll(",\\s*}", "}").replaceAll(",\\s*]", "]");
     }
-
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
         List<String> bodyParams = findStringParametersWithNullDefaultValue(payload);

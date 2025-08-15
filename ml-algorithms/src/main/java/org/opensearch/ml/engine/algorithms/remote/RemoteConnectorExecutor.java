@@ -10,10 +10,15 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRe
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -29,7 +34,9 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.*;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -47,6 +54,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.Builder;
 
@@ -81,7 +90,7 @@ public interface RemoteConnectorExecutor {
                         MLInput
                             .builder()
                             .algorithm(FunctionName.TEXT_EMBEDDING)
-//                            .parameters(mlInput.getParameters())
+                            .parameters(mlInput.getParameters())
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
