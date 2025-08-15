@@ -9,13 +9,8 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VAL
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.io.IOException;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.Logger;
@@ -28,11 +23,12 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.*;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -42,6 +38,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -49,6 +46,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.Builder;
 
@@ -83,6 +82,7 @@ public interface RemoteConnectorExecutor {
                         MLInput
                             .builder()
                             .algorithm(FunctionName.TEXT_EMBEDDING)
+                            .parameters(mlInput.getParameters())
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
@@ -187,6 +187,17 @@ public interface RemoteConnectorExecutor {
             inputParameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
         parameters.putAll(inputParameters);
+
+        MLAlgoParams algoParams = mlInput.getParameters();
+        if (algoParams != null) {
+            try {
+                Map<String, String> parametersMap = getParams(mlInput);
+                parameters.putAll(parametersMap);
+            } catch (IOException e) {
+                actionListener.onFailure(e);
+            }
+        }
+
         RemoteInferenceInputDataSet inputData = processInput(action, mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
@@ -225,6 +236,23 @@ public interface RemoteConnectorExecutor {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
         }
+    }
+
+    default Map<String, String> getParams(MLInput mlInput) throws IOException {
+        Map<String, String> result = new HashMap<>();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        mlInput.getParameters().toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.flush();
+        String json = builder.toString();
+
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> tempMap = mapper.readValue(json, Map.class);
+
+        HashMap<String, String> paramMap = new HashMap<>();
+        for (Map.Entry<String, Object> entry : tempMap.entrySet()) {
+            paramMap.put(entry.getKey(), entry.getValue() != null ? entry.getValue().toString() : null);
+        }
+        return paramMap;
     }
 
     default BackoffPolicy getRetryBackoffPolicy(ConnectorClientConfig connectorClientConfig) {
