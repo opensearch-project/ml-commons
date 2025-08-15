@@ -194,6 +194,22 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_ExtraParams() {
+
+        String requestBody = "{\"input\": \"${parameters.input}\", \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\" }}";
+        String expected = "{\"input\": \"test value\", \"parameters\": {\"sparseEmbeddingFormat\": \"WORD\", \"content_type\": \"query\" }}";
+
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test value");
+        parameters.put("sparseEmbeddingFormat", "WORD");
+        parameters.put("content_type", "query");
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+        Assert.assertEquals(expected, predictPayload);
+    }
+
+    @Test
     public void parseResponse_modelTensorJson() throws IOException {
         HttpConnector connector = createHttpConnector();
 
@@ -439,7 +455,7 @@ public class HttpConnectorTest {
         Map<String, String> params = new HashMap<>();
 
         String payload = "{\"input\": ${parameters.input}, \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\"}}";
-        String expected = "{ \"parameters\": {}}";
+        String expected = "{\"input\": ${parameters.input}, \"parameters\": {}}";
         String result = connector.removeMissingParameterFields(payload, params);
         Assert.assertEquals(expected, result);
     }
@@ -450,7 +466,6 @@ public class HttpConnectorTest {
         Map<String, String> params = new HashMap<>();
         params.put("input", "test value");
 
-        // Case 1: Payload with valid parameter placeholders
         String payload = "{\"input\": \"${parameters.input}\", \"parameters\": {\"nested\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\"}}}";
         String expected = "{\"input\": \"${parameters.input}\", \"parameters\": {\"nested\": {}}}";
         String result = connector.removeMissingParameterFields(payload, params);

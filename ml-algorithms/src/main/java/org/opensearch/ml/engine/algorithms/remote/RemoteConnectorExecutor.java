@@ -5,18 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-//import static org.opensearch.ml.common.dataset.SearchQueryInputDataset.xContentRegistry;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.Logger;
@@ -30,7 +25,6 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -46,7 +40,6 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-//import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -88,7 +81,7 @@ public interface RemoteConnectorExecutor {
                         MLInput
                             .builder()
                             .algorithm(FunctionName.TEXT_EMBEDDING)
-                            .parameters(mlInput.getParameters())
+//                            .parameters(mlInput.getParameters())
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
@@ -203,23 +196,6 @@ public interface RemoteConnectorExecutor {
                 actionListener.onFailure(e);
             }
         }
-//        if (algoParams != null) {
-//            Map<String, String> parametersMap = new HashMap<>();
-//            String algoParamsStr = algoParams.toString();
-//            Pattern pattern = Pattern.compile("\\(([^)]+)\\)");
-//            Matcher matcher = pattern.matcher(algoParamsStr);
-//            if (matcher.find()) {
-//                String bracketContent = matcher.group(1);
-//                pattern = Pattern.compile("(\\w+)=([^,\\s]+)");
-//                matcher = pattern.matcher(bracketContent);
-//                while (matcher.find()) {
-//                    String fieldName = matcher.group(1);
-//                    String fieldValue = matcher.group(2);
-//                    parametersMap.put(fieldName, fieldValue);
-//                }
-//            }
-//            parameters.putAll(parametersMap);
-//        }
 
         RemoteInferenceInputDataSet inputData = processInput(action, mlInput, connector, parameters, getScriptService());
         if (inputData.getParameters() != null) {

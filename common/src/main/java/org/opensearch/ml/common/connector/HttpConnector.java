@@ -359,7 +359,9 @@ public class HttpConnector extends AbstractConnector {
     }
 
     public String removeMissingParameterFields(String payload, Map<String, String> params) {
-        // Match: "xxx": "${parameters.yyy}" or "xxx": {parameters.yyy}
+        if (params == null) {
+            return payload;
+        }
         Pattern pattern = Pattern.compile(
                 "\\s*\"[^\"]+\"\\s*:\\s*(\"?\\$?\\{parameters\\.([^}]+)\\}\"?)\\s*,?"
         );
@@ -368,7 +370,7 @@ public class HttpConnector extends AbstractConnector {
 
         while (matcher.find()) {
             String paramName = matcher.group(2); // yyy
-            if (!params.containsKey(paramName)) {
+            if (!params.containsKey(paramName) && !"input".equals(paramName)) {
                 matcher.appendReplacement(sb, "");
             } else {
                 matcher.appendReplacement(sb, Matcher.quoteReplacement(matcher.group(0)));
