@@ -19,6 +19,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.opensearch.client.node.NodeClient;
@@ -83,27 +84,30 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        String algorithm = request.param(PARAMETER_ALGORITHM);
+        String userAlgorithm = request.param(PARAMETER_ALGORITHM);
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
 
-        if (algorithm == null && functionName.isPresent()) {
-            algorithm = functionName.get().name();
+        // check if the model is in cache
+        if (functionName.isPresent()) {
+            MLPredictionTaskRequest predictionRequest = getRequest(
+                modelId,
+                functionName.get().name(),
+                Objects.requireNonNullElse(userAlgorithm, functionName.get().name()),
+                request
+            );
+            return channel -> client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, new RestToXContentListener<>(channel));
         }
 
-        if (algorithm != null) {
-            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, algorithm, request);
-            return channel -> client
-                .execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
-        }
-
+        // If the model isn't in cache
         return channel -> {
             ActionListener<MLModel> listener = ActionListener.wrap(mlModel -> {
-                String algoName = mlModel.getAlgorithm().name();
+                String modelType = mlModel.getAlgorithm().name();
+                String modelAlgorithm = Objects.requireNonNullElse(userAlgorithm, mlModel.getAlgorithm().name());
                 client
                     .execute(
                         MLPredictionTaskAction.INSTANCE,
-                        getRequest(modelId, algoName, request),
+                        getRequest(modelId, modelType, modelAlgorithm, request),
                         new RestToXContentListener<>(channel)
                     );
             }, e -> {
@@ -126,18 +130,22 @@ public class RestMLPredictionAction extends BaseRestHandler {
     }
 
     /**
-     * Creates a MLPredictionTaskRequest from a RestRequest
+     * Creates a MLPredictionTaskRequest from a RestRequest. This method validates the request based on
+     * enabled features and model types, and parses the input data for prediction.
      *
-     * @param request RestRequest
-     * @return MLPredictionTaskRequest
+     * @param modelId The ID of the ML model to use for prediction
+     * @param modelType The type of the ML model, extracted from model cache to specify if its a remote model or a local model
+     * @param userAlgorithm The algorithm specified by the user for prediction, this is used todetermine the interface of the model
+     * @param request The REST request containing prediction input data
+     * @return MLPredictionTaskRequest configured with the model and input parameters
      */
     @VisibleForTesting
-    MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
+    MLPredictionTaskRequest getRequest(String modelId, String modelType, String userAlgorithm, RestRequest request) throws IOException {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
-        if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+        if (FunctionName.REMOTE.name().equals(modelType) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase(Locale.ROOT)))
+        } else if (FunctionName.isDLModel(FunctionName.from(modelType.toUpperCase(Locale.ROOT)))
             && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         } else if (ActionType.BATCH_PREDICT == actionType && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
@@ -148,7 +156,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLInput mlInput = MLInput.parse(parser, algorithm, actionType);
+        MLInput mlInput = MLInput.parse(parser, userAlgorithm, actionType);
         return new MLPredictionTaskRequest(modelId, mlInput, null, tenantId);
     }
 
