@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -197,6 +198,22 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         assertEquals(
                 e.getMessage(),
                 LOCAL_MODEL_DISABLED_ERR_MSG
+        );
+    }
+
+    @Test
+    public void testPrediction_remote_inference_not_exception() {
+        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+
+        IllegalStateException e = assertThrows(
+                IllegalStateException.class,
+                () -> transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener)
+        );
+        assertEquals(
+                e.getMessage(),
+                REMOTE_INFERENCE_DISABLED_ERR_MSG
         );
     }
 

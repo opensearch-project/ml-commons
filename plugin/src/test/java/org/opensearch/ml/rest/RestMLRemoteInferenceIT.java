@@ -1177,4 +1177,39 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         logger.info("task ID created: {}", taskId);
         return taskId;
     }
+
+    public void testPredictRemoteModelFeatureDisabled() throws IOException, InterruptedException {
+        Response response = createConnector(completionModelConnectorEntity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = registerRemoteModelWithInterface("openAI-GPT-3.5 completions", connectorId, "correctInterface");
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.remote_inference.enabled\":false}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
+        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
+        try {
+            predictRemoteModel(modelId, predictInput);
+        } catch (Exception e) {
+            assertTrue(e instanceof org.opensearch.client.ResponseException);
+            String stackTrace = ExceptionUtils.getStackTrace(e);
+            assertTrue(stackTrace.contains("Remote Inference is currently disabled."));
+        }
+    }
 }
