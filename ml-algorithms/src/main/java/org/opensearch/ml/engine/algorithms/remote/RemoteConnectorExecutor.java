@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -48,6 +47,8 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.Builder;
 
 public interface RemoteConnectorExecutor {
@@ -81,7 +82,7 @@ public interface RemoteConnectorExecutor {
                         MLInput
                             .builder()
                             .algorithm(FunctionName.TEXT_EMBEDDING)
-//                            .parameters(mlInput.getParameters())
+                            .parameters(mlInput.getParameters())
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
