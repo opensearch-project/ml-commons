@@ -14,7 +14,13 @@ import java.util.function.Consumer;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.MLOutputType;
 
 public class ModelTensorOutputTest {
@@ -59,6 +65,109 @@ public class ModelTensorOutputTest {
             assertEquals(MLOutputType.MODEL_TENSOR, parsedTensorOutput.getType());
             assertNull(parsedTensorOutput.getMlModelOutputs());
         });
+    }
+
+    @Test
+    public void parse_Success() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startObject();
+        builder.startArray(ModelTensorOutput.INFERENCE_RESULT_FIELD);
+
+        builder.startObject();
+        builder.startArray("output");
+
+        builder.startObject();
+        builder.field("name", "test");
+        builder.field("data_type", "FLOAT32");
+        builder.field("shape", new long[] { 1, 3 });
+        builder.field("data", value);
+        builder.endObject();
+
+        builder.endArray();
+        builder.endObject();
+
+        builder.endArray();
+        builder.endObject();
+
+        String jsonStr = TestHelper.xContentBuilderToString(builder);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        ModelTensorOutput parsedOutput = ModelTensorOutput.parse(parser);
+
+        assertEquals(1, parsedOutput.getMlModelOutputs().size());
+        ModelTensors modelTensors = parsedOutput.getMlModelOutputs().get(0);
+        assertEquals(1, modelTensors.getMlModelTensors().size());
+        ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
+        assertEquals("test", modelTensor.getName());
+        assertEquals(value.length, modelTensor.getData().length);
+        assertEquals(value[0].doubleValue(), modelTensor.getData()[0].doubleValue(), 0.0001);
+        assertArrayEquals(new long[] { 1, 3 }, modelTensor.getShape());
+        assertEquals(MLResultDataType.FLOAT32, modelTensor.getDataType());
+    }
+
+    @Test
+    public void parse_EmptyObject() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startObject();
+        builder.endObject();
+
+        String jsonStr = TestHelper.xContentBuilderToString(builder);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        ModelTensorOutput parsedOutput = ModelTensorOutput.parse(parser);
+
+        assertEquals(0, parsedOutput.getMlModelOutputs().size());
+    }
+
+    @Test
+    public void parse_SkipIrrelevantFields() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startObject();
+
+        builder.field("irrelevant_field", "irrelevant_value");
+
+        builder.startArray(ModelTensorOutput.INFERENCE_RESULT_FIELD);
+        builder.startObject();
+        builder.startArray("output");
+        builder.startObject();
+        builder.field("name", "test");
+        builder.field("data_type", "FLOAT32");
+        builder.field("shape", new long[] { 1, 3 });
+        builder.field("data", value);
+        builder.endObject();
+        builder.endArray();
+        builder.endObject();
+        builder.endArray();
+
+        builder.field("another_irrelevant_field", "another_value");
+
+        builder.endObject();
+
+        String jsonStr = TestHelper.xContentBuilderToString(builder);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+        parser.nextToken();
+
+        ModelTensorOutput parsedOutput = ModelTensorOutput.parse(parser);
+
+        assertEquals(1, parsedOutput.getMlModelOutputs().size());
+        ModelTensors modelTensors = parsedOutput.getMlModelOutputs().get(0);
+        assertEquals(1, modelTensors.getMlModelTensors().size());
+        ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
+        assertEquals("test", modelTensor.getName());
+        assertEquals(value.length, modelTensor.getData().length);
+        assertEquals(value[0].doubleValue(), modelTensor.getData()[0].doubleValue(), 0.0001);
+        assertArrayEquals(new long[] { 1, 3 }, modelTensor.getShape());
     }
 
     private void readInputStream(ModelTensorOutput input, Consumer<ModelTensorOutput> verify) throws IOException {
