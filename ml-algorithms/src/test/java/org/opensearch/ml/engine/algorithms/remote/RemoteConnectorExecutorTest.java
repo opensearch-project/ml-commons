@@ -19,6 +19,7 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VAL
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -72,7 +73,7 @@ public class RemoteConnectorExecutorTest {
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
     }
 
-    private Connector getConnector(Map<String, String> parameters) {
+    private Connector getConnector(Map<String, String> parameters) throws ExecutionException, InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -81,7 +82,12 @@ public class RemoteConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -105,7 +111,7 @@ public class RemoteConnectorExecutorTest {
     }
 
     @Test
-    public void executePreparePayloadAndInvoke_SkipValidateMissingParameterDisabled() {
+    public void executePreparePayloadAndInvoke_SkipValidateMissingParameterDisabled() throws ExecutionException, InterruptedException {
         Map<String, String> parameters = ImmutableMap
             .of(SKIP_VALIDATE_MISSING_PARAMETERS, "false", SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
         Connector connector = getConnector(parameters);
@@ -128,7 +134,7 @@ public class RemoteConnectorExecutorTest {
     }
 
     @Test
-    public void executePreparePayloadAndInvoke_SkipValidateMissingParameterEnabled() {
+    public void executePreparePayloadAndInvoke_SkipValidateMissingParameterEnabled() throws ExecutionException, InterruptedException {
         Map<String, String> parameters = ImmutableMap
             .of(SKIP_VALIDATE_MISSING_PARAMETERS, "true", SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
         Connector connector = getConnector(parameters);
@@ -149,7 +155,7 @@ public class RemoteConnectorExecutorTest {
     }
 
     @Test
-    public void executePreparePayloadAndInvoke_SkipValidateMissingParameterDefault() {
+    public void executePreparePayloadAndInvoke_SkipValidateMissingParameterDefault() throws ExecutionException, InterruptedException {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
         Connector connector = getConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);

@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
@@ -144,7 +145,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         syncUpCron = new MLSyncUpCron(client, sdkClient, clusterService, nodeHelper, mlIndicesHandler, encryptor, mlFeatureEnabledSetting);
     }
 
-    public void testInitMlConfig_MasterKeyNotExist() {
+    public void testInitMlConfig_MasterKeyNotExist() throws ExecutionException, InterruptedException {
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             GetResponse response = mock(GetResponse.class);
@@ -161,12 +162,12 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
+        Assert.assertNotNull(encryptor.encrypt("test", null).get());
         syncUpCron.initMLConfig();
         verify(encryptor, times(1)).setMasterKey(any(), any());
     }
 
-    public void testInitMlConfig_MasterKeyExists() {
+    public void testInitMlConfig_MasterKeyExists() throws ExecutionException, InterruptedException {
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             GetResponse response = mock(GetResponse.class);
@@ -179,7 +180,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
+        Assert.assertNotNull(encryptor.encrypt("test", null).get());
         syncUpCron.initMLConfig();
         verify(encryptor, times(1)).setMasterKey(any(), any());
     }
