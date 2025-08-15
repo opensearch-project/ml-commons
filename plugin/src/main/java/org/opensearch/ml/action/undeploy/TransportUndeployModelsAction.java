@@ -6,10 +6,12 @@
 package org.opensearch.ml.action.undeploy;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.opensearch.ExceptionsHelper;
@@ -198,7 +200,19 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
              * Having this change enables a check that this edge case occurs along with having access to the model id
              * allowing us to update the stale model index correctly to `UNDEPLOYED` since no nodes service the model.
              */
-            if (response.getNodes().isEmpty()) {
+            boolean modelNotFoundInNodesCache = response.getNodes().stream().allMatch(nodeResponse -> {
+                Map<String, String> status = nodeResponse.getModelUndeployStatus();
+                if (status == null)
+                    return false;
+                // Stream is used to catch all models edge case but only one is ever undeployed
+                boolean modelCacheMissForModelIds = Arrays.stream(modelIds).allMatch(modelId -> {
+                    String modelStatus = status.get(modelId);
+                    return modelStatus != null && modelStatus.equalsIgnoreCase(NOT_FOUND);
+                });
+
+                return modelCacheMissForModelIds;
+            });
+            if (response.getNodes().isEmpty() || modelNotFoundInNodesCache) {
                 bulkSetModelIndexToUndeploy(modelIds, listener, response);
                 return;
             }
