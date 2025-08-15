@@ -20,7 +20,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -48,13 +47,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
     private final MLIndexInsightType taskType = MLIndexInsightType.FIELD_DESCRIPTION;
     private final String sourceIndex;
-    private final MappingMetadata mappingMetadata;
     private final Client client;
     private final ClusterService clusterService;
 
     public FieldDescriptionTask(String sourceIndex, Client client, ClusterService clusterService) {
         this.sourceIndex = sourceIndex;
-        this.mappingMetadata = clusterService.state().metadata().index(sourceIndex).mapping();
         this.client = client;
         this.clusterService = clusterService;
     }
@@ -126,7 +123,14 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     private void batchProcessFields(String statisticalContent, String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
-        Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
+        Map<String, Object> mappingSource;
+        try {
+            mappingSource = (Map<String, Object>) ((Map<String, Object>) JsonPath.read(statisticalContent, "$")).get("mapping");
+        } catch (Exception e) {
+            listener.onFailure(new RuntimeException("Failed to parse statistic content for field description task to get mappings"));
+            return;
+        }
+
         if (mappingSource == null || mappingSource.isEmpty()) {
             log.error("No mapping properties found for index: {}", sourceIndex);
             saveFailedStatus(storageIndex);
