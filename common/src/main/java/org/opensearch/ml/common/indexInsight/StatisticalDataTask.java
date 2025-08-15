@@ -21,6 +21,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.utils.mergeMetaDataUtils.MergeRuleHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
@@ -115,17 +116,21 @@ public class StatisticalDataTask implements IndexInsightTask {
             if (mappings.isEmpty()) {
                 throw new IllegalArgumentException("No matching mapping with index name: " + sourceIndex);
             }
-            String firstIndexName = (String) mappings.keySet().toArray()[0];
+
+            Map<String, Object> allFields = new HashMap<>();
+            for (MappingMetadata mappingMetadata : mappings.values()) {
+                Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
+                MergeRuleHelper.merge(mappingSource, allFields);
+            }
             Map<String, String> fieldsToType = new HashMap<>();
-            Map<String, Object> mappingSource = (Map<String, Object>) mappings.get(firstIndexName).getSourceAsMap().get("properties");
-            extractFieldNamesTypes(mappingSource, fieldsToType, "", false);
+            extractFieldNamesTypes(allFields, fieldsToType, "", false);
             SearchRequest searchRequest = new SearchRequest(sourceIndex);
             searchRequest.source(buildQuery(fieldsToType));
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
                 Map<String, Object> result = new LinkedHashMap<>();
-                result.put("mapping", mappingSource);
+                result.put("mapping", allFields);
                 result.put("distribution", parseSearchResult(searchResponse));
 
                 String statisticalContent = gson.toJson(result);
