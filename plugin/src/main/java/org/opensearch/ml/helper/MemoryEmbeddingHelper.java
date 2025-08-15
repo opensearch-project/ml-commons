@@ -64,7 +64,13 @@ public class MemoryEmbeddingHelper {
             listener.onResponse(new ArrayList<>());
             return;
         }
+        generateEmbeddingsInternal(texts, storageConfig, listener);
+    }
 
+    /**
+     * Internal method to generate embeddings for multiple texts
+     */
+    private void generateEmbeddingsInternal(List<String> texts, MemoryStorageConfig storageConfig, ActionListener<List<Object>> listener) {
         String embeddingModelId = storageConfig.getEmbeddingModelId();
         FunctionName embeddingModelType = storageConfig.getEmbeddingModelType();
 
@@ -142,49 +148,11 @@ public class MemoryEmbeddingHelper {
             return;
         }
 
-        // Validate model state before generating embedding
-        validateEmbeddingModelState(embeddingModelId, embeddingModelType, ActionListener.wrap(isValid -> {
-            // Create MLInput for text embedding
-            MLInput mlInput = MLInput
-                .builder()
-                .algorithm(embeddingModelType)
-                .inputDataset(TextDocsInputDataSet.builder().docs(Arrays.asList(text)).build())
-                .build();
-
-            // Create prediction request
-            MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
-                .builder()
-                .modelId(embeddingModelId)
-                .mlInput(mlInput)
-                .build();
-
-            // Execute prediction
-            client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
-                try {
-                    MLOutput mlOutput = response.getOutput();
-                    if (mlOutput instanceof ModelTensorOutput) {
-                        ModelTensorOutput tensorOutput = (ModelTensorOutput) mlOutput;
-                        Object embedding = null;
-
-                        if (embeddingModelType == FunctionName.TEXT_EMBEDDING) {
-                            embedding = buildDenseEmbeddingFromResponse(tensorOutput);
-                        } else if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
-                            embedding = buildSparseEmbeddingFromResponse(tensorOutput);
-                        }
-
-                        listener.onResponse(embedding);
-                    } else {
-                        log.error("Unexpected ML output type: {}", mlOutput.getClass().getName());
-                        listener.onResponse(null);
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to extract embedding from ML output", e);
-                    listener.onResponse(null);
-                }
-            }, e -> {
-                log.error("Failed to generate embedding", e);
-                listener.onResponse(null);
-            }));
+        // Use the internal method with a single text
+        generateEmbeddingsInternal(Arrays.asList(text), storageConfig, ActionListener.wrap(embeddings -> {
+            // Extract the first (and only) embedding
+            Object embedding = (embeddings != null && !embeddings.isEmpty()) ? embeddings.get(0) : null;
+            listener.onResponse(embedding);
         }, e -> {
             log.error("Failed to validate embedding model state", e);
             listener.onResponse(null);
@@ -209,7 +177,8 @@ public class MemoryEmbeddingHelper {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(model -> {
                 MLModelState modelState = model.getModelState();
-                if (modelState != MLModelState.DEPLOYED) {
+                if (model.getAlgorithm() != FunctionName.REMOTE
+                    && (modelState != MLModelState.DEPLOYED && modelState != MLModelState.PARTIALLY_DEPLOYED)) {
                     listener
                         .onFailure(
                             new IllegalStateException(
@@ -220,7 +189,7 @@ public class MemoryEmbeddingHelper {
                     listener.onResponse(true);
                 }
             }, e -> {
-                log.error("Failed to get embedding model: " + modelId, e);
+                log.error("Failed to get embedding model: {}", modelId, e);
                 listener.onFailure(new IllegalStateException("Failed to validate embedding model state", e));
             }), context::restore);
 
@@ -278,81 +247,4 @@ public class MemoryEmbeddingHelper {
         return null;
     }
 
-    /**
-     * Build dense embedding from response
-     * 
-     * @param tensorOutput model tensor output
-     * @return float array representing the dense embedding
-     */
-    private float[] buildDenseEmbeddingFromResponse(ModelTensorOutput tensorOutput) {
-        if (tensorOutput.getMlModelOutputs() == null || tensorOutput.getMlModelOutputs().isEmpty()) {
-            log.debug("No model outputs found in tensor output");
-            return null;
-        }
-
-        ModelTensors modelTensors = tensorOutput.getMlModelOutputs().get(0);
-        if (modelTensors.getMlModelTensors() == null || modelTensors.getMlModelTensors().isEmpty()) {
-            log.debug("No model tensors found in model output");
-            return null;
-        }
-
-        // For dense embeddings, look for the sentence_embedding tensor
-        for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-            if ("sentence_embedding".equals(tensor.getName()) && tensor.getData() != null) {
-                Number[] data = tensor.getData();
-                log.debug("Found sentence_embedding tensor with dimension: {}", data.length);
-
-                // Convert Number[] to float[] for proper storage
-                float[] floatData = new float[data.length];
-                for (int i = 0; i < data.length; i++) {
-                    floatData[i] = data[i].floatValue();
-                }
-                return floatData;
-            }
-        }
-
-        log.error("No sentence_embedding tensor found for dense embedding");
-        return null;
-    }
-
-    /**
-     * Build sparse embedding from response
-     * 
-     * @param tensorOutput model tensor output
-     * @return map representing the sparse embedding
-     */
-    private Map<String, ?> buildSparseEmbeddingFromResponse(ModelTensorOutput tensorOutput) {
-        if (tensorOutput.getMlModelOutputs() == null || tensorOutput.getMlModelOutputs().isEmpty()) {
-            log.debug("No model outputs found in tensor output");
-            return null;
-        }
-
-        ModelTensors modelTensors = tensorOutput.getMlModelOutputs().get(0);
-        if (modelTensors.getMlModelTensors() == null || modelTensors.getMlModelTensors().isEmpty()) {
-            log.debug("No model tensors found in model output");
-            return null;
-        }
-
-        // For sparse embeddings, find the tensor with dataAsMap
-        for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-            Map<String, ?> dataMap = tensor.getDataAsMap();
-            if (dataMap != null) {
-                // Check if sparse embedding is nested in a response field
-                if (dataMap.containsKey("response") && dataMap.get("response") instanceof List) {
-                    List<?> responseList = (List<?>) dataMap.get("response");
-                    if (!responseList.isEmpty() && responseList.get(0) instanceof Map) {
-                        Map<String, ?> sparseMap = (Map<String, ?>) responseList.get(0);
-                        log.debug("Extracted sparse embedding from nested response with {} tokens", sparseMap.size());
-                        return sparseMap;
-                    }
-                }
-                // Otherwise return the direct map
-                log.debug("Using direct sparse embedding with {} tokens", dataMap.size());
-                return dataMap;
-            }
-        }
-
-        log.error("No sparse embedding data found");
-        return null;
-    }
 }

@@ -26,6 +26,7 @@ import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
@@ -74,7 +75,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         String connectorId = executeConnectorRequest.getConnectorId();
         String connectorAction = ConnectorAction.ActionType.EXECUTE.name();
 
-        if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+        if (MLIndicesHandler
+            .doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_CONNECTOR_INDEX)) {
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
                     // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.

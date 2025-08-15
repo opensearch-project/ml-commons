@@ -237,7 +237,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         ModelTensors firstModelTensors = mlModelOutputs.get(0);
         List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(4, firstModelTensorList.size());
+        assertEquals(2, firstModelTensorList.size());
 
         ModelTensor memoryIdTensor = firstModelTensorList.get(0);
         assertEquals("memory_id", memoryIdTensor.getName());
@@ -310,7 +310,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         ModelTensors firstModelTensors = mlModelOutputs.get(0);
         List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(4, firstModelTensorList.size());
+        assertEquals(2, firstModelTensorList.size());
 
         ModelTensor memoryIdTensor = firstModelTensorList.get(0);
         assertEquals("memory_id", memoryIdTensor.getName());
@@ -575,10 +575,11 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         mlPlanExecuteAndReflectAgentRunner.addToolsToPrompt(tools, testParams);
 
         assertEquals(
-            "In this environment, the executor agent only has access to the below tools. You must choose from only the following tools — no other tools are available. Do not use tools not listed here. \n"
+            "In this environment, you have access to the tools listed below. Use these tools to create your plan, and do not reference or use any tools not listed here.\n"
                 + "Tool 1 - tool1: description1\n"
                 + "\n"
-                + "No other tools are available. Do not invent tools.\n\n",
+                + "No other tools are available. Do not invent tools. Only use tools to create the plan.\n"
+                + "\n",
             testParams.get(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD)
         );
     }
@@ -612,6 +613,15 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
         assertEquals(executorMemoryId, tensors.getMlModelTensors().get(2).getResult());
         assertEquals(executorParentId, tensors.getMlModelTensors().get(3).getResult());
+
+        result = MLPlanExecuteAndReflectAgentRunner.createModelTensors(sessionId, parentInteractionId, "", "");
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        tensors = result.get(0);
+        assertEquals(2, tensors.getMlModelTensors().size());
+        assertEquals(sessionId, tensors.getMlModelTensors().get(0).getResult());
+        assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
     }
 
     @Test
