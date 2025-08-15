@@ -610,7 +610,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     @VisibleForTesting
     void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
         StringBuilder toolsPrompt = new StringBuilder(
-            "In this environment, the executor agent only has access to the below tools. You must choose from only the following tools — no other tools are available. Do not use tools not listed here. \n"
+            "In this environment, you have access to the tools listed below. Use these tools to create your plan, and do not reference or use any tools not listed here.\n"
         );
         int toolNumber = 0;
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
@@ -618,7 +618,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             String toolDescription = entry.getValue().getDescription();
             toolsPrompt.append(String.format("Tool %d - %s: %s\n\n", ++toolNumber, toolName, toolDescription));
         }
-        toolsPrompt.append("No other tools are available. Do not invent tools.\n\n");
+        toolsPrompt.append("No other tools are available. Do not invent tools. Only use tools to create the plan.\n\n");
         allParams.put(DEFAULT_PROMPT_TOOLS_FIELD, toolsPrompt.toString());
         populatePrompt(allParams);
         cleanUpResource(tools);
@@ -677,25 +677,20 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String reactParentInteractionId
     ) {
         List<ModelTensors> modelTensors = new ArrayList<>();
-        modelTensors
-            .add(
-                ModelTensors
-                    .builder()
-                    .mlModelTensors(
-                        List
-                            .of(
-                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
-                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build(),
-                                ModelTensor.builder().name(EXECUTOR_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build(),
-                                ModelTensor
-                                    .builder()
-                                    .name(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD)
-                                    .result(reactParentInteractionId)
-                                    .build()
-                            )
-                    )
-                    .build()
-            );
+        List<ModelTensor> tensors = new ArrayList<>();
+
+        tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
+        tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
+
+        if (reactAgentMemoryId != null && !reactAgentMemoryId.isEmpty()) {
+            tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build());
+        }
+
+        if (reactParentInteractionId != null && !reactParentInteractionId.isEmpty()) {
+            tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD).result(reactParentInteractionId).build());
+        }
+
+        modelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
         return modelTensors;
     }
 
