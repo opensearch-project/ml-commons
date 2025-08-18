@@ -27,6 +27,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.Version;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -100,6 +101,23 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
             .withPath(RestMcpConnectionMessageStreamingAction.SSE_ENDPOINT)
             .build();
         restMcpConnectionMessageStreamingAction.prepareRequest(request, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_prepareRequest_featureFlagDisabled() {
+        exceptionRule.expect(OpenSearchException.class);
+        exceptionRule
+            .expectMessage("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled");
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        RestMcpConnectionMessageStreamingAction messageStreamingAction = new RestMcpConnectionMessageStreamingAction(
+            clusterService,
+            mlFeatureEnabledSetting
+        );
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.GET)
+            .withPath(RestMcpConnectionMessageStreamingAction.SSE_ENDPOINT)
+            .build();
+        messageStreamingAction.prepareRequest(request, mock(NodeClient.class));
     }
 
     @Test

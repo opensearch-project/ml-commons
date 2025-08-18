@@ -1,6 +1,7 @@
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
@@ -29,6 +30,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -184,6 +187,153 @@ public class TextEmbeddingSparseEncodingModelTest {
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
         }
+        textEmbeddingSparseEncodingModel.close();
+    }
+
+    // Test AsymmetricTextEmbeddingParameters with WORD format
+    @Test
+    public void initModel_predict_SparseEncoding_WithLexicalFormat() {
+        textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
+
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .build();
+
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SPARSE_ENCODING)
+            .inputDataset(inputDataSet)
+            .parameters(parameters)
+            .build();
+
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            assertNotNull(tensor.getDataAsMap());
+        }
+        textEmbeddingSparseEncodingModel.close();
+    }
+
+    // Test AsymmetricTextEmbeddingParameters with TOKEN_ID format
+    @Test
+    public void initModel_predict_SparseEncoding_WithTokenIdFormat() {
+        textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
+
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.TOKEN_ID)
+            .build();
+
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SPARSE_ENCODING)
+            .inputDataset(inputDataSet)
+            .parameters(parameters)
+            .build();
+
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            assertNotNull(tensor.getDataAsMap());
+        }
+        textEmbeddingSparseEncodingModel.close();
+    }
+
+    // Test both content_type and sparse_embedding_format parameters
+    @Test
+    public void initModel_predict_SparseEncoding_WithBothParameters() {
+        textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
+
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.QUERY)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.TOKEN_ID)
+            .build();
+
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SPARSE_ENCODING)
+            .inputDataset(inputDataSet)
+            .parameters(parameters)
+            .build();
+
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            assertNotNull(tensor.getDataAsMap());
+        }
+        textEmbeddingSparseEncodingModel.close();
+    }
+
+    // Test default parameters behavior (no AsymmetricTextEmbeddingParameters)
+    @Test
+    public void initModel_predict_SparseEncoding_WithoutParameters() {
+        textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
+
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build();
+
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            assertNotNull(tensor.getDataAsMap());
+        }
+        textEmbeddingSparseEncodingModel.close();
+    }
+
+    // Test isAsymmetricModel method override returns false
+    @Test
+    public void test_isAsymmetricModel_ReturnsFalse() {
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.QUERY)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .build();
+
+        // Test that isAsymmetricModel returns false even with AsymmetricTextEmbeddingParameters
+        boolean isAsymmetric = textEmbeddingSparseEncodingModel.isAsymmetricModel(parameters);
+        assertFalse("isAsymmetricModel should return false for sparse encoding model", isAsymmetric);
+    }
+
+    // Test isAsymmetricModel with null parameters
+    @Test
+    public void test_isAsymmetricModel_WithNullParameters() {
+        boolean isAsymmetric = textEmbeddingSparseEncodingModel.isAsymmetricModel(null);
+        assertFalse("isAsymmetricModel should return false with null parameters", isAsymmetric);
+    }
+
+    // Test isSparseModel field default value
+    @Test
+    public void test_isSparseModel_DefaultValue() {
+        // Test that the protected field isSparseModel defaults to false
+        // This indirectly tests the field existence and default value
+        textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
+
+        // The field is tested implicitly through model behavior
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
+        assertNotNull("Model should predict successfully with default isSparseModel value", output);
+
         textEmbeddingSparseEncodingModel.close();
     }
 

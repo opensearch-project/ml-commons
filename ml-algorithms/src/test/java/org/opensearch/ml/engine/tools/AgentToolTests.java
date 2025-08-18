@@ -129,7 +129,7 @@ public class AgentToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = AgentTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "test_agent_id"));
         assertEquals(AgentTool.TYPE, tool.getName());
         assertEquals(AgentTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
@@ -137,5 +137,49 @@ public class AgentToolTests {
         assertTrue(tool.validate(otherParams));
         assertTrue(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
+    }
+
+    @Test
+    public void testToolFailure() {
+        assertThrows(IllegalArgumentException.class, () -> AgentTool.Factory.getInstance().create(Collections.emptyMap()));
+        assertThrows(IllegalArgumentException.class, () -> AgentTool.Factory.getInstance().create(Map.of("agent_id", "")));
+    }
+
+    @Test
+    public void testRunWithNullAgentId() {
+        AgentTool tool = new AgentTool(client, "test_agent_id");
+        tool.setAgentId(null);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("testKey", "testValue");
+
+        tool.run(parameters, listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
+    public void testRunWithBlankAgentId() {
+        AgentTool tool = new AgentTool(client, "test_agent_id");
+        tool.setAgentId("");
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("testKey", "testValue");
+
+        tool.run(parameters, listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
+    public void testRunWithGeneralException() {
+        AgentTool tool = new AgentTool(null, "test_agent_id");
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("testKey", "testValue");
+
+        tool.run(parameters, listener);
+
+        verify(listener).onFailure(any(Exception.class));
     }
 }

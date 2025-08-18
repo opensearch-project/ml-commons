@@ -11,7 +11,7 @@ buildscript {
     ext {
         opensearch_group = "org.opensearch"
         isSnapshot = "true" == System.getProperty("build.snapshot", "true")
-        opensearch_version = System.getProperty("opensearch.version", "3.1.0-SNAPSHOT")
+        opensearch_version = System.getProperty("opensearch.version", "3.2.0-SNAPSHOT")
         buildVersionQualifier = System.getProperty("build.version_qualifier", "")
         asm_version = "9.7"
 
@@ -60,9 +60,9 @@ buildscript {
 }
 
 plugins {
-    id 'com.netflix.nebula.ospackage' version "11.5.0"
+    id 'com.netflix.nebula.ospackage' version "12.0.0"
     id 'java'
-    id "io.freefair.lombok" version "8.4"
+    id "io.freefair.lombok" version "8.14"
     id 'jacoco'
 }
 
@@ -80,7 +80,7 @@ allprojects {
     }
 
     plugins.withId('jacoco') {
-        jacoco.toolVersion = '0.8.12'
+        jacoco.toolVersion = '0.8.13'
     }
 
     project.getExtensions().getExtraProperties().set("versions", VersionProperties.getVersions());

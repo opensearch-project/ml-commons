@@ -16,6 +16,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
@@ -977,4 +978,144 @@ public class MLChatAgentRunnerTest {
         };
     }
 
+    @Test
+    public void testMaxIterationsReached() {
+        // Create LLM spec with max_iteration = 1 to force max iterations
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        // Mock LLM response that doesn't contain final_answer to force max iterations
+        Mockito
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "", "action", FIRST_TOOL)))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify response is captured
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object capturedResponse = objectCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+        List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
+        assertEquals(1, agentOutput.size());
+
+        // Verify the response contains max iterations message
+        String response = (String) agentOutput.get(0).getDataAsMap().get("response");
+        assertEquals("Agent reached maximum iterations (1) without completing the task", response);
+    }
+
+    @Test
+    public void testMaxIterationsReachedWithValidThought() {
+        // Create LLM spec with max_iteration = 1 to force max iterations
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        // Mock LLM response with valid thought
+        Mockito
+            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "I need to use the first tool", "action", FIRST_TOOL)))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify response is captured
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object capturedResponse = objectCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+        List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
+        assertEquals(1, agentOutput.size());
+
+        // Verify the response contains the last valid thought instead of max iterations message
+        String response = (String) agentOutput.get(0).getDataAsMap().get("response");
+        assertEquals(
+            "Agent reached maximum iterations (1) without completing the task. Last thought: I need to use the first tool",
+            response
+        );
+    }
+
+    @Test
+    public void testConstructLLMParams_WithSystemPromptAndDateTimeInjection() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MLChatAgentRunner.SYSTEM_PROMPT_FIELD, "You are a helpful assistant.");
+        parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "true");
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(MLChatAgentRunner.SYSTEM_PROMPT_FIELD));
+        String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
+        Assert.assertTrue(systemPrompt.startsWith("You are a helpful assistant."));
+        Assert.assertTrue(systemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+    }
+
+    @Test
+    public void testConstructLLMParams_WithoutSystemPromptAndDateTimeInjection() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "true");
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_PREFIX));
+        String promptPrefix = result.get(AgentUtils.PROMPT_PREFIX);
+        Assert.assertTrue(promptPrefix.contains(DEFAULT_DATETIME_PREFIX));
+    }
+
+    @Test
+    public void testConstructLLMParams_DateTimeInjectionDisabled() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "false");
+        parameters.put(MLChatAgentRunner.SYSTEM_PROMPT_FIELD, "You are a helpful assistant.");
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(MLChatAgentRunner.SYSTEM_PROMPT_FIELD));
+        String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
+        Assert.assertEquals("You are a helpful assistant.", systemPrompt);
+        Assert.assertFalse(systemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+    }
+
+    @Test
+    public void testConstructLLMParams_DefaultValues() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_PREFIX));
+        Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_SUFFIX));
+        Assert.assertTrue(result.containsKey(AgentUtils.RESPONSE_FORMAT_INSTRUCTION));
+        Assert.assertTrue(result.containsKey(AgentUtils.TOOL_RESPONSE));
+    }
 }

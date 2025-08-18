@@ -8,10 +8,12 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -28,6 +30,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.input.execute.tool.ToolMLInput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
@@ -67,7 +70,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
         return ImmutableList
             .of(
                 new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/_execute/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM)),
-                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/agents/{%s}/_execute", ML_BASE_URI, PARAMETER_AGENT_ID))
+                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/agents/{%s}/_execute", ML_BASE_URI, PARAMETER_AGENT_ID)),
+                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/tools/_execute/{%s}", ML_BASE_URI, PARAMETER_TOOL_NAME))
             );
     }
 
@@ -124,6 +128,14 @@ public class RestMLExecuteAction extends BaseRestHandler {
             ((AgentMLInput) input).setAgentId(agentId);
             ((AgentMLInput) input).setTenantId(tenantId);
             ((AgentMLInput) input).setIsAsync(async);
+        } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
+            if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
+                throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);
+            }
+            String toolName = request.param(PARAMETER_TOOL_NAME);
+            functionName = FunctionName.TOOL;
+            input = MLInput.parse(parser, functionName.name());
+            ((ToolMLInput) input).setToolName(toolName);
         } else {
             String algorithm = getAlgorithm(request).toUpperCase(Locale.ROOT);
             functionName = FunctionName.from(algorithm);

@@ -1,6 +1,8 @@
 package org.opensearch.ml.engine.indices;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isA;
@@ -11,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
@@ -35,6 +38,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
@@ -74,6 +78,9 @@ public class MLIndicesHandlerTest {
     @Mock
     private ThreadPool threadPool;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     Settings settings;
     ThreadContext threadContext;
     MLIndicesHandler indicesHandler;
@@ -102,7 +109,29 @@ public class MLIndicesHandlerTest {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        indicesHandler = new MLIndicesHandler(clusterService, client);
+        indicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
+    }
+
+    @Test
+    public void doesMultiTenantIndexExist_multiTenancyEnabled_returnsTrue() {
+        assertTrue(MLIndicesHandler.doesMultiTenantIndexExist(null, true, null));
+        MLIndicesHandler mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
+        assertTrue(mlIndicesHandler.doesIndexExists(ML_CONFIG_INDEX));
+    }
+
+    @Test
+    public void doesMultiTenantIndexExist_multiTenancyDisabledSearchesClusterService_returnsValidSearchResult() {
+        assertFalse(MLIndicesHandler.doesMultiTenantIndexExist(clusterService, false, null));
+
+        String sampleIndexName = "test-index";
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        MLIndicesHandler mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
+
+        when(clusterService.state().metadata().hasIndex(sampleIndexName)).thenReturn(true);
+        assertTrue(mlIndicesHandler.doesIndexExists(sampleIndexName));
+
+        when(clusterService.state().metadata().hasIndex(sampleIndexName)).thenReturn(false);
+        assertFalse(mlIndicesHandler.doesIndexExists(sampleIndexName));
     }
 
     @Test

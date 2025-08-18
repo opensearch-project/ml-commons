@@ -2,6 +2,7 @@ package org.opensearch.ml.engine.algorithms.tokenize;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -163,6 +166,147 @@ public class SparseTokenizerModelTest {
         }
     }
 
+    // Test default WORD format (no parameters provided)
+    @Test
+    public void initModel_predict_Tokenize_DefaultLexicalFormat() throws URISyntaxException, TranslateException {
+        sparseTokenizerModel.initModel(model, params, encryptor);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput) sparseTokenizerModel.predict(mlInput);
+
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        // Verify output format is WORD (token strings as keys)
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            Map<String, ?> resultMap = tensor.getDataAsMap();
+            List<Map<String, Float>> resultList = (List<Map<String, Float>>) resultMap.get("response");
+            Map<String, Float> result = resultList.get(0);
+
+            // Verify keys are token strings rather than numeric IDs
+            for (String key : result.keySet()) {
+                assertTrue("Key should be a token string, not numeric ID", !isNumeric(key));
+            }
+        }
+    }
+
+    // Test WORD format with explicit parameter
+    @Test
+    public void initModel_predict_Tokenize_WithLexicalFormat() throws URISyntaxException, TranslateException {
+        sparseTokenizerModel.initModel(model, params, encryptor);
+
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .build();
+
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SPARSE_TOKENIZE)
+            .inputDataset(inputDataSet)
+            .parameters(parameters)
+            .build();
+
+        ModelTensorOutput output = (ModelTensorOutput) sparseTokenizerModel.predict(mlInput);
+
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        // Verify output format is WORD
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            Map<String, ?> resultMap = tensor.getDataAsMap();
+            List<Map<String, Float>> resultList = (List<Map<String, Float>>) resultMap.get("response");
+            Map<String, Float> result = resultList.get(0);
+
+            // Verify keys are token strings
+            for (String key : result.keySet()) {
+                assertTrue("Key should be a token string for WORD format", !isNumeric(key));
+            }
+        }
+    }
+
+    // Test TOKEN_ID format
+    @Test
+    public void initModel_predict_Tokenize_WithTokenIdFormat() throws URISyntaxException, TranslateException {
+        sparseTokenizerModel.initModel(model, params, encryptor);
+
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.TOKEN_ID)
+            .build();
+
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SPARSE_TOKENIZE)
+            .inputDataset(inputDataSet)
+            .parameters(parameters)
+            .build();
+
+        ModelTensorOutput output = (ModelTensorOutput) sparseTokenizerModel.predict(mlInput);
+
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        // Verify output format is TOKEN_ID
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            Map<String, ?> resultMap = tensor.getDataAsMap();
+            List<Map<String, Float>> resultList = (List<Map<String, Float>>) resultMap.get("response");
+            Map<String, Float> result = resultList.get(0);
+
+            // Verify keys are numeric token ID strings
+            for (String key : result.keySet()) {
+                assertTrue("Key should be a numeric token ID for TOKEN_ID format", isNumeric(key));
+            }
+        }
+    }
+
+    // Test both content_type and sparse_embedding_format parameters
+    @Test
+    public void initModel_predict_Tokenize_WithBothContentTypeAndFormat() throws URISyntaxException, TranslateException {
+        sparseTokenizerModel.initModel(model, params, encryptor);
+
+        AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
+            .builder()
+            .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.QUERY)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.TOKEN_ID)
+            .build();
+
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.SPARSE_TOKENIZE)
+            .inputDataset(inputDataSet)
+            .parameters(parameters)
+            .build();
+
+        ModelTensorOutput output = (ModelTensorOutput) sparseTokenizerModel.predict(mlInput);
+
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        // Verify output format is TOKEN_ID (sparse_embedding_format parameter takes effect)
+        for (ModelTensors tensors : mlModelOutputs) {
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            ModelTensor tensor = mlModelTensors.get(0);
+            Map<String, ?> resultMap = tensor.getDataAsMap();
+            List<Map<String, Float>> resultList = (List<Map<String, Float>>) resultMap.get("response");
+            Map<String, Float> result = resultList.get(0);
+
+            // Verify keys are numeric token ID strings
+            for (String key : result.keySet()) {
+                assertTrue("Key should be a numeric token ID for TOKEN_ID format", isNumeric(key));
+            }
+        }
+    }
+
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -255,6 +399,21 @@ public class SparseTokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
         sparseTokenizerModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build(), model);
+    }
+
+    /**
+     * Helper method to check if a string is numeric
+     */
+    private boolean isNumeric(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        try {
+            Integer.parseInt(str);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     @After

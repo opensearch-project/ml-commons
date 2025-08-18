@@ -35,7 +35,7 @@ public class MLJobParameterTests {
         lockDurationSeconds = 20L;
         jitter = 0.5;
         jobType = null;
-        jobParameter = new MLJobParameter(jobName, schedule, lockDurationSeconds, jitter, jobType);
+        jobParameter = new MLJobParameter(jobName, schedule, lockDurationSeconds, jitter, jobType, true);
     }
 
     @Test
@@ -54,7 +54,7 @@ public class MLJobParameterTests {
     @Test
     public void testNullCase() throws IOException {
         String newJobName = "test-job";
-        MLJobParameter nullParameter = new MLJobParameter(newJobName, null, null, null, null);
+        MLJobParameter nullParameter = new MLJobParameter(newJobName, null, null, null, null, true);
         nullParameter.setLastUpdateTime(null);
         nullParameter.setEnabledTime(null);
 
@@ -64,6 +64,7 @@ public class MLJobParameterTests {
 
         assertTrue(jsonString.contains(newJobName));
         assertEquals(newJobName, nullParameter.getName());
+        assertTrue(nullParameter.isEnabled());
         assertNull(nullParameter.getSchedule());
         assertNull(nullParameter.getLockDurationSeconds());
         assertNull(nullParameter.getJitter());

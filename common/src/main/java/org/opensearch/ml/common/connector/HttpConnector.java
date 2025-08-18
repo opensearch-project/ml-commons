@@ -72,6 +72,11 @@ public class HttpConnector extends AbstractConnector {
         String tenantId
     ) {
         validateProtocol(protocol);
+        if (actions != null) {
+            for (ConnectorAction action : actions) {
+                action.validatePrePostProcessFunctions(parameters);
+            }
+        }
         this.name = name;
         this.description = description;
         this.version = version;

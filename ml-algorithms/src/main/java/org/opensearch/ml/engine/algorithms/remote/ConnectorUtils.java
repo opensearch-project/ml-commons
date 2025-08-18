@@ -8,6 +8,10 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
+import static org.opensearch.ml.common.connector.ConnectorAction.BEDROCK;
+import static org.opensearch.ml.common.connector.ConnectorAction.COHERE;
+import static org.opensearch.ml.common.connector.ConnectorAction.OPENAI;
+import static org.opensearch.ml.common.connector.ConnectorAction.SAGEMAKER;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -54,24 +58,20 @@ import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.signer.Aws4Signer;
-import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
-import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.http.auth.aws.signer.AwsV4HttpSigner;
+import software.amazon.awssdk.http.auth.spi.signer.SignedRequest;
 
 @Log4j2
 public class ConnectorUtils {
 
-    private static final Aws4Signer signer;
+    private static final AwsV4HttpSigner signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
 
-    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
-        .of("sagemaker", "openai", "bedrock", "cohere");
-
     static {
-        signer = Aws4Signer.create();
+        signer = AwsV4HttpSigner.create();
     }
 
     public static RemoteInferenceInputDataSet processInput(
@@ -292,14 +292,16 @@ public class ConnectorUtils {
             ? AwsBasicCredentials.create(accessKey, secretKey)
             : AwsSessionCredentials.create(accessKey, secretKey, sessionToken);
 
-        Aws4SignerParams params = Aws4SignerParams
-            .builder()
-            .awsCredentials(credentials)
-            .signingName(signingName)
-            .signingRegion(Region.of(region))
-            .build();
-
-        return signer.sign(request, params);
+        SignedRequest signedRequest = signer
+            .sign(
+                r -> r
+                    .identity(credentials)
+                    .request(request)
+                    .payload(request.contentStreamProvider().orElse(null))
+                    .putProperty(AwsV4HttpSigner.SERVICE_SIGNING_NAME, signingName)
+                    .putProperty(AwsV4HttpSigner.REGION_NAME, region)
+            );
+        return (SdkHttpFullRequest) signedRequest.request();
     }
 
     public static SdkHttpFullRequest buildSdkRequest(
@@ -323,10 +325,23 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
         String endpoint = connector.getActionEndpoint(action, parameters);
+        URI uri;
+        try {
+            uri = URI.create(endpoint);
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+                e
+            );
+        }
+
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
             .method(method)
-            .uri(URI.create(endpoint))
+            .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
         Map<String, String> headers = connector.getDecryptedHeaders();
         if (headers != null) {
@@ -363,19 +378,19 @@ public class ConnectorUtils {
         String requestBody = null;
         String url = "";
 
-        switch (getRemoteServerFromURL(predictEndpoint)) {
-            case "sagemaker":
+        switch (ConnectorAction.getRemoteServerFromURL(predictEndpoint)) {
+            case SAGEMAKER:
                 url = isCancelAction
                     ? predictEndpoint.replace("CreateTransformJob", "StopTransformJob")
                     : predictEndpoint.replace("CreateTransformJob", "DescribeTransformJob");
                 requestBody = "{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}";
                 break;
-            case "openai":
-            case "cohere":
+            case OPENAI:
+            case COHERE:
                 url = isCancelAction ? predictEndpoint + "/${parameters.id}/cancel" : predictEndpoint + "/${parameters.id}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
-            case "bedrock":
+            case BEDROCK:
                 url = isCancelAction
                     ? predictEndpoint + "/${parameters.processedJobArn}/stop"
                     : predictEndpoint + "/${parameters.processedJobArn}";
@@ -396,9 +411,5 @@ public class ConnectorUtils {
             .requestBody(requestBody)
             .headers(batchPredictAction.get().getHeaders())
             .build();
-    }
-
-    public static String getRemoteServerFromURL(String url) {
-        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 }

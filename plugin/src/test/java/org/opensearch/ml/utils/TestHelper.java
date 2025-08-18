@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -418,6 +419,17 @@ public class TestHelper {
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .withPath("/_plugins/_ml/agents/test_agent_id/_execute")
+            .build();
+    }
+
+    public static RestRequest getExecuteToolRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_TOOL_NAME, "TestTool");
+        final String requestContent = "{\"parameters\":{\"question\":\"sample question\"}}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/tools/_execute/TestTool")
             .build();
     }
 

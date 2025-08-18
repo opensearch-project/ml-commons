@@ -43,7 +43,11 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                     MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -65,6 +69,9 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", true)
             .put("plugins.ml_commons.metrics_collection_enabled", true)
             .put("plugins.ml_commons.metrics_static_collection_enabled", true)
+            .put("plugins.ml_commons.mcp_connector_enabled", true)
+            .put("plugins.ml_commons.agentic_search_enabled", true)
+            .put("plugins.ml_commons.agentic_memory_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -81,6 +88,9 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isRagSearchPipelineEnabled());
         assertTrue(setting.isMetricCollectionEnabled());
         assertTrue(setting.isStaticMetricCollectionEnabled());
+        assertTrue(setting.isMcpConnectorEnabled());
+        assertTrue(setting.isAgenticSearchEnabled());
+        assertTrue(setting.isAgenticMemoryEnabled());
     }
 
     @Test
@@ -99,6 +109,9 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", false)
             .put("plugins.ml_commons.metrics_collection_enabled", false)
             .put("plugins.ml_commons.metrics_static_collection_enabled", false)
+            .put("plugins.ml_commons.mcp_connector_enabled", false)
+            .put("plugins.ml_commons.agentic_search_enabled", false)
+            .put("plugins.ml_commons.agentic_memory_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -115,6 +128,9 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isRagSearchPipelineEnabled());
         assertFalse(setting.isMetricCollectionEnabled());
         assertFalse(setting.isStaticMetricCollectionEnabled());
+        assertFalse(setting.isMcpConnectorEnabled());
+        assertFalse(setting.isAgenticSearchEnabled());
+        assertFalse(setting.isAgenticMemoryEnabled());
     }
 
     @Test
@@ -128,5 +144,45 @@ public class MLFeatureEnabledSettingTests {
 
         setting.notifyMultiTenancyListeners(true);
         verify(mockListener).onMultiTenancyEnabledChanged(true);
+    }
+
+    @Test
+    public void testAgenticMemoryEnabledByDefault() {
+        Settings settings = Settings.EMPTY;
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        // Should be disabled by default
+        assertFalse(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testAgenticMemoryCanBeEnabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.agentic_memory_enabled", true).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertTrue(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testAgenticMemoryCanBeDisabled() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.agentic_memory_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+        assertFalse(setting.isAgenticMemoryEnabled());
+    }
+
+    @Test
+    public void testStaticMetricCollectionSettingChangeNotifiesListeners() {
+        Settings settings = Settings.builder().put("plugins.ml_commons.metrics_static_collection_enabled", false).build();
+
+        MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
+
+        SettingsChangeListener mockListener = mock(SettingsChangeListener.class);
+        setting.addListener(mockListener);
+
+        mockClusterSettings.applySettings(Settings.builder().put("plugins.ml_commons.metrics_static_collection_enabled", true).build());
+
+        verify(mockListener).onStaticMetricCollectionEnabledChanged(true);
+        assertTrue(setting.isStaticMetricCollectionEnabled());
     }
 }

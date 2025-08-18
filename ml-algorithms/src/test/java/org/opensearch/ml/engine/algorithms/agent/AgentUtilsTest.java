@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
@@ -33,6 +34,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
@@ -76,6 +78,8 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -1624,6 +1628,133 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testGetCurrentDateTime_WithInvalidFormats() {
+        // null
+        String result = AgentUtils.getCurrentDateTime(null);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+
+        // empty
+        result = AgentUtils.getCurrentDateTime("");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+
+        // invalid
+        result = AgentUtils.getCurrentDateTime("invalid-format");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithValidFormat() {
+        String result = AgentUtils.getCurrentDateTime("EEEE, MMMM d, yyyy 'at' h:mm a z");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+        Assert.assertTrue(result.contains("UTC"));
+    }
+
+    @Test
+    public void testConstructToolParams_ToolInputSubstitution() {
+        String question = "What is the population?";
+        String actionInput = "{\"question\": \"Seattle 2025 population\"}";
+
+        Map<String, Object> queryObj = new HashMap<>();
+        queryObj
+            .put(
+                "query",
+                Map
+                    .of(
+                        "neural",
+                        Map
+                            .of(
+                                "population_description_embedding",
+                                Map.of("query_text", "${parameters.question}", "model_id", "embedding_model_id")
+                            )
+                    )
+            );
+        queryObj.put("size", 2);
+        queryObj.put("_source", "population_description");
+
+        Map<String, Tool> tools = Map.of("SearchIndexTool", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of(
+                "SearchIndexTool",
+                MLToolSpec
+                    .builder()
+                    .type("SearchIndexTool")
+                    .parameters(
+                        Map
+                            .of(
+                                "index",
+                                "test_population_data",
+                                "input",
+                                "{\"index\": \"${parameters.index}\", \"query\": " + StringUtils.toJson(queryObj) + "}"
+                            )
+                    )
+                    .build()
+            );
+
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "SearchIndexTool";
+
+        // Execute
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+
+        // Verify
+        Assert.assertTrue(toolParams.get("input").contains("\"query_text\":\"Seattle 2025 population\""));
+        assertEquals("Seattle 2025 population", toolParams.get("question"));
+    }
+
+    @Test
+    public void testConstructToolParams_NoInputKey() {
+        // Setup
+        String question = "What is the population?";
+        String actionInput = "{\"question\": \"Seattle 2025 population\"}";
+
+        Map<String, Tool> tools = Map.of("SearchTool", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of("SearchTool", MLToolSpec.builder().type("SearchTool").parameters(Map.of("key1", "value1")).build());
+
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "SearchTool";
+
+        // Execute
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+
+        // Verify - should fall back to actionInput
+        assertEquals(actionInput, toolParams.get("input"));
+        assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+    }
+
+    @Test
+    public void testConstructToolParams_InputWithMultipleSubstitutions() {
+        // Setup
+        String question = "What is the population?";
+        String actionInput = "{\"city\": \"Seattle\", \"year\": \"2025\"}";
+
+        Map<String, Tool> tools = Map.of("SearchTool", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of(
+                "SearchTool",
+                MLToolSpec
+                    .builder()
+                    .type("SearchTool")
+                    .parameters(Map.of("input", "Find population of ${parameters.city} in ${parameters.year}"))
+                    .build()
+            );
+
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "SearchTool";
+
+        // Execute
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+
+        // Verify
+        assertEquals("Find population of Seattle in 2025", toolParams.get("input"));
+        assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+    }
+
+    @Test
     public void testCreateTool_Success() {
         Map<String, Tool.Factory> toolFactories = new HashMap<>();
         Tool.Factory factory = mock(Tool.Factory.class);
@@ -1644,7 +1775,8 @@ public class AgentUtilsTest extends MLStaticMockBase {
         params.put("TestTool.param2", "value3");
         params.put("TestTool.description", "Custom description");
 
-        AgentUtils.createTool(toolFactories, params, toolSpec, "test_tenant");
+        Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, toolSpec, "test_tenant");
+        createTool(toolFactories, toolParameters, toolSpec);
 
         verify(factory).create(argThat(toolParamsMap -> {
             Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
@@ -1663,6 +1795,70 @@ public class AgentUtilsTest extends MLStaticMockBase {
         Map<String, Tool.Factory> toolFactories = new HashMap<>();
         MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
 
-        assertThrows(IllegalArgumentException.class, () -> AgentUtils.createTool(toolFactories, new HashMap<>(), toolSpec, "test_tenant"));
+        assertThrows(IllegalArgumentException.class, () -> createTool(toolFactories, new HashMap<>(), toolSpec));
+    }
+
+    @Test
+    public void testCreateTool_WithDescription() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").description("Tool description").build();
+
+        Map<String, String> params = new HashMap<>();
+
+        Tool result = createTool(toolFactories, params, toolSpec);
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Tool description");
+        assertEquals(mockTool, result);
+    }
+
+    @Test
+    public void testCreateTool_WithRuntimeResources() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        Map<String, Object> runtimeResources = new HashMap<>();
+        runtimeResources.put("resource1", "value1");
+        runtimeResources.put("resource2", 42);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(runtimeResources).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        createTool(toolFactories, params, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("resource1").equals("value1")
+                && toolParams.get("resource2").equals(42);
+        }));
+    }
+
+    @Test
+    public void testCreateTool_WithNullRuntimeResources() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").name("TestTool").runtimeResources(null).build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("param1", "value1");
+
+        createTool(toolFactories, params, toolSpec);
+
+        verify(factory).create(argThat(toolParamsMap -> ((Map<String, Object>) toolParamsMap).get("param1").equals("value1")));
     }
 }

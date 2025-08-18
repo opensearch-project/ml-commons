@@ -38,7 +38,7 @@ java {
 }
 
 lombok {
-    version = "1.18.30"
+    version = "1.18.38"
 }
 
 opensearchplugin {
@@ -84,7 +84,7 @@ dependencies {
 	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.11.0'
-    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: "${versions.commonslang}"
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
@@ -226,6 +226,7 @@ integTest {
     if (System.getProperty("test.debug") != null) {
         jvmArgs '-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005'
     }
+    jvmArgs '--add-opens', 'java.base/java.time=ALL-UNNAMED'
 
     // Set this to true this if you want to see the logs in the terminal test output.
     // note: if left false the log output will still show in your IDE
@@ -375,22 +376,17 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.jobs.MLBatchTaskUpdateExtension',
         'org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner',
         'org.opensearch.ml.action.agents.TransportRegisterAgentAction',
-        'org.opensearch.ml.action.mcpserver.TransportMcpToolsListAction.1',
-        'org.opensearch.ml.action.mcpserver.OpenSearchMcpServerTransportProvider',
-        'org.opensearch.ml.action.mcpserver.McpAsyncServerHolder',
-        'org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction',
-        'org.opensearch.ml.action.mcpserver.TransportMcpMessageAction',
-        'org.opensearch.ml.action.mcpserver.TransportMcpMessageDispatchedAction',
-        'org.opensearch.ml.action.mcpserver.OpenSearchMcpServerTransportProvider.1',
-        'org.opensearch.ml.action.mcpserver.OpenSearchMcpServerTransportProvider.OpenSearchMcpSessionTransport',
         'org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction.1',
         'org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction',
-        'org.opensearch.ml.action.mcpserver.TransportMcpToolsRemoveOnNodesAction',
-        'org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction.1',
+        'org.opensearch.ml.action.mcpserver.TransportMcpMessageDispatchedAction',
         'org.opensearch.ml.jobs.MLJobRunner',
         'org.opensearch.ml.utils.ParseUtils',
         'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
-        'org.opensearch.ml.jobs.processors.MLJobProcessor'
+        'org.opensearch.ml.jobs.processors.MLJobProcessor',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
+        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
+        'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
+        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*'
 ]
 
 jacocoTestCoverageVerification {
@@ -420,7 +416,7 @@ check.dependsOn jacocoTestCoverageVerification
 configurations.all {
     exclude group: "org.jetbrains", module: "annotations"
     exclude group: "com.google.guava", module: "failureaccess"
-    resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
+    resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
@@ -442,6 +438,7 @@ configurations.all {
     resolutionStrategy.force "org.opensearch:opensearch:${opensearch_version}"
     resolutionStrategy.force "org.bouncycastle:bcprov-jdk18on:1.78.1"
     resolutionStrategy.force 'io.projectreactor:reactor-core:3.7.0'
+    resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
@@ -670,13 +667,4 @@ task bwcTestSuite(type: StandaloneRestIntegTestTask) {
 forbiddenPatterns {
     exclude '**/*.pdf'
     exclude '**/*.jpg'
-}
-
-configurations {
-    runtimeClasspath {
-        resolutionStrategy {
-            // CVE-48734: tribuo-clustering-kmeans:'4.2.1 causes a transitive dependency on beanutils:1.94
-            force 'commons-beanutils:commons-beanutils:1.11.0'
-        }
-    }
 }

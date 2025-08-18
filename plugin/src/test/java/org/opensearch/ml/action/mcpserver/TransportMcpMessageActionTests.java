@@ -16,6 +16,7 @@ import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 import java.util.Set;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -100,6 +101,33 @@ public class TransportMcpMessageActionTests extends OpenSearchTestCase {
         ArgumentCaptor<AcknowledgedResponse> argumentCaptor = ArgumentCaptor.forClass(AcknowledgedResponse.class);
         verify(listener).onResponse(argumentCaptor.capture());
         assertEquals(true, argumentCaptor.getValue().isAcknowledged());
+    }
+
+    @Test
+    public void test_doExecute_featureFlagDisabled() {
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        TransportMcpMessageAction mcpMessageAction = new TransportMcpMessageAction(
+            transportService,
+            actionFilters,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            mlFeatureEnabledSetting
+        );
+        MLMcpMessageRequest request = MLMcpMessageRequest
+            .builder()
+            .nodeId("mockNodeId")
+            .sessionId("mockSessionId")
+            .requestBody("mockRequestBody")
+            .build();
+        mcpMessageAction.doExecute(task, request, listener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_exception() {

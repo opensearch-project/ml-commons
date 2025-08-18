@@ -15,7 +15,9 @@ import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
+import org.apache.lucene.analysis.tokenattributes.TypeAttribute;
 import org.apache.lucene.util.BytesRef;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 
 import com.google.common.io.CharStreams;
 
@@ -35,6 +37,7 @@ public class HFModelTokenizer extends Tokenizer {
     private final CharTermAttribute termAtt;
     private final PayloadAttribute payloadAtt;
     private final OffsetAttribute offsetAtt;
+    private final TypeAttribute typeAtt;
     private final Supplier<HuggingFaceTokenizer> tokenizerSupplier;
     private final Supplier<Map<String, Float>> tokenWeightsSupplier;
 
@@ -49,6 +52,7 @@ public class HFModelTokenizer extends Tokenizer {
     public HFModelTokenizer(Supplier<HuggingFaceTokenizer> huggingFaceTokenizerSupplier, Supplier<Map<String, Float>> weightsSupplier) {
         termAtt = addAttribute(CharTermAttribute.class);
         offsetAtt = addAttribute(OffsetAttribute.class);
+        typeAtt = addAttribute(TypeAttribute.class);
         if (Objects.nonNull(weightsSupplier)) {
             payloadAtt = addAttribute(PayloadAttribute.class);
         } else {
@@ -81,9 +85,19 @@ public class HFModelTokenizer extends Tokenizer {
         return ByteBuffer.wrap(bytes).getFloat();
     }
 
+    /**
+     * Clear all attributes except type. Type is used to identify the sparse embedding format.
+     * It should be immutable and not needed to be cleared by the tokenizer.
+     */
+    private void clearAttributesExceptType() {
+        String type = typeAtt.type();
+        clearAttributes();
+        typeAtt.setType(type);
+    }
+
     @Override
     final public boolean incrementToken() throws IOException {
-        clearAttributes();
+        clearAttributesExceptType();
         if (Objects.isNull(encoding))
             return false;
         Encoding curEncoding = overflowingIdx == -1 ? encoding : encoding.getOverflowing()[overflowingIdx];
@@ -99,7 +113,12 @@ public class HFModelTokenizer extends Tokenizer {
                 }
                 curEncoding = encoding.getOverflowing()[overflowingIdx];
             } else {
-                termAtt.append(curEncoding.getTokens()[tokenIdx]);
+                SparseEmbeddingFormat sparseEmbeddingFormat = SparseEmbeddingFormat.valueOf(typeAtt.type().toUpperCase());
+                if (sparseEmbeddingFormat == SparseEmbeddingFormat.WORD) {
+                    termAtt.append(curEncoding.getTokens()[tokenIdx]);
+                } else {
+                    termAtt.append(String.valueOf(curEncoding.getIds()[tokenIdx]));
+                }
                 offsetAtt
                     .setOffset(curEncoding.getCharTokenSpans()[tokenIdx].getStart(), curEncoding.getCharTokenSpans()[tokenIdx].getEnd());
                 if (Objects.nonNull(tokenWeightsSupplier)) {

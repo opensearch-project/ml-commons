@@ -13,11 +13,10 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.OpenSearchException;
-import org.opensearch.action.ActionRequest;
-import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.annotation.ExperimentalApi;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
+import org.opensearch.ml.common.transport.mcpserver.requests.list.MLMcpToolsListRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -56,11 +55,6 @@ public class RestMLMcpToolsListAction extends BaseRestHandler {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
         }
 
-        return channel -> client.execute(MLMcpToolsListAction.INSTANCE, new ActionRequest() {
-            @Override
-            public ActionRequestValidationException validate() {
-                return null;
-            }
-        }, new RestToXContentListener<>(channel));
+        return channel -> client.execute(MLMcpToolsListAction.INSTANCE, new MLMcpToolsListRequest(), new RestToXContentListener<>(channel));
     }
 }

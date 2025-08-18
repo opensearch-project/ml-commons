@@ -15,6 +15,7 @@ import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -56,8 +57,9 @@ public class McpSseTool implements WithModelTool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get("input");
             Map<String, Object> inputArgs = StringUtils.fromJson(input, "input");
             McpSchema.CallToolResult result = mcpSyncClient.callTool(new McpSchema.CallToolRequest(this.name, inputArgs));

@@ -24,6 +24,7 @@ import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
 
 public abstract class TextEmbeddingModel extends DLModel {
+    protected boolean isSparseModel = false;
 
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
@@ -40,13 +41,18 @@ public abstract class TextEmbeddingModel extends DLModel {
         for (String doc : textDocsInput.getDocs()) {
             Input input = new Input();
             input.add(doc);
+            if (mlParams instanceof AsymmetricTextEmbeddingParameters) {
+                AsymmetricTextEmbeddingParameters params = (AsymmetricTextEmbeddingParameters) mlParams;
+                input.add(AsymmetricTextEmbeddingParameters.SPARSE_EMBEDDING_FORMAT_FIELD, params.getSparseEmbeddingFormat().name());
+            }
+
             output = getPredictor().predict(input);
             tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
         }
         return new ModelTensorOutput(tensorOutputs);
     }
 
-    private boolean isAsymmetricModel(MLAlgoParams mlParams) {
+    protected boolean isAsymmetricModel(MLAlgoParams mlParams) {
         if (mlParams instanceof AsymmetricTextEmbeddingParameters) {
             // Check for the necessary prefixes in modelConfig
             if (modelConfig == null

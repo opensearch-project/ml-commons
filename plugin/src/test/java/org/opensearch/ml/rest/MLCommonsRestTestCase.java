@@ -279,7 +279,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
             for (Map<String, Object> index : parserList) {
                 String indexName = (String) index.get("index");
-                if (indexName != null && !".opendistro_security".equals(indexName)) {
+                if (indexName != null && !".opendistro_security".equals(indexName) && !".plugins-ml-config".equals(indexName)) {
                     adminClient().performRequest(new Request("DELETE", "/" + indexName));
                 }
             }
