@@ -8,11 +8,14 @@ package org.opensearch.ml.common.indexInsight;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -139,5 +142,17 @@ public class IndexInsight implements ToXContentObject, Writeable {
 
     public static IndexInsight fromStream(StreamInput in) throws IOException {
         return new IndexInsight(in);
+    }
+
+    @Override
+    public String toString() {
+        try {
+            XContentBuilder builder = XContentFactory.jsonBuilder();
+            builder.prettyPrint();
+            toXContent(builder, ToXContent.EMPTY_PARAMS);
+            return builder.toString();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }
