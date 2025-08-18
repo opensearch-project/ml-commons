@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.core.action.ActionListener;
@@ -61,6 +62,8 @@ public class IndexInsightAccessControllerHelperTests {
 
         IndexInsightAccessControllerHelper.verifyAccessController(client, actionListener, sourceIndex);
 
-        verify(actionListener).onFailure(any(IllegalArgumentException.class));
+        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertEquals("You don't have access to this index", exceptionCaptor.getValue().getMessage());
     }
 }

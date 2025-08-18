@@ -14,7 +14,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -81,20 +80,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
     @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
-    }
-
-    private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
-        for (Map.Entry<String, Object> entry : properties.entrySet()) {
-            String fieldName = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
-            Map<String, Object> fieldProperties = (Map<String, Object>) entry.getValue();
-
-            String type = fieldProperties.containsKey("type") ? fieldProperties.get("type").toString() : "object";
-            joiner.add("- " + fieldName + ": " + type);
-
-            if (fieldProperties.containsKey("properties")) {
-                extractFieldsInfo((Map<String, Object>) fieldProperties.get("properties"), fieldName, joiner);
-            }
-        }
     }
 
     private void batchProcessFields(String statisticalContent, String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
@@ -286,21 +271,17 @@ public class FieldDescriptionTask implements IndexInsightTask {
             if (distribution != null && distribution.containsKey("example_docs")) {
                 List<Map<String, Object>> exampleDocs = (List<Map<String, Object>>) distribution.get("example_docs");
                 if (exampleDocs != null && !exampleDocs.isEmpty()) {
-                    List<Map<String, Object>> relevantExampleDocs = new ArrayList<>();
+                    List<Map<String, Object>> filteredExampleDocs = new ArrayList<>();
                     for (Map<String, Object> doc : exampleDocs) {
-                        Map<String, Object> relevantFields = new LinkedHashMap<>();
+                        Map<String, Object> filteredDoc = new LinkedHashMap<>();
                         for (String field : batchFields) {
                             if (doc.containsKey(field)) {
-                                relevantFields.put(field, doc.get(field));
+                                filteredDoc.put(field, doc.get(field));
                             }
                         }
-                        if (!relevantFields.isEmpty()) {
-                            relevantExampleDocs.add(relevantFields);
-                        }
+                        filteredExampleDocs.add(filteredDoc);
                     }
-                    if (!relevantExampleDocs.isEmpty()) {
-                        result.put("example_docs", relevantExampleDocs);
-                    }
+                    result.put("example_docs", filteredExampleDocs);
                 }
             }
 

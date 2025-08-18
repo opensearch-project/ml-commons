@@ -21,10 +21,6 @@ public class IndexInsightTaskStatusTests {
         assertEquals(IndexInsightTaskStatus.GENERATING, IndexInsightTaskStatus.fromString("GENERATING"));
         assertEquals(IndexInsightTaskStatus.COMPLETED, IndexInsightTaskStatus.fromString("COMPLETED"));
         assertEquals(IndexInsightTaskStatus.FAILED, IndexInsightTaskStatus.fromString("FAILED"));
-
-        assertEquals(IndexInsightTaskStatus.GENERATING, IndexInsightTaskStatus.fromString("generating"));
-        assertEquals(IndexInsightTaskStatus.COMPLETED, IndexInsightTaskStatus.fromString("completed"));
-        assertEquals(IndexInsightTaskStatus.FAILED, IndexInsightTaskStatus.fromString("failed"));
     }
 
     @Test

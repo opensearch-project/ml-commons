@@ -35,7 +35,7 @@ public class IndexInsightContainerTests {
     }
 
     @Test
-    public void testBuilderWithNullValues() {
+    public void testBuilder_WithNullValues() {
         IndexInsightContainer container = IndexInsightContainer.builder().indexName(null).tenantId(null).build();
 
         assertNull(container.getIndexName());
@@ -70,7 +70,7 @@ public class IndexInsightContainerTests {
     }
 
     @Test
-    public void testToXContentWithNullTenantId() throws IOException {
+    public void testToXContent_WithNullTenantId() throws IOException {
         IndexInsightContainer container = IndexInsightContainer.builder().indexName("test-index").tenantId(null).build();
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
@@ -100,7 +100,7 @@ public class IndexInsightContainerTests {
     }
 
     @Test
-    public void testParseFromXContentWithMissingTenantId() throws IOException {
+    public void testParseFromXContent_WithMissingTenantId() throws IOException {
         String json = "{\"index_name\":\"test-index\"}";
 
         XContentParser parser = XContentType.JSON
@@ -118,7 +118,7 @@ public class IndexInsightContainerTests {
     }
 
     @Test
-    public void testParseFromXContentWithUnknownField() throws IOException {
+    public void testParseFromXContent_WithUnknownField() throws IOException {
         String json = "{\"index_name\":\"test-index\",\"tenant_id\":\"test-tenant\",\"unknown_field\":\"value\"}";
 
         XContentParser parser = XContentType.JSON
@@ -136,7 +136,7 @@ public class IndexInsightContainerTests {
     }
 
     @Test
-    public void testParseFromXContentWithEmptyObject() throws IOException {
+    public void testParseFromXContent_WithEmptyObject() throws IOException {
         String json = "{}";
 
         XContentParser parser = XContentType.JSON

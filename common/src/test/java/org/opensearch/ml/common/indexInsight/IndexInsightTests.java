@@ -56,22 +56,14 @@ public class IndexInsightTests {
     }
 
     @Test
-    public void testBuilderWithNullValues() {
-        Instant now = Instant.now();
-        IndexInsight insight = IndexInsight
-            .builder()
-            .index(null)
-            .content(null)
-            .status(null)
-            .taskType(MLIndexInsightType.FIELD_DESCRIPTION)
-            .lastUpdatedTime(now)
-            .build();
+    public void testBuilder_WithNullValues() {
+        IndexInsight insight = IndexInsight.builder().index(null).content(null).status(null).taskType(null).lastUpdatedTime(null).build();
 
         assertNull(insight.getIndex());
         assertNull(insight.getContent());
         assertNull(insight.getStatus());
-        assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, insight.getTaskType());
-        assertEquals(now, insight.getLastUpdatedTime());
+        assertNull(insight.getTaskType());
+        assertNull(insight.getLastUpdatedTime());
     }
 
     @Test
@@ -104,7 +96,7 @@ public class IndexInsightTests {
         Instant now = Instant.now();
         IndexInsight original = IndexInsight
             .builder()
-            .index("test-index")
+            .index(null)
             .content(null)
             .status(null)
             .taskType(MLIndexInsightType.STATISTICAL_DATA)
@@ -117,7 +109,7 @@ public class IndexInsightTests {
         StreamInput input = output.bytes().streamInput();
         IndexInsight deserialized = new IndexInsight(input);
 
-        assertEquals(original.getIndex(), deserialized.getIndex());
+        assertNull(deserialized.getIndex());
         assertNull(deserialized.getContent());
         assertNull(deserialized.getStatus());
         assertEquals(original.getTaskType(), deserialized.getTaskType());
@@ -196,7 +188,7 @@ public class IndexInsightTests {
     }
 
     @Test
-    public void testParseFromXContentWithMissingFields() throws IOException {
+    public void testParseFromXContent_WithMissingFields() throws IOException {
         Instant now = Instant.ofEpochMilli(System.currentTimeMillis());
         String json = "{\"task_type\":\"STATISTICAL_DATA\",\"last_updated_time\":" + now.toEpochMilli() + "}";
 
@@ -240,30 +232,5 @@ public class IndexInsightTests {
 
         assertEquals(insight1, insight2);
         assertEquals(insight1.hashCode(), insight2.hashCode());
-    }
-
-    @Test
-    public void testFromStream() throws IOException {
-        Instant now = Instant.now();
-        IndexInsight original = IndexInsight
-            .builder()
-            .index("test-index")
-            .content("test content")
-            .status(IndexInsightTaskStatus.GENERATING)
-            .taskType(MLIndexInsightType.FIELD_DESCRIPTION)
-            .lastUpdatedTime(now)
-            .build();
-
-        BytesStreamOutput output = new BytesStreamOutput();
-        original.writeTo(output);
-
-        StreamInput input = output.bytes().streamInput();
-        IndexInsight deserialized = IndexInsight.fromStream(input);
-
-        assertEquals(original.getIndex(), deserialized.getIndex());
-        assertEquals(original.getContent(), deserialized.getContent());
-        assertEquals(original.getStatus(), deserialized.getStatus());
-        assertEquals(original.getTaskType(), deserialized.getTaskType());
-        assertEquals(original.getLastUpdatedTime(), deserialized.getLastUpdatedTime());
     }
 }

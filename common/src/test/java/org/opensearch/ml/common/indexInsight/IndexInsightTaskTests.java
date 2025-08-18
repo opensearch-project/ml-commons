@@ -1,0 +1,374 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common.indexInsight;
+
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_UPDATE_INTERVAL;
+
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.transport.client.Client;
+
+public class IndexInsightTaskTests {
+
+    private Client client;
+    private TestIndexInsightTask task;
+
+    @Before
+    public void setUp() {
+        client = mock(Client.class);
+        task = new TestIndexInsightTask(client);
+    }
+
+    private void mockClientGetResponse(Client client, GetResponse response) {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+    }
+
+    private void mockClientUpdateResponse(Client client, UpdateResponse response) {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).update(any(), any());
+    }
+
+    private void mockClientUpdateFailure(Client client, Exception exception) {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onFailure(exception);
+            return null;
+        }).when(client).update(any(), any());
+    }
+
+    @Test
+    public void testGenerateDocId() {
+        String docId = task.generateDocId();
+        assertEquals(64, docId.length());
+    }
+
+    @Test
+    public void testGetInsightContentFromContainer() {
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("content", "existing content");
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+
+        mockClientGetResponse(client, getResponse);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        task.getInsightContentFromContainer("test-storage", MLIndexInsightType.STATISTICAL_DATA, listener);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("existing content", captor.getValue());
+    }
+
+    @Test
+    public void testGetInsightContentFromContainer_NotExists() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+
+        mockClientGetResponse(client, getResponse);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        task.getInsightContentFromContainer("test-storage", MLIndexInsightType.STATISTICAL_DATA, listener);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("", captor.getValue());
+    }
+
+    @Test
+    public void testSaveResult() {
+        UpdateResponse updateResponse = mock(UpdateResponse.class);
+        mockClientUpdateResponse(client, updateResponse);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.saveResult("test content", "test-storage", listener);
+
+        ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("test content", captor.getValue().getContent());
+        assertEquals(IndexInsightTaskStatus.COMPLETED, captor.getValue().getStatus());
+    }
+
+    @Test
+    public void testSaveResult_Failure() {
+        mockClientUpdateFailure(client, new Exception("Update failed"));
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.saveResult("test content", "test-storage", listener);
+
+        verify(listener).onFailure(any());
+    }
+
+    @Test
+    public void testSaveFailedStatus() {
+        UpdateResponse updateResponse = mock(UpdateResponse.class);
+        mockClientUpdateResponse(client, updateResponse);
+
+        task.saveFailedStatus("test-storage");
+
+        verify(client).update(any(), any());
+    }
+
+    @Test
+    public void testHandleExistingDoc_Completed_NoUpdate() {
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("status", "COMPLETED");
+        source.put("last_updated_time", Instant.now().toEpochMilli() - 3600);
+        source.put("index_name", "test-index");
+        source.put("task_type", "STATISTICAL_DATA");
+        source.put("content", "test content");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.handleExistingDoc(getResponse, "test-storage", "test-tenant", listener);
+
+        ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("test content", captor.getValue().getContent());
+    }
+
+    @Test
+    public void testHandleExistingDoc_Completed_NeedUpdate() {
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("status", "COMPLETED");
+        source.put("last_updated_time", Instant.now().toEpochMilli() - INDEX_INSIGHT_UPDATE_INTERVAL - 3600);
+        source.put("index_name", "test-index");
+        source.put("task_type", "STATISTICAL_DATA");
+        source.put("content", "test content");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+
+        mockClientUpdateResponse(client, mock(UpdateResponse.class));
+
+        // Mock prerequisite task execution
+        GetResponse prereqResponse = mock(GetResponse.class);
+        when(prereqResponse.isExists()).thenReturn(false);
+        mockClientGetResponse(client, prereqResponse);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.handleExistingDoc(getResponse, "test-storage", "test-tenant", listener);
+
+        ArgumentCaptor<UpdateRequest> captor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(client, times(4)).update(captor.capture(), any());
+    }
+
+    @Test
+    public void testHandleExistingDoc_Generating_NotTimeout() {
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("status", "GENERATING");
+        source.put("last_updated_time", Instant.now().toEpochMilli());
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.handleExistingDoc(getResponse, "test-storage", "test-tenant", listener);
+
+        ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(listener).onFailure(captor.capture());
+        assertEquals("Index insight is being generated, please wait...", captor.getValue().getMessage());
+        assertEquals(RestStatus.TOO_MANY_REQUESTS, captor.getValue().status());
+    }
+
+    @Test
+    public void testHandleExistingDoc_Generating_Timeout() {
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("status", "GENERATING");
+        source.put("last_updated_time", Instant.now().toEpochMilli() - INDEX_INSIGHT_GENERATING_TIMEOUT - 3600);
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+
+        mockClientUpdateResponse(client, mock(UpdateResponse.class));
+
+        // Mock prerequisite task execution
+        GetResponse prereqResponse = mock(GetResponse.class);
+        when(prereqResponse.isExists()).thenReturn(false);
+        mockClientGetResponse(client, prereqResponse);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.handleExistingDoc(getResponse, "test-storage", "test-tenant", listener);
+
+        ArgumentCaptor<UpdateRequest> captor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(client, times(4)).update(captor.capture(), any());
+    }
+
+    @Test
+    public void testHandleExistingDoc_Failed_Retry() {
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("status", "FAILED");
+        source.put("last_updated_time", Instant.now().toEpochMilli());
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+
+        mockClientUpdateResponse(client, mock(UpdateResponse.class));
+
+        // Mock prerequisite task execution
+        GetResponse prereqResponse = mock(GetResponse.class);
+        when(prereqResponse.isExists()).thenReturn(false);
+        mockClientGetResponse(client, prereqResponse);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.handleExistingDoc(getResponse, "test-storage", "test-tenant", listener);
+
+        ArgumentCaptor<UpdateRequest> captor = ArgumentCaptor.forClass(UpdateRequest.class);
+        verify(client, times(4)).update(captor.capture(), any());
+    }
+
+    @Test
+    public void testRunWithPrerequisites_Success() {
+        mockClientUpdateResponse(client, mock(UpdateResponse.class));
+
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+        mockClientGetResponse(client, getResponse);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.runWithPrerequisites("test-storage", "test-tenant", listener);
+
+        verify(listener).onResponse(any(IndexInsight.class));
+    }
+
+    @Test
+    public void testRunWithPrerequisites_PrerequisiteFailure() {
+        mockClientUpdateResponse(client, mock(UpdateResponse.class));
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("Prerequisite failed"));
+            return null;
+        }).when(client).get(any(), any());
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.runWithPrerequisites("test-storage", "test-tenant", listener);
+
+        verify(listener).onFailure(any());
+    }
+
+    @Test
+    public void testRunWithPrerequisites_PrerequisiteCompleted() {
+        mockClientUpdateResponse(client, mock(UpdateResponse.class));
+
+        // Mock prerequisite already completed with all required fields
+        GetResponse prereqResponse = mock(GetResponse.class);
+        Map<String, Object> prereqSource = new HashMap<>();
+        prereqSource.put("status", "COMPLETED");
+        prereqSource.put("content", "prerequisite content");
+        prereqSource.put("index_name", "test-index");
+        prereqSource.put("task_type", "STATISTICAL_DATA");
+        prereqSource.put("last_updated_time", Instant.now().toEpochMilli() - 3600);
+        when(prereqResponse.isExists()).thenReturn(true);
+        when(prereqResponse.getSourceAsMap()).thenReturn(prereqSource);
+        mockClientGetResponse(client, prereqResponse);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.runWithPrerequisites("test-storage", "test-tenant", listener);
+
+        verify(client, times(1)).update(any(), any());
+        verify(listener).onResponse(any(IndexInsight.class));
+    }
+
+    // Test implementation with prerequisites
+    private static class TestIndexInsightTask implements IndexInsightTask {
+        private final Client client;
+
+        TestIndexInsightTask(Client client) {
+            this.client = client;
+        }
+
+        @Override
+        public MLIndexInsightType getTaskType() {
+            return MLIndexInsightType.FIELD_DESCRIPTION;
+        }
+
+        @Override
+        public String getSourceIndex() {
+            return "test-index";
+        }
+
+        @Override
+        public List<MLIndexInsightType> getPrerequisites() {
+            return Arrays.asList(MLIndexInsightType.STATISTICAL_DATA);
+        }
+
+        @Override
+        public Client getClient() {
+            return client;
+        }
+
+        @Override
+        public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+            saveResult("test result", storageIndex, listener);
+        }
+
+        @Override
+        public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
+            return new SimpleTestTask(client);
+        }
+    }
+
+    // Simple task without prerequisites
+    private static class SimpleTestTask implements IndexInsightTask {
+        private final Client client;
+
+        SimpleTestTask(Client client) {
+            this.client = client;
+        }
+
+        @Override
+        public MLIndexInsightType getTaskType() {
+            return MLIndexInsightType.STATISTICAL_DATA;
+        }
+
+        @Override
+        public String getSourceIndex() {
+            return "test-index";
+        }
+
+        @Override
+        public List<MLIndexInsightType> getPrerequisites() {
+            return Arrays.asList();
+        }
+
+        @Override
+        public Client getClient() {
+            return client;
+        }
+
+        @Override
+        public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+            saveResult("prerequisite result", storageIndex, listener);
+        }
+
+        @Override
+        public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
+            return new SimpleTestTask(client);
+        }
+    }
+}

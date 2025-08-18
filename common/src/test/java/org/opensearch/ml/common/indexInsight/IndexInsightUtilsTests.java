@@ -7,7 +7,6 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -34,7 +33,7 @@ import org.opensearch.transport.client.Client;
 public class IndexInsightUtilsTests {
 
     @Test
-    public void testGetAgentIdToRunSuccess() {
+    public void testGetAgentIdToRun_Success() {
         Client client = mock(Client.class);
         ActionListener<String> actionListener = mock(ActionListener.class);
         String tenantId = "test-tenant";
@@ -56,7 +55,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testGetAgentIdToRunFailure() {
+    public void testGetAgentIdToRun_Failure() {
         Client client = mock(Client.class);
         ActionListener<String> actionListener = mock(ActionListener.class);
         String tenantId = "test-tenant";
@@ -74,13 +73,13 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testExtractFieldNamesTypesBasicFields() {
+    public void testExtractFieldNamesTypes_BasicFields() {
         Map<String, Object> mappingSource = new HashMap<>();
         mappingSource.put("field1", Map.of("type", "text"));
         mappingSource.put("field2", Map.of("type", "keyword"));
 
         Map<String, String> fieldsToType = new HashMap<>();
-        IndexInsightUtils.extractFieldNamesTypes(mappingSource, fieldsToType, "", true);
+        IndexInsightUtils.extractFieldNamesTypes(mappingSource, fieldsToType, "", false);
 
         assertEquals("text", fieldsToType.get("field1"));
         assertEquals("keyword", fieldsToType.get("field2"));
@@ -88,20 +87,24 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testExtractFieldNamesTypesNestedProperties() {
+    public void testExtractFieldNamesTypes_NestedProperties() {
         Map<String, Object> mappingSource = new HashMap<>();
         Map<String, Object> nestedField = new HashMap<>();
-        nestedField.put("properties", Map.of("subfield", Map.of("type", "text")));
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("fields", Map.of("keyword", Map.of("type", "keyword")));
+        properties.put("other_field", Map.of("type", "text"));
+        nestedField.put("properties", properties);
         mappingSource.put("nested", nestedField);
 
         Map<String, String> fieldsToType = new HashMap<>();
-        IndexInsightUtils.extractFieldNamesTypes(mappingSource, fieldsToType, "", true);
+        IndexInsightUtils.extractFieldNamesTypes(mappingSource, fieldsToType, "", false);
 
-        assertEquals("text", fieldsToType.get("nested.subfield"));
+        assertEquals("text", fieldsToType.get("nested.other_field"));
+        assertFalse(fieldsToType.containsKey("nested.fields.keyword"));
     }
 
     @Test
-    public void testExtractFieldNamesTypesSkipAliasAndObject() {
+    public void testExtractFieldNamesTypes_SkipAliasAndObject() {
         Map<String, Object> mappingSource = new HashMap<>();
         mappingSource.put("alias_field", Map.of("type", "alias"));
         mappingSource.put("object_field", Map.of("type", "object"));
@@ -116,7 +119,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testExtractFieldNamesTypesWithFields() {
+    public void testExtractFieldNamesTypes_WithFields() {
         Map<String, Object> mappingSource = new HashMap<>();
         Map<String, Object> textField = new HashMap<>();
         textField.put("type", "text");
@@ -131,7 +134,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testExtractFieldNamesTypesExcludeFields() {
+    public void testExtractFieldNamesTypes_ExcludeFields() {
         Map<String, Object> mappingSource = new HashMap<>();
         Map<String, Object> textField = new HashMap<>();
         textField.put("type", "text");
@@ -154,19 +157,21 @@ public class IndexInsightUtilsTests {
         String docId2 = IndexInsightUtils.generateDocId(sourceIndex, taskType);
 
         assertEquals(docId1, docId2);
-        assertTrue(docId1.length() == 64);
+        assertEquals(64, docId1.length());
     }
 
     @Test
     public void testGenerateDocIdDifferentInputs() {
         String docId1 = IndexInsightUtils.generateDocId("index1", MLIndexInsightType.STATISTICAL_DATA);
         String docId2 = IndexInsightUtils.generateDocId("index2", MLIndexInsightType.STATISTICAL_DATA);
+        String docId3 = IndexInsightUtils.generateDocId("index1", MLIndexInsightType.FIELD_DESCRIPTION);
 
         assertFalse(docId1.equals(docId2));
+        assertFalse(docId1.equals(docId3));
     }
 
     @Test
-    public void testExtractModelResponseChoices() {
+    public void testExtractModelResponse_Choices() {
         Map<String, Object> data = Map
             .of("choices", Collections.singletonList(Map.of("message", Map.of("content", "response from choices"))));
 
@@ -175,7 +180,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testExtractModelResponseContent() {
+    public void testExtractModelResponse_Content() {
         Map<String, Object> data = Map.of("content", Collections.singletonList(Map.of("text", "response from content")));
 
         String result = IndexInsightUtils.extractModelResponse(data);
@@ -183,7 +188,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testExtractModelResponseDefault() {
+    public void testExtractModelResponse_Default() {
         Map<String, Object> data = Map.of("response", "default response");
 
         String result = IndexInsightUtils.extractModelResponse(data);
@@ -191,7 +196,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testCallLLMWithAgentSuccessWithJson() {
+    public void testCallLLMWithAgent_SuccessWithJson() {
         Client client = mock(Client.class);
         ActionListener<String> listener = mock(ActionListener.class);
         String agentId = "test-agent";
@@ -223,7 +228,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testCallLLMWithAgentSuccessWithPlainText() {
+    public void testCallLLMWithAgent_SuccessWithPlainText() {
         Client client = mock(Client.class);
         ActionListener<String> listener = mock(ActionListener.class);
         String agentId = "test-agent";
@@ -255,7 +260,7 @@ public class IndexInsightUtilsTests {
     }
 
     @Test
-    public void testCallLLMWithAgentFailure() {
+    public void testCallLLMWithAgent_Failure() {
         Client client = mock(Client.class);
         ActionListener<String> listener = mock(ActionListener.class);
         String agentId = "test-agent";
