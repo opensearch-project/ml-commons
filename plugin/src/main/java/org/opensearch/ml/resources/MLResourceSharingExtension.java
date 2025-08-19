@@ -17,8 +17,6 @@ import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 
 public class MLResourceSharingExtension implements ResourceSharingExtension {
 
-    private ResourceSharingClient client;
-
     @Override
     public Set<ResourceProvider> getResourceProviders() {
         return Set.of(new ResourceProvider(MLModelGroup.class.getCanonicalName(), ML_MODEL_GROUP_INDEX));
@@ -27,10 +25,5 @@ public class MLResourceSharingExtension implements ResourceSharingExtension {
     @Override
     public void assignResourceSharingClient(ResourceSharingClient resourceSharingClient) {
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
-    }
-
-    @Override
-    public ResourceSharingClient getResourceSharingClient() {
-        return ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 }
