@@ -12,9 +12,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.FIELD_DESCRIPTION;
+import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
+import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.STATISTICAL_DATA;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -96,7 +100,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         mlIndexInsightGetRequest = MLIndexInsightGetRequest
             .builder()
             .indexName("test_index_name")
-            .targetIndexInsight(MLIndexInsightType.STATISTICAL_DATA)
+            .targetIndexInsight(STATISTICAL_DATA)
             .tenantId(null)
             .build();
 
@@ -137,7 +141,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test_index",
             "test content",
             IndexInsightTaskStatus.COMPLETED,
-            MLIndexInsightType.STATISTICAL_DATA,
+            STATISTICAL_DATA,
             Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {
@@ -178,7 +182,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test_index",
             "test content",
             IndexInsightTaskStatus.COMPLETED,
-            MLIndexInsightType.STATISTICAL_DATA,
+            STATISTICAL_DATA,
             Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {
@@ -218,7 +222,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test_index",
             "test content",
             IndexInsightTaskStatus.COMPLETED,
-            MLIndexInsightType.STATISTICAL_DATA,
+            STATISTICAL_DATA,
             Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {
@@ -239,6 +243,17 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
         assertEquals("The container is not set yet", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testCreateTask() {
+        for (MLIndexInsightType taskType : List.of(FIELD_DESCRIPTION, STATISTICAL_DATA, LOG_RELATED_INDEX_CHECK)) {
+            MLIndexInsightGetRequest request = new MLIndexInsightGetRequest("test_index", taskType, null);
+            IndexInsightTask task = getIndexInsightTransportAction.createTask(request);
+            assertEquals(task.getSourceIndex(), "test_index");
+            assertEquals(task.getTaskType(), taskType);
+        }
+
     }
 
 }
