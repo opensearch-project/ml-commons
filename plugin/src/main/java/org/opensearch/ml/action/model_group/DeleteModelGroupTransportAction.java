@@ -27,12 +27,12 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -61,9 +61,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Inject(optional = true)
-    public MLResourceSharingExtension mlResourceSharingExtension;
 
     @Inject
     public DeleteModelGroupTransportAction(
@@ -99,7 +96,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
 
             // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
-            if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
+            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
                 checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
             } else {
                 validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);

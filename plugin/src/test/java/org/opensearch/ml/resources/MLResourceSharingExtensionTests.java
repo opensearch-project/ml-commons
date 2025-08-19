@@ -15,24 +15,27 @@ import static org.mockito.Mockito.mock;
 import java.util.Iterator;
 import java.util.Set;
 
+import org.junit.After;
 import org.junit.Test;
-import org.mockito.Mock;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.security.spi.resources.ResourceProvider;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 
 public class MLResourceSharingExtensionTests {
-
-    @Mock
-    ResourceSharingClient mockClient;
-
     private static String extractIndexFrom(Set<ResourceProvider> providers) {
         assertThat("providers should not be null", providers, is(not(nullValue())));
         assertThat("Expected exactly one provider", providers.size(), equalTo(1));
         Iterator<ResourceProvider> it = providers.iterator();
         assertThat(it.hasNext(), equalTo(true));
         return it.next().resourceIndexName();
+    }
+
+    @After
+    public void tearDown() {
+        // Reset the accessor to avoid cross-test leakage
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     @Test
@@ -67,12 +70,17 @@ public class MLResourceSharingExtensionTests {
     @Test
     public void testAssignResourceSharingClient_setsClientOnAccessor() {
         MLResourceSharingExtension ext = new MLResourceSharingExtension();
+        ResourceSharingClient mockClient = mock(ResourceSharingClient.class);
 
-        assertThat(ext.getResourceSharingClient(), is(nullValue()));
+        assertThat(ResourceSharingClientAccessor.getInstance().getResourceSharingClient(), is(nullValue()));
 
         ext.assignResourceSharingClient(mockClient);
 
-        assertThat("Accessor should hold the client passed to extension", ext.getResourceSharingClient(), equalTo(mockClient));
+        assertThat(
+            "Accessor should hold the client passed to extension",
+            ResourceSharingClientAccessor.getInstance().getResourceSharingClient(),
+            equalTo(mockClient)
+        );
     }
 
     @Test
@@ -82,13 +90,17 @@ public class MLResourceSharingExtensionTests {
         ResourceSharingClient second = mock(ResourceSharingClient.class);
 
         // Prime with the first client
-        ext.assignResourceSharingClient(first);
-        assertThat(ext.getResourceSharingClient(), equalTo(first));
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(first);
+        assertThat(ResourceSharingClientAccessor.getInstance().getResourceSharingClient(), equalTo(first));
 
         // Now assign a new one via the extension
         ext.assignResourceSharingClient(second);
 
-        assertThat("Accessor should be updated to the new client", ext.getResourceSharingClient(), equalTo(second));
+        assertThat(
+            "Accessor should be updated to the new client",
+            ResourceSharingClientAccessor.getInstance().getResourceSharingClient(),
+            equalTo(second)
+        );
     }
 
     @Test

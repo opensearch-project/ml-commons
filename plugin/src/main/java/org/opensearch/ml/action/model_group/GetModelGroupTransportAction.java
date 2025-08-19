@@ -27,12 +27,12 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -58,9 +58,6 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     final ClusterService clusterService;
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Inject(optional = true)
-    public MLResourceSharingExtension mlResourceSharingExtension;
 
     @Inject
     public GetModelGroupTransportAction(
@@ -189,7 +186,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     ) {
         // if resource sharing feature is enabled, security plugin will have automatically evaluated access to this model group, hence no
         // need to validate again
-        if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
             wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
             return;
         }

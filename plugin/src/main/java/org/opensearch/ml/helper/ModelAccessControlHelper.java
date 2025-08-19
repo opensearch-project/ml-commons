@@ -25,7 +25,6 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -50,10 +49,10 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -72,9 +71,6 @@ import lombok.extern.log4j.Log4j2;
 public class ModelAccessControlHelper {
 
     private volatile Boolean modelAccessControlEnabled;
-
-    @Inject
-    public MLResourceSharingExtension mlResourceSharingExtension;
 
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
@@ -101,9 +97,8 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-
-        if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
-            ResourceSharingClient resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -172,8 +167,8 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        if (mlResourceSharingExtension != null && mlResourceSharingExtension.getResourceSharingClient() != null) {
-            ResourceSharingClient resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -387,9 +382,9 @@ public class ModelAccessControlHelper {
         Consumer<Set<String>> onSuccess,
         ActionListener<SearchResponse> wrappedListener
     ) {
-        ResourceSharingClient resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
+        ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
         // filter by accessible model-groups
-        resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(onSuccess::accept, e -> {
+        rsc.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(onSuccess::accept, e -> {
             // Fail-safe: deny-all and still return a response
             SearchSourceBuilder reqSrc = request.source() != null ? request.source() : new SearchSourceBuilder();
             reqSrc.query(mergeWithAccessFilter(reqSrc.query(), Collections.emptySet()));
