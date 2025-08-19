@@ -16,8 +16,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
@@ -33,15 +31,9 @@ import com.google.common.collect.ImmutableList;
 public class RestMLGetIndexInsightAction extends BaseRestHandler {
     private static final String ML_GET_INDEX_INSIGHT_ACTION = "ml_get_index_insight_action";
 
-    private ClusterService clusterService;
-
-    private Settings settings;
-
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public RestMLGetIndexInsightAction(ClusterService clusterService, Settings settings, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
-        this.clusterService = clusterService;
-        this.settings = settings;
+    public RestMLGetIndexInsightAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 

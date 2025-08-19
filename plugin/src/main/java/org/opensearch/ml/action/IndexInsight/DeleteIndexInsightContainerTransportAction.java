@@ -174,7 +174,7 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
                     }
                 });
         } catch (Exception e) {
-            log.error("Failed to create index insight container", e);
+            log.error("Failed to delete index insight container", e);
             listener.onFailure(e);
         }
     }

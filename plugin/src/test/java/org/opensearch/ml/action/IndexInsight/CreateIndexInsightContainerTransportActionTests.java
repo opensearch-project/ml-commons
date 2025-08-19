@@ -34,6 +34,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -163,6 +164,97 @@ public class CreateIndexInsightContainerTransportActionTests extends OpenSearchT
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof AcknowledgedResponse);
         assertTrue(argumentCaptor.getValue().isAcknowledged());
+    }
+
+    @Test
+    public void testCreateIndexInsightContainer_SuccessfulToInitSystemIndices() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+
+        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
+        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new Exception(new IndexNotFoundException("not find failure")));
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
+        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
+        when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
+        CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
+        when(sdkClient.putDataObjectAsync(any())).thenReturn(putFuture);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        CreateIndexResponse createIndexResponse = new CreateIndexResponse(true, true, "test_index");
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(createIndexResponse);
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
+
+        ArgumentCaptor<AcknowledgedResponse> argumentCaptor = ArgumentCaptor.forClass(AcknowledgedResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof AcknowledgedResponse);
+        assertTrue(argumentCaptor.getValue().isAcknowledged());
+    }
+
+    @Test
+    public void testCreateIndexInsightContainer_FailDueToGetObject() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(false);
+
+        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
+        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new Exception(new RuntimeException("not find failure")));
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
+        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
+        when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
+        CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
+        when(sdkClient.putDataObjectAsync(any())).thenReturn(putFuture);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        CreateIndexResponse createIndexResponse = new CreateIndexResponse(true, true, "test_index");
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(createIndexResponse);
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        createIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerCreateRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(argumentCaptor.getValue().getCause().getMessage(), "not find failure");
     }
 
     @Test

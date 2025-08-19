@@ -155,6 +155,126 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     }
 
     @Test
+    public void testDeleteIndexInsightContainer_FailToGetDeleteResponse() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+
+        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
+        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).delete(any(), any());
+
+        DeleteResponse deleteResponse = mock(DeleteResponse.class);
+        when(deleteResponse.status()).thenReturn(RestStatus.OK);
+
+        DeleteDataObjectResponse sdkDeleteResponse = mock(DeleteDataObjectResponse.class);
+        when(sdkDeleteResponse.deleteResponse()).thenThrow(new RuntimeException("fail to get delete response"));
+
+        CompletableFuture<DeleteDataObjectResponse> futureDelete = CompletableFuture.completedFuture(sdkDeleteResponse);
+
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(futureDelete);
+
+        deleteIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals(argumentCaptor.getValue().getMessage(), "fail to get delete response");
+    }
+
+    @Test
+    public void testDeleteIndexInsightContainer_FailToGetStashContext() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+
+        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
+        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).delete(any(), any());
+
+        DeleteResponse deleteResponse = mock(DeleteResponse.class);
+        when(deleteResponse.status()).thenReturn(RestStatus.OK);
+
+        DeleteDataObjectResponse sdkDeleteResponse = mock(DeleteDataObjectResponse.class);
+        when(sdkDeleteResponse.deleteResponse()).thenThrow(new RuntimeException("fail to get delete response"));
+        when(threadPool.getThreadContext()).thenThrow(new RuntimeException("fail to get context"));
+        CompletableFuture<DeleteDataObjectResponse> futureDelete = CompletableFuture.completedFuture(sdkDeleteResponse);
+
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(futureDelete);
+
+        deleteIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals(argumentCaptor.getValue().getMessage(), "fail to get context");
+    }
+
+    @Test
+    public void testDeleteIndexInsightContainer_FailToGetObject() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+
+        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
+        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
+
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).delete(any(), any());
+
+        DeleteResponse deleteResponse = mock(DeleteResponse.class);
+        when(deleteResponse.status()).thenReturn(RestStatus.OK);
+
+        DeleteDataObjectResponse sdkDeleteResponse = mock(DeleteDataObjectResponse.class);
+        when(sdkDeleteResponse.deleteResponse()).thenThrow(new RuntimeException("fail to get delete response"));
+        when(sdkClient.deleteDataObjectAsync(any())).thenThrow(new RuntimeException("fail to get Object"));
+
+        deleteIndexInsightContainerTransportAction.doExecute(null, mlIndexInsightContainerDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals(argumentCaptor.getValue().getMessage(), "fail to get Object");
+    }
+
+    @Test
     public void testDeleteIndexInsightContainer_ContainerNotSet() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
