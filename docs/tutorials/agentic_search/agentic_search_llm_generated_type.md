@@ -12,7 +12,7 @@ This tutorial works for 3.2 and above. To read more details, see the OpenSearch 
 This is an experimental feature and is not recommended for use in a production environment. For updates on the progress of the feature or if you want to leave feedback, join the discussion on the [OpenSearch forum](https://forum.opensearch.org/).
 {: .warning}
 
-Agentic Search is a new query type proposed in OpenSearch that triggers an agent-driven workflow for query understanding, planning and execution. Instead of hand-crafting DSL, you supply a natural language question and an agent id; the agent executes a Query Planning Toolwith index/mapping introspection, and guide LLMs to produce OpenSearch DSL and run it through agentic query clause and return the search hits based on it.
+Agentic Search is a new query type proposed in OpenSearch that triggers an agent-driven workflow for query understanding, planning and execution. Instead of hand-crafting DSL, you supply a natural language question and an agent id; the agent executes a Query Planning Tool with index/mapping introspection, and guide LLMs to produce OpenSearch DSL and run it through agentic query clause and return the search hits based on it.
 
 This tutorial demonstrates how to use the `QueryPlanningTool` with the `llmGenerated` type to translate natural language questions into OpenSearch Query DSL queries.
 
@@ -24,7 +24,7 @@ This tutorial demonstrates how to use the `QueryPlanningTool` with the `llmGener
 3. Create and configure an agent with the `QueryPlanningTool`
 4. Create a sample index and populate it with test data
 5. Create a search pipeline with the `agentic_query_translator` processor
-6. Execute natural language queries using the agentic search feature
+6. Execute natural language queries using the agentic search query
 
 The agentic search feature provides several benefits:
 - Allows users to search using natural language instead of complex DSL queries
@@ -40,7 +40,8 @@ To use the `QueryPlanningTool`, you must first enable the `agentic_search_enable
 PUT _cluster/settings
 {
   "persistent" : {
-    "plugins.ml_commons.agentic_search_enabled" : true
+    "plugins.ml_commons.agentic_search_enabled" : true,
+    "plugins.neural_search.agentic_search_enabled": true
   }
 }
 ```
@@ -214,6 +215,10 @@ POST /_plugins/_ml/agents/_register
 
 To see how the agent converts a question into a DSL query, use the `_execute` API.
 
+It's optional to provide `user_prompt`, as there is a default `user_prompt` in the agent.
+If you would like to test the agent with a simple question and your custom user prompt, you can use the following example:
+
+
 ### Example: Question with aggregation
 
 ```json
@@ -235,7 +240,7 @@ POST /_plugins/_ml/agents/your_agent_id/_execute
       "output": [
         {
           "name": "response",
-          "result": "{\"query\":{\"bool\":{\"must\":[{\"match\":{\"customer_full_name\":\"Diane Goodwin\"}}]}},\"aggs\":{\"order_count\":{\"value_count\":{\"field\":\"_id\"}}}}"
+          "result": "{\"query\":{\"bool\":{\"adjust_pure_negative\":true,\"must\":[{\"match_phrase\":{\"customer_full_name\":{\"query\":\"Diane Goodwin\",\"zero_terms_query\":\"NONE\",\"boost\":1.0,\"slop\":0}}}],\"boost\":1.0}},\"aggregations\":{\"order_count\":{\"cardinality\":{\"field\":\"order_id\"}}}}"
         }
       ]
     }
@@ -280,7 +285,8 @@ GET shipment/_search?search_pipeline=agentic-pipeline
 {
     "query": {
         "agentic": {
-            "query_text": "How many orders were placed by Diane Goodwin?"
+            "query_text": "How many orders were placed by Diane Goodwin?",
+            "query_fields":"customer_full_name"
         }
     }
 }
@@ -292,7 +298,7 @@ The agent generates the DSL query (as seen in Step 5) and executes it against th
 **Sample Response**
 ```json
 {
-  "took": 4,
+  "took": 5,
   "timed_out": false,
   "_shards": {
     "total": 1,
@@ -302,7 +308,7 @@ The agent generates the DSL query (as seen in Step 5) and executes it against th
   },
   "hits": {
     "total": {
-      "value": 3,
+      "value": 1,
       "relation": "eq"
     },
     "max_score": 3.4228706,
@@ -396,191 +402,12 @@ The agent generates the DSL query (as seen in Step 5) and executes it against th
             "dataset": "sample_ecommerce"
           }
         }
-      },
-      {
-        "_index": "shipment",
-        "_id": "MFauupgBVvsXVzThCXHa",
-        "_score": 1.7114353,
-        "_source": {
-          "category": [
-            "Women's Shoes",
-            "Women's Clothing"
-          ],
-          "currency": "EUR",
-          "customer_first_name": "Diane",
-          "customer_full_name": "Diane Wise",
-          "customer_gender": "FEMALE",
-          "customer_id": 22,
-          "customer_last_name": "Wise",
-          "customer_phone": "",
-          "day_of_week": "Thursday",
-          "day_of_week_i": 3,
-          "email": "diane@wise-family.zzz",
-          "manufacturer": [
-            "Tigress Enterprises",
-            "Pyramidustries"
-          ],
-          "order_date": "2023-11-30T20:42:43+00:00",
-          "order_id": 579807,
-          "products": [
-            {
-              "base_price": 32.99,
-              "discount_percentage": 0,
-              "quantity": 1,
-              "manufacturer": "Tigress Enterprises",
-              "tax_amount": 0,
-              "product_id": 13900,
-              "category": "Women's Shoes",
-              "sku": "ZO0017700177",
-              "taxless_price": 32.99,
-              "unit_discount_amount": 0,
-              "min_price": 15.51,
-              "_id": "sold_product_579807_13900",
-              "discount_amount": 0,
-              "created_on": "2016-12-22T20:42:43+00:00",
-              "product_name": "Cowboy/Biker boots - black",
-              "price": 32.99,
-              "taxful_price": 32.99,
-              "base_unit_price": 32.99
-            },
-            {
-              "base_price": 13.99,
-              "discount_percentage": 0,
-              "quantity": 1,
-              "manufacturer": "Pyramidustries",
-              "tax_amount": 0,
-              "product_id": 20481,
-              "category": "Women's Clothing",
-              "sku": "ZO0157901579",
-              "taxless_price": 13.99,
-              "unit_discount_amount": 0,
-              "min_price": 7.13,
-              "_id": "sold_product_579807_20481",
-              "discount_amount": 0,
-              "created_on": "2016-12-22T20:42:43+00:00",
-              "product_name": "Vest - red Medium Turquoise",
-              "price": 13.99,
-              "taxful_price": 13.99,
-              "base_unit_price": 13.99
-            }
-          ],
-          "sku": [
-            "ZO0017700177",
-            "ZO0157901579"
-          ],
-          "taxful_total_price": 46.98,
-          "taxless_total_price": 46.98,
-          "total_quantity": 2,
-          "total_unique_products": 2,
-          "type": "order",
-          "user": "diane",
-          "geoip": {
-            "country_iso_code": "GB",
-            "location": {
-              "lon": -0.1,
-              "lat": 51.5
-            },
-            "continent_name": "Europe"
-          },
-          "event": {
-            "dataset": "sample_ecommerce"
-          }
-        }
-      },
-      {
-        "_index": "shipment",
-        "_id": "U1auupgBVvsXVzThCnFK",
-        "_score": 1.7114353,
-        "_source": {
-          "category": [
-            "Men's Clothing"
-          ],
-          "currency": "EUR",
-          "customer_first_name": "Oliver",
-          "customer_full_name": "Oliver Goodwin",
-          "customer_gender": "MALE",
-          "customer_id": 7,
-          "customer_last_name": "Goodwin",
-          "customer_phone": "",
-          "day_of_week": "Thursday",
-          "day_of_week_i": 3,
-          "email": "oliver@goodwin-family.zzz",
-          "manufacturer": [
-            "Low Tide Media",
-            "Elitelligence"
-          ],
-          "order_date": "2023-11-09T15:04:19+00:00",
-          "order_id": 551220,
-          "products": [
-            {
-              "base_price": 49.99,
-              "discount_percentage": 0,
-              "quantity": 1,
-              "manufacturer": "Low Tide Media",
-              "tax_amount": 0,
-              "product_id": 6152,
-              "category": "Men's Clothing",
-              "sku": "ZO0428304283",
-              "taxless_price": 49.99,
-              "unit_discount_amount": 0,
-              "min_price": 22.5,
-              "_id": "sold_product_551220_6152",
-              "discount_amount": 0,
-              "created_on": "2016-12-01T15:04:19+00:00",
-              "product_name": "Light jacket - dark blue",
-              "price": 49.99,
-              "taxful_price": 49.99,
-              "base_unit_price": 49.99
-            },
-            {
-              "base_price": 24.99,
-              "discount_percentage": 0,
-              "quantity": 1,
-              "manufacturer": "Elitelligence",
-              "tax_amount": 0,
-              "product_id": 15738,
-              "category": "Men's Clothing",
-              "sku": "ZO0530105301",
-              "taxless_price": 24.99,
-              "unit_discount_amount": 0,
-              "min_price": 12.99,
-              "_id": "sold_product_551220_15738",
-              "discount_amount": 0,
-              "created_on": "2016-12-01T15:04:19+00:00",
-              "product_name": "Tracksuit bottoms - dark blue",
-              "price": 24.99,
-              "taxful_price": 24.99,
-              "base_unit_price": 24.99
-            }
-          ],
-          "sku": [
-            "ZO0428304283",
-            "ZO0530105301"
-          ],
-          "taxful_total_price": 74.98,
-          "taxless_total_price": 74.98,
-          "total_quantity": 2,
-          "total_unique_products": 2,
-          "type": "order",
-          "user": "oliver",
-          "geoip": {
-            "country_iso_code": "GB",
-            "location": {
-              "lon": -0.1,
-              "lat": 51.5
-            },
-            "continent_name": "Europe"
-          },
-          "event": {
-            "dataset": "sample_ecommerce"
-          }
-        }
       }
     ]
   },
   "aggregations": {
     "order_count": {
-      "value": 3
+      "value": 1
     }
   }
 }
@@ -596,7 +423,8 @@ GET shipment/_search?search_pipeline=agentic-pipeline&verbose_pipeline=true
 {
   "query": {
     "agentic": {
-      "query_text": "How many orders were placed by Diane Goodwin?"
+      "query_text": "How many orders were placed by Diane Goodwin?",
+      "query_fields":"customer_full_name"
     }
   }
 }
@@ -605,74 +433,69 @@ You can see the match query with aggregation clause generated:
 
 ```json
 {
-    "took": 3327,
-    "timed_out": false,
-    "_shards": {
-        "total": 1,
-        "successful": 1,
-        "skipped": 0,
-        "failed": 0
+  "took": 2974,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 1,
+      "relation": "eq"
     },
-    "hits": {
-        "total": {
-            "value": 3,
-            "relation": "eq"
+    "max_score": null,
+    "hits": [...]
+  },
+  "aggregations": {
+    "order_count": {
+      "value": 1
+    }
+  },
+  "processor_results": [
+    {
+      "processor_name": "agentic_query_translator",
+      "duration_millis": 2970763781,
+      "status": "success",
+      "input_data": {
+        "verbose_pipeline": true,
+        "query": {
+          "agentic": {
+            "query_text": "How many orders were placed by Diane Goodwin?"
+          }
+        }
+      },
+      "output_data": { // here  is the llm generated query
+        "query": {
+          "bool": {
+            "adjust_pure_negative": true,
+            "must": [
+              {
+                "match_phrase": {
+                  "customer_full_name": {
+                    "query": "Diane Goodwin",
+                    "zero_terms_query": "NONE",
+                    "boost": 1.0,
+                    "slop": 0
+                  }
+                }
+              }
+            ],
+            "boost": 1.0
+          }
         },
-        "max_score": null,
-        "hits": [...]
-    },
-    "aggregations": {
-        "order_count": {
-            "value": 3
-        }
-    },
-    "processor_results": [
-        {
-            "processor_name": "agentic_query_translator",
-            "duration_millis": 3322961958,
-            "status": "success",
-            "input_data": {
-                "verbose_pipeline": true,
-                "query": {
-                    "agentic": {
-                        "query_text": "How many orders were placed by Diane Goodwin?"
-                    }
-                }
-            },
-            "output_data": { // here is the agentic generated query
-                "query": { 
-                    "bool": {
-                        "adjust_pure_negative": true,
-                        "must": [
-                            {
-                                "match": {
-                                    "customer_full_name": {
-                                        "auto_generate_synonyms_phrase_query": true,
-                                        "query": "Diane Goodwin",
-                                        "zero_terms_query": "NONE",
-                                        "fuzzy_transpositions": true,
-                                        "boost": 1.0,
-                                        "prefix_length": 0,
-                                        "operator": "OR",
-                                        "lenient": false,
-                                        "max_expansions": 50
-                                    }
-                                }
-                            }
-                        ],
-                        "boost": 1.0
-                    }
-                },
-                "aggregations": {
-                    "order_count": {
-                        "cardinality": {
-                            "field": "order_id"
-                        }
-                    }
-                }
+        "aggregations": {
+          "order_count": {
+            "cardinality": {
+              "field": "order_id"
             }
+          }
         }
-    ]
+      }
+    }
+  ]
 }
 ```
 
