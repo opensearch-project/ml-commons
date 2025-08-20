@@ -8,12 +8,16 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.*;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -175,7 +179,10 @@ public class SearchIndexTool implements Tool {
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                         index = jsonObject.get(INDEX_FIELD).getAsString();
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
-                        query = queryElement == null ? null : queryElement.toString();
+                        Gson gson = new GsonBuilder()
+                                .registerTypeAdapter(Double.class, new PlainDoubleAdapter())
+                                .create();
+                        query = queryElement == null ? null : gson.toJson(new Gson().fromJson(queryElement.toString(), Map.class));
                     }
                 } catch (JsonSyntaxException e) {
                     log.error("Invalid JSON input: {}", input, e);
@@ -297,6 +304,24 @@ public class SearchIndexTool implements Tool {
         @Override
         public Map<String, Object> getDefaultAttributes() {
             return DEFAULT_ATTRIBUTES;
+        }
+    }
+
+    private  class PlainDoubleAdapter extends TypeAdapter<Double> {
+        @Override
+        public void write(JsonWriter out, Double value) throws IOException {
+            if (value == null) {
+                out.nullValue();
+                return;
+            }
+            // 使用 BigDecimal.toPlainString() 确保不是科学计数法
+            out.value(new BigDecimal(value).toPlainString());
+        }
+
+
+        @Override
+        public Double read(JsonReader in) throws IOException {
+            return in.nextDouble();
         }
     }
 }
