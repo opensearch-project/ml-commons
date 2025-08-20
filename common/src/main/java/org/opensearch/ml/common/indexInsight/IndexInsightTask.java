@@ -51,8 +51,8 @@ public interface IndexInsightTask {
 
     default void handleExistingDoc(GetResponse getResponse, String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         Map<String, Object> source = getResponse.getSourceAsMap();
-        String currentStatus = (String) source.get("status");
-        Long lastUpdateTime = (Long) source.get("last_updated_time");
+        String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
+        Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
         long currentTime = Instant.now().toEpochMilli();
 
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
@@ -77,9 +77,9 @@ public interface IndexInsightTask {
                     // Return existing result
                     IndexInsight insight = IndexInsight
                         .builder()
-                        .index((String) source.get("index_name"))
-                        .taskType(MLIndexInsightType.valueOf((String) source.get("task_type")))
-                        .content((String) source.get("content"))
+                        .index((String) source.get(IndexInsight.INDEX_NAME_FIELD))
+                        .taskType(MLIndexInsightType.valueOf((String) source.get(IndexInsight.TASK_TYPE_FIELD)))
+                        .content((String) source.get(IndexInsight.CONTENT_FIELD))
                         .status(IndexInsightTaskStatus.COMPLETED)
                         .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
                         .build();
@@ -99,10 +99,10 @@ public interface IndexInsightTask {
     default void beginGeneration(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         String docId = generateDocId();
         Map<String, Object> docMap = new HashMap<>();
-        docMap.put("index_name", getSourceIndex());
-        docMap.put("task_type", getTaskType().toString());
-        docMap.put("status", IndexInsightTaskStatus.GENERATING.toString());
-        docMap.put("last_updated_time", Instant.now().toEpochMilli());
+        docMap.put(IndexInsight.INDEX_NAME_FIELD, getSourceIndex());
+        docMap.put(IndexInsight.TASK_TYPE_FIELD, getTaskType().toString());
+        docMap.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.GENERATING.toString());
+        docMap.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
 
         UpdateRequest updateRequest = new UpdateRequest(storageIndex, docId).doc(docMap, MediaTypeRegistry.JSON).docAsUpsert(true);
 
@@ -138,11 +138,11 @@ public interface IndexInsightTask {
         String docId = generateDocId();
         long currentTime = Instant.now().toEpochMilli();
         Map<String, Object> docMap = new HashMap<>();
-        docMap.put("index_name", getSourceIndex());
-        docMap.put("task_type", getTaskType().toString());
-        docMap.put("content", content);
-        docMap.put("status", IndexInsightTaskStatus.COMPLETED.toString());
-        docMap.put("last_updated_time", currentTime);
+        docMap.put(IndexInsight.INDEX_NAME_FIELD, getSourceIndex());
+        docMap.put(IndexInsight.TASK_TYPE_FIELD, getTaskType().toString());
+        docMap.put(IndexInsight.CONTENT_FIELD, content);
+        docMap.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString());
+        docMap.put(IndexInsight.LAST_UPDATE_FIELD, currentTime);
 
         UpdateRequest updateRequest = new UpdateRequest(storageIndex, docId).doc(docMap, MediaTypeRegistry.JSON).docAsUpsert(true);
 
@@ -166,10 +166,10 @@ public interface IndexInsightTask {
     default void saveFailedStatus(String storageIndex) {
         String docId = generateDocId();
         Map<String, Object> docMap = new HashMap<>();
-        docMap.put("index_name", getSourceIndex());
-        docMap.put("task_type", getTaskType().toString());
-        docMap.put("status", IndexInsightTaskStatus.FAILED.toString());
-        docMap.put("last_updated_time", Instant.now().toEpochMilli());
+        docMap.put(IndexInsight.INDEX_NAME_FIELD, getSourceIndex());
+        docMap.put(IndexInsight.TASK_TYPE_FIELD, getTaskType().toString());
+        docMap.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.FAILED.toString());
+        docMap.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
 
         UpdateRequest updateRequest = new UpdateRequest(storageIndex, docId).doc(docMap, MediaTypeRegistry.JSON).docAsUpsert(true);
 
@@ -189,7 +189,7 @@ public interface IndexInsightTask {
         GetRequest getRequest = new GetRequest(storageIndex, docId);
 
         getClient().get(getRequest, ActionListener.wrap(response -> {
-            String content = response.isExists() ? response.getSourceAsMap().get("content").toString() : "";
+            String content = response.isExists() ? response.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
             listener.onResponse(content);
         }, e -> {
             // Return empty content on failure instead of propagating error

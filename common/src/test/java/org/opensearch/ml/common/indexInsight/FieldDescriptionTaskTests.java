@@ -54,7 +54,7 @@ public class FieldDescriptionTaskTests {
             ActionListener<GetResponse> getListener = invocation.getArgument(1);
             GetResponse mockResponse = mock(GetResponse.class);
             when(mockResponse.isExists()).thenReturn(true);
-            Map<String, Object> sourceMap = Map.of("content", content);
+            Map<String, Object> sourceMap = Map.of(IndexInsight.CONTENT_FIELD, content);
             when(mockResponse.getSourceAsMap()).thenReturn(sourceMap);
             getListener.onResponse(mockResponse);
             return null;

@@ -73,7 +73,7 @@ public class IndexInsightTaskTests {
     public void testGetInsightContentFromContainer() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put("content", "existing content");
+        source.put(IndexInsight.CONTENT_FIELD, "existing content");
         when(getResponse.isExists()).thenReturn(true);
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
@@ -140,11 +140,11 @@ public class IndexInsightTaskTests {
     public void testHandleExistingDoc_Completed_NoUpdate() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put("status", "COMPLETED");
-        source.put("last_updated_time", Instant.now().toEpochMilli() - 3600);
-        source.put("index_name", "test-index");
-        source.put("task_type", "STATISTICAL_DATA");
-        source.put("content", "test content");
+        source.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - 3600);
+        source.put(IndexInsight.INDEX_NAME_FIELD, "test-index");
+        source.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
+        source.put(IndexInsight.CONTENT_FIELD, "test content");
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
@@ -159,11 +159,11 @@ public class IndexInsightTaskTests {
     public void testHandleExistingDoc_Completed_NeedUpdate() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put("status", "COMPLETED");
-        source.put("last_updated_time", Instant.now().toEpochMilli() - INDEX_INSIGHT_UPDATE_INTERVAL - 3600);
-        source.put("index_name", "test-index");
-        source.put("task_type", "STATISTICAL_DATA");
-        source.put("content", "test content");
+        source.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - INDEX_INSIGHT_UPDATE_INTERVAL - 3600);
+        source.put(IndexInsight.INDEX_NAME_FIELD, "test-index");
+        source.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
+        source.put(IndexInsight.CONTENT_FIELD, "test content");
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
         mockClientUpdateResponse(client, mock(UpdateResponse.class));
@@ -184,8 +184,8 @@ public class IndexInsightTaskTests {
     public void testHandleExistingDoc_Generating_NotTimeout() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put("status", "GENERATING");
-        source.put("last_updated_time", Instant.now().toEpochMilli());
+        source.put(IndexInsight.STATUS_FIELD, "GENERATING");
+        source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
@@ -201,8 +201,8 @@ public class IndexInsightTaskTests {
     public void testHandleExistingDoc_Generating_Timeout() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put("status", "GENERATING");
-        source.put("last_updated_time", Instant.now().toEpochMilli() - INDEX_INSIGHT_GENERATING_TIMEOUT - 3600);
+        source.put(IndexInsight.STATUS_FIELD, "GENERATING");
+        source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - INDEX_INSIGHT_GENERATING_TIMEOUT - 3600);
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
         mockClientUpdateResponse(client, mock(UpdateResponse.class));
@@ -223,8 +223,8 @@ public class IndexInsightTaskTests {
     public void testHandleExistingDoc_Failed_Retry() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put("status", "FAILED");
-        source.put("last_updated_time", Instant.now().toEpochMilli());
+        source.put(IndexInsight.STATUS_FIELD, "FAILED");
+        source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
         mockClientUpdateResponse(client, mock(UpdateResponse.class));
@@ -278,11 +278,11 @@ public class IndexInsightTaskTests {
         // Mock prerequisite already completed with all required fields
         GetResponse prereqResponse = mock(GetResponse.class);
         Map<String, Object> prereqSource = new HashMap<>();
-        prereqSource.put("status", "COMPLETED");
-        prereqSource.put("content", "prerequisite content");
-        prereqSource.put("index_name", "test-index");
-        prereqSource.put("task_type", "STATISTICAL_DATA");
-        prereqSource.put("last_updated_time", Instant.now().toEpochMilli() - 3600);
+        prereqSource.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        prereqSource.put(IndexInsight.CONTENT_FIELD, "prerequisite content");
+        prereqSource.put(IndexInsight.INDEX_NAME_FIELD, "test-index");
+        prereqSource.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
+        prereqSource.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - 3600);
         when(prereqResponse.isExists()).thenReturn(true);
         when(prereqResponse.getSourceAsMap()).thenReturn(prereqSource);
         mockClientGetResponse(client, prereqResponse);
