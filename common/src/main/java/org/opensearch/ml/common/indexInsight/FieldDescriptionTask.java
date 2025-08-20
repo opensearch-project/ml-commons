@@ -34,7 +34,7 @@ import lombok.extern.log4j.Log4j2;
 public class FieldDescriptionTask implements IndexInsightTask {
 
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
-    private final MLIndexInsightType taskType = MLIndexInsightType.FIELD_DESCRIPTION;
+    private static final MLIndexInsightType TASK_TYPE = MLIndexInsightType.FIELD_DESCRIPTION;
     private final String sourceIndex;
     private final Client client;
 
@@ -64,7 +64,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
     @Override
     public MLIndexInsightType getTaskType() {
-        return taskType;
+        return TASK_TYPE;
     }
 
     @Override
