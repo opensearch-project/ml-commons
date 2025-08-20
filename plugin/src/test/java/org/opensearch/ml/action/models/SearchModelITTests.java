@@ -8,7 +8,6 @@ package org.opensearch.ml.action.models;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
@@ -32,7 +31,6 @@ import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-@Ignore
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class SearchModelITTests extends MLCommonsIntegTestCase {
     @Rule

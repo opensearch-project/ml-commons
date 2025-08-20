@@ -91,7 +91,6 @@ public class IndexInsightTests {
         assertEquals(original.getLastUpdatedTime(), deserialized.getLastUpdatedTime());
     }
 
-
     @Test
     public void testToXContent() throws IOException {
         Instant now = Instant.now();
