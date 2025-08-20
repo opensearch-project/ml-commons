@@ -335,7 +335,6 @@ jacocoTestReport {
 List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
         'org.opensearch.ml.constant.CommonValue',
-        'org.opensearch.ml.plugin.MachineLearningPlugin*',
         'org.opensearch.ml.indices.MLIndicesHandler',
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.profile.MLModelProfile',
