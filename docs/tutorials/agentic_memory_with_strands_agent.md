@@ -12,7 +12,7 @@ Agentic memory in OpenSearch solves this problem by providing agents with the ab
 
 # Prerequisites
 
-- OpenSearch version 3.2.0+ with Machine Learning plugin enabled
+- OpenSearch version 3.2.0+ with ml-commons plugin installed
 - AWS credentials with access to Amazon Bedrock services
 - Python 3.10+
 
@@ -33,7 +33,7 @@ PUT /_cluster/settings
 
 ## 2. Register Embedding Model
 
-In this tutorial, we will use two models: an text-embedding model and a large language model.
+In this tutorial, we will use two models: a text-embedding model and a large language model.
 
 First, register an Amazon Titan Text Embeddings V2 model on Bedrock:
 
@@ -49,7 +49,7 @@ POST /_plugins/_ml/models/_register
     "version": 1,
     "protocol": "aws_sigv4",
     "parameters": {
-      "region": "us-east-1",
+      "region": "your_aws_region",
       "service_name": "bedrock",
       "model": "amazon.titan-embed-text-v2:0",
       "dimensions": 1024,
@@ -90,7 +90,7 @@ POST /_plugins/_ml/models/_register
     "version": 1,
     "protocol": "aws_sigv4",
     "parameters": {
-      "region": "us-east-1",
+      "region": "your_aws_region",
       "service_name": "bedrock",
       "max_tokens": 8000,
       "temperature": 1,
