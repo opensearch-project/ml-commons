@@ -96,7 +96,7 @@ POST /_plugins/_ml/models/_register?deploy=true
         "headers": {
           "content-type": "application/json"
         },
-        "request_body": "{ \"system\": [{\"text\": \"${parameters.system_prompt}\"}]\, \"messages\": [${parameters._chat_history:-}{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_prompt}\"}]}${parameters._interactions:-}]${parameters.tool_configs:-} }"
+        "request_body": "{ \"system\": [{\"text\": \"${parameters.system_prompt}\"}], \"messages\": [${parameters._chat_history:-}{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.user_prompt}\"}]}${parameters._interactions:-}]${parameters.tool_configs:-} }"
       }
     ]
   }
