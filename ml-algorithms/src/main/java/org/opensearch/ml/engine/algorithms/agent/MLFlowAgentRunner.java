@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
@@ -120,6 +121,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                             flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
                         } else if (output instanceof ModelTensorOutput) {
                             flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+                        } else if (toolParameters.getOrDefault("return_data_as_map", "false").equalsIgnoreCase("true")) {
+                            flowAgentOutput.add(convertOutputToModelTensor(output, outputKey));
                         } else {
                             ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(StringUtils.toJson(output)).build();
                             flowAgentOutput.add(stepOutput);
@@ -158,11 +161,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 previousStepListener = nextStepListener;
             }
         }
-        if (toolSpecs.size() == 1) {
-            firstTool.run(firstToolExecuteParams, listener);
-        } else {
-            firstTool.run(firstToolExecuteParams, firstStepListener);
-        }
+        firstTool.run(firstToolExecuteParams, firstStepListener);
     }
 
     @VisibleForTesting

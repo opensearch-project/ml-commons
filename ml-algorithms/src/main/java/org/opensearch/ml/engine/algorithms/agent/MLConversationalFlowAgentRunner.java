@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
@@ -19,9 +20,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHis
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
-import java.security.AccessController;
 import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -270,12 +269,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
             } else if (output instanceof ModelTensorOutput) {
                 flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+            } else if (toolParameters.getOrDefault("return_data_as_map", "false").equalsIgnoreCase("true")) {
+                flowAgentOutput.add(convertOutputToModelTensor(output, outputKey));
             } else {
-                String result = output instanceof String
-                    ? (String) output
-                    : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
-
-                ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(result).build();
+                ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(StringUtils.toJson(output)).build();
                 flowAgentOutput.add(stepOutput);
             }
             if (memory == null) {
