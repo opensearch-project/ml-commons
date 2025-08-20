@@ -92,31 +92,6 @@ public class IndexInsightTests {
     }
 
     @Test
-    public void testStreamSerializationWithNullContent() throws IOException {
-        Instant now = Instant.now();
-        IndexInsight original = IndexInsight
-            .builder()
-            .index(null)
-            .content(null)
-            .status(null)
-            .taskType(MLIndexInsightType.STATISTICAL_DATA)
-            .lastUpdatedTime(now)
-            .build();
-
-        BytesStreamOutput output = new BytesStreamOutput();
-        original.writeTo(output);
-
-        StreamInput input = output.bytes().streamInput();
-        IndexInsight deserialized = new IndexInsight(input);
-
-        assertNull(deserialized.getIndex());
-        assertNull(deserialized.getContent());
-        assertNull(deserialized.getStatus());
-        assertEquals(original.getTaskType(), deserialized.getTaskType());
-        assertEquals(original.getLastUpdatedTime(), deserialized.getLastUpdatedTime());
-    }
-
-    @Test
     public void testToXContent() throws IOException {
         Instant now = Instant.now();
         IndexInsight insight = IndexInsight

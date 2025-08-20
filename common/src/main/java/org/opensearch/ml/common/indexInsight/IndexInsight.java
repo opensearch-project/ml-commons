@@ -49,11 +49,11 @@ public class IndexInsight implements ToXContentObject, Writeable {
     }
 
     public IndexInsight(StreamInput input) throws IOException {
-        index = input.readOptionalString();
-        content = input.readOptionalString();
-        status = IndexInsightTaskStatus.fromString(input.readOptionalString());
-        taskType = MLIndexInsightType.fromString(input.readOptionalString());
+        index = input.readString();
+        status = IndexInsightTaskStatus.fromString(input.readString());
+        taskType = MLIndexInsightType.fromString(input.readString());
         lastUpdatedTime = input.readInstant();
+        content = input.readOptionalString();
     }
 
     public static IndexInsight parse(XContentParser parser) throws IOException {
@@ -99,11 +99,11 @@ public class IndexInsight implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeOptionalString(index);
-        out.writeOptionalString(content);
-        out.writeOptionalString(status.toString());
-        out.writeOptionalString(taskType.toString());
+        out.writeString(index);
+        out.writeString(status.toString());
+        out.writeString(taskType.toString());
         out.writeInstant(lastUpdatedTime);
+        out.writeOptionalString(content);
     }
 
     @Override
