@@ -6,7 +6,7 @@
     "index_name": {
       "type": "keyword"
     },
-    "tenantId": {
+    "tenant_id": {
       "type": "keyword"
     }
   }
