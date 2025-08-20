@@ -50,12 +50,8 @@ public class IndexInsight implements ToXContentObject, Writeable {
 
     public IndexInsight(StreamInput input) throws IOException {
         index = input.readOptionalString();
-        if (input.readBoolean()) {
-            content = input.readOptionalString();
-        }
-        if (input.readBoolean()) {
-            status = IndexInsightTaskStatus.fromString(input.readOptionalString());
-        }
+        content = input.readOptionalString();
+        status = IndexInsightTaskStatus.fromString(input.readOptionalString());
         taskType = MLIndexInsightType.fromString(input.readOptionalString());
         lastUpdatedTime = input.readInstant();
     }
@@ -104,18 +100,8 @@ public class IndexInsight implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(index);
-        if (content != null && !content.isEmpty()) {
-            out.writeBoolean(true);
-            out.writeOptionalString(content);
-        } else {
-            out.writeBoolean(false);
-        }
-        if (status != null) {
-            out.writeBoolean(true);
-            out.writeOptionalString(status.toString());
-        } else {
-            out.writeBoolean(false);
-        }
+        out.writeOptionalString(content);
+        out.writeOptionalString(status.toString());
         out.writeOptionalString(taskType.toString());
         out.writeInstant(lastUpdatedTime);
     }
