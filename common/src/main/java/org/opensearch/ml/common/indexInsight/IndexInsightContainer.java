@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIEL
 
 import java.io.IOException;
 
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -34,7 +35,12 @@ public class IndexInsightContainer implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(indexName);
-        out.writeString(tenantId);
+        out.writeOptionalString(tenantId);
+    }
+
+    public IndexInsightContainer(StreamInput input) throws IOException {
+        indexName = input.readString();
+        tenantId = input.readOptionalString();
     }
 
     @Override
