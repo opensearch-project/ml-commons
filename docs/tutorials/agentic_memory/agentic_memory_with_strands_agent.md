@@ -136,11 +136,11 @@ Sample response:
 { 'memory_container_id': 'xthvpZgBOh0h20Y9O3Sa', 'status': 'created' }
 ```
 
-## 5. Implement Strands Agent with Memory Tools
+## 5. Implement Agent with Memory Tools
 
-We will now create a memory agent using the [Strands Agents](https://strandsagents.com/latest/) framework and OpenSearch agentic memory.
+OpenSearch agentic memory can work with any agent framework. To demonstrate, we will create a memory agent using the [Strands Agents](https://strandsagents.com/latest/) framework and OpenSearch agentic memory.
 
-Implement the agent and its memory tools:
+Implement the agent and its memory tools using OpenSearch agentic memory APIs:
 
 ```python
 from strands import Agent, tool
@@ -148,7 +148,7 @@ import requests
 from typing import Dict, List, Optional, Any
 from requests.auth import HTTPBasicAuth
 
-OPENSEARCH_URL = "http://localhost:9200"
+OPENSEARCH_URL = "your_opensearch_cluster_endpoint"
 OPENSEARCH_USERNAME = "your_username"
 OPENSEARCH_PASSWORD = "your_password"
 CONTAINER_ID = "your_memory_container_id"
