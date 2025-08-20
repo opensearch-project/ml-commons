@@ -51,7 +51,7 @@ public class IndexInsightContainerTests {
 
         StreamInput input = output.bytes().streamInput();
         String indexName = input.readString();
-        String tenantId = input.readString();
+        String tenantId = input.readOptionalString();
 
         assertEquals(original.getIndexName(), indexName);
         assertEquals(original.getTenantId(), tenantId);
