@@ -314,7 +314,6 @@ public class SearchIndexTool implements Tool {
                 out.nullValue();
                 return;
             }
-            // 使用 BigDecimal.toPlainString() 确保不是科学计数法
             out.value(new BigDecimal(value).toPlainString());
         }
 
