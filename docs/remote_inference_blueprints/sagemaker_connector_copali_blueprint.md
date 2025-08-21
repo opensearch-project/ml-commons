@@ -52,6 +52,7 @@ Based on your platform, there are different steps to create a connector. Regardl
 This approach is for users running OpenSearch on their own infrastructure.
 
 Once the model endpoint is available on SageMaker, you can create a connector and register the model in OpenSearch.
+The following sample request will try to create a model and also inline create the connector in OpenSearch to connect to the SageMaker model endpoint.
 Please replace `<endpoint-name>` with the name of your SageMaker endpoint.
 
 ```json
@@ -100,7 +101,7 @@ You will get a `model_id` in the response:
 ```
 
 ### B. Using Amazon OpenSearch Service
-This is the recommended approach when using Amazon's managed service.
+This is the recommended approach when using Amazon's managed service. For more information, refer to the [Amazon OpenSearch documentation](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html).
 
 #### a. Create an IAM Role for the OpenSearch Connector
 In the AWS IAM console, create a new role with the following trust relationship. This allows the OpenSearch service to assume this role.
@@ -163,7 +164,7 @@ After creating the role, copy its ARN. You will need it to create the connector.
 #### c. Map the IAM Role in OpenSearch Dashboards
 Follow the documentation to map the IAM role you just created to the `ml_full_access` role in your OpenSearch domain.
 
-Now, create the connector in OpenSearch to connect to the SageMaker model endpoint.
+Now, try to create a model and also inline create the connector in OpenSearch to connect to the SageMaker model endpoint. 
 
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
@@ -197,7 +198,15 @@ POST /_plugins/_ml/models/_register?deploy=true
     }
 }
 ```
+You will get a `model_id` in the response:
 
+```json
+{
+    "task_id": "gNilzZgBOh0h20Y9GokF",
+    "status": "CREATED",
+    "model_id": "gdilzZgBOh0h20Y9Goki"
+}
+```
 
 ## 3. Test the Model
 
@@ -259,7 +268,10 @@ The response will contain the query embeddings:
 
 ### Image-based Prediction
 
-You can also use the model for image-based predictions by providing a base64-encoded image:
+You can also use the model for image-based predictions by providing a base64-encoded image. 
+
+Please note that this model accept image in the format of Base64 encoded string, please try convert the image to base64 format before sending it to the model.
+Some known python packages for converting image to base64 format are PIL, OpenCV, and Pillow.
 
 ```json
 POST /_plugins/_ml/models/gdilzZgBOh0h20Y9Goki/_predict
