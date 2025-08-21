@@ -4,9 +4,13 @@ import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.mock;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigFailure;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteFailure;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
@@ -18,21 +22,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.Configuration;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLConfig;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.transport.config.MLConfigGetAction;
-import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
-import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.transport.client.Client;
@@ -62,43 +52,6 @@ public class LogRelatedIndexCheckTaskTests {
             listener.onResponse(resp);
             return null;
         }).when(client).search(any(), any(ActionListener.class));
-    }
-
-    private void mockMLConfigSuccess() {
-        doAnswer(invocation -> {
-            ActionListener<MLConfigGetResponse> configListener = invocation.getArgument(2);
-            MLConfig config = MLConfig.builder().type("test").configuration(Configuration.builder().agentId("agent-id").build()).build();
-            configListener.onResponse(new MLConfigGetResponse(config));
-            return null;
-        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), any(ActionListener.class));
-    }
-
-    private void mockMLExecuteSuccess(String response) {
-        doAnswer(invocation -> {
-            ActionListener<MLExecuteTaskResponse> executeListener = invocation.getArgument(2);
-            ModelTensor tensor = ModelTensor.builder().result(response).build();
-            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-            ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-            executeListener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(output).build());
-            return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
-    }
-
-    private void mockMLExecuteFailure(String errorMessage) {
-        doAnswer(invocation -> {
-            ActionListener<MLExecuteTaskResponse> executeListener = invocation.getArgument(2);
-            executeListener.onFailure(new RuntimeException(errorMessage));
-            return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
-    }
-
-    private void mockUpdateSuccess() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
-            UpdateResponse updateResponse = mock(UpdateResponse.class);
-            updateListener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), any(ActionListener.class));
     }
 
     // parseCheckResponse declared method
@@ -288,13 +241,13 @@ public class LogRelatedIndexCheckTaskTests {
     public void testRunTask_Success() {
         mockSearchResponse();
         // Mock getAgentIdToRun
-        mockMLConfigSuccess();
+        mockMLConfigSuccess(client);
         // Mock callLLMWithAgent
         String response = "<RCA_analysis>{\"is_log_index\":false,\"log_message_field\":null,\"trace_id_field\":null}</RCA_analysis>";
-        mockMLExecuteSuccess(response);
+        mockMLExecuteSuccess(client, response);
 
         // Mock update call for saveResult
-        mockUpdateSuccess();
+        mockUpdateSuccess(client);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runTask("storage-index", "tenant-id", listener);
@@ -307,11 +260,27 @@ public class LogRelatedIndexCheckTaskTests {
     }
 
     @Test
+    public void testRunTask_MLConfigRetrievalFailure() {
+        mockSearchResponse();
+        // Mock getAgentIdToRun
+        mockMLConfigFailure(client, "Config not found");
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.runTask("storage-index", "tenant-id", listener);
+
+        ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(listener).onFailure(captor.capture());
+
+        IllegalStateException exception = captor.getValue();
+        assertEquals("Config not found", exception.getMessage());
+    }
+
+    @Test
     public void testRunTask_MLExecuteFailure() {
         mockSearchResponse();
         // Mock getAgentIdToRun
-        mockMLConfigSuccess();
-        mockMLExecuteFailure("ML execution failed");
+        mockMLConfigSuccess(client);
+        mockMLExecuteFailure(client, "ML execution failed");
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runTask("storage-index", "tenant-id", listener);
