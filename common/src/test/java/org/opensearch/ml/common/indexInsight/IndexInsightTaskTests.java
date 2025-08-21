@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
@@ -16,6 +17,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.swing.*;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -73,18 +76,18 @@ public class IndexInsightTaskTests {
     public void testGetInsightContentFromContainer() {
         GetResponse getResponse = mock(GetResponse.class);
         Map<String, Object> source = new HashMap<>();
-        source.put(IndexInsight.CONTENT_FIELD, "existing content");
+        source.put(IndexInsight.CONTENT_FIELD, "{\"key\": \"value\"}");
         when(getResponse.isExists()).thenReturn(true);
         when(getResponse.getSourceAsMap()).thenReturn(source);
 
         mockClientGetResponse(client, getResponse);
 
-        ActionListener<String> listener = mock(ActionListener.class);
+        ActionListener<Map<String, Object>> listener = mock(ActionListener.class);
         task.getInsightContentFromContainer("test-storage", MLIndexInsightType.STATISTICAL_DATA, listener);
 
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass((Class) Map.class);
         verify(listener).onResponse(captor.capture());
-        assertEquals("existing content", captor.getValue());
+        assertEquals("value", captor.getValue().get("key"));
     }
 
     @Test
@@ -94,12 +97,12 @@ public class IndexInsightTaskTests {
 
         mockClientGetResponse(client, getResponse);
 
-        ActionListener<String> listener = mock(ActionListener.class);
+        ActionListener<Map<String, Object>> listener = mock(ActionListener.class);
         task.getInsightContentFromContainer("test-storage", MLIndexInsightType.STATISTICAL_DATA, listener);
 
-        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass((Class) Map.class);
         verify(listener).onResponse(captor.capture());
-        assertEquals("", captor.getValue());
+        assertNull(captor.getValue());
     }
 
     @Test

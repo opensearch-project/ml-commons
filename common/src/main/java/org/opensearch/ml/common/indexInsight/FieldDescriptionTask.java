@@ -21,8 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.transport.client.Client;
 
-import com.jayway.jsonpath.JsonPath;
-
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -34,7 +32,6 @@ import lombok.extern.log4j.Log4j2;
 public class FieldDescriptionTask implements IndexInsightTask {
 
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
-    private static final MLIndexInsightType TASK_TYPE = MLIndexInsightType.FIELD_DESCRIPTION;
     private final String sourceIndex;
     private final Client client;
 
@@ -46,9 +43,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
     @Override
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         try {
-            getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA, ActionListener.wrap(statisticalContent -> {
+            getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA, ActionListener.wrap(statisticalContentMap -> {
                 getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
-                    batchProcessFields(statisticalContent, agentId, storageIndex, listener);
+                    batchProcessFields(statisticalContentMap, agentId, storageIndex, listener);
                 }, listener::onFailure));
             }, e -> {
                 log.error("Failed to get statistical content for index {}", sourceIndex, e);
@@ -64,7 +61,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
     @Override
     public MLIndexInsightType getTaskType() {
-        return TASK_TYPE;
+        return MLIndexInsightType.FIELD_DESCRIPTION;
     }
 
     @Override
@@ -82,14 +79,13 @@ public class FieldDescriptionTask implements IndexInsightTask {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
     }
 
-    private void batchProcessFields(String statisticalContent, String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
-        Map<String, Object> mappingSource;
-        try {
-            mappingSource = (Map<String, Object>) ((Map<String, Object>) JsonPath.read(statisticalContent, "$")).get("mapping");
-        } catch (Exception e) {
-            listener.onFailure(new RuntimeException("Failed to parse statistic content for field description task to get mappings"));
-            return;
-        }
+    private void batchProcessFields(
+        Map<String, Object> statisticalContentMap,
+        String agentId,
+        String storageIndex,
+        ActionListener<IndexInsight> listener
+    ) {
+        Map<String, Object> mappingSource = (Map<String, Object>) statisticalContentMap.get("mapping");
 
         if (mappingSource == null || mappingSource.isEmpty()) {
             log.error("No mapping properties found for index: {}", sourceIndex);
@@ -152,7 +148,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         });
 
         for (List<String> batch : batches) {
-            processBatch(batch, statisticalContent, agentId, batchListener);
+            processBatch(batch, statisticalContentMap, agentId, batchListener);
         }
     }
 
@@ -182,11 +178,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
     private void processBatch(
         List<String> batchFields,
-        String statisticalContent,
+        Map<String, Object> statisticalContentMap,
         String agentId,
         ActionListener<Map<String, Object>> listener
     ) {
-        String prompt = generateBatchPrompt(batchFields, statisticalContent);
+        String prompt = generateBatchPrompt(batchFields, statisticalContentMap);
 
         callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {
             try {
@@ -200,7 +196,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }, listener::onFailure));
     }
 
-    private String generateBatchPrompt(List<String> batchFields, String statisticalContent) {
+    private String generateBatchPrompt(List<String> batchFields, Map<String, Object> statisticalContentMap) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("Please analyze the following OpenSearch index fields and provide descriptions:\\n\\n");
         prompt.append("Index Name: ").append(sourceIndex).append("\\n\\n");
@@ -211,7 +207,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
         prompt.append("\\n");
         // Filter statistical data based on current batch fields
-        Map<String, Object> relevantStatisticalData = extractRelevantStatisticalData(statisticalContent, batchFields);
+        Map<String, Object> relevantStatisticalData = extractRelevantStatisticalData(statisticalContentMap, batchFields);
         if (!relevantStatisticalData.isEmpty()) {
             if (relevantStatisticalData.containsKey("mapping")) {
                 prompt.append("Field Mapping:\\n").append(relevantStatisticalData.get("mapping")).append("\\n\\n");
@@ -234,16 +230,15 @@ public class FieldDescriptionTask implements IndexInsightTask {
         return prompt.toString();
     }
 
-    private Map<String, Object> extractRelevantStatisticalData(String statisticalContent, List<String> batchFields) {
+    private Map<String, Object> extractRelevantStatisticalData(Map<String, Object> statisticalContentMap, List<String> batchFields) {
         Map<String, Object> result = new LinkedHashMap<>();
-        if (statisticalContent == null || statisticalContent.isEmpty() || batchFields.isEmpty()) {
+        if (statisticalContentMap == null || statisticalContentMap.isEmpty() || batchFields.isEmpty()) {
             return result;
         }
 
         try {
-            Map<String, Object> statisticalData = JsonPath.read(statisticalContent, "$");
-            Map<String, Object> mapping = (Map<String, Object>) statisticalData.get("mapping");
-            Map<String, Object> distribution = (Map<String, Object>) statisticalData.get("distribution");
+            Map<String, Object> mapping = (Map<String, Object>) statisticalContentMap.get("mapping");
+            Map<String, Object> distribution = (Map<String, Object>) statisticalContentMap.get("distribution");
 
             // Extract relevant mapping
             Map<String, Object> relevantMapping = new LinkedHashMap<>();

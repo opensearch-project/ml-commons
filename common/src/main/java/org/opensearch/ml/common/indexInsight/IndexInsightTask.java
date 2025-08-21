@@ -7,6 +7,7 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_UPDATE_INTERVAL;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -184,16 +185,21 @@ public interface IndexInsightTask {
     /**
      * Get insight content from storage for a specific task type
      */
-    default void getInsightContentFromContainer(String storageIndex, MLIndexInsightType taskType, ActionListener<String> listener) {
+    default void getInsightContentFromContainer(
+        String storageIndex,
+        MLIndexInsightType taskType,
+        ActionListener<Map<String, Object>> listener
+    ) {
         String docId = IndexInsightUtils.generateDocId(getSourceIndex(), taskType);
         GetRequest getRequest = new GetRequest(storageIndex, docId);
 
         getClient().get(getRequest, ActionListener.wrap(response -> {
             String content = response.isExists() ? response.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
-            listener.onResponse(content);
+            Map<String, Object> contentMap = gson.fromJson(content, Map.class);
+            listener.onResponse(contentMap);
         }, e -> {
             // Return empty content on failure instead of propagating error
-            listener.onResponse("");
+            listener.onResponse(new HashMap<>());
         }));
     }
 

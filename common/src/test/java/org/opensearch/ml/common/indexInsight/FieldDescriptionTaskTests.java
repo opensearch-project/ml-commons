@@ -170,9 +170,7 @@ public class FieldDescriptionTaskTests {
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertTrue(
-            exceptionCaptor.getValue().getMessage().contains("Failed to parse statistic content for field description task to get mappings")
-        );
+        assertEquals("No mapping properties found for index: test-index", exceptionCaptor.getValue().getMessage());
     }
 
     @Test

@@ -35,7 +35,6 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class LogRelatedIndexCheckTask implements IndexInsightTask {
-    private static final MLIndexInsightType TASK_TYPE = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
     private final String sourceIndex;
     private final Client client;
 
@@ -103,7 +102,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     // Standard IndexInsightTask interface methods
     @Override
     public MLIndexInsightType getTaskType() {
-        return TASK_TYPE;
+        return MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
     }
 
     @Override

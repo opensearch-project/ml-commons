@@ -54,7 +54,6 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
 
-    private static final MLIndexInsightType TASK_TYPE = MLIndexInsightType.STATISTICAL_DATA;
     private final String sourceIndex;
     private final Client client;
     private SearchHit[] sampleDocuments;
@@ -77,7 +76,7 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     @Override
     public MLIndexInsightType getTaskType() {
-        return TASK_TYPE;
+        return MLIndexInsightType.STATISTICAL_DATA;
     }
 
     @Override
