@@ -168,16 +168,16 @@ public class RemoteMlCommonsPassthroughPostProcessFunctionTest {
     @Test
     public void process_MLCommonsResponse_InvalidDenseVectorFormat() {
         Map<String, Object> output = Map
-                .of(
-                        "name",
-                        List.of("Not a string"),
-                        "data_type",
-                        "NON-EXISTENT TYPE",
-                        "shape",
-                        "not a list of long",
-                        "data",
-                        "not a list of numbers"
-                );
+            .of(
+                "name",
+                List.of("Not a string"),
+                "data_type",
+                "NON-EXISTENT TYPE",
+                "shape",
+                "not a list of long",
+                "data",
+                "not a list of numbers"
+            );
         Map<String, Object> inferenceResult = Map.of("output", Arrays.asList(output));
         Map<String, Object> input = Map.of("inference_results", Arrays.asList(inferenceResult));
 
