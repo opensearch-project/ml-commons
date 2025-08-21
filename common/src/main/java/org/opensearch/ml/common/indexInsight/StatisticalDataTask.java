@@ -109,7 +109,8 @@ public class StatisticalDataTask implements IndexInsightTask {
 
             Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
             if (mappings.isEmpty()) {
-                throw new IllegalArgumentException("No matching mapping with index name: " + sourceIndex);
+                listener.onFailure(new IllegalArgumentException("No matching mapping with index name: " + sourceIndex));
+                return;
             }
 
             Map<String, Object> allFields = new HashMap<>();
@@ -213,27 +214,31 @@ public class StatisticalDataTask implements IndexInsightTask {
                         String aggregationType = key.substring(0, prefix.length() - 1);
                         Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
                         Object targetValue;
-                        if (prefix.equals("unique_terms_")) {
-                            // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
-                            Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
-                            List<Map<String, Object>> buckets = (List<Map<String, Object>>) aggResult.get("buckets");
+                        try {
+                            if (prefix.equals("unique_terms_")) {
+                                // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
+                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                                List<Map<String, Object>> buckets = (List<Map<String, Object>>) aggResult.get("buckets");
 
-                            List<Object> values = new ArrayList<>();
-                            for (Map<String, Object> bucket : buckets) {
-                                values.add(bucket.get("key"));
-                            }
-                            targetValue = values;
-                        } else {
-                            Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
-                            if (aggResult.containsKey("value_as_string")) {
-                                targetValue = aggResult.get("value_as_string");
+                                List<Object> values = new ArrayList<>();
+                                for (Map<String, Object> bucket : buckets) {
+                                    values.add(bucket.get("key"));
+                                }
+                                targetValue = values;
                             } else {
-                                targetValue = aggResult.get("value");
+                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                                if (aggResult.containsKey("value_as_string")) {
+                                    targetValue = aggResult.get("value_as_string");
+                                } else {
+                                    targetValue = aggResult.get("value");
+                                }
                             }
+                            result.computeIfAbsent(targetField, k -> new HashMap<>());
+                            ((Map<String, Object>) result.get(targetField)).put(aggregationType, targetValue);
+                            break;
+                        } catch (Exception e) {
+                            log.error("fail to parse result from DSL in statistical index insight for: ", e);
                         }
-                        result.computeIfAbsent(targetField, k -> new HashMap<>());
-                        ((Map<String, Object>) result.get(targetField)).put(aggregationType, targetValue);
-                        break;
                     }
                 }
             }
