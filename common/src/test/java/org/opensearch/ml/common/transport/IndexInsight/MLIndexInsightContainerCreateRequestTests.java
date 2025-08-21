@@ -28,7 +28,7 @@ public class MLIndexInsightContainerCreateRequestTests {
             indexName,
             tenantId
         );
-        assertEquals(mlIndexInsightContainerCreateRequest.getIndexName(), indexName);
+        assertEquals(mlIndexInsightContainerCreateRequest.getContainerName(), indexName);
     }
 
     @Test
@@ -45,8 +45,8 @@ public class MLIndexInsightContainerCreateRequestTests {
             output.bytes().streamInput()
         );
 
-        assertEquals(mlIndexInsightContainerCreateRequest1.getIndexName(), mlIndexInsightContainerCreateRequest.getIndexName());
-        assertEquals(mlIndexInsightContainerCreateRequest1.getIndexName(), indexName);
+        assertEquals(mlIndexInsightContainerCreateRequest1.getContainerName(), mlIndexInsightContainerCreateRequest.getContainerName());
+        assertEquals(mlIndexInsightContainerCreateRequest1.getContainerName(), indexName);
     }
 
     @Test
@@ -67,7 +67,7 @@ public class MLIndexInsightContainerCreateRequestTests {
             indexName,
             tenantId
         );
-        assertEquals(null, mlIndexInsightContainerCreateRequest.getIndexName());
+        assertEquals(null, mlIndexInsightContainerCreateRequest.getContainerName());
 
         ActionRequestValidationException exception = addValidationError("Index Insight's container index can't be null", null);
         mlIndexInsightContainerCreateRequest.validate().equals(exception);
@@ -106,7 +106,7 @@ public class MLIndexInsightContainerCreateRequestTests {
             }
         };
         MLIndexInsightContainerCreateRequest request = mlIndexInsightContainerCreateRequest.fromActionRequest(actionRequest);
-        assertEquals(request.getIndexName(), indexName);
+        assertEquals(request.getContainerName(), indexName);
     }
 
 }

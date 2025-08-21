@@ -66,6 +66,6 @@ public class RestMLCreateIndexInsightContainerAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-        return new MLIndexInsightContainerCreateRequest(indexInsightContainer.getIndexName(), tenantId);
+        return new MLIndexInsightContainerCreateRequest(indexInsightContainer.getContainerName(), tenantId);
     }
 }

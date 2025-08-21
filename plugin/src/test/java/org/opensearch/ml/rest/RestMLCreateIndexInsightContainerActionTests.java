@@ -107,7 +107,7 @@ public class RestMLCreateIndexInsightContainerActionTests extends OpenSearchTest
         ArgumentCaptor<MLIndexInsightContainerCreateRequest> argumentCaptor = ArgumentCaptor
             .forClass(MLIndexInsightContainerCreateRequest.class);
         verify(client, times(1)).execute(eq(MLIndexInsightContainerCreateAction.INSTANCE), argumentCaptor.capture(), any());
-        String indexName = argumentCaptor.getValue().getIndexName();
+        String indexName = argumentCaptor.getValue().getContainerName();
         assertEquals("testIndex", indexName);
     }
 
@@ -124,7 +124,7 @@ public class RestMLCreateIndexInsightContainerActionTests extends OpenSearchTest
 
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.PUT;
-        String requestContent = "{\"index_name\":\"testIndex\"}";
+        String requestContent = "{\"container_name\":\"testIndex\"}";
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/index_insight_container")

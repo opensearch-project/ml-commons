@@ -117,7 +117,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_Successful() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
@@ -158,7 +158,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_FailToGetDeleteResponse() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
@@ -199,7 +199,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_FailToGetStashContext() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
@@ -240,7 +240,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_FailToGetObject() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
@@ -278,7 +278,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_ContainerNotSet() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
@@ -319,7 +319,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_DeleteOriginalIndexFail() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
@@ -360,7 +360,7 @@ public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchT
     public void testDeleteIndexInsightContainer_FailToDeleteContainer() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-index\"}");
 
         GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
         when(sdkGetResponse.getResponse()).thenReturn(getResponse);
