@@ -69,7 +69,6 @@ import org.opensearch.jobscheduler.spi.JobSchedulerExtension;
 import org.opensearch.jobscheduler.spi.ScheduledJobParser;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
 import org.opensearch.ml.action.IndexInsight.PutIndexInsightConfigTransportAction;
-import org.opensearch.ml.action.IndexInsight.DeleteIndexInsightContainerTransportAction;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightTransportAction;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
@@ -192,7 +191,6 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageDispatchAction;
@@ -312,7 +310,6 @@ import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
-import org.opensearch.ml.rest.RestMLDeleteIndexInsightContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
@@ -534,7 +531,6 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLIndexInsightGetAction.INSTANCE, GetIndexInsightTransportAction.class),
                 new ActionHandler<>(MLIndexInsightConfigPutAction.INSTANCE, PutIndexInsightConfigTransportAction.class),
-                new ActionHandler<>(MLIndexInsightContainerDeleteAction.INSTANCE, DeleteIndexInsightContainerTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
                 new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
@@ -950,9 +946,6 @@ public class MachineLearningPlugin extends Plugin
         RestMLPutIndexInsightConfigAction restMLPutIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(
             mlFeatureEnabledSetting
         );
-        RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(
-            mlFeatureEnabledSetting
-        );
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
@@ -1075,8 +1068,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLRemoveMcpToolsAction,
                 restMLListMcpToolsAction,
                 restMLMcpToolsUpdateAction,
-                    restMLPutIndexInsightConfigAction,
-                restMLDeleteIndexInsightContainerAction
+                    restMLPutIndexInsightConfigAction
             );
     }
 
