@@ -30,11 +30,23 @@ public class LogRelatedIndexCheckTaskTests {
     }
 
     // parseCheckResponse declared method
+    @SuppressWarnings("unchecked")
     private Map<String, Object> invokeParse(LogRelatedIndexCheckTask t, String resp) {
         try {
             Method method = LogRelatedIndexCheckTask.class.getDeclaredMethod("parseCheckResponse", String.class);
             method.setAccessible(true);
             return (Map<String, Object>) method.invoke(t, resp);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // collectSampleDocString declared method
+    private void invokeCollect(LogRelatedIndexCheckTask t, ActionListener<String> listener) {
+        try {
+            Method method = LogRelatedIndexCheckTask.class.getDeclaredMethod("collectSampleDocString", ActionListener.class);
+            method.setAccessible(true);
+            method.invoke(t, listener);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -59,17 +71,6 @@ public class LogRelatedIndexCheckTaskTests {
         assertFalse((Boolean) message.get("is_log_index"));
         assertNull(message.get("log_message_field"));
         assertNull(message.get("trace_id_field"));
-    }
-
-    // collectSampleDocString declared method
-    private void invokeCollect(LogRelatedIndexCheckTask t, ActionListener<String> listener) {
-        try {
-            Method method = LogRelatedIndexCheckTask.class.getDeclaredMethod("collectSampleDocString", ActionListener.class);
-            method.setAccessible(true);
-            method.invoke(t, listener);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     @Test
@@ -109,5 +110,93 @@ public class LogRelatedIndexCheckTaskTests {
         invokeCollect(task, listener);
 
         verify(listener, times(1)).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void parseCheckResponse_empty_returnsDefault() {
+        Map<String, Object> message = invokeParse(task, "");
+        assertFalse((Boolean) message.get("is_log_index"));
+        assertNull(message.get("log_message_field"));
+        assertNull(message.get("trace_id_field"));
+    }
+
+    @Test
+    public void parseCheckResponse_missingTag_returnsDefault() {
+        String resp = "{\"is_log_index\":true,\"log_message_field\":\"msg\"}";
+        Map<String, Object> message = invokeParse(task, resp);
+        assertFalse((Boolean) message.get("is_log_index"));
+        assertNull(message.get("log_message_field"));
+        assertNull(message.get("trace_id_field"));
+    }
+
+    @Test
+    public void parseCheckResponse_malformedJson_returnsDefault() {
+        String resp = "<RCA_analysis>{bad json}</RCA_analysis>";
+        Map<String, Object> message = invokeParse(task, resp);
+        assertFalse((Boolean) message.get("is_log_index"));
+        assertNull(message.get("log_message_field"));
+        assertNull(message.get("trace_id_field"));
+    }
+
+    @Test
+    public void collectSampleDocString_nullHits_triggersOnFailure() {
+        SearchResponse resp = mock(SearchResponse.class);
+        when(resp.getHits()).thenReturn(null);
+
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(resp);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        invokeCollect(task, listener);
+
+        verify(listener, times(1)).onFailure(any(Exception.class));
+        verify(listener, never()).onResponse(anyString());
+    }
+
+    @Test
+    public void collectSampleDocString_noHitsArray_triggersOnResponse() {
+        SearchHits noHits = new SearchHits(new SearchHit[0], new TotalHits(0, Relation.EQUAL_TO), 1.0f);
+        SearchResponse resp = mock(SearchResponse.class);
+        when(resp.getHits()).thenReturn(noHits);
+
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(resp);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        invokeCollect(task, listener);
+
+        verify(listener, times(1)).onResponse(anyString());
+    }
+
+    @Test
+    public void collectSampleDocString_multipleHits_triggersOnResponse() {
+        SearchHit h1 = new SearchHit(1);
+        SearchHit h2 = new SearchHit(2);
+        SearchHits hits = new SearchHits(new SearchHit[] { h1, h2 }, new TotalHits(2, Relation.EQUAL_TO), 1.0f);
+        SearchResponse resp = mock(SearchResponse.class);
+        when(resp.getHits()).thenReturn(hits);
+
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(resp);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        invokeCollect(task, listener);
+
+        verify(listener, times(1)).onResponse(anyString());
     }
 }
