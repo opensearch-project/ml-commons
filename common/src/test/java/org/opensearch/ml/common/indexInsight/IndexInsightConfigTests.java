@@ -24,27 +24,27 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
-public class IndexInsightContainerTests {
+public class IndexInsightConfigTests {
 
     @Test
     public void testBuilder() {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName("test-index").tenantId("test-tenant").build();
+        IndexInsightConfig container = IndexInsightConfig.builder().containerName("test-index").tenantId("test-tenant").build();
 
-        assertEquals("test-index", container.getContainerName());
+        assertEquals("test-index", container.getIsEnable());
         assertEquals("test-tenant", container.getTenantId());
     }
 
     @Test
     public void testBuilder_WithNullValues() {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName(null).tenantId(null).build();
+        IndexInsightConfig container = IndexInsightConfig.builder().containerName(null).tenantId(null).build();
 
-        assertNull(container.getContainerName());
+        assertNull(container.getIsEnable());
         assertNull(container.getTenantId());
     }
 
     @Test
     public void testStreamSerialization() throws IOException {
-        IndexInsightContainer original = IndexInsightContainer.builder().containerName("test-index").tenantId("test-tenant").build();
+        IndexInsightConfig original = IndexInsightConfig.builder().containerName("test-index").tenantId("test-tenant").build();
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
@@ -53,13 +53,13 @@ public class IndexInsightContainerTests {
         String indexName = input.readString();
         String tenantId = input.readOptionalString();
 
-        assertEquals(original.getContainerName(), indexName);
+        assertEquals(original.getIsEnable(), indexName);
         assertEquals(original.getTenantId(), tenantId);
     }
 
     @Test
     public void testToXContent() throws IOException {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName("test-index").tenantId("test-tenant").build();
+        IndexInsightConfig container = IndexInsightConfig.builder().containerName("test-index").tenantId("test-tenant").build();
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
         container.toXContent(builder, null);
@@ -71,7 +71,7 @@ public class IndexInsightContainerTests {
 
     @Test
     public void testToXContent_WithNullTenantId() throws IOException {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName("test-index").tenantId(null).build();
+        IndexInsightConfig container = IndexInsightConfig.builder().containerName("test-index").tenantId(null).build();
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
         container.toXContent(builder, null);
@@ -93,9 +93,9 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig container = IndexInsightConfig.parse(parser);
 
-        assertEquals("test-index", container.getContainerName());
+        assertEquals("test-index", container.getIsEnable());
         assertEquals("test-tenant", container.getTenantId());
     }
 
@@ -111,9 +111,9 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig container = IndexInsightConfig.parse(parser);
 
-        assertEquals("test-index", container.getContainerName());
+        assertEquals("test-index", container.getIsEnable());
         assertNull(container.getTenantId());
     }
 
@@ -129,9 +129,9 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig container = IndexInsightConfig.parse(parser);
 
-        assertEquals("test-index", container.getContainerName());
+        assertEquals("test-index", container.getIsEnable());
         assertEquals("test-tenant", container.getTenantId());
     }
 
@@ -147,9 +147,9 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig container = IndexInsightConfig.parse(parser);
 
-        assertNull(container.getContainerName());
+        assertNull(container.getIsEnable());
         assertNull(container.getTenantId());
     }
 }

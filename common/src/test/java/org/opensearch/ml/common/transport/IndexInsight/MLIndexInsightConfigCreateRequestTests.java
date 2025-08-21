@@ -15,81 +15,81 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateRequest;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 
-public class MLIndexInsightContainerCreateRequestTests {
+public class MLIndexInsightConfigCreateRequestTests {
     private String indexName;
     private String tenantId = null;
 
     @Test
     public void constructor() {
         indexName = "test-abc";
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
             indexName,
             tenantId
         );
-        assertEquals(mlIndexInsightContainerCreateRequest.getContainerName(), indexName);
+        assertEquals(mlIndexInsightConfigPutRequest.getContainerName(), indexName);
     }
 
     @Test
     public void writeTo() throws IOException {
         indexName = "test-abc";
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
             indexName,
             tenantId
         );
         BytesStreamOutput output = new BytesStreamOutput();
-        mlIndexInsightContainerCreateRequest.writeTo(output);
+        mlIndexInsightConfigPutRequest.writeTo(output);
 
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest1 = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest1 = new MLIndexInsightConfigPutRequest(
             output.bytes().streamInput()
         );
 
-        assertEquals(mlIndexInsightContainerCreateRequest1.getContainerName(), mlIndexInsightContainerCreateRequest.getContainerName());
-        assertEquals(mlIndexInsightContainerCreateRequest1.getContainerName(), indexName);
+        assertEquals(mlIndexInsightConfigPutRequest1.getContainerName(), mlIndexInsightConfigPutRequest.getContainerName());
+        assertEquals(mlIndexInsightConfigPutRequest1.getContainerName(), indexName);
     }
 
     @Test
     public void validate_Success() {
         indexName = "not-null";
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
             indexName,
             tenantId
         );
 
-        assertEquals(null, mlIndexInsightContainerCreateRequest.validate());
+        assertEquals(null, mlIndexInsightConfigPutRequest.validate());
     }
 
     @Test
     public void validate_Failure_index() {
         indexName = null;
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
             indexName,
             tenantId
         );
-        assertEquals(null, mlIndexInsightContainerCreateRequest.getContainerName());
+        assertEquals(null, mlIndexInsightConfigPutRequest.getContainerName());
 
         ActionRequestValidationException exception = addValidationError("Index Insight's container index can't be null", null);
-        mlIndexInsightContainerCreateRequest.validate().equals(exception);
+        mlIndexInsightConfigPutRequest.validate().equals(exception);
     }
 
     @Test
     public void fromActionRequest_Success() throws IOException {
         indexName = "test-abc";
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
             indexName,
             tenantId
         );
         assertEquals(
-            mlIndexInsightContainerCreateRequest.fromActionRequest(mlIndexInsightContainerCreateRequest),
-            mlIndexInsightContainerCreateRequest
+            mlIndexInsightConfigPutRequest.fromActionRequest(mlIndexInsightConfigPutRequest),
+                mlIndexInsightConfigPutRequest
         );
     }
 
     @Test
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
         indexName = "test-abc";
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = new MLIndexInsightContainerCreateRequest(
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
             indexName,
             tenantId
         );
@@ -102,10 +102,10 @@ public class MLIndexInsightContainerCreateRequestTests {
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-                mlIndexInsightContainerCreateRequest.writeTo(out);
+                mlIndexInsightConfigPutRequest.writeTo(out);
             }
         };
-        MLIndexInsightContainerCreateRequest request = mlIndexInsightContainerCreateRequest.fromActionRequest(actionRequest);
+        MLIndexInsightConfigPutRequest request = mlIndexInsightConfigPutRequest.fromActionRequest(actionRequest);
         assertEquals(request.getContainerName(), indexName);
     }
 

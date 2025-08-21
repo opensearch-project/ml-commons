@@ -6,12 +6,14 @@
 package org.opensearch.ml.action.IndexInsight;
 
 import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_INDEX_NAME;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.CONTENT_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.LAST_UPDATE_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.STATUS_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.TASK_TYPE_FIELD;
+import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +21,6 @@ import java.util.Map;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -28,15 +29,13 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLIndex;
-import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
+import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateRequest;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TenantAwareHelper;
-import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -52,7 +51,7 @@ import lombok.extern.log4j.Log4j2;
  */
 
 @Log4j2
-public class CreateIndexInsightContainerTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
+public class PutIndexInsightConfigTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
     private Client client;
     private final SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
@@ -60,7 +59,7 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
     private final MLIndicesHandler mlIndicesHandler;
 
     @Inject
-    public CreateIndexInsightContainerTransportAction(
+    public PutIndexInsightConfigTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         NamedXContentRegistry xContentRegistry,
@@ -69,7 +68,7 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
         SdkClient sdkClient,
         MLIndicesHandler mlIndicesHandler
     ) {
-        super(MLIndexInsightContainerCreateAction.NAME, transportService, actionFilters, MLIndexInsightContainerCreateRequest::new);
+        super(MLIndexInsightConfigPutAction.NAME, transportService, actionFilters, MLIndexInsightConfigPutRequest::new);
         this.client = client;
 
         this.xContentRegistry = xContentRegistry;
@@ -80,23 +79,26 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
-        MLIndexInsightContainerCreateRequest mlIndexInsightContainerCreateRequest = MLIndexInsightContainerCreateRequest
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest
             .fromActionRequest(request);
-        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightContainerCreateRequest.getTenantId(), listener)) {
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightConfigPutRequest.getTenantId(), listener)) {
             return;
         }
 
-        String tenantId = mlIndexInsightContainerCreateRequest.getTenantId();
-        IndexInsightContainer indexInsightContainer = IndexInsightContainer
+        String tenantId = mlIndexInsightConfigPutRequest.getTenantId();
+        if (tenantId == null) {
+            tenantId = DEFAULT_TENANT_ID;
+        }
+        IndexInsightConfig indexInsightConfig = IndexInsightConfig
             .builder()
-            .containerName(mlIndexInsightContainerCreateRequest.getContainerName())
+            .isEnable(mlIndexInsightConfigPutRequest.getIsEnable())
             .tenantId(tenantId)
             .build();
         // The container is a doc in system index, and it defines where we store the index insight. The index insight is an user index
         // inside user's cluster.
-        checkWhetherExist(indexInsightContainer, ActionListener.wrap(r -> {
-            indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
-                initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getContainerName(), ActionListener.wrap(r2 -> {
+        mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, ActionListener.wrap(r -> {
+            indexIndexInsightConfig(indexInsightConfig, ActionListener.wrap(r1 -> {
+                initIndexInsightIndex(INDEX_INSIGHT_INDEX_NAME, ActionListener.wrap(r2 -> {
                     log.info("Successfully created index insight container");
                     listener.onResponse(new AcknowledgedResponse(true));
                 }, e -> {
@@ -108,58 +110,15 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
 
     }
 
-    private void checkWhetherExist(IndexInsightContainer indexInsightContainer, ActionListener<Boolean> listener) {
-        try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient
-                .getDataObjectAsync(
-                    GetDataObjectRequest
-                        .builder()
-                        .tenantId(indexInsightContainer.getTenantId())
-                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
-                        .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
-                        .build()
-                )
-                .whenComplete((r, throwable) -> {
-                    getContext.restore();
-                    if (throwable != null) {
-                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to index index insight container", cause);
-                        if (cause.getCause() instanceof IndexNotFoundException) {
-                            mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, listener); // If the container index
-                                                                                                             // hasn't initialized,
-                                                                                                             // initialize it.
-                            return;
-                        }
-                        listener.onFailure(cause);
-                    } else {
-                        GetResponse getResponse = r.getResponse();
-                        if (getResponse.isExists()) {
-                            listener
-                                .onFailure(
-                                    new RuntimeException(
-                                        "Index insight container is already set. If you want to update, please delete it first."
-                                    )
-                                );
-                        } else {
-                            listener.onResponse(true);
-                        }
-                    }
-                });
-        } catch (Exception e) {
-            listener.onFailure(e);
-        }
-    }
-
-    private void indexIndexInsightContainer(IndexInsightContainer indexInsightContainer, ActionListener<Boolean> listener) {
+    private void indexIndexInsightConfig(IndexInsightConfig indexInsightConfig, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .putDataObjectAsync(
                     PutDataObjectRequest
                         .builder()
-                        .tenantId(indexInsightContainer.getTenantId())
-                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
-                        .dataObject(indexInsightContainer)
-                        .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
+                        .tenantId(indexInsightConfig.getTenantId())
+                        .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
+                        .dataObject(indexInsightConfig)
                         .build()
                 )
                 .whenComplete((r, throwable) -> {
@@ -172,7 +131,7 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
                         try {
                             IndexResponse indexResponse = r.indexResponse();
                             assert indexResponse != null;
-                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED || indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                                 String generatedId = indexResponse.getId();
                                 log.info("Successfully created index insight with ID: {}", generatedId);
                                 listener.onResponse(true);

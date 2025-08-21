@@ -8,7 +8,7 @@ package org.opensearch.ml.action.IndexInsight;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
@@ -24,7 +24,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
+import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteRequest;
@@ -105,7 +105,7 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
                     GetDataObjectRequest
                         .builder()
                         .tenantId(tenantId)
-                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
+                        .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                         .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
                         .build()
                 )
@@ -123,8 +123,8 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
                                         .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                    IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-                                    listener.onResponse(indexInsightContainer.getContainerName());
+                                    IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser);
+                                    listener.onResponse(indexInsightConfig.getIsEnable());
                                 } catch (Exception e) {
                                     listener.onFailure(e);
                                 }
@@ -150,7 +150,7 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
                     DeleteDataObjectRequest
                         .builder()
                         .tenantId(tenantId)
-                        .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
+                        .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                         .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
                         .build()
                 )

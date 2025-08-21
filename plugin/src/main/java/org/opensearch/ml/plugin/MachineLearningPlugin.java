@@ -68,7 +68,7 @@ import org.opensearch.indices.analysis.PreBuiltCacheFactory;
 import org.opensearch.jobscheduler.spi.JobSchedulerExtension;
 import org.opensearch.jobscheduler.spi.ScheduledJobParser;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
-import org.opensearch.ml.action.IndexInsight.CreateIndexInsightContainerTransportAction;
+import org.opensearch.ml.action.IndexInsight.PutIndexInsightConfigTransportAction;
 import org.opensearch.ml.action.IndexInsight.DeleteIndexInsightContainerTransportAction;
 import org.opensearch.ml.action.IndexInsight.GetIndexInsightTransportAction;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
@@ -191,7 +191,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerCreateAction;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
@@ -307,7 +307,7 @@ import org.opensearch.ml.rest.RestMLAddMemoriesAction;
 import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
-import org.opensearch.ml.rest.RestMLCreateIndexInsightContainerAction;
+import org.opensearch.ml.rest.RestMLPutIndexInsightConfigAction;
 import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
@@ -533,7 +533,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLExecuteConnectorAction.INSTANCE, ExecuteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLIndexInsightGetAction.INSTANCE, GetIndexInsightTransportAction.class),
-                new ActionHandler<>(MLIndexInsightContainerCreateAction.INSTANCE, CreateIndexInsightContainerTransportAction.class),
+                new ActionHandler<>(MLIndexInsightConfigPutAction.INSTANCE, PutIndexInsightConfigTransportAction.class),
                 new ActionHandler<>(MLIndexInsightContainerDeleteAction.INSTANCE, DeleteIndexInsightContainerTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
@@ -947,7 +947,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
         RestMLGetIndexInsightAction restMLGetIndexInsightAction = new RestMLGetIndexInsightAction(mlFeatureEnabledSetting);
-        RestMLCreateIndexInsightContainerAction restMLCreateIndexInsightContainerAction = new RestMLCreateIndexInsightContainerAction(
+        RestMLPutIndexInsightConfigAction restMLPutIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(
             mlFeatureEnabledSetting
         );
         RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(
@@ -1075,7 +1075,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLRemoveMcpToolsAction,
                 restMLListMcpToolsAction,
                 restMLMcpToolsUpdateAction,
-                restMLCreateIndexInsightContainerAction,
+                    restMLPutIndexInsightConfigAction,
                 restMLDeleteIndexInsightContainerAction
             );
     }

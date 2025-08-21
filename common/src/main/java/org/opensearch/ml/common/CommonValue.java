@@ -33,7 +33,7 @@ public class CommonValue {
     public static String HOT_BOX_TYPE = "hot";
     // warm node
     public static String WARM_BOX_TYPE = "warm";
-    public static final String ML_INDEX_INSIGHT_CONTAINER_INDEX = ".plugins-ml-index-insight-container";
+    public static final String ML_INDEX_INSIGHT_CONFIG_INDEX = ".plugins-ml-index-insight-config";
     public static final String ML_MODEL_GROUP_INDEX = ".plugins-ml-model-group";
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
@@ -116,8 +116,9 @@ public class CommonValue {
     public static final String FIXED_INDEX_INSIGHT_CONTAINER_ID = "index_insight_container"; // This is the doc id of the container doc in
                                                                                              // the system index. It defines where we store
                                                                                              // the index insight, it should be always
-                                                                                             // single one.
+                                                                                                // single one.
     public static final String INDEX_INSIGHT_AGENT_NAME = "os_index_insight_agent";
+    public static final String INDEX_INSIGHT_INDEX_NAME = "ml_index_insight";
     public static final long INDEX_INSIGHT_GENERATING_TIMEOUT = 3 * 60 * 1000;
     public static final long INDEX_INSIGHT_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
 }

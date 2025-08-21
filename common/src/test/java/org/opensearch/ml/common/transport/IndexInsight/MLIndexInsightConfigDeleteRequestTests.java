@@ -16,7 +16,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteRequest;
 
-public class MLIndexInsightContainerDeleteRequestTests {
+public class MLIndexInsightConfigDeleteRequestTests {
     String tenantId = "test_tenant";
 
     @Test

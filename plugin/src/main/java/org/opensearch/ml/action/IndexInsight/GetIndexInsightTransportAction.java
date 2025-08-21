@@ -8,7 +8,9 @@ package org.opensearch.ml.action.IndexInsight;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONTAINER_INDEX;
+import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_INDEX_NAME;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
+import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
@@ -23,7 +25,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.indexInsight.FieldDescriptionTask;
 import org.opensearch.ml.common.indexInsight.IndexInsightAccessControllerHelper;
-import org.opensearch.ml.common.indexInsight.IndexInsightContainer;
+import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.indexInsight.IndexInsightTask;
 import org.opensearch.ml.common.indexInsight.LogRelatedIndexCheckTask;
 import org.opensearch.ml.common.indexInsight.StatisticalDataTask;
@@ -71,23 +73,25 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         MLIndexInsightGetRequest mlIndexInsightGetRequest = MLIndexInsightGetRequest.fromActionRequest(request);
         String indexName = mlIndexInsightGetRequest.getIndexName();
         String tenantId = mlIndexInsightGetRequest.getTenantId();
-
+        if (tenantId == null) {
+            tenantId = DEFAULT_TENANT_ID;
+        }
+        String finalTenantId = tenantId;
         ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
             try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .getDataObjectAsync(
                         GetDataObjectRequest
                             .builder()
-                            .tenantId(tenantId)
-                            .index(ML_INDEX_INSIGHT_CONTAINER_INDEX)
-                            .id(FIXED_INDEX_INSIGHT_CONTAINER_ID)
+                            .tenantId(finalTenantId)
+                            .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                             .build()
                     )
                     .whenComplete((r1, throwable) -> {
                         getContext.restore();
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            log.error("Failed to get index insight container", cause);
+                            log.error("Failed to get index insight config", cause);
                             actionListener.onFailure(cause);
                         } else {
                             GetResponse getResponse = r1.getResponse();
@@ -97,12 +101,16 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                         .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                    IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-                                    String storageIndex = indexInsightContainer.getContainerName();
+                                    IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser);
+                                    Boolean isEnable = indexInsightConfig.getIsEnable();
+                                    if (!isEnable) {
+                                        actionListener.onFailure(new RuntimeException("You are not enabled to use index insight yet, please firstly enable it."));
+                                        return;
+                                    }
                                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                                         ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
                                             .runBefore(actionListener, () -> context.restore());
-                                        executeTaskAndReturn(mlIndexInsightGetRequest, storageIndex, tenantId, wrappedListener);
+                                        executeTaskAndReturn(mlIndexInsightGetRequest, INDEX_INSIGHT_INDEX_NAME, finalTenantId, wrappedListener);
                                     } catch (Exception e) {
                                         log.error("fail to get index insight", e);
                                         actionListener.onFailure(e);
@@ -111,7 +119,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                     actionListener.onFailure(e);
                                 }
                             } else {
-                                actionListener.onFailure(new RuntimeException("The container is not set yet"));
+                                actionListener.onFailure(new RuntimeException("You are not enabled to use index insight yet, please firstly enable it."));
                             }
                         }
                     });

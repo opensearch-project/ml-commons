@@ -15,7 +15,7 @@ import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.ml.utils.TestHelper;
 
-public class RestMLDeleteIndexInsightContainerIT extends RestBaseAgentToolsIT {
+public class RestMLDeleteIndexInsightConfigIT extends RestBaseAgentToolsIT {
     @Before
     public void setUp() throws Exception {
         super.setUp();

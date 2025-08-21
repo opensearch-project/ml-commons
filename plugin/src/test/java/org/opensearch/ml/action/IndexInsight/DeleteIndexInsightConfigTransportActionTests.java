@@ -44,7 +44,7 @@ import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
-public class DeleteIndexInsightContainerTransportActionTests extends OpenSearchTestCase {
+public class DeleteIndexInsightConfigTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 

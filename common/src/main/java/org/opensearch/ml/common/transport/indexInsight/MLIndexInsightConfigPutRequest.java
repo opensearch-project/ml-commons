@@ -24,40 +24,40 @@ import lombok.Getter;
 
 @Builder
 @Getter
-public class MLIndexInsightContainerCreateRequest extends ActionRequest {
-    private String containerName;
+public class MLIndexInsightConfigPutRequest extends ActionRequest {
+    private Boolean isEnable;
     private String tenantId;
 
-    public MLIndexInsightContainerCreateRequest(String containerName, String tenantId) {
-        this.containerName = containerName;
+    public MLIndexInsightConfigPutRequest(Boolean isEnable, String tenantId) {
+        this.isEnable = isEnable;
         this.tenantId = tenantId;
     }
 
-    public MLIndexInsightContainerCreateRequest(StreamInput in) throws IOException {
+    public MLIndexInsightConfigPutRequest(StreamInput in) throws IOException {
         super(in);
-        this.containerName = in.readString();
+        this.isEnable = in.readBoolean();
         this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(this.containerName);
+        out.writeBoolean(this.isEnable);
         out.writeOptionalString(tenantId);
     }
 
-    public static MLIndexInsightContainerCreateRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLIndexInsightContainerCreateRequest) {
-            return (MLIndexInsightContainerCreateRequest) actionRequest;
+    public static MLIndexInsightConfigPutRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLIndexInsightConfigPutRequest) {
+            return (MLIndexInsightConfigPutRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLIndexInsightContainerCreateRequest(input);
+                return new MLIndexInsightConfigPutRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightContainerCreateRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightConfigPutRequest", e);
         }
 
     }
@@ -66,8 +66,8 @@ public class MLIndexInsightContainerCreateRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
 
-        if (this.containerName == null) {
-            exception = addValidationError("Index Insight's container index can't be null", exception);
+        if (this.isEnable == null) {
+            exception = addValidationError("Index Insight config's isEnable can't be null", exception);
         }
 
         return exception;
