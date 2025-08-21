@@ -25,24 +25,24 @@ import lombok.Getter;
 @Builder
 @Getter
 public class MLIndexInsightContainerCreateRequest extends ActionRequest {
-    private String indexName;
+    private String containerName;
     private String tenantId;
 
-    public MLIndexInsightContainerCreateRequest(String indexName, String tenantId) {
-        this.indexName = indexName;
+    public MLIndexInsightContainerCreateRequest(String containerName, String tenantId) {
+        this.containerName = containerName;
         this.tenantId = tenantId;
     }
 
     public MLIndexInsightContainerCreateRequest(StreamInput in) throws IOException {
         super(in);
-        this.indexName = in.readString();
+        this.containerName = in.readString();
         this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(this.indexName);
+        out.writeString(this.containerName);
         out.writeOptionalString(tenantId);
     }
 
@@ -66,7 +66,7 @@ public class MLIndexInsightContainerCreateRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
 
-        if (this.indexName == null) {
+        if (this.containerName == null) {
             exception = addValidationError("Index Insight's container index can't be null", exception);
         }
 

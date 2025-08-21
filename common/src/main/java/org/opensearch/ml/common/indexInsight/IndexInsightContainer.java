@@ -7,7 +7,6 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
 
 import java.io.IOException;
 
@@ -23,30 +22,32 @@ import lombok.Getter;
 
 @Getter
 public class IndexInsightContainer implements ToXContentObject, Writeable {
-    private String indexName;
+    private String containerName;
     private String tenantId;
 
+    public static final String CONTAINER_NAME_FIELD = "container_name";
+
     @Builder(toBuilder = true)
-    public IndexInsightContainer(String indexName, String tenantId) {
-        this.indexName = indexName;
+    public IndexInsightContainer(String containerName, String tenantId) {
+        this.containerName = containerName;
         this.tenantId = tenantId;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(indexName);
+        out.writeString(containerName);
         out.writeOptionalString(tenantId);
     }
 
     public IndexInsightContainer(StreamInput input) throws IOException {
-        indexName = input.readString();
+        containerName = input.readString();
         tenantId = input.readOptionalString();
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(INDEX_NAME_FIELD, indexName);
+        builder.field(CONTAINER_NAME_FIELD, containerName);
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -62,7 +63,7 @@ public class IndexInsightContainer implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case INDEX_NAME_FIELD:
+                case CONTAINER_NAME_FIELD:
                     indexName = parser.text();
                     break;
                 case TENANT_ID_FIELD:
@@ -74,6 +75,6 @@ public class IndexInsightContainer implements ToXContentObject, Writeable {
             }
 
         }
-        return IndexInsightContainer.builder().indexName(indexName).tenantId(tenantId).build();
+        return IndexInsightContainer.builder().containerName(indexName).tenantId(tenantId).build();
     }
 }

@@ -97,7 +97,7 @@ public class CreateIndexInsightContainerTransportActionTests extends OpenSearchT
         MockitoAnnotations.openMocks(this);
         mlIndexInsightContainerCreateRequest = MLIndexInsightContainerCreateRequest
             .builder()
-            .indexName("test_index_name")
+            .containerName("test_index_name")
             .tenantId(null)
             .build();
 

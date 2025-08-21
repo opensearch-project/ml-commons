@@ -98,7 +98,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-                                    String storageIndex = indexInsightContainer.getIndexName();
+                                    String storageIndex = indexInsightContainer.getContainerName();
                                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                                         ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
                                             .runBefore(actionListener, () -> context.restore());

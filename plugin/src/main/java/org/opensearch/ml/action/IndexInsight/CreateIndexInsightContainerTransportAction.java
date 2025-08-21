@@ -89,14 +89,14 @@ public class CreateIndexInsightContainerTransportAction extends HandledTransport
         String tenantId = mlIndexInsightContainerCreateRequest.getTenantId();
         IndexInsightContainer indexInsightContainer = IndexInsightContainer
             .builder()
-            .indexName(mlIndexInsightContainerCreateRequest.getIndexName())
+            .containerName(mlIndexInsightContainerCreateRequest.getContainerName())
             .tenantId(tenantId)
             .build();
         // The container is a doc in system index, and it defines where we store the index insight. The index insight is an user index
         // inside user's cluster.
         checkWhetherExist(indexInsightContainer, ActionListener.wrap(r -> {
             indexIndexInsightContainer(indexInsightContainer, ActionListener.wrap(r1 -> {
-                initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getIndexName(), ActionListener.wrap(r2 -> {
+                initIndexInsightIndex(mlIndexInsightContainerCreateRequest.getContainerName(), ActionListener.wrap(r2 -> {
                     log.info("Successfully created index insight container");
                     listener.onResponse(new AcknowledgedResponse(true));
                 }, e -> {

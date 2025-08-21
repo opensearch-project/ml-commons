@@ -3,7 +3,7 @@
     "schema_version": 1
   },
   "properties": {
-    "index_name": {
+    "container_name": {
       "type": "keyword"
     },
     "tenant_id": {

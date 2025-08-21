@@ -124,7 +124,7 @@ public class DeleteIndexInsightContainerTransportAction extends HandledTransport
                                 ) {
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     IndexInsightContainer indexInsightContainer = IndexInsightContainer.parse(parser);
-                                    listener.onResponse(indexInsightContainer.getIndexName());
+                                    listener.onResponse(indexInsightContainer.getContainerName());
                                 } catch (Exception e) {
                                     listener.onFailure(e);
                                 }
