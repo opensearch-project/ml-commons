@@ -334,8 +334,6 @@ jacocoTestReport {
 
 List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
-        'org.opensearch.ml.profile.MLPredictRequestStats',
-        'org.opensearch.ml.action.deploy.TransportDeployModelAction',
         'org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction',
         'org.opensearch.ml.action.undeploy.TransportUndeployModelsAction',
         'org.opensearch.ml.action.prediction.TransportPredictionTaskAction',
