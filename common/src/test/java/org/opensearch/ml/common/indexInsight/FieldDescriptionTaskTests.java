@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -37,6 +39,9 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.transport.client.Client;
 
 public class FieldDescriptionTaskTests {
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private Client client;
     private FieldDescriptionTask task;
@@ -64,7 +69,7 @@ public class FieldDescriptionTaskTests {
     private void mockMLConfigSuccess() {
         doAnswer(invocation -> {
             ActionListener<MLConfigGetResponse> configListener = invocation.getArgument(2);
-            MLConfig config = MLConfig.builder().type("test").configuration(Configuration.builder().agentId("test-agent").build()).build();
+            MLConfig config = MLConfig.builder().type("test").configuration(Configuration.builder().agentId("agent-id").build()).build();
             configListener.onResponse(new MLConfigGetResponse(config));
             return null;
         }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), any(ActionListener.class));
@@ -136,9 +141,12 @@ public class FieldDescriptionTaskTests {
         assertEquals("test-index", prerequisiteTask.getSourceIndex());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCreatePrerequisiteTask_UnsupportedType() {
-        task.createPrerequisiteTask(MLIndexInsightType.LOG_RELATED_INDEX_CHECK);
+        MLIndexInsightType unsupportedType = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported prerequisite type: " + unsupportedType);
+        task.createPrerequisiteTask(unsupportedType);
     }
 
     @Test
@@ -182,7 +190,11 @@ public class FieldDescriptionTaskTests {
 
         task.runTask("storage-index", "tenant-id", listener);
 
-        verify(listener).onFailure(any(Exception.class));
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertEquals("Config not found", exception.getMessage());
     }
 
     @Test
@@ -195,7 +207,11 @@ public class FieldDescriptionTaskTests {
 
         task.runTask("storage-index", "tenant-id", listener);
 
-        verify(listener).onFailure(any(Exception.class));
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertEquals("Batch processing failed", exception.getMessage());
     }
 
     @Test
