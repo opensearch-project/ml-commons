@@ -77,15 +77,15 @@ public class RestMLPutIndexInsightConfigActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLPutIndexInsightConfigAction createIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(mlFeatureEnabledSetting);
-        assertNotNull(createIndexInsightConfigAction);
+        RestMLPutIndexInsightConfigAction putIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(mlFeatureEnabledSetting);
+        assertNotNull(putIndexInsightConfigAction);
     }
 
     @Test
     public void testGetName() {
         String actionName = restMLPutIndexInsightConfigAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_create_index_insight_config_action", actionName);
+        assertEquals("ml_put_index_insight_config_action", actionName);
     }
 
     @Test
@@ -99,7 +99,7 @@ public class RestMLPutIndexInsightConfigActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testCreateIndexInsightConfigRequest() throws Exception {
+    public void testPutIndexInsightConfigRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLPutIndexInsightConfigAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLIndexInsightConfigPutRequest> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigPutRequest.class);
@@ -109,7 +109,7 @@ public class RestMLPutIndexInsightConfigActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testCreateIndexInsightConfigRequestWithoutEnableAgentFramework() throws Exception {
+    public void testPutIndexInsightConfigRequestWithoutEnableAgentFramework() throws Exception {
         RestRequest request = getRestRequest();
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         IllegalStateException e = assertThrows(
