@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.IndexInsight;
 
-import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_INDEX_NAME;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.CONTENT_FIELD;
@@ -93,10 +92,10 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
             .build();
         // The container is a doc in system index, and it defines where we store the index insight. The index insight is an user index
         // inside user's cluster.
-        mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONTAINER, ActionListener.wrap(r -> {
+        mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONFIG, ActionListener.wrap(r -> {
             indexIndexInsightConfig(indexInsightConfig, ActionListener.wrap(r1 -> {
                 initIndexInsightIndex(INDEX_INSIGHT_INDEX_NAME, ActionListener.wrap(r2 -> {
-                    log.info("Successfully created index insight container");
+                    log.info("Successfully created index insight data index");
                     listener.onResponse(new AcknowledgedResponse(true));
                 }, e -> {
                     log.error("Failed to create index insight container", e);
