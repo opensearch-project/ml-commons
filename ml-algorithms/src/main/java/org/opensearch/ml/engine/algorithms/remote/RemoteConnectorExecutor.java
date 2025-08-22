@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
@@ -51,11 +52,10 @@ import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.Builder;
 
@@ -203,6 +203,7 @@ public interface RemoteConnectorExecutor {
                 parameters.putAll(parametersMap);
             } catch (IOException e) {
                 actionListener.onFailure(e);
+                return;
             }
         }
 
@@ -246,21 +247,13 @@ public interface RemoteConnectorExecutor {
         }
     }
 
-    default Map<String, String> getParams(MLInput mlInput) throws IOException {
-        Map<String, String> result = new HashMap<>();
+    static Map<String, String> getParams(MLInput mlInput) throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlInput.getParameters().toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.flush();
         String json = builder.toString();
-
-        ObjectMapper mapper = new ObjectMapper();
-        Map<String, Object> tempMap = mapper.readValue(json, Map.class);
-
-        HashMap<String, String> paramMap = new HashMap<>();
-        for (Map.Entry<String, Object> entry : tempMap.entrySet()) {
-            paramMap.put(entry.getKey(), entry.getValue() != null ? entry.getValue().toString() : null);
-        }
-        return paramMap;
+        Map<String, Object> tempMap = StringUtils.MAPPER.readValue(json, Map.class);
+        return getParameterMap(tempMap);
     }
 
     default BackoffPolicy getRetryBackoffPolicy(ConnectorClientConfig connectorClientConfig) {
