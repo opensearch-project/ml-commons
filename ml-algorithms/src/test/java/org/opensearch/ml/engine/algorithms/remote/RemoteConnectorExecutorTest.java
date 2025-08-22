@@ -199,7 +199,7 @@ public class RemoteConnectorExecutorTest {
             .build();
 
         try {
-            Map<String, String> paramsMap = executor.getParams(mlInput);
+            Map<String, String> paramsMap = RemoteConnectorExecutor.getParams(mlInput);
             Map<String, String> expectedMap = new HashMap<>();
             expectedMap.put("sparse_embedding_format", "WORD");
             Assert.assertEquals(expectedMap, paramsMap);
@@ -233,7 +233,7 @@ public class RemoteConnectorExecutorTest {
             .build();
 
         try {
-            Map<String, String> paramsMap = executor.getParams(mlInput);
+            Map<String, String> paramsMap = RemoteConnectorExecutor.getParams(mlInput);
             Map<String, String> expectedMap = new HashMap<>();
             expectedMap.put("sparse_embedding_format", "WORD");
             expectedMap.put("content_type", "PASSAGE");
