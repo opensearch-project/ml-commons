@@ -77,4 +77,8 @@ public class IndexInsightConfig implements ToXContentObject, Writeable {
         }
         return IndexInsightConfig.builder().isEnable(isEnable).tenantId(tenantId).build();
     }
+
+    public static IndexInsightConfig fromStream(StreamInput in) throws IOException {
+        return new IndexInsightConfig(in);
+    }
 }

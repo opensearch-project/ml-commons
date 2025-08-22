@@ -109,6 +109,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 xContentRegistry,
+                mlFeatureEnabledSetting,
                 client,
                 sdkClient,
                 mlIndicesHandler,

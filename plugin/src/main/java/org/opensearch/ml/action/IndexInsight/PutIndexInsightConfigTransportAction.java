@@ -86,9 +86,6 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
         }
 
         String tenantId = mlIndexInsightConfigPutRequest.getTenantId();
-        if (tenantId == null) {
-            tenantId = DEFAULT_TENANT_ID;
-        }
         IndexInsightConfig indexInsightConfig = IndexInsightConfig
             .builder()
             .isEnable(mlIndexInsightConfigPutRequest.getIsEnable())
@@ -112,6 +109,10 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
 
     private void indexIndexInsightConfig(IndexInsightConfig indexInsightConfig, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            String docId =  indexInsightConfig.getTenantId();
+            if (docId == null) {
+                docId = DEFAULT_TENANT_ID;
+            }
             sdkClient
                 .putDataObjectAsync(
                     PutDataObjectRequest
@@ -119,6 +120,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
                         .tenantId(indexInsightConfig.getTenantId())
                         .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                         .dataObject(indexInsightConfig)
+                            .id(docId)
                         .build()
                 )
                 .whenComplete((r, throwable) -> {

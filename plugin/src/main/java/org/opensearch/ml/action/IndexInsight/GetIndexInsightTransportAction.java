@@ -29,10 +29,12 @@ import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.indexInsight.IndexInsightTask;
 import org.opensearch.ml.common.indexInsight.LogRelatedIndexCheckTask;
 import org.opensearch.ml.common.indexInsight.StatisticalDataTask;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -49,12 +51,14 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
     private NamedXContentRegistry xContentRegistry;
     private MLIndicesHandler mlIndicesHandler;
     private ClusterService clusterService;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public GetIndexInsightTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         NamedXContentRegistry xContentRegistry,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Client client,
         SdkClient sdkClient,
         MLIndicesHandler mlIndicesHandler,
@@ -66,24 +70,29 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
         this.sdkClient = sdkClient;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLIndexInsightGetResponse> actionListener) {
         MLIndexInsightGetRequest mlIndexInsightGetRequest = MLIndexInsightGetRequest.fromActionRequest(request);
-        String indexName = mlIndexInsightGetRequest.getIndexName();
-        String tenantId = mlIndexInsightGetRequest.getTenantId();
-        if (tenantId == null) {
-            tenantId = DEFAULT_TENANT_ID;
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightGetRequest.getTenantId(), actionListener)) {
+            return;
         }
-        String finalTenantId = tenantId;
+        String indexName = mlIndexInsightGetRequest.getIndexName();
+        String docId = mlIndexInsightGetRequest.getTenantId();
+        if (docId == null) {
+            docId = DEFAULT_TENANT_ID;
+        }
+        String finalDocId = docId;
         ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
             try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .getDataObjectAsync(
                         GetDataObjectRequest
                             .builder()
-                            .tenantId(finalTenantId)
+                            .tenantId(mlIndexInsightGetRequest.getTenantId())
+                                .id(finalDocId)
                             .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                             .build()
                     )
@@ -110,7 +119,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                                         ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
                                             .runBefore(actionListener, () -> context.restore());
-                                        executeTaskAndReturn(mlIndexInsightGetRequest, INDEX_INSIGHT_INDEX_NAME, finalTenantId, wrappedListener);
+                                        executeTaskAndReturn(mlIndexInsightGetRequest, INDEX_INSIGHT_INDEX_NAME, mlIndexInsightGetRequest.getTenantId(), wrappedListener);
                                     } catch (Exception e) {
                                         log.error("fail to get index insight", e);
                                         actionListener.onFailure(e);
