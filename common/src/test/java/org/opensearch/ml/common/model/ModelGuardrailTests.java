@@ -21,6 +21,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchModule;
 import org.opensearch.transport.client.Client;
 
@@ -28,6 +29,9 @@ public class ModelGuardrailTests {
     NamedXContentRegistry xContentRegistry;
     @Mock
     Client client;
+    @Mock
+    SdkClient sdkClient;
+    String tenantId;
 
     Pattern regexPattern;
     ModelGuardrail modelGuardrail;
@@ -38,6 +42,7 @@ public class ModelGuardrailTests {
         xContentRegistry = new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents());
         doNothing().when(this.client).execute(any(), any(), any());
         modelGuardrail = new ModelGuardrail("test_model_id", "$.test", "^accept$");
+        tenantId = "tenant_id";
         regexPattern = Pattern.compile("^accept$");
     }
 
@@ -70,7 +75,7 @@ public class ModelGuardrailTests {
     @Test
     public void init() {
         Assert.assertNull(modelGuardrail.getRegexAcceptPattern());
-        modelGuardrail.init(xContentRegistry, client);
+        modelGuardrail.init(xContentRegistry, client, sdkClient, tenantId);
         Assert.assertEquals(regexPattern.toString(), modelGuardrail.getRegexAcceptPattern().toString());
     }
 
