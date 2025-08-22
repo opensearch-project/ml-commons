@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.ALL;
 import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.FIELD_DESCRIPTION;
 import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
 import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.STATISTICAL_DATA;
@@ -19,6 +20,7 @@ import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.STATISTIC
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -124,19 +126,11 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetIndexInsight_Successful() {
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        setupMockResponses();
 
-        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
-        when(sdkResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
         IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
-
         doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
+
         IndexInsight insight = new IndexInsight(
             "test_index",
             "test content",
@@ -150,13 +144,6 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(indexInsightTask).execute(any(), any(), any());
 
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
         getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
         ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -167,7 +154,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     public void testGetIndexInsight_FailToAccess() {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"index_name\": \"test-index\"}");
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-container\"}");
 
         GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
         when(sdkResponse.getResponse()).thenReturn(getResponse);
@@ -254,6 +241,116 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             assertEquals(task.getTaskType(), taskType);
         }
 
+    }
+
+    @Test
+    public void testGetIndexInsight_ALLType_Successful() {
+        testGetIndexInsight_ALLType(null, Map.of("STATISTICAL_DATA", true, "FIELD_DESCRIPTION", true, "LOG_RELATED_INDEX_CHECK", true));
+    }
+
+    @Test
+    public void testGetIndexInsight_ALLType_StatisticalDataFailed() {
+        testGetIndexInsight_ALLType(
+            STATISTICAL_DATA,
+            Map.of("STATISTICAL_DATA", false, "FIELD_DESCRIPTION", false, "LOG_RELATED_INDEX_CHECK", true)
+        );
+    }
+
+    @Test
+    public void testGetIndexInsight_ALLType_FieldDescriptionFailed() {
+        testGetIndexInsight_ALLType(
+            FIELD_DESCRIPTION,
+            Map.of("STATISTICAL_DATA", true, "FIELD_DESCRIPTION", false, "LOG_RELATED_INDEX_CHECK", true)
+        );
+    }
+
+    @Test
+    public void testGetIndexInsight_ALLType_LogRelatedIndexCheckFailed() {
+        testGetIndexInsight_ALLType(
+            LOG_RELATED_INDEX_CHECK,
+            Map.of("STATISTICAL_DATA", true, "FIELD_DESCRIPTION", true, "LOG_RELATED_INDEX_CHECK", false)
+        );
+    }
+
+    private void testGetIndexInsight_ALLType(MLIndexInsightType failedType, Map<String, Boolean> expectedContent) {
+        setupMockResponses();
+
+        Map<MLIndexInsightType, String> contentMap = Map
+            .of(STATISTICAL_DATA, "stats content", FIELD_DESCRIPTION, "field content", LOG_RELATED_INDEX_CHECK, "log content");
+
+        doAnswer(invocation -> {
+            MLIndexInsightGetRequest request = invocation.getArgument(0);
+            IndexInsightTask task = mock(IndexInsightTask.class);
+            MLIndexInsightType taskType = request.getTargetIndexInsight();
+
+            doAnswer(taskInvocation -> {
+                ActionListener<IndexInsight> listener = taskInvocation.getArgument(2);
+
+                if (taskType.equals(failedType)) {
+                    listener.onFailure(new RuntimeException("Task failed"));
+                } else {
+                    String content = contentMap.get(taskType);
+                    IndexInsight insight = new IndexInsight(
+                        "test_index",
+                        content,
+                        IndexInsightTaskStatus.COMPLETED,
+                        taskType,
+                        Instant.now()
+                    );
+                    listener.onResponse(insight);
+                }
+                return null;
+            }).when(task).execute(any(), any(), any());
+
+            return task;
+        }).when(getIndexInsightTransportAction).createTask(any());
+
+        MLIndexInsightGetRequest allTypeRequest = MLIndexInsightGetRequest
+            .builder()
+            .indexName("test_index_name")
+            .targetIndexInsight(ALL)
+            .tenantId(null)
+            .build();
+
+        getIndexInsightTransportAction.doExecute(null, allTypeRequest, actionListener);
+
+        ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        MLIndexInsightGetResponse response = argumentCaptor.getValue();
+        IndexInsight result = response.getIndexInsight();
+
+        assertEquals("test_index_name", result.getIndex());
+        assertEquals(ALL, result.getTaskType());
+
+        String content = result.getContent();
+        expectedContent.forEach((type, shouldContain) -> {
+            if (shouldContain) {
+                String expectedValue = contentMap.get(MLIndexInsightType.valueOf(type));
+                assertTrue(content.contains(type + ":\n" + expectedValue));
+            } else {
+                assertFalse(content.contains(type));
+            }
+        });
+    }
+
+    private void setupMockResponses() {
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsString()).thenReturn("{\"container_name\": \"test-container\"}");
+
+        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
+        when(sdkResponse.getResponse()).thenReturn(getResponse);
+
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
     }
 
 }

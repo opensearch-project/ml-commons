@@ -153,16 +153,36 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         String indexName = request.getIndexName();
         StringBuilder combinedContent = new StringBuilder();
 
+        // Create requests for each task type
+        MLIndexInsightGetRequest statsRequest = MLIndexInsightGetRequest
+            .builder()
+            .indexName(indexName)
+            .targetIndexInsight(MLIndexInsightType.STATISTICAL_DATA)
+            .tenantId(tenantId)
+            .build();
+        MLIndexInsightGetRequest fieldRequest = MLIndexInsightGetRequest
+            .builder()
+            .indexName(indexName)
+            .targetIndexInsight(MLIndexInsightType.FIELD_DESCRIPTION)
+            .tenantId(tenantId)
+            .build();
+        MLIndexInsightGetRequest logRequest = MLIndexInsightGetRequest
+            .builder()
+            .indexName(indexName)
+            .targetIndexInsight(MLIndexInsightType.LOG_RELATED_INDEX_CHECK)
+            .tenantId(tenantId)
+            .build();
+
         // Execute STATISTICAL_DATA first
-        new StatisticalDataTask(indexName, client).execute(storageIndex, tenantId, ActionListener.wrap(insight1 -> {
+        createTask(statsRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight1 -> {
             combinedContent.append("STATISTICAL_DATA:\n").append(insight1.getContent());
 
             // Execute FIELD_DESCRIPTION second
-            new FieldDescriptionTask(indexName, client).execute(storageIndex, tenantId, ActionListener.wrap(insight2 -> {
+            createTask(fieldRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight2 -> {
                 combinedContent.append("\n\nFIELD_DESCRIPTION:\n").append(insight2.getContent());
 
                 // Execute LOG_RELATED_INDEX_CHECK third
-                new LogRelatedIndexCheckTask(indexName, client).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
+                createTask(logRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
                     combinedContent.append("\n\nLOG_RELATED_INDEX_CHECK:\n").append(insight3.getContent());
 
                     // Create combined insight
@@ -190,7 +210,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                 }));
             }, e -> {
                 // FIELD_DESCRIPTION failed, try LOG_RELATED_INDEX_CHECK
-                new LogRelatedIndexCheckTask(indexName, client).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
+                createTask(logRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
                     combinedContent.append("\n\nLOG_RELATED_INDEX_CHECK:\n").append(insight3.getContent());
                     IndexInsight partialInsight = IndexInsight
                         .builder()
@@ -216,7 +236,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             }));
         }, e -> {
             // STATISTICAL_DATA failed, skip FIELD_DESCRIPTION and only try LOG_RELATED_INDEX_CHECK
-            new LogRelatedIndexCheckTask(indexName, client).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
+            createTask(logRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
                 IndexInsight partialInsight = IndexInsight
                     .builder()
                     .index(indexName)
