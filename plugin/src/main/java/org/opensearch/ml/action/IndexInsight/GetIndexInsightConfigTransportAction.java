@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.IndexInsight;
 
 import lombok.extern.log4j.Log4j2;
