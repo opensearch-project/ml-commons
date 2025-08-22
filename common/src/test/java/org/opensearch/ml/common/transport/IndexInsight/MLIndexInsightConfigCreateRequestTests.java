@@ -18,24 +18,24 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 
 public class MLIndexInsightConfigCreateRequestTests {
-    private String indexName;
+    private Boolean isEnable;
     private String tenantId = null;
 
     @Test
     public void constructor() {
-        indexName = "test-abc";
+        isEnable = true;
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
-            indexName,
+                isEnable,
             tenantId
         );
-        assertEquals(mlIndexInsightConfigPutRequest.getContainerName(), indexName);
+        assertEquals(mlIndexInsightConfigPutRequest.getIsEnable(), isEnable);
     }
 
     @Test
     public void writeTo() throws IOException {
-        indexName = "test-abc";
+        isEnable = true;
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
-            indexName,
+            isEnable,
             tenantId
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -45,15 +45,15 @@ public class MLIndexInsightConfigCreateRequestTests {
             output.bytes().streamInput()
         );
 
-        assertEquals(mlIndexInsightConfigPutRequest1.getContainerName(), mlIndexInsightConfigPutRequest.getContainerName());
-        assertEquals(mlIndexInsightConfigPutRequest1.getContainerName(), indexName);
+        assertEquals(mlIndexInsightConfigPutRequest1.getIsEnable(), mlIndexInsightConfigPutRequest.getIsEnable());
+        assertEquals(mlIndexInsightConfigPutRequest1.getTenantId(), tenantId);
     }
 
     @Test
     public void validate_Success() {
-        indexName = "not-null";
+        isEnable = false;
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
-            indexName,
+                isEnable,
             tenantId
         );
 
@@ -62,12 +62,12 @@ public class MLIndexInsightConfigCreateRequestTests {
 
     @Test
     public void validate_Failure_index() {
-        indexName = null;
+        isEnable = null;
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
-            indexName,
+                isEnable,
             tenantId
         );
-        assertEquals(null, mlIndexInsightConfigPutRequest.getContainerName());
+        assertEquals(null, mlIndexInsightConfigPutRequest.getIsEnable());
 
         ActionRequestValidationException exception = addValidationError("Index Insight's container index can't be null", null);
         mlIndexInsightConfigPutRequest.validate().equals(exception);
@@ -75,9 +75,9 @@ public class MLIndexInsightConfigCreateRequestTests {
 
     @Test
     public void fromActionRequest_Success() throws IOException {
-        indexName = "test-abc";
+        isEnable = true;
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
-            indexName,
+                isEnable,
             tenantId
         );
         assertEquals(
@@ -88,9 +88,9 @@ public class MLIndexInsightConfigCreateRequestTests {
 
     @Test
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
-        indexName = "test-abc";
+        isEnable = true;
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = new MLIndexInsightConfigPutRequest(
-            indexName,
+                isEnable,
             tenantId
         );
 
@@ -106,7 +106,7 @@ public class MLIndexInsightConfigCreateRequestTests {
             }
         };
         MLIndexInsightConfigPutRequest request = mlIndexInsightConfigPutRequest.fromActionRequest(actionRequest);
-        assertEquals(request.getContainerName(), indexName);
+        assertEquals(request.getIsEnable(), isEnable);
     }
 
 }

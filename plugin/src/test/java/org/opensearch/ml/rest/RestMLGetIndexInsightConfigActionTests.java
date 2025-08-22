@@ -1,20 +1,4 @@
-/*
- * Copyright OpenSearch Contributors
- * SPDX-License-Identifier: Apache-2.0
- */
-
 package org.opensearch.ml.rest;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
-
-import java.util.List;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -40,11 +24,22 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
 
-public class RestMLCreateIndexInsightConfigActionTests extends OpenSearchTestCase {
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
+
+public class RestMLGetIndexInsightConfigActionTests  extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private RestMLPutIndexInsightConfigAction restMLPutIndexInsightConfigAction;
+    private RestMLGetIndexInsightConfigAction restMLPutIndexInsightConfigAction;
     private NodeClient client;
     private ThreadPool threadPool;
 
@@ -61,7 +56,7 @@ public class RestMLCreateIndexInsightConfigActionTests extends OpenSearchTestCas
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
-        restMLPutIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(mlFeatureEnabledSetting);
+        restMLPutIndexInsightConfigAction = new RestMLGetIndexInsightConfigAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             invocation.getArgument(2);
             return null;
@@ -77,17 +72,17 @@ public class RestMLCreateIndexInsightConfigActionTests extends OpenSearchTestCas
 
     @Test
     public void testConstructor() {
-        RestMLPutIndexInsightConfigAction createIndexInsightContainerAction = new RestMLPutIndexInsightConfigAction(
-            mlFeatureEnabledSetting
+        RestMLPutIndexInsightConfigAction createIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(
+                mlFeatureEnabledSetting
         );
-        assertNotNull(createIndexInsightContainerAction);
+        assertNotNull(createIndexInsightConfigAction);
     }
 
     @Test
     public void testGetName() {
         String actionName = restMLPutIndexInsightConfigAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_create_index_insight_container_action", actionName);
+        assertEquals("ml_create_index_insight_config_action", actionName);
     }
 
     @Test
@@ -97,39 +92,39 @@ public class RestMLCreateIndexInsightConfigActionTests extends OpenSearchTestCas
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.PUT, route.getMethod());
-        assertEquals("/_plugins/_ml/index_insight_container/", route.getPath());
+        assertEquals("/_plugins/_ml/index_insight_config/", route.getPath());
     }
 
     @Test
-    public void testCreateIndexInsightContainerRequest() throws Exception {
+    public void testCreateIndexInsightConfigRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLPutIndexInsightConfigAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLIndexInsightConfigPutRequest> argumentCaptor = ArgumentCaptor
-            .forClass(MLIndexInsightConfigPutRequest.class);
+                .forClass(MLIndexInsightConfigPutRequest.class);
         verify(client, times(1)).execute(eq(MLIndexInsightConfigPutAction.INSTANCE), argumentCaptor.capture(), any());
-        String indexName = argumentCaptor.getValue().getContainerName();
-        assertEquals("testIndex", indexName);
+        Boolean isEnable = argumentCaptor.getValue().getIsEnable();
+        assertEquals(true, isEnable);
     }
 
     @Test
-    public void testCreateIndexInsightContainerRequestWithoutEnableAgentFramework() throws Exception {
+    public void testCreateIndexInsightConfigRequestWithoutEnableAgentFramework() throws Exception {
         RestRequest request = getRestRequest();
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         IllegalStateException e = assertThrows(
-            IllegalStateException.class,
-            () -> restMLPutIndexInsightConfigAction.handleRequest(request, channel, client)
+                IllegalStateException.class,
+                () -> restMLPutIndexInsightConfigAction.handleRequest(request, channel, client)
         );
         assertEquals(e.getMessage(), AGENT_FRAMEWORK_DISABLED_ERR_MSG);
     }
 
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.PUT;
-        String requestContent = "{\"container_name\":\"testIndex\"}";
+        String requestContent = "{\"is_enable\":true}";
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withMethod(method)
-            .withPath("/_plugins/_ml/index_insight_container")
-            .withContent(new BytesArray(requestContent), XContentType.JSON)
-            .build();
+                .withMethod(method)
+                .withPath("/_plugins/_ml/index_insight_config")
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .build();
         return request;
     }
 

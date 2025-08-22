@@ -114,7 +114,7 @@ public class MLIndexInsightGetResponseTests {
     }
 
     @Test
-    public void testNullConnector() {
+    public void testNullIndexInsight() {
         MLIndexInsightGetResponse response = MLIndexInsightGetResponse.builder().build();
         assertNull(response.getIndexInsight());
     }

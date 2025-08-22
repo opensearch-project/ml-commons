@@ -45,7 +45,7 @@ import org.opensearch.transport.client.Client;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * This action will put a container object into system index, then
+ * This action will put a config object into system index, then
  * Create an index to store index insight using the provided index name if not exists.
  */
 
@@ -90,18 +90,22 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
             .isEnable(mlIndexInsightConfigPutRequest.getIsEnable())
             .tenantId(tenantId)
             .build();
-        // The container is a doc in system index, and it defines where we store the index insight. The index insight is an user index
-        // inside user's cluster.
+
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONFIG, ActionListener.wrap(r -> {
             indexIndexInsightConfig(indexInsightConfig, ActionListener.wrap(r1 -> {
+                if (indexInsightConfig.getIsEnable()) {
                 initIndexInsightIndex(INDEX_INSIGHT_INDEX_NAME, ActionListener.wrap(r2 -> {
                     log.info("Successfully created index insight data index");
                     listener.onResponse(new AcknowledgedResponse(true));
                 }, e -> {
-                    log.error("Failed to create index insight container", e);
+                    log.error("Failed to create index insight config", e);
                     listener.onFailure(e);
                 }));
-            }, listener::onFailure));
+            } else {
+                    listener.onResponse(new AcknowledgedResponse(true));
+            }
+                }
+                    , listener::onFailure));
         }, listener::onFailure));
 
     }
@@ -126,7 +130,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
                     context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to index index insight container", cause);
+                        log.error("Failed to index index insight config", cause);
                         listener.onFailure(cause);
                     } else {
                         try {
@@ -137,7 +141,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
                                 log.info("Successfully created index insight with ID: {}", generatedId);
                                 listener.onResponse(true);
                             } else {
-                                listener.onFailure(new RuntimeException("Failed to create index insight container"));
+                                listener.onFailure(new RuntimeException("Failed to create index insight config"));
                             }
                         } catch (Exception e) {
                             listener.onFailure(e);
@@ -145,7 +149,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
                     }
                 });
         } catch (Exception e) {
-            log.error("Failed to create index insight container", e);
+            log.error("Failed to create index insight config", e);
             listener.onFailure(e);
         }
     }

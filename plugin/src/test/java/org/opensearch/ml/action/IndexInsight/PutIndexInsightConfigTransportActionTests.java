@@ -11,7 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.FIXED_INDEX_INSIGHT_CONTAINER_ID;
+import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -48,7 +48,7 @@ import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
-public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTestCase {
+public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
@@ -97,7 +97,7 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
         MockitoAnnotations.openMocks(this);
         mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest
             .builder()
-            .containerName("test_index_name")
+            .isEnable(true)
             .tenantId(null)
             .build();
 
@@ -122,26 +122,16 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testCreateIndexInsightContainer_Successful() {
+    public void testCreateIndexInsightConfig_Successful() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(false);
-
-        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
-        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
         PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
         when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
@@ -167,27 +157,16 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testCreateIndexInsightContainer_SuccessfulToInitSystemIndices() {
+    public void testCreateIndexInsightConfig_SuccessfulToInitSystemIndices() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(false);
-
-        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
-        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> failedFuture = new CompletableFuture<>();
-        failedFuture.completeExceptionally(new Exception(new IndexNotFoundException("not find failure")));
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
-
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
         PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
         when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
@@ -213,27 +192,16 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testCreateIndexInsightContainer_FailDueToGetObject() {
+    public void testCreateIndexInsightConfig_FailDueToInitIndices() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
+            listener.onFailure(new RuntimeException("fail to create index"));
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(false);
-
-        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
-        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> failedFuture = new CompletableFuture<>();
-        failedFuture.completeExceptionally(new Exception(new RuntimeException("not find failure")));
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
-
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
         PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
         when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
@@ -254,59 +222,12 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(argumentCaptor.getValue().getCause().getMessage(), "not find failure");
+        assertEquals(argumentCaptor.getValue().getMessage(), "fail to create index");
     }
 
-    @Test
-    public void testCreateIndexInsightContainer_ContainerNotExist() {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
-
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(true);
-
-        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
-        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-
-        IndexResponse indexResponse = mock(IndexResponse.class);
-        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
-        PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
-        when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
-        CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
-        when(sdkClient.putDataObjectAsync(any())).thenReturn(putFuture);
-
-        AdminClient adminClient = mock(AdminClient.class);
-        when(client.admin()).thenReturn(adminClient);
-        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
-        when(adminClient.indices()).thenReturn(indicesAdminClient);
-        CreateIndexResponse createIndexResponse = new CreateIndexResponse(true, true, "test_index");
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            listener.onResponse(createIndexResponse);
-            return null;
-        }).when(indicesAdminClient).create(any(), any());
-
-        putIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigPutRequest, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
-        assertEquals(
-            argumentCaptor.getValue().getMessage(),
-            "Index insight container is already set. If you want to update, please delete it first."
-        );
-    }
 
     @Test
-    public void testCreateIndexInsightContainer_FailToIndexContainer() {
+    public void testCreateIndexInsightConfig_FailToIndexConfig() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -325,7 +246,7 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.NOOP);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
         PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
         when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
@@ -347,11 +268,11 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
-        assertEquals(argumentCaptor.getValue().getMessage(), "Failed to create index insight container");
+        assertEquals(argumentCaptor.getValue().getMessage(), "Failed to create index insight config");
     }
 
     @Test
-    public void testCreateIndexInsightContainer_IndexAlreadyCreated() {
+    public void testCreateIndexInsightConfig_IndexAlreadyCreated() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
@@ -370,7 +291,7 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
         PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
         when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
@@ -396,26 +317,17 @@ public class CreateIndexInsightConfigTransportActionTests extends OpenSearchTest
     }
 
     @Test
-    public void testCreateIndexInsightContainer_FailToCreateIndexContainer() {
+    public void testCreateIndexInsightConfig_FailToCreateIndexIndex() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(false);
-
-        GetDataObjectResponse sdkGetResponse = mock(GetDataObjectResponse.class);
-        when(sdkGetResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkGetResponse);
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
-        when(indexResponse.getId()).thenReturn(FIXED_INDEX_INSIGHT_CONTAINER_ID);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
         PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
         when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
