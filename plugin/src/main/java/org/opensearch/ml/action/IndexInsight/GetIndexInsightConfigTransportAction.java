@@ -54,17 +54,19 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
             TransportService transportService,
             ActionFilters actionFilters,
             NamedXContentRegistry xContentRegistry,
+            MLFeatureEnabledSetting mlFeatureEnabledSetting,
             Client client,
             SdkClient sdkClient,
             MLIndicesHandler mlIndicesHandler,
             ClusterService clusterService
     ) {
-        super(MLIndexInsightGetAction.NAME, transportService, actionFilters, MLIndexInsightConfigGetRequest::new);
+        super(MLIndexInsightConfigGetAction.NAME, transportService, actionFilters, MLIndexInsightConfigGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
         this.sdkClient = sdkClient;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
 
