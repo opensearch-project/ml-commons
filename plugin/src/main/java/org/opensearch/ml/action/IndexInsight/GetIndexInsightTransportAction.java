@@ -91,7 +91,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                         GetDataObjectRequest
                             .builder()
                             .tenantId(mlIndexInsightGetRequest.getTenantId())
-                                .id(finalDocId)
+                            .id(finalDocId)
                             .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                             .build()
                     )
@@ -112,13 +112,23 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                     IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser);
                                     Boolean isEnable = indexInsightConfig.getIsEnable();
                                     if (!isEnable) {
-                                        actionListener.onFailure(new RuntimeException("You are not enabled to use index insight yet, please firstly enable it."));
+                                        actionListener
+                                            .onFailure(
+                                                new RuntimeException(
+                                                    "You are not enabled to use index insight yet, please firstly enable it."
+                                                )
+                                            );
                                         return;
                                     }
                                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                                         ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
                                             .runBefore(actionListener, () -> context.restore());
-                                        executeTaskAndReturn(mlIndexInsightGetRequest, INDEX_INSIGHT_INDEX_NAME, mlIndexInsightGetRequest.getTenantId(), wrappedListener);
+                                        executeTaskAndReturn(
+                                            mlIndexInsightGetRequest,
+                                            INDEX_INSIGHT_INDEX_NAME,
+                                            mlIndexInsightGetRequest.getTenantId(),
+                                            wrappedListener
+                                        );
                                     } catch (Exception e) {
                                         log.error("fail to get index insight", e);
                                         actionListener.onFailure(e);
@@ -127,7 +137,10 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                     actionListener.onFailure(e);
                                 }
                             } else {
-                                actionListener.onFailure(new RuntimeException("You are not enabled to use index insight yet, please firstly enable it."));
+                                actionListener
+                                    .onFailure(
+                                        new RuntimeException("You are not enabled to use index insight yet, please firstly enable it.")
+                                    );
                             }
                         }
                     });

@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.common.transport.indexInsight;
 
-import lombok.Getter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -13,13 +17,10 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import lombok.Builder;
+import lombok.Getter;
 
-import static org.opensearch.action.ValidateActions.addValidationError;
-
+@Builder
 public class MLIndexInsightConfigGetRequest extends ActionRequest {
     @Getter
     private String tenantId;

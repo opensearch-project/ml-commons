@@ -45,11 +45,7 @@ public class RestMLPutIndexInsightConfigAction extends BaseRestHandler {
     protected RestChannelConsumer prepareRequest(RestRequest restRequest, NodeClient client) throws IOException {
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = getRequest(restRequest);
         return channel -> client
-            .execute(
-                MLIndexInsightConfigPutAction.INSTANCE,
-                    mlIndexInsightConfigPutRequest,
-                new RestToXContentListener<>(channel)
-            );
+            .execute(MLIndexInsightConfigPutAction.INSTANCE, mlIndexInsightConfigPutRequest, new RestToXContentListener<>(channel));
     }
 
     @Override

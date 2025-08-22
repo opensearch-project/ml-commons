@@ -1,19 +1,15 @@
 package org.opensearch.ml.common.transport.IndexInsight;
 
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetRequest;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
-
-import java.io.IOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.FIELD_DESCRIPTION;
 
 public class MLIndexInsightConfigGetRequestTests {
     private String tenantId = null;

@@ -34,7 +34,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -95,11 +94,7 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest
-            .builder()
-            .isEnable(true)
-            .tenantId(null)
-            .build();
+        mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest.builder().isEnable(true).tenantId(null).build();
 
         putIndexInsightConfigTransportAction = spy(
             new PutIndexInsightConfigTransportAction(
@@ -225,7 +220,6 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
         assertEquals(argumentCaptor.getValue().getMessage(), "fail to create index");
     }
 
-
     @Test
     public void testCreateIndexInsightConfig_FailToIndexConfig() {
         doAnswer(invocation -> {
@@ -323,7 +317,6 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
             listener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
-
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);

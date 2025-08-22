@@ -78,8 +78,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
-        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest
-            .fromActionRequest(request);
+        MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest.fromActionRequest(request);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightConfigPutRequest.getTenantId(), listener)) {
             return;
         }
@@ -94,25 +93,24 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONFIG, ActionListener.wrap(r -> {
             indexIndexInsightConfig(indexInsightConfig, ActionListener.wrap(r1 -> {
                 if (indexInsightConfig.getIsEnable()) {
-                initIndexInsightIndex(INDEX_INSIGHT_INDEX_NAME, ActionListener.wrap(r2 -> {
-                    log.info("Successfully created index insight data index");
+                    initIndexInsightIndex(INDEX_INSIGHT_INDEX_NAME, ActionListener.wrap(r2 -> {
+                        log.info("Successfully created index insight data index");
+                        listener.onResponse(new AcknowledgedResponse(true));
+                    }, e -> {
+                        log.error("Failed to create index insight config", e);
+                        listener.onFailure(e);
+                    }));
+                } else {
                     listener.onResponse(new AcknowledgedResponse(true));
-                }, e -> {
-                    log.error("Failed to create index insight config", e);
-                    listener.onFailure(e);
-                }));
-            } else {
-                    listener.onResponse(new AcknowledgedResponse(true));
-            }
                 }
-                    , listener::onFailure));
+            }, listener::onFailure));
         }, listener::onFailure));
 
     }
 
     private void indexIndexInsightConfig(IndexInsightConfig indexInsightConfig, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            String docId =  indexInsightConfig.getTenantId();
+            String docId = indexInsightConfig.getTenantId();
             if (docId == null) {
                 docId = DEFAULT_TENANT_ID;
             }
@@ -123,7 +121,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
                         .tenantId(indexInsightConfig.getTenantId())
                         .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                         .dataObject(indexInsightConfig)
-                            .id(docId)
+                        .id(docId)
                         .build()
                 )
                 .whenComplete((r, throwable) -> {
@@ -136,7 +134,8 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
                         try {
                             IndexResponse indexResponse = r.indexResponse();
                             assert indexResponse != null;
-                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED || indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED
+                                || indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                                 String generatedId = indexResponse.getId();
                                 log.info("Successfully created index insight with ID: {}", generatedId);
                                 listener.onResponse(true);

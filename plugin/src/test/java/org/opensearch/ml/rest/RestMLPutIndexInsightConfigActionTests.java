@@ -77,9 +77,7 @@ public class RestMLPutIndexInsightConfigActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLPutIndexInsightConfigAction createIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(
-            mlFeatureEnabledSetting
-        );
+        RestMLPutIndexInsightConfigAction createIndexInsightConfigAction = new RestMLPutIndexInsightConfigAction(mlFeatureEnabledSetting);
         assertNotNull(createIndexInsightConfigAction);
     }
 
@@ -104,8 +102,7 @@ public class RestMLPutIndexInsightConfigActionTests extends OpenSearchTestCase {
     public void testCreateIndexInsightConfigRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLPutIndexInsightConfigAction.handleRequest(request, channel, client);
-        ArgumentCaptor<MLIndexInsightConfigPutRequest> argumentCaptor = ArgumentCaptor
-            .forClass(MLIndexInsightConfigPutRequest.class);
+        ArgumentCaptor<MLIndexInsightConfigPutRequest> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigPutRequest.class);
         verify(client, times(1)).execute(eq(MLIndexInsightConfigPutAction.INSTANCE), argumentCaptor.capture(), any());
         Boolean isEnable = argumentCaptor.getValue().getIsEnable();
         assertEquals(true, isEnable);

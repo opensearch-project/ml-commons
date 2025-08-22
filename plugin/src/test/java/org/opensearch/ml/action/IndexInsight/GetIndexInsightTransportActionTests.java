@@ -180,11 +180,11 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
         doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
         IndexInsight insight = new IndexInsight(
-                "test_index",
-                "test content",
-                IndexInsightTaskStatus.COMPLETED,
-                STATISTICAL_DATA,
-                Instant.ofEpochMilli(0)
+            "test_index",
+            "test content",
+            IndexInsightTaskStatus.COMPLETED,
+            STATISTICAL_DATA,
+            Instant.ofEpochMilli(0)
         );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
