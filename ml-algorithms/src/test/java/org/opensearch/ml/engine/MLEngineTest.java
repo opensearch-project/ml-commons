@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -459,16 +460,16 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testEncryptMethod() {
+    public void testEncryptMethod() throws ExecutionException, InterruptedException {
         String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString, null);
+        String encryptedString = mlEngine.encrypt(testString, null).get();
         assertNotNull(encryptedString);
         assertNotEquals(testString, encryptedString);
     }
 
     @Test
-    public void testGetConnectorCredential() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
+    public void testGetConnectorCredential() throws IOException, ExecutionException, InterruptedException {
+        String encryptedValue = mlEngine.encrypt("test_key_value", null).get();
         String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
             + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
@@ -496,8 +497,8 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testGetConnectorCredentialWithoutRegion() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
+    public void testGetConnectorCredentialWithoutRegion() throws IOException, ExecutionException, InterruptedException {
+        String encryptedValue = mlEngine.encrypt("test_key_value", null).get();
         String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
             + "\"parameters\":{},\"credential\":{\"key\":\""
