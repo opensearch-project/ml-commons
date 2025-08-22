@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -215,7 +216,7 @@ public class MemoryContainerHelperTests {
     public void testCheckMemoryContainerAccessWithAdminUser() {
         // User constructor: name, backend_roles, roles, custom_attributes
         // The "all_access" should be in roles (third parameter), not backend_roles
-        User adminUser = new User("admin", Arrays.asList("backend-role"), Arrays.asList("all_access"), null);
+        User adminUser = new User("admin", Arrays.asList("backend-role"), Arrays.asList("all_access"), Map.of());
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").build();
 
         assertTrue(helper.checkMemoryContainerAccess(adminUser, container));
@@ -224,8 +225,8 @@ public class MemoryContainerHelperTests {
     @Test
     public void testCheckMemoryContainerAccessAsOwner() {
         // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), null);
-        User accessingUser = new User("owner-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), null);
+        User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
+        User accessingUser = new User("owner-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), Map.of());
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
@@ -235,8 +236,8 @@ public class MemoryContainerHelperTests {
     @Test
     public void testCheckMemoryContainerAccessWithMatchingBackendRole() {
         // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", Arrays.asList("backend-role1", "backend-role2"), Arrays.asList("role1"), null);
-        User accessingUser = new User("different-user", Arrays.asList("backend-role2", "backend-role3"), Arrays.asList("role2"), null);
+        User owner = new User("owner-user", Arrays.asList("backend-role1", "backend-role2"), Arrays.asList("role1"), Map.of());
+        User accessingUser = new User("different-user", Arrays.asList("backend-role2", "backend-role3"), Arrays.asList("role2"), Map.of());
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
@@ -246,8 +247,8 @@ public class MemoryContainerHelperTests {
     @Test
     public void testCheckMemoryContainerAccessDenied() {
         // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), null);
-        User accessingUser = new User("different-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), null);
+        User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
+        User accessingUser = new User("different-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), Map.of());
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
@@ -257,7 +258,7 @@ public class MemoryContainerHelperTests {
     @Test
     public void testCheckMemoryContainerAccessWithNullOwner() {
         // User constructor: name, backend_roles, roles, custom_attributes
-        User accessingUser = new User("some-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), null);
+        User accessingUser = new User("some-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(null).build();
 
@@ -338,8 +339,8 @@ public class MemoryContainerHelperTests {
     @Test
     public void testCheckMemoryContainerAccessWithNullBackendRoles() {
         // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", null, Arrays.asList("role1"), null);
-        User accessingUser = new User("different-user", Arrays.asList("backend-role1"), Arrays.asList("role2"), null);
+        User owner = new User("owner-user", null, Arrays.asList("role1"), Map.of());
+        User accessingUser = new User("different-user", Arrays.asList("backend-role1"), Arrays.asList("role2"), Map.of());
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
@@ -349,8 +350,8 @@ public class MemoryContainerHelperTests {
     @Test
     public void testCheckMemoryContainerAccessBothNullBackendRoles() {
         // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", null, Arrays.asList("role1"), null);
-        User accessingUser = new User("different-user", null, Arrays.asList("role2"), null);
+        User owner = new User("owner-user", null, Arrays.asList("role1"), Map.of());
+        User accessingUser = new User("different-user", null, Arrays.asList("role2"), Map.of());
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 

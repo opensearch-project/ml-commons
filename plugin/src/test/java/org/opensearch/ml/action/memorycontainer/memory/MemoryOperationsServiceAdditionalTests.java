@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -94,7 +95,7 @@ public class MemoryOperationsServiceAdditionalTests {
 
         String indexName = "memory-index";
         String sessionId = "session-123";
-        User user = new User("testuser", null, null, null);
+        User user = new User("testuser", null, null, Collections.emptyList());
 
         java.time.Instant now = java.time.Instant.now();
         List<org.opensearch.action.index.IndexRequest> indexRequests = new ArrayList<>();
