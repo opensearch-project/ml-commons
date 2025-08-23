@@ -86,7 +86,7 @@ public class MLTaskGetResponseTest {
                 + "\"create_time\":123,"
                 + "\"last_update_time\":123,"
                 + "\"error\":\"error\","
-                + "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant_access\":null,\"user_requested_tenant\":null},"
+                + "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"custom_attributes\":{},\"user_requested_tenant_access\":null,\"user_requested_tenant\":null},"
                 + "\"is_async\":true}",
             jsonStr
         );
