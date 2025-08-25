@@ -36,6 +36,7 @@ public class MLPostProcessFunction {
     public static final String BEDROCK_RERANK = "connector.post_process.bedrock.rerank";
     public static final String DEFAULT_EMBEDDING = "connector.post_process.default.embedding";
     public static final String DEFAULT_RERANK = "connector.post_process.default.rerank";
+    // ML commons passthrough unwraps a remote ml-commons response and reconstructs model tensors directly based on remote inference
     public static final String ML_COMMONS_PASSTHROUGH = "connector.post_process.mlcommons.passthrough";
 
     private static final Map<String, String> JSON_PATH_EXPRESSION = new HashMap<>();
