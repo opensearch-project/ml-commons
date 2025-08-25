@@ -194,6 +194,41 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_ExtraParams() {
+
+        String requestBody =
+            "{\"input\": \"${parameters.input}\", \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": \"${parameters.content_type}\" }}";
+        String expected =
+            "{\"input\": \"test value\", \"parameters\": {\"sparseEmbeddingFormat\": \"WORD\", \"content_type\": \"query\" }}";
+
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test value");
+        parameters.put("sparseEmbeddingFormat", "WORD");
+        parameters.put("content_type", "query");
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+        Assert.assertEquals(expected, predictPayload);
+    }
+
+    @Test
+    public void createPayload_MissingParamsInvalidJson() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule
+            .expectMessage(
+                "Invalid payload: {\"input\": \"test value\", \"parameters\": {\"sparseEmbeddingFormat\": \"WORD\", \"content_type\": ${parameters.content_type} }}"
+            );
+        String requestBody =
+            "{\"input\": \"${parameters.input}\", \"parameters\": {\"sparseEmbeddingFormat\": \"${parameters.sparseEmbeddingFormat}\", \"content_type\": ${parameters.content_type} }}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test value");
+        parameters.put("sparseEmbeddingFormat", "WORD");
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
+        connector.validatePayload(predictPayload);
+    }
+
+    @Test
     public void parseResponse_modelTensorJson() throws IOException {
         HttpConnector connector = createHttpConnector();
 
