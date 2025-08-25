@@ -15,9 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import com.google.gson.TypeAdapter;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -48,6 +45,9 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -179,9 +179,7 @@ public class SearchIndexTool implements Tool {
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                         index = jsonObject.get(INDEX_FIELD).getAsString();
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
-                        Gson gson = new GsonBuilder()
-                                .registerTypeAdapter(Double.class, new PlainDoubleAdapter())
-                                .create();
+                        Gson gson = new GsonBuilder().registerTypeAdapter(Double.class, new PlainDoubleAdapter()).create();
                         query = queryElement == null ? null : gson.toJson(new Gson().fromJson(queryElement.toString(), Map.class));
                     }
                 } catch (JsonSyntaxException e) {
@@ -307,16 +305,23 @@ public class SearchIndexTool implements Tool {
         }
     }
 
-    private  class PlainDoubleAdapter extends TypeAdapter<Double> {
+    private class PlainDoubleAdapter extends TypeAdapter<Double> {
         @Override
         public void write(JsonWriter out, Double value) throws IOException {
             if (value == null) {
                 out.nullValue();
                 return;
             }
-            out.value(new BigDecimal(value).toPlainString());
-        }
 
+            if (value.isNaN() || value.isInfinite()) {
+                out.nullValue();
+                return;
+            }
+
+            BigDecimal bd = BigDecimal.valueOf(value).stripTrailingZeros();
+
+            out.jsonValue(bd.toPlainString());
+        }
 
         @Override
         public Double read(JsonReader in) throws IOException {
