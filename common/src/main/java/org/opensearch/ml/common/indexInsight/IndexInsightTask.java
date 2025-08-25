@@ -194,9 +194,14 @@ public interface IndexInsightTask {
         GetRequest getRequest = new GetRequest(storageIndex, docId);
 
         getClient().get(getRequest, ActionListener.wrap(response -> {
-            String content = response.isExists() ? response.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
-            Map<String, Object> contentMap = gson.fromJson(content, Map.class);
-            listener.onResponse(contentMap);
+            try {
+                String content = response.isExists() ? response.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
+                Map<String, Object> contentMap = gson.fromJson(content, Map.class);
+                listener.onResponse(contentMap);
+            } catch (Exception e) {
+                // Return empty content on JSON parsing failure
+                listener.onResponse(new HashMap<>());
+            }
         }, e -> {
             // Return empty content on failure instead of propagating error
             listener.onResponse(new HashMap<>());

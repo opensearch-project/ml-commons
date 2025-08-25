@@ -13,7 +13,9 @@ import static org.mockito.Mockito.*;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -26,6 +28,9 @@ import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
 
 public class StatisticalDataTaskTests {
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private Client setupBasicClientMocks() {
         Client client = mock(Client.class);
@@ -102,11 +107,9 @@ public class StatisticalDataTaskTests {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client);
 
-        try {
-            task.createPrerequisiteTask(MLIndexInsightType.FIELD_DESCRIPTION);
-        } catch (IllegalArgumentException e) {
-            assertEquals("StatisticalDataTask has no prerequisites", e.getMessage());
-        }
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("StatisticalDataTask has no prerequisites");
+        task.createPrerequisiteTask(MLIndexInsightType.FIELD_DESCRIPTION);
     }
 
     @Test

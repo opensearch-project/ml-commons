@@ -10,33 +10,29 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigFailure;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteFailure;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 
 import java.util.List;
-import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.Configuration;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLConfig;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.transport.config.MLConfigGetAction;
-import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
-import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.transport.client.Client;
 
 public class FieldDescriptionTaskTests {
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private Client client;
     private FieldDescriptionTask task;
@@ -47,63 +43,6 @@ public class FieldDescriptionTaskTests {
         client = mock(Client.class);
         task = new FieldDescriptionTask("test-index", client);
         listener = mock(ActionListener.class);
-    }
-
-    private void mockGetResponse(String content) {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> getListener = invocation.getArgument(1);
-            GetResponse mockResponse = mock(GetResponse.class);
-            when(mockResponse.isExists()).thenReturn(true);
-            Map<String, Object> sourceMap = Map.of(IndexInsight.CONTENT_FIELD, content);
-            when(mockResponse.getSourceAsMap()).thenReturn(sourceMap);
-            getListener.onResponse(mockResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), any());
-    }
-
-    private void mockMLConfigSuccess() {
-        doAnswer(invocation -> {
-            ActionListener<MLConfigGetResponse> configListener = invocation.getArgument(2);
-            MLConfig config = MLConfig.builder().type("test").configuration(Configuration.builder().agentId("test-agent").build()).build();
-            configListener.onResponse(new MLConfigGetResponse(config));
-            return null;
-        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), any(ActionListener.class));
-    }
-
-    private void mockMLConfigFailure(String errorMessage) {
-        doAnswer(invocation -> {
-            ActionListener<MLConfigGetResponse> configListener = invocation.getArgument(2);
-            configListener.onFailure(new RuntimeException(errorMessage));
-            return null;
-        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(MLConfigGetRequest.class), any(ActionListener.class));
-    }
-
-    private void mockMLExecuteSuccess(String response) {
-        doAnswer(invocation -> {
-            ActionListener<MLExecuteTaskResponse> executeListener = invocation.getArgument(2);
-            ModelTensor tensor = ModelTensor.builder().result(response).build();
-            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-            ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-            executeListener.onResponse(MLExecuteTaskResponse.builder().functionName(FunctionName.AGENT).output(output).build());
-            return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
-    }
-
-    private void mockMLExecuteFailure(String errorMessage) {
-        doAnswer(invocation -> {
-            ActionListener<MLExecuteTaskResponse> executeListener = invocation.getArgument(2);
-            executeListener.onFailure(new RuntimeException(errorMessage));
-            return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
-    }
-
-    private void mockUpdateSuccess() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
-            UpdateResponse mockUpdateResponse = mock(UpdateResponse.class);
-            updateListener.onResponse(mockUpdateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), any(ActionListener.class));
     }
 
     @Test
@@ -136,9 +75,12 @@ public class FieldDescriptionTaskTests {
         assertEquals("test-index", prerequisiteTask.getSourceIndex());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testCreatePrerequisiteTask_UnsupportedType() {
-        task.createPrerequisiteTask(MLIndexInsightType.LOG_RELATED_INDEX_CHECK);
+        MLIndexInsightType unsupportedType = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported prerequisite type: " + unsupportedType);
+        task.createPrerequisiteTask(unsupportedType);
     }
 
     @Test
@@ -151,8 +93,8 @@ public class FieldDescriptionTaskTests {
         }
         mappingBuilder.append("}}");
 
-        mockGetResponse(mappingBuilder.toString());
-        mockMLConfigSuccess();
+        mockGetSuccess(client, mappingBuilder.toString());
+        mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
 
@@ -163,8 +105,8 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_InvalidJsonContent() {
         String invalidStatisticalContent = "invalid json content";
 
-        mockGetResponse(invalidStatisticalContent);
-        mockMLConfigSuccess();
+        mockGetSuccess(client, invalidStatisticalContent);
+        mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
 
@@ -177,33 +119,41 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_MLConfigRetrievalFailure() {
         String statisticalContent = "{\"mapping\": {\"field1\": {\"type\": \"text\"}}}";
 
-        mockGetResponse(statisticalContent);
-        mockMLConfigFailure("Config not found");
+        mockGetSuccess(client, statisticalContent);
+        mockMLConfigFailure(client, "Config not found");
 
         task.runTask("storage-index", "tenant-id", listener);
 
-        verify(listener).onFailure(any(Exception.class));
+        ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(listener).onFailure(captor.capture());
+
+        IllegalStateException exception = captor.getValue();
+        assertEquals("Config not found", exception.getMessage());
     }
 
     @Test
     public void testRunTask_MLExecuteFailure() {
         String statisticalContent = "{\"mapping\": {\"field1\": {\"type\": \"text\"}}}";
 
-        mockGetResponse(statisticalContent);
-        mockMLConfigSuccess();
-        mockMLExecuteFailure("ML execution failed");
+        mockGetSuccess(client, statisticalContent);
+        mockMLConfigSuccess(client);
+        mockMLExecuteFailure(client, "ML execution failed");
 
         task.runTask("storage-index", "tenant-id", listener);
 
-        verify(listener).onFailure(any(Exception.class));
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertEquals("Batch processing failed", exception.getMessage());
     }
 
     @Test
     public void testRunTask_EmptyMappingSource() {
         String statisticalContentWithEmptyMapping = "{\"mapping\": {}}";
 
-        mockGetResponse(statisticalContentWithEmptyMapping);
-        mockMLConfigSuccess();
+        mockGetSuccess(client, statisticalContentWithEmptyMapping);
+        mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
 
@@ -216,8 +166,8 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_NullMappingSource() {
         String statisticalContentWithNullMapping = "{\"other_field\": \"value\"}";
 
-        mockGetResponse(statisticalContentWithNullMapping);
-        mockMLConfigSuccess();
+        mockGetSuccess(client, statisticalContentWithNullMapping);
+        mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
 
@@ -238,9 +188,9 @@ public class FieldDescriptionTaskTests {
             + "}"
             + "}";
 
-        mockGetResponse(statisticalContentWithNoTypeFields);
-        mockMLConfigSuccess();
-        mockUpdateSuccess();
+        mockGetSuccess(client, statisticalContentWithNoTypeFields);
+        mockMLConfigSuccess(client);
+        mockUpdateSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
 
@@ -261,10 +211,10 @@ public class FieldDescriptionTaskTests {
             + "}"
             + "}";
 
-        mockGetResponse(statisticalContent);
-        mockMLConfigSuccess();
-        mockMLExecuteSuccess("user_name: name of the user\nuser_age: age of the user in years");
-        mockUpdateSuccess();
+        mockGetSuccess(client, statisticalContent);
+        mockMLConfigSuccess(client);
+        mockMLExecuteSuccess(client, "user_name: name of the user\nuser_age: age of the user in years");
+        mockUpdateSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
 

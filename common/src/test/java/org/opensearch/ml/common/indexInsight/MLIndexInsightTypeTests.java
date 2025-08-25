@@ -21,6 +21,7 @@ public class MLIndexInsightTypeTests {
         assertEquals(MLIndexInsightType.STATISTICAL_DATA, MLIndexInsightType.fromString("STATISTICAL_DATA"));
         assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, MLIndexInsightType.fromString("FIELD_DESCRIPTION"));
         assertEquals(MLIndexInsightType.LOG_RELATED_INDEX_CHECK, MLIndexInsightType.fromString("LOG_RELATED_INDEX_CHECK"));
+        assertEquals(MLIndexInsightType.ALL, MLIndexInsightType.fromString("ALL"));
     }
 
     @Test
