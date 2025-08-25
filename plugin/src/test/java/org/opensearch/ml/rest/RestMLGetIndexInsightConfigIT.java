@@ -14,7 +14,7 @@ import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.ml.utils.TestHelper;
 
-public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
+public class RestMLGetIndexInsightConfigIT extends RestBaseAgentToolsIT {
 
     @Before
     public void setUp() throws Exception {
@@ -27,7 +27,7 @@ public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
         deleteExternalIndices();
     }
 
-    public void testPutIndexInsightContainer_successful() throws IOException, ParseException {
+    public void testGetIndexInsightContainer_successful() throws IOException, ParseException {
         String putIndexInsightConfigBody = """
             {
                 "is_enable": true
@@ -50,6 +50,19 @@ public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
         Response indexReponse = TestHelper
             .makeRequest(client(), "GET", "/ml_index_insight/", null, TestHelper.toHttpEntity(putIndexInsightConfigBody), null);
         assertNotNull(indexReponse);
+
+        String getIndexInsightConfig = """
+            {
+                "is_enable": true
+            }
+            """;
+        Response responseGet = TestHelper
+            .makeRequest(client(), "GET", "/_plugins/_ml/index_insight_config", null, TestHelper.toHttpEntity(getIndexInsightConfig), null);
+        assertNotNull(responseGet);
+        String responseGetBody = TestHelper.httpEntityToString(responseGet.getEntity());
+        Map<String, Object> getBody = gson.fromJson(responseGetBody, Map.class);
+        assertEquals(true, getBody.getOrDefault("is_enable", false));
+
     }
 
 }
