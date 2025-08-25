@@ -203,83 +203,61 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             .build();
 
         // Execute STATISTICAL_DATA first
-        createTask(statsRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight1 -> {
-            combinedContent.append("STATISTICAL_DATA:\n").append(insight1.getContent());
-
+        executeTaskForAllType(statsRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime1 -> {
             // Execute FIELD_DESCRIPTION second
-            createTask(fieldRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight2 -> {
-                combinedContent.append("\n\nFIELD_DESCRIPTION:\n").append(insight2.getContent());
-
+            executeTaskForAllType(fieldRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime2 -> {
                 // Execute LOG_RELATED_INDEX_CHECK third
-                createTask(logRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
-                    combinedContent.append("\n\nLOG_RELATED_INDEX_CHECK:\n").append(insight3.getContent());
-
-                    // Create combined insight
-                    IndexInsight combinedInsight = IndexInsight
-                        .builder()
-                        .index(indexName)
-                        .taskType(MLIndexInsightType.ALL)
-                        .content(combinedContent.toString())
-                        .status(IndexInsightTaskStatus.COMPLETED)
-                        .lastUpdatedTime(Instant.now())
-                        .build();
-
-                    listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(combinedInsight).build());
-                }, e -> {
-                    // LOG_RELATED_INDEX_CHECK failed, return partial result
-                    IndexInsight partialInsight = IndexInsight
-                        .builder()
-                        .index(indexName)
-                        .taskType(MLIndexInsightType.ALL)
-                        .content(combinedContent.toString())
-                        .status(IndexInsightTaskStatus.COMPLETED)
-                        .lastUpdatedTime(Instant.now())
-                        .build();
-                    listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(partialInsight).build());
-                }));
+                executeTaskForAllType(logRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
+                    returnCombinedResult(indexName, combinedContent, lastTime3, listener);
+                }, e -> returnCombinedResult(indexName, combinedContent, lastTime2, listener)));
             }, e -> {
                 // FIELD_DESCRIPTION failed, try LOG_RELATED_INDEX_CHECK
-                createTask(logRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
-                    combinedContent.append("\n\nLOG_RELATED_INDEX_CHECK:\n").append(insight3.getContent());
-                    IndexInsight partialInsight = IndexInsight
-                        .builder()
-                        .index(indexName)
-                        .taskType(MLIndexInsightType.ALL)
-                        .content(combinedContent.toString())
-                        .status(IndexInsightTaskStatus.COMPLETED)
-                        .lastUpdatedTime(Instant.now())
-                        .build();
-                    listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(partialInsight).build());
-                }, e2 -> {
-                    // Both FIELD_DESCRIPTION and LOG_RELATED_INDEX_CHECK failed, return STATISTICAL_DATA only
-                    IndexInsight partialInsight = IndexInsight
-                        .builder()
-                        .index(indexName)
-                        .taskType(MLIndexInsightType.ALL)
-                        .content(combinedContent.toString())
-                        .status(IndexInsightTaskStatus.COMPLETED)
-                        .lastUpdatedTime(Instant.now())
-                        .build();
-                    listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(partialInsight).build());
-                }));
+                executeTaskForAllType(logRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
+                    returnCombinedResult(indexName, combinedContent, lastTime3, listener);
+                }, e2 -> returnCombinedResult(indexName, combinedContent, lastTime1, listener)));
             }));
         }, e -> {
             // STATISTICAL_DATA failed, skip FIELD_DESCRIPTION and only try LOG_RELATED_INDEX_CHECK
-            createTask(logRequest).execute(storageIndex, tenantId, ActionListener.wrap(insight3 -> {
-                IndexInsight partialInsight = IndexInsight
-                    .builder()
-                    .index(indexName)
-                    .taskType(MLIndexInsightType.ALL)
-                    .content("LOG_RELATED_INDEX_CHECK:\n" + insight3.getContent())
-                    .status(IndexInsightTaskStatus.COMPLETED)
-                    .lastUpdatedTime(Instant.now())
-                    .build();
-                listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(partialInsight).build());
+            executeTaskForAllType(logRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
+                returnCombinedResult(indexName, combinedContent, lastTime3, listener);
             }, e2 -> {
                 // All tasks failed
                 listener.onFailure(new RuntimeException("All index insight tasks failed"));
             }));
         }));
+    }
+
+    private void executeTaskForAllType(
+        MLIndexInsightGetRequest request,
+        String storageIndex,
+        String tenantId,
+        StringBuilder combinedContent,
+        ActionListener<Instant> listener
+    ) {
+        createTask(request).execute(storageIndex, tenantId, ActionListener.wrap(insight -> {
+            if (combinedContent.length() > 0) {
+                combinedContent.append("\n\n");
+            }
+            combinedContent.append(request.getTargetIndexInsight().name()).append(":\n").append(insight.getContent());
+            listener.onResponse(insight.getLastUpdatedTime());
+        }, listener::onFailure));
+    }
+
+    private void returnCombinedResult(
+        String indexName,
+        StringBuilder combinedContent,
+        Instant lastUpdatedTime,
+        ActionListener<MLIndexInsightGetResponse> listener
+    ) {
+        IndexInsight combinedInsight = IndexInsight
+            .builder()
+            .index(indexName)
+            .taskType(MLIndexInsightType.ALL)
+            .content(combinedContent.toString())
+            .status(IndexInsightTaskStatus.COMPLETED)
+            .lastUpdatedTime(lastUpdatedTime)
+            .build();
+        listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(combinedInsight).build());
     }
 
     IndexInsightTask createTask(MLIndexInsightGetRequest request) {
