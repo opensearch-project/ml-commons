@@ -235,7 +235,7 @@ public class ConnectorAccessControlHelper {
         return user == null || !connectorAccessControlEnabled;
     }
 
-    public boolean isAdmin(User user) {
+    public static boolean isAdmin(User user) {
         if (user == null) {
             return false;
         }

@@ -12,7 +12,6 @@ import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
-import org.opensearch.client.ResponseException;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
@@ -52,8 +51,5 @@ public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
             .makeRequest(client(), "GET", "/ml_index_insight/", null, TestHelper.toHttpEntity(registerAgentRequestBody), null);
         assertNotNull(indexReponse);
     }
-
-
-
 
 }

@@ -32,6 +32,8 @@ import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -87,6 +89,8 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
     @Mock
     private Throwable throwable;
 
+    private User user;
+
     PutIndexInsightConfigTransportAction putIndexInsightConfigTransportAction;
     MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest;
     ThreadContext threadContext;
@@ -109,11 +113,12 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
         );
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|all_access");
+
     }
 
     @Test
@@ -343,6 +348,110 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
         assertEquals(argumentCaptor.getValue().getMessage(), "Test Exception");
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_FailToPutObject() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
+        PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
+        when(sdkPutResponse.indexResponse()).thenReturn(indexResponse);
+        CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.failedFuture(new RuntimeException("fail to put object"));
+        when(sdkClient.putDataObjectAsync(any())).thenReturn(putFuture);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        CreateIndexResponse createIndexResponse = new CreateIndexResponse(true, true, "test_index");
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(createIndexResponse);
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        putIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigPutRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals(argumentCaptor.getValue().getMessage(), "fail to put object");
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_FailToGetIndexResponse() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
+        when(indexResponse.getId()).thenReturn(DEFAULT_TENANT_ID);
+        PutDataObjectResponse sdkPutResponse = mock(PutDataObjectResponse.class);
+        when(sdkPutResponse.indexResponse()).thenThrow(new RuntimeException("fail to get index response"));
+        CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
+        when(sdkClient.putDataObjectAsync(any())).thenReturn(putFuture);
+
+        AdminClient adminClient = mock(AdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        CreateIndexResponse createIndexResponse = new CreateIndexResponse(true, true, "test_index");
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(createIndexResponse);
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        putIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigPutRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals(argumentCaptor.getValue().getMessage(), "fail to get index response");
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_FailToMultiTenant() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        putIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigPutRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
+        assertEquals(argumentCaptor.getValue().getMessage(), "You don't have permission to access this resource");
+    }
+
+    @Test
+    public void testCreateIndexInsightConfig_FailDueToWrongUser() {
+        ThreadContext threadContext1 = new ThreadContext(Settings.builder().build());
+        when(threadPool.getThreadContext()).thenReturn(threadContext1);
+        threadContext1.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|null");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+
+        putIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigPutRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            argumentCaptor.getValue().getMessage(),
+            "You don't have permission to put index insight config. Please contact admin user."
+        );
     }
 
 }

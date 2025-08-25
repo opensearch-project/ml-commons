@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.indexInsight.IndexInsight.LAST_UPDATE_FIE
 import static org.opensearch.ml.common.indexInsight.IndexInsight.STATUS_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.TASK_TYPE_FIELD;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
+import static org.opensearch.ml.helper.ConnectorAccessControlHelper.isAdmin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +27,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLIndex;
@@ -34,6 +36,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -80,6 +83,15 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
         MLIndexInsightConfigPutRequest mlIndexInsightConfigPutRequest = MLIndexInsightConfigPutRequest.fromActionRequest(request);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightConfigPutRequest.getTenantId(), listener)) {
+            return;
+        }
+
+        User user = RestActionUtils.getUserContext(client);
+        // Two scenario we can put config
+        // 1. user is null: security is not enabled/super admin
+        // 2. admin user
+        if (user != null && !isAdmin(user)) {
+            listener.onFailure(new RuntimeException("You don't have permission to put index insight config. Please contact admin user."));
             return;
         }
 
