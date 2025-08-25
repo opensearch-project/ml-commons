@@ -21,33 +21,33 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class IndexInsightContainer implements ToXContentObject, Writeable {
-    private String containerName;
+public class IndexInsightConfig implements ToXContentObject, Writeable {
+    private Boolean isEnable;
     private String tenantId;
 
-    public static final String CONTAINER_NAME_FIELD = "container_name";
+    public static final String IS_ENABLE_FILED = "is_enable";
 
     @Builder(toBuilder = true)
-    public IndexInsightContainer(String containerName, String tenantId) {
-        this.containerName = containerName;
+    public IndexInsightConfig(Boolean isEnable, String tenantId) {
+        this.isEnable = isEnable;
         this.tenantId = tenantId;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(containerName);
+        out.writeBoolean(isEnable);
         out.writeOptionalString(tenantId);
     }
 
-    public IndexInsightContainer(StreamInput input) throws IOException {
-        containerName = input.readString();
+    public IndexInsightConfig(StreamInput input) throws IOException {
+        isEnable = input.readBoolean();
         tenantId = input.readOptionalString();
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(CONTAINER_NAME_FIELD, containerName);
+        builder.field(IS_ENABLE_FILED, isEnable);
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -55,16 +55,16 @@ public class IndexInsightContainer implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static IndexInsightContainer parse(XContentParser parser) throws IOException {
-        String indexName = null;
+    public static IndexInsightConfig parse(XContentParser parser) throws IOException {
+        Boolean isEnable = null;
         String tenantId = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case CONTAINER_NAME_FIELD:
-                    indexName = parser.text();
+                case IS_ENABLE_FILED:
+                    isEnable = parser.booleanValue();
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
@@ -75,6 +75,10 @@ public class IndexInsightContainer implements ToXContentObject, Writeable {
             }
 
         }
-        return IndexInsightContainer.builder().containerName(indexName).tenantId(tenantId).build();
+        return IndexInsightConfig.builder().isEnable(isEnable).tenantId(tenantId).build();
+    }
+
+    public static IndexInsightConfig fromStream(StreamInput in) throws IOException {
+        return new IndexInsightConfig(in);
     }
 }

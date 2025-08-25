@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.common.transport.indexInsight;
 
-import static org.opensearch.action.ValidateActions.addValidationError;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,53 +21,43 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Builder
-@Getter
-public class MLIndexInsightContainerCreateRequest extends ActionRequest {
-    private String containerName;
+public class MLIndexInsightConfigGetRequest extends ActionRequest {
+    @Getter
     private String tenantId;
 
-    public MLIndexInsightContainerCreateRequest(String containerName, String tenantId) {
-        this.containerName = containerName;
+    public MLIndexInsightConfigGetRequest(String tenantId) {
         this.tenantId = tenantId;
     }
 
-    public MLIndexInsightContainerCreateRequest(StreamInput in) throws IOException {
+    public MLIndexInsightConfigGetRequest(StreamInput in) throws IOException {
         super(in);
-        this.containerName = in.readString();
         this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(this.containerName);
         out.writeOptionalString(tenantId);
     }
 
-    public static MLIndexInsightContainerCreateRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLIndexInsightContainerCreateRequest) {
-            return (MLIndexInsightContainerCreateRequest) actionRequest;
+    public static MLIndexInsightConfigGetRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLIndexInsightConfigGetRequest) {
+            return (MLIndexInsightConfigGetRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLIndexInsightContainerCreateRequest(input);
+                return new MLIndexInsightConfigGetRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightContainerCreateRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLIndexInsightConfigPutRequest", e);
         }
 
     }
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
-
-        if (this.containerName == null) {
-            exception = addValidationError("Index Insight's container index can't be null", exception);
-        }
-
-        return exception;
+        return null;
     }
 }

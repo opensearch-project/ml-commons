@@ -3,8 +3,8 @@
     "schema_version": 1
   },
   "properties": {
-    "container_name": {
-      "type": "keyword"
+    "is_enable": {
+      "type": "boolean"
     },
     "tenant_id": {
       "type": "keyword"

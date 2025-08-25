@@ -24,11 +24,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteAction;
-import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightContainerDeleteRequest;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
+import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -38,11 +40,11 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
 
-public class RestMLDeleteIndexInsightContainerActionTests extends OpenSearchTestCase {
+public class RestMLGetIndexInsightConfigActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private RestMLDeleteIndexInsightContainerAction restMLDeleteIndexInsightContainerAction;
+    private RestMLGetIndexInsightConfigAction restMLGetIndexInsightConfigAction;
     private NodeClient client;
     private ThreadPool threadPool;
 
@@ -59,11 +61,11 @@ public class RestMLDeleteIndexInsightContainerActionTests extends OpenSearchTest
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
-        restMLDeleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(mlFeatureEnabledSetting);
+        restMLGetIndexInsightConfigAction = new RestMLGetIndexInsightConfigAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             invocation.getArgument(2);
             return null;
-        }).when(client).execute(eq(MLIndexInsightContainerDeleteAction.INSTANCE), any(), any());
+        }).when(client).execute(eq(MLIndexInsightConfigGetAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -75,56 +77,53 @@ public class RestMLDeleteIndexInsightContainerActionTests extends OpenSearchTest
 
     @Test
     public void testConstructor() {
-        RestMLDeleteIndexInsightContainerAction deleteIndexInsightContainerAction = new RestMLDeleteIndexInsightContainerAction(
-            mlFeatureEnabledSetting
-        );
-        assertNotNull(deleteIndexInsightContainerAction);
+        RestMLGetIndexInsightConfigAction getIndexInsightConfigAction = new RestMLGetIndexInsightConfigAction(mlFeatureEnabledSetting);
+        assertNotNull(getIndexInsightConfigAction);
     }
 
     @Test
     public void testGetName() {
-        String actionName = restMLDeleteIndexInsightContainerAction.getName();
+        String actionName = restMLGetIndexInsightConfigAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_delete_index_insight_container_action", actionName);
+        assertEquals("ml_get_index_insight_config_action", actionName);
     }
 
     @Test
     public void testRoutes() {
-        List<RestHandler.Route> routes = restMLDeleteIndexInsightContainerAction.routes();
+        List<RestHandler.Route> routes = restMLGetIndexInsightConfigAction.routes();
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.DELETE, route.getMethod());
-        assertEquals("/_plugins/_ml/index_insight_container/", route.getPath());
+        assertEquals(RestRequest.Method.GET, route.getMethod());
+        assertEquals("/_plugins/_ml/index_insight_config/", route.getPath());
     }
 
     @Test
-    public void testDeleteIndexInsightContainerRequest() throws Exception {
+    public void testCreateIndexInsightConfigRequest() throws Exception {
         RestRequest request = getRestRequest();
-        restMLDeleteIndexInsightContainerAction.handleRequest(request, channel, client);
-        ArgumentCaptor<MLIndexInsightContainerDeleteRequest> argumentCaptor = ArgumentCaptor
-            .forClass(MLIndexInsightContainerDeleteRequest.class);
-        verify(client, times(1)).execute(eq(MLIndexInsightContainerDeleteAction.INSTANCE), argumentCaptor.capture(), any());
-        MLIndexInsightContainerDeleteRequest indexInsightContainerDeleteRequest = argumentCaptor.getValue();
-        assertNotNull(indexInsightContainerDeleteRequest);
+        restMLGetIndexInsightConfigAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLIndexInsightConfigGetRequest> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightConfigGetRequest.class);
+        verify(client, times(1)).execute(eq(MLIndexInsightConfigGetAction.INSTANCE), argumentCaptor.capture(), any());
     }
 
     @Test
-    public void testDeleteIndexInsightContainerRequestWithoutEnableAgentFramework() throws Exception {
+    public void testCreateIndexInsightConfigRequestWithoutEnableAgentFramework() throws Exception {
         RestRequest request = getRestRequest();
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         IllegalStateException e = assertThrows(
             IllegalStateException.class,
-            () -> restMLDeleteIndexInsightContainerAction.handleRequest(request, channel, client)
+            () -> restMLGetIndexInsightConfigAction.handleRequest(request, channel, client)
         );
         assertEquals(e.getMessage(), AGENT_FRAMEWORK_DISABLED_ERR_MSG);
     }
 
     private RestRequest getRestRequest() {
-        RestRequest.Method method = RestRequest.Method.DELETE;
+        RestRequest.Method method = RestRequest.Method.PUT;
+        String requestContent = "{\"is_enable\":true}";
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/index_insight_container")
+            .withPath("/_plugins/_ml/index_insight_config")
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
     }

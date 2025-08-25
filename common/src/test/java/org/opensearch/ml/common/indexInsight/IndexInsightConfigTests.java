@@ -24,66 +24,66 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
 
-public class IndexInsightContainerTests {
+public class IndexInsightConfigTests {
 
     @Test
     public void testBuilder() {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName("test-index").tenantId("test-tenant").build();
+        IndexInsightConfig config = IndexInsightConfig.builder().isEnable(true).tenantId("test-tenant").build();
 
-        assertEquals("test-index", container.getContainerName());
-        assertEquals("test-tenant", container.getTenantId());
+        assertEquals(true, config.getIsEnable());
+        assertEquals("test-tenant", config.getTenantId());
     }
 
     @Test
     public void testBuilder_WithNullValues() {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName(null).tenantId(null).build();
+        IndexInsightConfig config = IndexInsightConfig.builder().isEnable(null).tenantId(null).build();
 
-        assertNull(container.getContainerName());
-        assertNull(container.getTenantId());
+        assertNull(config.getIsEnable());
+        assertNull(config.getTenantId());
     }
 
     @Test
     public void testStreamSerialization() throws IOException {
-        IndexInsightContainer original = IndexInsightContainer.builder().containerName("test-index").tenantId("test-tenant").build();
+        IndexInsightConfig original = IndexInsightConfig.builder().isEnable(true).tenantId("test-tenant").build();
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
         StreamInput input = output.bytes().streamInput();
-        String indexName = input.readString();
+        Boolean isEnable = input.readBoolean();
         String tenantId = input.readOptionalString();
 
-        assertEquals(original.getContainerName(), indexName);
+        assertEquals(original.getIsEnable(), isEnable);
         assertEquals(original.getTenantId(), tenantId);
     }
 
     @Test
     public void testToXContent() throws IOException {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName("test-index").tenantId("test-tenant").build();
+        IndexInsightConfig config = IndexInsightConfig.builder().isEnable(true).tenantId("test-tenant").build();
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
-        container.toXContent(builder, null);
+        config.toXContent(builder, null);
         String json = builder.toString();
 
-        assertTrue(json.contains("\"container_name\":\"test-index\""));
+        assertTrue(json.contains("\"is_enable\":true"));
         assertTrue(json.contains("\"tenant_id\":\"test-tenant\""));
     }
 
     @Test
     public void testToXContent_WithNullTenantId() throws IOException {
-        IndexInsightContainer container = IndexInsightContainer.builder().containerName("test-index").tenantId(null).build();
+        IndexInsightConfig config = IndexInsightConfig.builder().isEnable(true).tenantId(null).build();
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
-        container.toXContent(builder, null);
+        config.toXContent(builder, null);
         String json = builder.toString();
 
-        assertTrue(json.contains("\"container_name\":\"test-index\""));
+        assertTrue(json.contains("\"is_enable\":true"));
         assertFalse(json.contains("tenant_id"));
     }
 
     @Test
     public void testParseFromXContent() throws IOException {
-        String json = "{\"container_name\":\"test-index\",\"tenant_id\":\"test-tenant\"}";
+        String json = "{\"is_enable\": true,\"tenant_id\":\"test-tenant\"}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -93,15 +93,15 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig config = IndexInsightConfig.parse(parser);
 
-        assertEquals("test-index", container.getContainerName());
-        assertEquals("test-tenant", container.getTenantId());
+        assertEquals(true, config.getIsEnable());
+        assertEquals("test-tenant", config.getTenantId());
     }
 
     @Test
     public void testParseFromXContent_WithMissingTenantId() throws IOException {
-        String json = "{\"container_name\":\"test-index\"}";
+        String json = "{\"is_enable\":true}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -111,15 +111,15 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig config = IndexInsightConfig.parse(parser);
 
-        assertEquals("test-index", container.getContainerName());
-        assertNull(container.getTenantId());
+        assertEquals(true, config.getIsEnable());
+        assertNull(config.getTenantId());
     }
 
     @Test
     public void testParseFromXContent_WithUnknownField() throws IOException {
-        String json = "{\"container_name\":\"test-index\",\"tenant_id\":\"test-tenant\",\"unknown_field\":\"value\"}";
+        String json = "{\"is_enable\":true,\"tenant_id\":\"test-tenant\",\"unknown_field\":\"value\"}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -129,10 +129,10 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig config = IndexInsightConfig.parse(parser);
 
-        assertEquals("test-index", container.getContainerName());
-        assertEquals("test-tenant", container.getTenantId());
+        assertEquals(true, config.getIsEnable());
+        assertEquals("test-tenant", config.getTenantId());
     }
 
     @Test
@@ -147,9 +147,9 @@ public class IndexInsightContainerTests {
                 json
             );
         parser.nextToken();
-        IndexInsightContainer container = IndexInsightContainer.parse(parser);
+        IndexInsightConfig config = IndexInsightConfig.parse(parser);
 
-        assertNull(container.getContainerName());
-        assertNull(container.getTenantId());
+        assertNull(config.getIsEnable());
+        assertNull(config.getTenantId());
     }
 }

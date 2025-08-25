@@ -29,14 +29,14 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
     public void testGetIndexInsight_Success() throws IOException, ParseException, InterruptedException {
         String registerAgentRequestBody = """
             {
-                "index_name": "test_index"
+                "is_enable": true
             }
             """;
         Response response = TestHelper
             .makeRequest(
                 client(),
                 "PUT",
-                "/_plugins/_ml/index_insight_container",
+                "/_plugins/_ml/index_insight_config",
                 null,
                 TestHelper.toHttpEntity(registerAgentRequestBody),
                 null
@@ -73,14 +73,14 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
     public void testGetIndexInsightWithPattern_Success() throws IOException, ParseException, InterruptedException {
         String registerAgentRequestBody = """
             {
-                "index_name": "test_index"
+                "is_enable": true
             }
             """;
         Response response = TestHelper
             .makeRequest(
                 client(),
                 "PUT",
-                "/_plugins/_ml/index_insight_container",
+                "/_plugins/_ml/index_insight_config",
                 null,
                 TestHelper.toHttpEntity(registerAgentRequestBody),
                 null
