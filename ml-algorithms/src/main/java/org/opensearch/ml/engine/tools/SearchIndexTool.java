@@ -6,9 +6,9 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.*;
+import static org.opensearch.ml.common.utils.StringUtils.plainDoubleGson;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -45,9 +45,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
-import com.google.gson.TypeAdapter;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -179,8 +176,11 @@ public class SearchIndexTool implements Tool {
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                         index = jsonObject.get(INDEX_FIELD).getAsString();
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
-                        Gson gson = new GsonBuilder().registerTypeAdapter(Double.class, new PlainDoubleAdapter()).create();
-                        query = queryElement == null ? null : gson.toJson(new Gson().fromJson(queryElement.toString(), Map.class));
+
+                        if (queryElement != null) {
+                            Object queryObject = plainDoubleGson.fromJson(queryElement, Object.class);
+                            query = plainDoubleGson.toJson(queryObject);
+                        }
                     }
                 } catch (JsonSyntaxException e) {
                     log.error("Invalid JSON input: {}", input, e);
@@ -302,30 +302,6 @@ public class SearchIndexTool implements Tool {
         @Override
         public Map<String, Object> getDefaultAttributes() {
             return DEFAULT_ATTRIBUTES;
-        }
-    }
-
-    private class PlainDoubleAdapter extends TypeAdapter<Double> {
-        @Override
-        public void write(JsonWriter out, Double value) throws IOException {
-            if (value == null) {
-                out.nullValue();
-                return;
-            }
-
-            if (value.isNaN() || value.isInfinite()) {
-                out.nullValue();
-                return;
-            }
-
-            BigDecimal bd = BigDecimal.valueOf(value).stripTrailingZeros();
-
-            out.jsonValue(bd.toPlainString());
-        }
-
-        @Override
-        public Double read(JsonReader in) throws IOException {
-            return in.nextDouble();
         }
     }
 }

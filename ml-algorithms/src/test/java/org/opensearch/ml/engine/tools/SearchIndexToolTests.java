@@ -14,7 +14,6 @@ import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
 import java.io.InputStream;
-import java.lang.reflect.Constructor;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -40,10 +39,6 @@ import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.search.SearchModule;
 import org.opensearch.transport.client.Client;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.TypeAdapter;
 
 import lombok.SneakyThrows;
 
@@ -412,84 +407,5 @@ public class SearchIndexToolTests {
         assertTrue(result instanceof String);
         assertFalse(((String) result).contains("_shards"));
         assertFalse(((String) result).contains("took"));
-    }
-
-    // reflect method for PlainDoubleAdapter
-    private static TypeAdapter<Double> createPlainDoubleAdapter() {
-        try {
-            Class<?> clazz = Class.forName("org.opensearch.ml.engine.tools.SearchIndexTool$PlainDoubleAdapter");
-            Constructor<?> constructor = clazz.getDeclaredConstructor(org.opensearch.ml.engine.tools.SearchIndexTool.class);
-            constructor.setAccessible(true);
-            Object adapterInstance = constructor.newInstance(new org.opensearch.ml.engine.tools.SearchIndexTool(null, null));
-            return (TypeAdapter<Double>) adapterInstance;
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create PlainDoubleAdapter via reflection", e);
-        }
-    }
-
-    @Test
-    public void testSerializeScientificNotation_RemovesExponent() {
-        Map<String, Object> data = Map.of("test1", 1e30, "test2", 1.2e3, "test3", 9.5e-3, "test4", 1.56e-30);
-
-        Gson gson = new GsonBuilder().registerTypeAdapter(Double.class, createPlainDoubleAdapter()).create();
-
-        String json = gson.toJson(data);
-        assertTrue(json.contains("1000000000000000000000000000000"));
-        assertTrue(json.contains("1200"));
-        assertTrue(json.contains("0.0095"));
-        assertTrue(json.contains("0.00000000000000000000000000000156"));
-
-    }
-
-    @Test
-    public void testSerializeInteger_RemovesDecimalPoint() {
-        Map<String, Object> data = Map.of("intLike", 42.0);
-
-        Gson gson = new GsonBuilder().registerTypeAdapter(Double.class, createPlainDoubleAdapter()).create();
-
-        String json = gson.toJson(data);
-
-        assertTrue(json.contains("42"));
-        assertFalse(json.contains("42.0"));
-    }
-
-    @Test
-    public void testSerializeNaNAndInfinity_BecomesNull() {
-        Map<String, Double> data = new java.util.HashMap<>();
-        data.put("nan", Double.NaN);
-        data.put("inf", Double.POSITIVE_INFINITY);
-        data.put("ninf", Double.NEGATIVE_INFINITY);
-
-        Gson gson = new GsonBuilder().serializeNulls().registerTypeAdapter(Double.class, createPlainDoubleAdapter()).create();
-
-        String json = gson.toJson(data);
-
-        assertTrue(json.contains("\"nan\":null"));
-        assertTrue(json.contains("\"inf\":null"));
-        assertTrue(json.contains("\"ninf\":null"));
-    }
-
-    @Test
-    public void testDeserializeBackToDouble() {
-        String json = "{\"value\": 12345.6789}";
-
-        Gson gson = new GsonBuilder().registerTypeAdapter(Double.class, createPlainDoubleAdapter()).create();
-
-        Map<?, ?> result = gson.fromJson(json, Map.class);
-
-        Object value = result.get("value");
-        assertTrue(value instanceof Double);
-        assertEquals(12345.6789, (Double) value, 1e-7);
-    }
-
-    @Test
-    public void testQuotedScientificNotation_RemainsString() {
-        String json = "{\"code\":\"1e-6\"}";
-
-        Gson gson = new GsonBuilder().registerTypeAdapter(Double.class, createPlainDoubleAdapter()).create();
-
-        Map<?, ?> result = gson.fromJson(json, Map.class);
-
-        assertEquals("1e-6", result.get("code"));
     }
 }
