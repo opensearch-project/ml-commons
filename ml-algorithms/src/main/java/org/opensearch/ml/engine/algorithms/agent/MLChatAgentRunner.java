@@ -34,6 +34,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutpu
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
+import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
@@ -326,7 +327,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
-
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
@@ -442,6 +442,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             toolCallId,
                             functionCalling
                         );
+
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
                         StringSubstitutor substitutor = new StringSubstitutor(
@@ -664,11 +665,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
                     llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
                     tools.get(action).run(llmToolTmpParameters, toolListener); // run tool
+                    // update the tmpParameters if the tool run produce new scratch pad
+                    if (llmToolTmpParameters.containsKey(SCRATCHPAD_NOTES_KEY) && llmToolTmpParameters.get(SCRATCHPAD_NOTES_KEY) != "") {
+                        tmpParameters.put(SCRATCHPAD_NOTES_KEY, llmToolTmpParameters.getOrDefault(SCRATCHPAD_NOTES_KEY, ""));
+                    }
+                    // TODO
                 } else {
                     Map<String, String> parameters = new HashMap<>();
                     parameters.putAll(tmpParameters);
                     parameters.putAll(toolParams);
                     tools.get(action).run(parameters, toolListener); // run tool
+                    // update the tmpParameters if the tool run produce new scratch pad
+                    if (parameters.containsKey(SCRATCHPAD_NOTES_KEY) && parameters.get(SCRATCHPAD_NOTES_KEY) != "") {
+                        tmpParameters.put(SCRATCHPAD_NOTES_KEY, parameters.getOrDefault(SCRATCHPAD_NOTES_KEY, ""));
+                    }
+                    // TODO
                 }
             } catch (Exception e) {
                 log.error("Failed to run tool {}", action, e);
