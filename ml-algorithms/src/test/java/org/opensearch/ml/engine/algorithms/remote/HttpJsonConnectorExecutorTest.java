@@ -50,13 +50,15 @@ public class HttpJsonConnectorExecutorTest {
         MockitoAnnotations.openMocks(this);
     }
 
+    private final String mockUrl = "http://mockai.com/mock";
+
     @Test
     public void invokeRemoteService_WrongHttpMethod() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
             .method("wrong_method")
-            .url("http://openai.com/mock")
+            .url(mockUrl)
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Connector connector = HttpConnector
@@ -174,13 +176,7 @@ public class HttpJsonConnectorExecutorTest {
 
     @Test
     public void invokeRemoteService_Empty_payload() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://openai.com/mock")
-            .requestBody("")
-            .build();
+        ConnectorAction predictAction = ConnectorAction.builder().actionType(PREDICT).method("POST").url(mockUrl).requestBody("").build();
         Connector connector = HttpConnector
             .builder()
             .name("test connector")
@@ -200,13 +196,7 @@ public class HttpJsonConnectorExecutorTest {
 
     @Test
     public void invokeRemoteService_get_request() {
-        ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("GET")
-            .url("http://openai.com/mock")
-            .requestBody("")
-            .build();
+        ConnectorAction predictAction = ConnectorAction.builder().actionType(PREDICT).method("GET").url(mockUrl).requestBody("").build();
         Connector connector = HttpConnector
             .builder()
             .name("test connector")
@@ -224,7 +214,7 @@ public class HttpJsonConnectorExecutorTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://openai.com/mock")
+            .url(mockUrl)
             .requestBody("hello world")
             .build();
         Connector connector = HttpConnector
@@ -245,7 +235,7 @@ public class HttpJsonConnectorExecutorTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://openai.com/mock")
+            .url(mockUrl)
             .requestBody("hello world")
             .build();
         Connector connector = HttpConnector
