@@ -7,7 +7,6 @@ package org.opensearch.ml.common.model;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.stopWordsIndices;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
@@ -225,8 +224,6 @@ public class LocalRegexGuardrail extends Guardrail {
         }
         Map<String, Object> queryBodyMap = Map.of("query", Map.of("percolate", Map.of("field", "query", "document", documentMap)));
         CountDownLatch latch = new CountDownLatch(1);
-        ThreadContext.StoredContext context = null;
-
         try {
             queryBody = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(queryBodyMap));
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -249,25 +246,15 @@ public class LocalRegexGuardrail extends Guardrail {
                 .searchSourceBuilder(searchSourceBuilder)
                 .tenantId(tenantId)
                 .build();
-            if (isStopWordsSystemIndex(indexName)) {
-                context = client.threadPool().getThreadContext().stashContext();
-                ThreadContext.StoredContext finalContext = context;
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.runBefore(responseListener, finalContext::restore)));
-            } else {
-                sdkClient
-                    .searchDataObjectAsync(searchDataObjectRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(responseListener));
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.runBefore(responseListener, context::restore)));
             }
         } catch (Exception e) {
             log.error("[validateStopWords] Searching stop words index failed.", e);
             latch.countDown();
             passedStopWordCheck.set(true);
-        } finally {
-            if (context != null) {
-                context.close();
-            }
         }
 
         try {
@@ -277,9 +264,5 @@ public class LocalRegexGuardrail extends Guardrail {
             throw new IllegalStateException(e);
         }
         return passedStopWordCheck.get();
-    }
-
-    private boolean isStopWordsSystemIndex(String index) {
-        return stopWordsIndices.contains(index);
     }
 }
