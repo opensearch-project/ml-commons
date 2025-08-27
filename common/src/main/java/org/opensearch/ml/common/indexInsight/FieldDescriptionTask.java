@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -87,19 +88,20 @@ public class FieldDescriptionTask implements IndexInsightTask {
         String storageIndex,
         ActionListener<IndexInsight> listener
     ) {
-        Map<String, Object> mappingSource = (Map<String, Object>) statisticalContentMap.get(IMPORTANT_COLUMN_KEYWORD);
-
-        if (mappingSource == null || mappingSource.isEmpty()) {
+        Map<String, Object> mappingSource;
+        Object obj = statisticalContentMap.get(IMPORTANT_COLUMN_KEYWORD);
+        if (!(obj instanceof Map)) {
             log.error("No mapping properties found for index: {}", sourceIndex);
             saveFailedStatus(storageIndex);
-            listener.onFailure(new IllegalStateException("No mapping properties found for index: " + sourceIndex));
+            listener.onFailure(new IllegalStateException("No data distribution found for index: " + sourceIndex));
             return;
         }
+        mappingSource = (Map<String, Object>) obj;
 
         List<String> allFields = List.of(mappingSource.keySet().toArray(new String[0]));
 
         if (allFields.isEmpty()) {
-            log.warn("No fields found for index: {}", sourceIndex);
+            log.warn("No important fields found for index: {}", sourceIndex);
             saveResult("", storageIndex, ActionListener.wrap(insight -> {
                 log.info("Empty field description completed for: {}", sourceIndex);
                 listener.onResponse(insight);
@@ -194,7 +196,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 log.error("Error parsing response for batch in index {}: {}", sourceIndex, e.getMessage());
                 listener.onFailure(e);
             }
-        }, listener::onFailure));
+        }, e -> {listener.onFailure(e);}));
     }
 
     private String generateBatchPrompt(List<String> batchFields, Map<String, Object> statisticalContentMap) {
