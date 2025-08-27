@@ -581,4 +581,324 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
+    public void testDeployRemoteModel_success() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getModelId()).thenReturn("test-model-id");
+        when(mlModel.getTenantId()).thenReturn("test-tenant");
+        when(mlModel.getModelContentHash()).thenReturn("test-hash");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        MLTask mlTask = mock(MLTask.class);
+        when(mlTask.getTaskId()).thenReturn("test-task-id");
+
+        DiscoveryNode node = mock(DiscoveryNode.class);
+        when(node.getId()).thenReturn("node1");
+        List<DiscoveryNode> nodes = List.of(node);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(3);
+            listener.onResponse(mock(UpdateResponse.class));
+            return null;
+        }).when(mlModelManager).updateModel(anyString(), anyString(), anyMap(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mock(MLDeployModelNodesResponse.class));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        when(mlTaskManager.contains(anyString())).thenReturn(true);
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.deployRemoteModel(mlModel, mlTask, "local-node", nodes, true, listener);
+
+        verify(listener).onResponse(any(MLDeployModelResponse.class));
+    }
+
+    public void testDeployRemoteModel_failure() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getModelId()).thenReturn("test-model-id");
+        when(mlModel.getTenantId()).thenReturn("test-tenant");
+        when(mlModel.getModelContentHash()).thenReturn("test-hash");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        MLTask mlTask = mock(MLTask.class);
+        when(mlTask.getTaskId()).thenReturn("test-task-id");
+
+        DiscoveryNode node = mock(DiscoveryNode.class);
+        when(node.getId()).thenReturn("node1");
+        List<DiscoveryNode> nodes = List.of(node);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("Update failed"));
+            return null;
+        }).when(mlModelManager).updateModel(anyString(), anyString(), anyMap(), any());
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.deployRemoteModel(mlModel, mlTask, "local-node", nodes, true, listener);
+
+        verify(listener).onFailure(any(RuntimeException.class));
+    }
+
+    public void testDoExecute_deployToAllNodes_false() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        // Use the existing mlDeployModelRequest but override specific nodes
+        when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1", "node2" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        // Set up multiple eligible nodes
+        DiscoveryNode node1 = mock(DiscoveryNode.class);
+        DiscoveryNode node2 = mock(DiscoveryNode.class);
+        when(node1.getId()).thenReturn("node1");
+        when(node2.getId()).thenReturn("node2");
+        DiscoveryNode[] nodes = { node1, node2 };
+        when(nodeFilter.getEligibleNodes(any())).thenReturn(nodes);
+        when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(null);
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("task-id");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), any());
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onResponse(any(MLDeployModelResponse.class));
+    }
+
+    public void testDoExecute_workerNodesConflict() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        // Use the existing mlDeployModelRequest but override specific nodes
+        when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        // Set up eligible nodes
+        DiscoveryNode node1 = mock(DiscoveryNode.class);
+        DiscoveryNode node2 = mock(DiscoveryNode.class);
+        when(node1.getId()).thenReturn("node1");
+        when(node2.getId()).thenReturn("node2");
+        DiscoveryNode[] nodes = { node1, node2 };
+        when(nodeFilter.getEligibleNodes(any())).thenReturn(nodes);
+
+        // Set up worker nodes conflict - model is already deployed on node2 but target is node1
+        when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(new String[] { "node2" });
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    public void testDoExecute_noEligibleNodes() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        // Use the existing mlDeployModelRequest but override to request non-existent node
+        when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "non-existent-node" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        // Set up eligible nodes that don't match the requested nodes
+        DiscoveryNode existingNode = mock(DiscoveryNode.class);
+        when(existingNode.getId()).thenReturn("existing-node");
+        DiscoveryNode[] nodes = { existingNode };
+        when(nodeFilter.getEligibleNodes(any())).thenReturn(nodes);
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    public void testDoExecute_deployToAllNodes_true() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        // Use null or empty array to trigger deployToAllNodes = true
+        when(mlDeployModelRequest.getModelNodeIds()).thenReturn(null);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        // Set up eligible nodes
+        DiscoveryNode node1 = mock(DiscoveryNode.class);
+        DiscoveryNode node2 = mock(DiscoveryNode.class);
+        when(node1.getId()).thenReturn("node1");
+        when(node2.getId()).thenReturn("node2");
+        DiscoveryNode[] nodes = { node1, node2 };
+        when(nodeFilter.getEligibleNodes(any())).thenReturn(nodes);
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("task-id");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), any());
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onResponse(any(MLDeployModelResponse.class));
+    }
+
+    public void testDoExecute_accessControlFailure() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        // Mock access control to return false (no access)
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), anyString(), any(), any());
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    public void testDoExecute_hiddenModelNonSuperAdmin() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        // Mock the isSuperAdminUserWrapper to return false (not super admin)
+        TransportDeployModelAction spyAction = spy(transportDeployModelAction);
+        doReturn(false).when(spyAction).isSuperAdminUserWrapper(any(), any());
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        spyAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onFailure(any(OpenSearchStatusException.class));
+    }
+
+    public void testDoExecute_taskManagerNotContains() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("task-id");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), any());
+
+        // Mock mlTaskManager.contains to return false
+        when(mlTaskManager.contains(anyString())).thenReturn(false);
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onResponse(any(MLDeployModelResponse.class));
+    }
+
+    public void testDoExecute_customDeploymentNotAllowed() {
+        // Override the settings to disable custom deployment plan
+        Settings restrictiveSettings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), false).build();
+        ClusterSettings restrictiveClusterSettings = new ClusterSettings(
+            restrictiveSettings,
+            new HashSet<>(Arrays.asList(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN))
+        );
+        when(clusterService.getClusterSettings()).thenReturn(restrictiveClusterSettings);
+        when(clusterService.getSettings()).thenReturn(restrictiveSettings);
+
+        // Create a new instance with restrictive settings
+        TransportDeployModelAction restrictiveAction = new TransportDeployModelAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlTaskManager,
+            clusterService,
+            threadPool,
+            client,
+            sdkClient,
+            namedXContentRegistry,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlModelManager,
+            mlStats,
+            restrictiveSettings,
+            modelAccessControlHelper,
+            mlFeatureEnabledSetting
+        );
+
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getModelGroupId()).thenReturn("test-group-id");
+        when(mlModel.getIsHidden()).thenReturn(false);
+
+        // Set specific nodes (not deploy to all)
+        when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), any());
+
+        ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
+        restrictiveAction.doExecute(null, mlDeployModelRequest, listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
 }
