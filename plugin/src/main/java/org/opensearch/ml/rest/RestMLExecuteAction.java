@@ -110,6 +110,10 @@ public class RestMLExecuteAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLExecuteTaskRequest getRequest(RestRequest request) throws IOException {
+        // DEBUG: Log raw request content
+        String requestContent = request.content().utf8ToString();
+        log.info("DEBUG: Raw request content: {}", requestContent);
+
         XContentParser parser = request.contentParser();
         boolean async = isAsync(request);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

@@ -65,6 +65,8 @@ import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemoryRecord;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -673,6 +675,65 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
         assertEquals(1, secondModelTensorList.size());
         assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testSaveAndReturnFinalResultWithBedrockAgentCoreMemory() {
+        BedrockAgentCoreMemory bedrockMemory = mock(BedrockAgentCoreMemory.class);
+        String parentInteractionId = "parent123";
+        String executorMemoryId = "executor456";
+        String executorParentId = "executorParent789";
+        String finalResult = "This is the final result from Bedrock";
+        String input = "What is the weather?";
+
+        // Mock the save operation to succeed
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(2);
+            listener.onResponse("saved-successfully");
+            return null;
+        }).when(bedrockMemory).save(any(String.class), any(BedrockAgentCoreMemoryRecord.class), any(ActionListener.class));
+
+        when(bedrockMemory.getSessionId()).thenReturn("bedrock-session-123");
+
+        ArgumentCaptor<Object> objectCaptor = ArgumentCaptor.forClass(Object.class);
+
+        mlPlanExecuteAndReflectAgentRunner
+            .saveAndReturnFinalResult(
+                bedrockMemory,
+                parentInteractionId,
+                executorMemoryId,
+                executorParentId,
+                finalResult,
+                input,
+                agentActionListener
+            );
+
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object response = objectCaptor.getValue();
+        assertTrue(response instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
+
+        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        // Verify first ModelTensors contains memory IDs
+        ModelTensors firstModelTensors = mlModelOutputs.get(0);
+        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
+        assertEquals(4, firstModelTensorList.size());
+        assertEquals(executorMemoryId, firstModelTensorList.get(0).getResult());
+        assertEquals(parentInteractionId, firstModelTensorList.get(1).getResult());
+        assertEquals(executorMemoryId, firstModelTensorList.get(2).getResult());
+        assertEquals(executorParentId, firstModelTensorList.get(3).getResult());
+
+        // Verify second ModelTensors contains the actual response
+        ModelTensors secondModelTensors = mlModelOutputs.get(1);
+        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
+        assertEquals(1, secondModelTensorList.size());
+        assertEquals("response", secondModelTensorList.get(0).getName());
+        assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
+
+        // Verify BedrockAgentCoreMemory.save was called with correct parameters
+        verify(bedrockMemory).save(eq("bedrock-session-123"), any(BedrockAgentCoreMemoryRecord.class), any(ActionListener.class));
     }
 
     @Test

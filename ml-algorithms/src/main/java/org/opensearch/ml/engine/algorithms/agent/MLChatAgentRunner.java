@@ -79,6 +79,8 @@ import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemoryRecord;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
@@ -95,6 +97,9 @@ import lombok.extern.log4j.Log4j2;
 @Data
 @NoArgsConstructor
 public class MLChatAgentRunner implements MLAgentRunner {
+
+    // CRITICAL FIX: Cache BedrockAgentCoreMemory configuration to persist across internal calls
+    private static final Map<String, Map<String, String>> bedrockMemoryConfigCache = new ConcurrentHashMap<>();
 
     public static final String SESSION_ID = "session_id";
     public static final String LLM_TOOL_PROMPT_PREFIX = "LanguageModelTool.prompt_prefix";
@@ -160,6 +165,201 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
+        Map<String, String> params = setupParameters(mlAgent, inputParams);
+        FunctionCalling functionCalling = configureFunctionCalling(params);
+        String memoryType = configureMemoryType(mlAgent, params);
+        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+        String appType = mlAgent.getAppType();
+        String title = params.get(MLAgentExecutor.QUESTION);
+        String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
+        String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
+        String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
+        int messageHistoryLimit = getMessageHistoryLimit(params);
+
+        // Handle different memory types
+        Object memoryFactory = memoryFactoryMap.get(memoryType);
+        if (memoryFactory instanceof ConversationIndexMemory.Factory) {
+            ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactory;
+            conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+                // TODO: call runAgent directly if messageHistoryLimit == 0
+                memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+                    List<Message> messageList = new ArrayList<>();
+                    for (Interaction next : r) {
+                        String question = next.getInput();
+                        String response = next.getResponse();
+                        // As we store the conversation with empty response first and then update when have final answer,
+                        // filter out those in-flight requests when run in parallel
+                        if (Strings.isNullOrEmpty(response)) {
+                            continue;
+                        }
+                        messageList
+                            .add(
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .sessionId(memory.getConversationId())
+                                    .question(question)
+                                    .response(response)
+                                    .build()
+                            );
+                    }
+                    if (!messageList.isEmpty()) {
+                        if (chatHistoryQuestionTemplate == null) {
+                            StringBuilder chatHistoryBuilder = new StringBuilder();
+                            chatHistoryBuilder.append(chatHistoryPrefix);
+                            for (Message message : messageList) {
+                                chatHistoryBuilder.append(message.toString()).append("\n");
+                            }
+                            params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                            inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                        } else {
+                            List<String> chatHistory = new ArrayList<>();
+                            for (Message message : messageList) {
+                                Map<String, String> messageParams = new HashMap<>();
+                                messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                                chatHistory.add(chatQuestionMessage);
+
+                                messageParams.clear();
+                                messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
+                                substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatResponseMessage);
+                            }
+                            params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                            params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                            inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        }
+                    }
+
+                    runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                }, e -> {
+                    log.error("Failed to get chat history", e);
+                    listener.onFailure(e);
+                }), messageHistoryLimit);
+            }, listener::onFailure));
+        } else if (memoryFactory instanceof BedrockAgentCoreMemory.Factory) {
+            BedrockAgentCoreMemory.Factory bedrockMemoryFactory = (BedrockAgentCoreMemory.Factory) memoryFactory;
+
+            // Build parameters for BedrockAgentCoreMemory from request parameters
+            Map<String, Object> memoryParams = new HashMap<>();
+            memoryParams.put("memory_arn", params.get("memory_arn"));
+            memoryParams.put("region", params.get("memory_region"));
+
+            // CRITICAL FIX: Use executor_memory_id for executor agents, fallback to memoryId for PER agent
+            String sessionIdToUse = params.get("executor_memory_id");
+            if (sessionIdToUse == null) {
+                sessionIdToUse = memoryId;
+            }
+            memoryParams.put("session_id", sessionIdToUse);
+            log
+                .info(
+                    "DEBUG: Using session ID for BedrockAgentCoreMemory: {} (executor_memory_id: {})",
+                    sessionIdToUse,
+                    params.get("executor_memory_id")
+                );
+
+            // Use agent ID from parameters (the actual agent execution ID) as agent_id - MANDATORY
+            String agentIdToUse = params.get("agent_id");
+            if (agentIdToUse == null) {
+                throw new IllegalArgumentException(
+                    "Agent ID is mandatory but not found in parameters. This indicates a configuration issue - please check agent setup."
+                );
+            }
+            memoryParams.put("agent_id", agentIdToUse);
+            log.info("DEBUG: Using mandatory agent ID for BedrockAgentCoreMemory actorId: {}", agentIdToUse);
+
+            // Add credentials if available
+            Map<String, String> credentials = new HashMap<>();
+            if (params.get("memory_access_key") != null) {
+                credentials.put("access_key", params.get("memory_access_key"));
+            }
+            if (params.get("memory_secret_key") != null) {
+                credentials.put("secret_key", params.get("memory_secret_key"));
+            }
+            if (params.get("memory_session_token") != null) {
+                credentials.put("session_token", params.get("memory_session_token"));
+            }
+            if (!credentials.isEmpty()) {
+                memoryParams.put("credentials", credentials);
+            }
+
+            bedrockMemoryFactory.create(memoryParams, ActionListener.<BedrockAgentCoreMemory>wrap(memory -> {
+                // BedrockAgentCoreMemory uses different message format, get messages as List<Interaction>
+                memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
+                    List<Message> messageList = new ArrayList<>();
+                    for (Interaction interaction : interactions) {
+                        String question = interaction.getInput();
+                        String response = interaction.getResponse();
+
+                        if (Strings.isNullOrEmpty(response)) {
+                            continue;
+                        }
+
+                        messageList
+                            .add(
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .sessionId(memory.getConversationId())
+                                    .question(question)
+                                    .response(response)
+                                    .build()
+                            );
+                    }
+
+                    // Use same chat history processing as ConversationIndexMemory
+                    if (!messageList.isEmpty()) {
+                        if (Strings.isNullOrEmpty(chatHistoryQuestionTemplate) || Strings.isNullOrEmpty(chatHistoryResponseTemplate)) {
+                            StringBuilder chatHistoryBuilder = new StringBuilder();
+                            for (Message message : messageList) {
+                                chatHistoryBuilder.append(message.toString()).append("\n");
+                            }
+                            params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                            inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                        } else {
+                            List<String> chatHistory = new ArrayList<>();
+                            for (Message message : messageList) {
+                                Map<String, String> messageParams = new HashMap<>();
+                                messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                                chatHistory.add(chatQuestionMessage);
+
+                                messageParams.clear();
+                                messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
+                                substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatResponseMessage);
+                            }
+                            params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                            params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                            inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        }
+                    }
+
+                    runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                }, e -> {
+                    log.error("Failed to get chat history from BedrockAgentCoreMemory", e);
+                    listener.onFailure(e);
+                }));
+            }, listener::onFailure));
+        } else {
+            listener
+                .onFailure(
+                    new IllegalArgumentException(
+                        "Unsupported memory factory type: " + (memoryFactory != null ? memoryFactory.getClass() : "null")
+                    )
+                );
+        }
+    }
+
+    private Map<String, String> setupParameters(MLAgent mlAgent, Map<String, String> inputParams) {
         Map<String, String> params = new HashMap<>();
         if (mlAgent.getParameters() != null) {
             params.putAll(mlAgent.getParameters());
@@ -169,91 +369,81 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             }
         }
-
         params.putAll(inputParams);
+        return params;
+    }
 
+    private FunctionCalling configureFunctionCalling(Map<String, String> params) {
         String llmInterface = params.get(LLM_INTERFACE);
         FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
         if (functionCalling != null) {
             functionCalling.configure(params);
         }
+        return functionCalling;
+    }
 
+    private String configureMemoryType(MLAgent mlAgent, Map<String, String> params) {
         String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
-        String appType = mlAgent.getAppType();
-        String title = params.get(MLAgentExecutor.QUESTION);
-        String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
-        String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
-        String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
-        int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
-                List<Message> messageList = new ArrayList<>();
-                for (Interaction next : r) {
-                    String question = next.getInput();
-                    String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when have final answer,
-                    // filter out those in-flight requests when run in parallel
-                    if (Strings.isNullOrEmpty(response)) {
-                        continue;
-                    }
-                    messageList
-                        .add(
-                            ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
-                                .question(question)
-                                .response(response)
-                                .build()
-                        );
-                }
-                if (!messageList.isEmpty()) {
-                    if (chatHistoryQuestionTemplate == null) {
-                        StringBuilder chatHistoryBuilder = new StringBuilder();
-                        chatHistoryBuilder.append(chatHistoryPrefix);
-                        for (Message message : messageList) {
-                            chatHistoryBuilder.append(message.toString()).append("\n");
-                        }
-                        params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+        // DEBUG: Log all parameters available in MLChatAgentRunner
+        log.info("DEBUG: MLChatAgentRunner params keys: {}", params.keySet());
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-                    } else {
-                        List<String> chatHistory = new ArrayList<>();
-                        for (Message message : messageList) {
-                            Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+        // Check if memory parameters indicate BedrockAgentCoreMemory (from internal calls)
+        String memoryTypeFromParams = params.get("memory_type");
+        if ("bedrock_agentcore_memory".equals(memoryTypeFromParams)) {
+            memoryType = memoryTypeFromParams;
+            log.info("Using BedrockAgentCoreMemory from parameters in internal call");
+            cacheBedrockMemoryConfig(mlAgent, params);
+        } else if (mlAgent.getMemory() != null && "bedrock_agentcore_memory".equals(mlAgent.getMemory().getType())) {
+            memoryType = "bedrock_agentcore_memory";
+            log.info("DEBUG: Agent has bedrock_agentcore_memory but parameters missing - restoring from cache");
+            restoreBedrockMemoryConfig(mlAgent, params);
+        }
+        return memoryType;
+    }
 
-                            StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
-                            chatHistory.add(chatQuestionMessage);
+    private void cacheBedrockMemoryConfig(MLAgent mlAgent, Map<String, String> params) {
+        String cacheKey = mlAgent.getName() + "_bedrock_config";
+        Map<String, String> bedrockConfig = new HashMap<>();
+        bedrockConfig.put("memory_type", "bedrock_agentcore_memory");
+        bedrockConfig.put("memory_arn", params.get("memory_arn"));
+        bedrockConfig.put("memory_region", params.get("memory_region"));
+        bedrockConfig.put("memory_access_key", params.get("memory_access_key"));
+        bedrockConfig.put("memory_secret_key", params.get("memory_secret_key"));
+        bedrockConfig.put("memory_session_token", params.get("memory_session_token"));
+        bedrockMemoryConfigCache.put(cacheKey, bedrockConfig);
+        log.info("DEBUG: Cached BedrockAgentCoreMemory config for agent: {}", mlAgent.getName());
+    }
 
-                            messageParams.clear();
-                            messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
-                            substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
-                            chatHistory.add(chatResponseMessage);
-                        }
-                        params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                        params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+    private void restoreBedrockMemoryConfig(MLAgent mlAgent, Map<String, String> params) {
+        String cacheKey = mlAgent.getName() + "_bedrock_config";
+        Map<String, String> cachedConfig = bedrockMemoryConfigCache.get(cacheKey);
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                    }
-                }
-
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
-            }, e -> {
-                log.error("Failed to get chat history", e);
-                listener.onFailure(e);
-            }), messageHistoryLimit);
-        }, listener::onFailure));
+        if (cachedConfig != null) {
+            params.put("memory_type", cachedConfig.get("memory_type"));
+            params.put("memory_arn", cachedConfig.get("memory_arn"));
+            params.put("memory_region", cachedConfig.get("memory_region"));
+            params.put("memory_access_key", cachedConfig.get("memory_access_key"));
+            params.put("memory_secret_key", cachedConfig.get("memory_secret_key"));
+            params.put("memory_session_token", cachedConfig.get("memory_session_token"));
+            log.info("DEBUG: Restored BedrockAgentCoreMemory parameters to params for subsequent calls");
+        } else {
+            log.info("DEBUG: No cached BedrockAgentCoreMemory config found - subsequent call will fail");
+        }
     }
 
     private void runAgent(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        String sessionId,
+        FunctionCalling functionCalling
+    ) {
+        setupToolsAndExecute(mlAgent, params, listener, memory, sessionId, functionCalling);
+    }
+
+    private void setupToolsAndExecute(
         MLAgent mlAgent,
         Map<String, String> params,
         ActionListener<Object> listener,
@@ -281,6 +471,34 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }));
     }
 
+    private static class ReActExecutionContext {
+        final Map<String, String> parameters;
+        final String prompt;
+        final String question;
+        final String parentInteractionId;
+        final boolean verbose;
+        final boolean traceDisabled;
+        final Memory memory;
+
+        ReActExecutionContext(
+            Map<String, String> parameters,
+            String prompt,
+            String question,
+            String parentInteractionId,
+            boolean verbose,
+            boolean traceDisabled,
+            Memory memory
+        ) {
+            this.parameters = parameters;
+            this.prompt = prompt;
+            this.question = question;
+            this.parentInteractionId = parentInteractionId;
+            this.verbose = verbose;
+            this.traceDisabled = traceDisabled;
+            this.memory = memory;
+        }
+    }
+
     private void runReAct(
         LLMSpec llm,
         Map<String, Tool> tools,
@@ -292,18 +510,55 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ActionListener<Object> listener,
         FunctionCalling functionCalling
     ) {
+        ReActExecutionContext context = setupReActExecution(llm, tools, parameters, memory);
+        executeReActLoop(context, llm, tools, toolSpecMap, memory, sessionId, tenantId, listener, functionCalling);
+    }
+
+    private ReActExecutionContext setupReActExecution(LLMSpec llm, Map<String, Tool> tools, Map<String, String> parameters, Memory memory) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
-        final String finalPrompt = prompt;
 
         String question = tmpParameters.get(MLAgentExecutor.QUESTION);
         String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
         boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
         boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
 
+        // DEBUG: Log question parameter details
+        log
+            .info(
+                "DEBUG: Question parameter - value: '{}', isNull: {}, isEmpty: {}",
+                question,
+                question == null,
+                question != null && question.isEmpty()
+            );
+
+        return new ReActExecutionContext(tmpParameters, prompt, question, parentInteractionId, verbose, traceDisabled, memory);
+    }
+
+    private void executeReActLoop(
+        ReActExecutionContext context,
+        LLMSpec llm,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        Memory memory,
+        String sessionId,
+        String tenantId,
+        ActionListener<Object> listener,
+        FunctionCalling functionCalling
+    ) {
+        // Extract context variables for easier access
+        Map<String, String> tmpParameters = context.parameters;
+        String prompt = context.prompt;
+        final String finalPrompt = prompt;
+        String question = context.question;
+        String parentInteractionId = context.parentInteractionId;
+        boolean verbose = context.verbose;
+        boolean traceDisabled = context.traceDisabled;
+
         // Create root interaction.
-        ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
+        // Support both ConversationIndexMemory and BedrockAgentCoreMemory
+        Object memoryObject = memory;
 
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
@@ -336,17 +591,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
                 if (finalI % 2 == 0) {
-                    MLTaskResponse llmResponse = (MLTaskResponse) output;
-                    ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
-                    List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
-                    Map<String, String> modelOutput = parseLLMOutput(
-                        parameters,
-                        tmpModelTensorOutput,
-                        llmResponsePatterns,
-                        tools.keySet(),
-                        interactions,
-                        functionCalling
-                    );
+                    Map<String, String> modelOutput = parseLLMResponseOutput(output, tmpParameters, tools, interactions, functionCalling);
 
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
@@ -365,7 +610,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             finalAnswer
@@ -388,9 +633,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .build()
                         );
 
+                    String memoryType;
+                    if (memory instanceof ConversationIndexMemory) {
+                        memoryType = ((ConversationIndexMemory) memory).getType();
+                    } else {
+                        memoryType = "bedrock_agentcore_memory";
+                    }
+
                     saveTraceData(
-                        conversationIndexMemory,
-                        memory.getType(),
+                        memory,
+                        memoryType,
                         question,
                         thoughtResponse,
                         sessionId,
@@ -409,7 +661,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             lastThought,
@@ -467,7 +719,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
                     saveTraceData(
-                        conversationIndexMemory,
+                        memory,
                         "ReAct",
                         lastActionInput.get(),
                         outputToOutputString(filteredOutput),
@@ -508,7 +760,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             lastThought,
@@ -681,9 +933,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
+    private Map<String, String> parseLLMResponseOutput(
+        Object output,
+        Map<String, String> tmpParameters,
+        Map<String, Tool> tools,
+        List<String> interactions,
+        FunctionCalling functionCalling
+    ) {
+        MLTaskResponse llmResponse = (MLTaskResponse) output;
+        ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
+        List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
+        return parseLLMOutput(tmpParameters, tmpModelTensorOutput, llmResponsePatterns, tools.keySet(), interactions, functionCalling);
+    }
+
     public static void saveTraceData(
-        ConversationIndexMemory conversationIndexMemory,
-        String memory,
+        Object memory,
+        String memoryType,
         String question,
         String thoughtResponse,
         String sessionId,
@@ -692,17 +957,30 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicInteger traceNumber,
         String origin
     ) {
-        if (conversationIndexMemory != null) {
-            ConversationIndexMessage msgTemp = ConversationIndexMessage
-                .conversationIndexMessageBuilder()
-                .type(memory)
-                .question(question)
-                .response(thoughtResponse)
-                .finalAnswer(false)
-                .sessionId(sessionId)
-                .build();
-            if (!traceDisabled) {
+        if (memory != null && !traceDisabled) {
+            if (memory instanceof ConversationIndexMemory) {
+                ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
+                ConversationIndexMessage msgTemp = ConversationIndexMessage
+                    .conversationIndexMessageBuilder()
+                    .type(memoryType)
+                    .question(question)
+                    .response(thoughtResponse)
+                    .finalAnswer(false)
+                    .sessionId(sessionId)
+                    .build();
                 conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), origin);
+            } else if (memory instanceof BedrockAgentCoreMemory) {
+                BedrockAgentCoreMemory bedrockMemory = (BedrockAgentCoreMemory) memory;
+                log.info("Saving trace data to BedrockAgentCoreMemory with sessionId: {}", sessionId);
+
+                BedrockAgentCoreMemoryRecord record = new BedrockAgentCoreMemoryRecord();
+                record.setSessionId(sessionId);
+                record.setContent(question);
+                record.setResponse(thoughtResponse);
+
+                bedrockMemory.save(sessionId, record, ActionListener.wrap(saveResult -> {
+                    log.info("Successfully saved trace data to BedrockAgentCoreMemory");
+                }, saveError -> { log.error("Failed to save trace data to BedrockAgentCoreMemory", saveError); }));
             }
         }
     }
@@ -715,12 +993,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> cotModelTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Object memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         String finalAnswer
     ) {
-        if (conversationIndexMemory != null) {
+        if (memory instanceof ConversationIndexMemory) {
+            ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
             String copyOfFinalAnswer = finalAnswer;
             ActionListener saveTraceListener = ActionListener.wrap(r -> {
                 conversationIndexMemory
@@ -741,8 +1020,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }, e -> { listener.onFailure(e); })
                     );
             }, e -> { listener.onFailure(e); });
+            saveMessage(memory, question, finalAnswer, sessionId, parentInteractionId, traceNumber, true, traceDisabled, saveTraceListener);
+        } else if (memory instanceof BedrockAgentCoreMemory) {
+            // For BedrockAgentCoreMemory, save the message and return final response
             saveMessage(
-                conversationIndexMemory,
+                memory,
                 question,
                 finalAnswer,
                 sessionId,
@@ -750,7 +1032,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 traceNumber,
                 true,
                 traceDisabled,
-                saveTraceListener
+                ActionListener.wrap(r -> {
+                    returnFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+                }, e -> { listener.onFailure(e); })
             );
         } else {
             returnFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
@@ -880,7 +1164,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> traceTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Object memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         AtomicReference<String> lastThought,
@@ -898,7 +1182,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             verbose,
             traceDisabled,
             traceTensors,
-            conversationIndexMemory,
+            memory,
             traceNumber,
             additionalInfo,
             incompleteResponse
@@ -907,7 +1191,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private void saveMessage(
-        ConversationIndexMemory memory,
+        Object memory,
         String question,
         String finalAnswer,
         String sessionId,
@@ -917,18 +1201,38 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean traceDisabled,
         ActionListener listener
     ) {
-        ConversationIndexMessage msgTemp = ConversationIndexMessage
-            .conversationIndexMessageBuilder()
-            .type(memory.getType())
-            .question(question)
-            .response(finalAnswer)
-            .finalAnswer(isFinalAnswer)
-            .sessionId(sessionId)
-            .build();
         if (traceDisabled) {
             listener.onResponse(true);
+        } else if (memory instanceof ConversationIndexMemory) {
+            ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
+            ConversationIndexMessage msgTemp = ConversationIndexMessage
+                .conversationIndexMessageBuilder()
+                .type(conversationIndexMemory.getType())
+                .question(question)
+                .response(finalAnswer)
+                .finalAnswer(isFinalAnswer)
+                .sessionId(sessionId)
+                .build();
+            conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+        } else if (memory instanceof BedrockAgentCoreMemory) {
+            BedrockAgentCoreMemory bedrockMemory = (BedrockAgentCoreMemory) memory;
+            log.info("Saving message to BedrockAgentCoreMemory with sessionId: {}", sessionId);
+
+            BedrockAgentCoreMemoryRecord record = new BedrockAgentCoreMemoryRecord();
+            record.setSessionId(sessionId);
+            record.setContent(question);
+            record.setResponse(finalAnswer);
+
+            bedrockMemory.save(sessionId, record, ActionListener.wrap(saveResult -> {
+                log.info("Successfully saved message to BedrockAgentCoreMemory");
+                listener.onResponse(true);
+            }, saveError -> {
+                log.error("Failed to save message to BedrockAgentCoreMemory", saveError);
+                // Still return success even if save fails
+                listener.onResponse(true);
+            }));
         } else {
-            memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+            listener.onResponse(true);
         }
     }
 }

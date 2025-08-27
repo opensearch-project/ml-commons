@@ -243,7 +243,9 @@ public class AgentUtils {
         toolsBuilder.append(toolsSuffix);
         Map<String, String> toolsPromptMap = new HashMap<>();
         toolsPromptMap.put(TOOL_DESCRIPTIONS, toolsBuilder.toString());
-        toolsPromptMap.put(TOOL_NAMES, toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1));
+        // Fix: Handle empty toolNamesBuilder to prevent StringIndexOutOfBoundsException
+        String toolNames = toolNamesBuilder.length() > 0 ? toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1) : "";
+        toolsPromptMap.put(TOOL_NAMES, toolNames);
 
         if (parameters.containsKey(TOOL_DESCRIPTIONS)) {
             toolsPromptMap.put(TOOL_DESCRIPTIONS, parameters.get(TOOL_DESCRIPTIONS));

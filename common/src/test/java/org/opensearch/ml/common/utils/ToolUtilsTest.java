@@ -280,4 +280,95 @@ public class ToolUtilsTest {
         // Should contain only the targeted deep value
         assertEquals("targetValue", result);
     }
+
+    @Test
+    public void testExtractInputParameters_ExistingStringValues() {
+        // Test existing behavior with string-only JSON (should work exactly as before)
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "{\"query\":\"test\",\"limit\":\"10\"}");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        assertEquals("test", result.get("query"));
+        assertEquals("10", result.get("limit"));
+        assertEquals("{\"query\":\"test\",\"limit\":\"10\"}", result.get("input"));
+    }
+
+    @Test
+    public void testExtractInputParameters_ArrayValues() {
+        // Test new functionality with array values (should work now instead of failing)
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "{\"index\":[\"*\"]}");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        assertEquals("[\"*\"]", result.get("index"));
+        assertEquals("{\"index\":[\"*\"]}", result.get("input"));
+    }
+
+    @Test
+    public void testExtractInputParameters_MixedTypes() {
+        // Test mixed types: strings, arrays, numbers
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "{\"index\":[\"*\",\"logs\"],\"limit\":10,\"query\":\"test\"}");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        assertEquals("[\"*\",\"logs\"]", result.get("index"));
+        // Numbers are converted using gson.toJson() which gives "10.0" for integers parsed as doubles
+        assertTrue(
+            "Expected limit to be numeric string, got: " + result.get("limit"),
+            "10".equals(result.get("limit")) || "10.0".equals(result.get("limit"))
+        );
+        assertEquals("test", result.get("query"));
+        assertEquals("{\"index\":[\"*\",\"logs\"],\"limit\":10,\"query\":\"test\"}", result.get("input"));
+    }
+
+    @Test
+    public void testExtractInputParameters_ComplexArrays() {
+        // Test complex nested arrays and objects
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "{\"indices\":[\"index1\",\"index2\"],\"filters\":{\"term\":\"value\"}}");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        assertEquals("[\"index1\",\"index2\"]", result.get("indices"));
+        assertEquals("{\"term\":\"value\"}", result.get("filters"));
+    }
+
+    @Test
+    public void testExtractInputParameters_InvalidJSON() {
+        // Test that invalid JSON still logs error and continues (existing behavior)
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "{invalid json}");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        // Should still contain the input parameter even if parsing failed
+        assertEquals("{invalid json}", result.get("input"));
+    }
+
+    @Test
+    public void testExtractInputParameters_PlainString() {
+        // Test plain string input (existing behavior should be unchanged)
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "plain string input");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        assertEquals("plain string input", result.get("input"));
+    }
+
+    @Test
+    public void testExtractInputParameters_JSONArray() {
+        // Test JSON array input (existing behavior should be unchanged)
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "[\"item1\", \"item2\"]");
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, null);
+
+        assertEquals("[\"item1\", \"item2\"]", result.get("input"));
+        // Should not extract individual parameters from array
+        assertFalse(result.containsKey("item1"));
+    }
 }

@@ -1042,6 +1042,104 @@ public class MLAgentExecutorTest {
         return new AgentMLInput("test", null, FunctionName.AGENT, dataset);
     }
 
+    @Test
+    public void test_handleMemoryCreation_noMemorySpec() throws IOException {
+        // Test execution when no memory spec is provided
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        // Test with no memory spec (null memory in agent)
+        Map<String, String> params = new HashMap<>();
+        params.put(MEMORY_ID, "test-memory-id");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test-parent-id");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
+        Assert.assertEquals(1, output.getMlModelOutputs().size());
+    }
+
+    @Test
+    public void test_handleMemoryCreation_unsupportedMemoryFactory() throws IOException {
+        // Test handling of unsupported memory factory type
+        Memory.Factory unsupportedFactory = Mockito.mock(Memory.Factory.class);
+        Map<String, Memory.Factory> memoryFactoryMap = ImmutableMap.of("unsupported_type", unsupportedFactory);
+
+        MLAgentExecutor executor = Mockito
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    mlFeatureEnabledSetting,
+                    null
+                )
+            );
+
+        // Create an agent with unsupported memory type
+        MLMemorySpec unsupportedMemorySpec = MLMemorySpec.builder().type("unsupported_type").build();
+        MLAgent mlAgentWithUnsupportedMemory = new MLAgent(
+            "test",
+            MLAgentType.CONVERSATIONAL.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            Collections.emptyList(),
+            Map.of("test", "test"),
+            unsupportedMemorySpec,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null
+        );
+
+        // Create GetResponse with the MLAgent that has unsupported memory
+        XContentBuilder content = mlAgentWithUnsupportedMemory.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "test-agent-id", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse agentGetResponse = new GetResponse(getResult);
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doReturn(mlAgentRunner).when(executor).getAgentRunner(Mockito.any());
+
+        // Test with unsupported memory factory
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        executor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof IllegalArgumentException);
+        Assert.assertTrue(exception.getMessage().contains("Unsupported memory factory type"));
+    }
+
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
 
         mlAgent = new MLAgent(

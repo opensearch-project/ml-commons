@@ -132,4 +132,26 @@ public class AgentMLInputTests {
         assertEquals("testAgentId", inputNewVersion.getAgentId());
         assertEquals("testTenantId", inputNewVersion.getTenantId()); // tenantId should be populated for newer versions
     }
+
+    @Test
+    public void testMemoryGetterSetter() {
+        // Test memory field getter/setter functionality
+        AgentMLInput input = new AgentMLInput("testAgent", null, FunctionName.AGENT, null);
+
+        // Initially memory should be null
+        assertNull("Memory should be null initially", input.getMemory());
+
+        // Set memory and verify
+        Map<String, Object> memoryMap = new HashMap<>();
+        memoryMap.put("type", "bedrock_agentcore_memory");
+        memoryMap.put("memory_arn", "test-arn");
+        memoryMap.put("region", "us-east-1");
+
+        input.setMemory(memoryMap);
+
+        assertNotNull("Memory should not be null after setting", input.getMemory());
+        assertEquals("bedrock_agentcore_memory", input.getMemory().get("type"));
+        assertEquals("test-arn", input.getMemory().get("memory_arn"));
+        assertEquals("us-east-1", input.getMemory().get("region"));
+    }
 }

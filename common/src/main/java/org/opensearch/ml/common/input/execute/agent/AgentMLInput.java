@@ -47,6 +47,10 @@ public class AgentMLInput extends MLInput {
     @Setter
     private Boolean isAsync;
 
+    @Getter
+    @Setter
+    private Map<String, Object> memory;
+
     @Builder(builderMethodName = "AgentMLInputBuilder")
     public AgentMLInput(String agentId, String tenantId, FunctionName functionName, MLInputDataset inputDataset) {
         this(agentId, tenantId, functionName, inputDataset, false);
@@ -72,6 +76,13 @@ public class AgentMLInput extends MLInput {
         if (streamOutputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             out.writeOptionalBoolean(isAsync);
         }
+        // Serialize memory field
+        if (memory != null) {
+            out.writeBoolean(true);
+            out.writeMap(memory);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     public AgentMLInput(StreamInput in) throws IOException {
@@ -81,6 +92,12 @@ public class AgentMLInput extends MLInput {
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         if (streamInputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             this.isAsync = in.readOptionalBoolean();
+        }
+        // Deserialize memory field
+        if (in.readBoolean()) {
+            this.memory = in.readMap();
+        } else {
+            this.memory = null;
         }
     }
 
@@ -103,6 +120,9 @@ public class AgentMLInput extends MLInput {
                     Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
+                case "memory":
+                    memory = parser.map();
+                    break;
                 case ASYNC_FIELD:
                     isAsync = parser.booleanValue();
                     break;
@@ -112,5 +132,4 @@ public class AgentMLInput extends MLInput {
             }
         }
     }
-
 }

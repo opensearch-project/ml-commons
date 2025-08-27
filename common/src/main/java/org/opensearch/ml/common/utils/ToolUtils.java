@@ -19,6 +19,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
@@ -93,9 +94,42 @@ public class ToolUtils {
                 StringSubstitutor stringSubstitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 String input = stringSubstitutor.replace(parameters.get("input"));
                 extractedParameters.put("input", input);
-                Map<String, String> inputParameters = gson
-                    .fromJson(input, TypeToken.getParameterized(Map.class, String.class, String.class).getType());
-                extractedParameters.putAll(inputParameters);
+
+                // Check if input is a JSON object or array
+                String trimmedInput = input.trim();
+                if (trimmedInput.startsWith("{")) {
+                    // Input is a JSON object - try parsing as Map<String, String> first (existing behavior)
+                    try {
+                        Map<String, String> inputParameters = gson
+                            .fromJson(input, TypeToken.getParameterized(Map.class, String.class, String.class).getType());
+                        extractedParameters.putAll(inputParameters);
+                    } catch (JsonSyntaxException e) {
+                        // Fallback: handle mixed types (arrays, objects, etc.) for cases like {"index": ["*"]}
+                        try {
+                            Map<String, Object> inputParameters = gson
+                                .fromJson(input, TypeToken.getParameterized(Map.class, String.class, Object.class).getType());
+
+                            // Convert non-string values to JSON strings for tool compatibility
+                            for (Map.Entry<String, Object> entry : inputParameters.entrySet()) {
+                                String key = entry.getKey();
+                                Object value = entry.getValue();
+
+                                if (value instanceof String) {
+                                    extractedParameters.put(key, (String) value); // Keep strings as-is
+                                } else {
+                                    extractedParameters.put(key, gson.toJson(value)); // Convert arrays/objects to JSON strings
+                                }
+                            }
+                        } catch (Exception fallbackException) {
+                            // If both approaches fail, log original error and continue
+                            log.info("fail extract parameters from key 'input' due to" + e.getMessage());
+                        }
+                    }
+                } else if (trimmedInput.startsWith("[")) {
+                    // Input is a JSON array - skip parsing as it's not a parameter map
+                    log.debug("Input is a JSON array, skipping parameter extraction");
+                }
+                // If it's neither object nor array, it's likely a plain string - keep as is
             } catch (Exception exception) {
                 log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
             }
