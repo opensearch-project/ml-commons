@@ -7,6 +7,8 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
+import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.EXAMPLE_DOC_KEYWORD;
+import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.IMPORTANT_COLUMN_KEYWORD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
@@ -85,7 +87,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         String storageIndex,
         ActionListener<IndexInsight> listener
     ) {
-        Map<String, Object> mappingSource = (Map<String, Object>) statisticalContentMap.get("mapping");
+        Map<String, Object> mappingSource = (Map<String, Object>) statisticalContentMap.get(IMPORTANT_COLUMN_KEYWORD);
 
         if (mappingSource == null || mappingSource.isEmpty()) {
             log.error("No mapping properties found for index: {}", sourceIndex);
@@ -94,8 +96,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             return;
         }
 
-        List<String> allFields = new ArrayList<>();
-        extractAllFieldNames(mappingSource, "", allFields);
+        List<String> allFields = List.of(mappingSource.keySet().toArray(new String[0]));
 
         if (allFields.isEmpty()) {
             log.warn("No fields found for index: {}", sourceIndex);
@@ -209,14 +210,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
         // Filter statistical data based on current batch fields
         Map<String, Object> relevantStatisticalData = extractRelevantStatisticalData(statisticalContentMap, batchFields);
         if (!relevantStatisticalData.isEmpty()) {
-            if (relevantStatisticalData.containsKey("mapping")) {
-                prompt.append("Field Mapping:\\n").append(relevantStatisticalData.get("mapping")).append("\\n\\n");
+            if (relevantStatisticalData.containsKey(IMPORTANT_COLUMN_KEYWORD)) {
+                prompt.append("Some Field Distribution:\\n").append(relevantStatisticalData.get(IMPORTANT_COLUMN_KEYWORD)).append("\\n\\n");
             }
-            if (relevantStatisticalData.containsKey("distribution")) {
-                prompt.append("Field Distribution:\\n").append(relevantStatisticalData.get("distribution")).append("\\n\\n");
-            }
-            if (relevantStatisticalData.containsKey("example_docs")) {
-                prompt.append("Example Documents:\\n").append(relevantStatisticalData.get("example_docs")).append("\\n\\n");
+            if (relevantStatisticalData.containsKey(EXAMPLE_DOC_KEYWORD)) {
+                prompt.append("Example Documents:\\n").append(relevantStatisticalData.get(EXAMPLE_DOC_KEYWORD)).append("\\n\\n");
             }
         }
 
@@ -237,47 +235,34 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
 
         try {
-            Map<String, Object> mapping = (Map<String, Object>) statisticalContentMap.get("mapping");
-            Map<String, Object> distribution = (Map<String, Object>) statisticalContentMap.get("distribution");
+            Map<String, Object> distribution = (Map<String, Object>) statisticalContentMap.get(IMPORTANT_COLUMN_KEYWORD);
 
             // Extract relevant mapping
             Map<String, Object> relevantMapping = new LinkedHashMap<>();
             for (String field : batchFields) {
-                if (mapping != null && mapping.containsKey(field)) {
-                    relevantMapping.put(field, mapping.get(field));
+                if (distribution != null && distribution.containsKey(field)) {
+                    relevantMapping.put(field, distribution.get(field));
                 }
             }
             if (!relevantMapping.isEmpty()) {
-                result.put("mapping", relevantMapping);
+                result.put(IMPORTANT_COLUMN_KEYWORD, relevantMapping);
             }
 
-            // Extract relevant distribution
-            Map<String, Object> relevantDistribution = new LinkedHashMap<>();
-            for (String field : batchFields) {
-                if (distribution != null && distribution.containsKey(field)) {
-                    relevantDistribution.put(field, distribution.get(field));
-                }
-            }
-            if (!relevantDistribution.isEmpty()) {
-                result.put("distribution", relevantDistribution);
-            }
 
             // Extract example docs from distribution
-            if (distribution != null && distribution.containsKey("example_docs")) {
-                List<Map<String, Object>> exampleDocs = (List<Map<String, Object>>) distribution.get("example_docs");
-                if (exampleDocs != null && !exampleDocs.isEmpty()) {
-                    List<Map<String, Object>> filteredExampleDocs = new ArrayList<>();
-                    for (Map<String, Object> doc : exampleDocs) {
-                        Map<String, Object> filteredDoc = new LinkedHashMap<>();
-                        for (String field : batchFields) {
-                            if (doc.containsKey(field)) {
-                                filteredDoc.put(field, doc.get(field));
-                            }
+            List<Map<String, Object>> exampleDocs = (List<Map<String, Object>>) statisticalContentMap.get(EXAMPLE_DOC_KEYWORD);
+            if (exampleDocs != null && !exampleDocs.isEmpty()) {
+                List<Map<String, Object>> filteredExampleDocs = new ArrayList<>();
+                for (Map<String, Object> doc : exampleDocs) {
+                    Map<String, Object> filteredDoc = new LinkedHashMap<>();
+                    for (String field : batchFields) {
+                        if (doc.containsKey(field)) {
+                            filteredDoc.put(field, doc.get(field));
                         }
-                        filteredExampleDocs.add(filteredDoc);
                     }
-                    result.put("example_docs", filteredExampleDocs);
+                    filteredExampleDocs.add(filteredDoc);
                 }
+                result.put(EXAMPLE_DOC_KEYWORD, filteredExampleDocs);
             }
 
         } catch (Exception e) {
