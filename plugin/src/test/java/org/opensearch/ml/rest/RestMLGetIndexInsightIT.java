@@ -63,7 +63,7 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
         assertEquals(indexInsight.get("task_type"), "STATISTICAL_DATA");
         Map<String, Object> targetContent = gson
             .fromJson(
-                "{\"mapping\":{\"field1\":{\"type\":\"long\"},\"field2\":{\"type\":\"keyword\"}},\"distribution\":{\"field1\":{\"min_value\":200.0,\"unique_count\":1.0,\"unique_terms\":[200.0],\"max_value\":200.0},\"example_docs\":[{\"field1\":200,\"field2\":\"text\"}],\"field2\":{\"unique_count\":1.0,\"unique_terms\":[\"text\"]}}}",
+                    "{\"example_docs\":[{\"field1\":200,\"field2\":\"text\"}],\"important_column_and_distribution\":{\"field2\":{\"type\":\"keyword\",\"unique_count\":1.0,\"unique_terms\":[\"text\"]},\"field1\":{\"min_value\":200.0,\"type\":\"long\",\"unique_count\":1.0,\"unique_terms\":[200.0],\"max_value\":200.0}}}",
                 Map.class
             );
         assertEquals(gson.fromJson((String) indexInsight.get("content"), Map.class), targetContent);
@@ -107,7 +107,7 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
         assertEquals(indexInsight.get("task_type"), "STATISTICAL_DATA");
         Map<String, Object> targetContent = gson
             .fromJson(
-                "{\"mapping\":{\"field1\":{\"type\":\"long\"},\"field2\":{\"type\":\"keyword\"}},\"distribution\":{\"field1\":{\"min_value\":200.0,\"unique_count\":1.0,\"unique_terms\":[200.0],\"max_value\":200.0},\"example_docs\":[{\"field1\":200},{\"field2\":\"text\"}],\"field2\":{\"unique_count\":1.0,\"unique_terms\":[\"text\"]}}}",
+                    "{\"example_docs\":[{\"field1\":200},{\"field2\":\"text\"}],\"important_column_and_distribution\":{\"field2\":{\"type\":\"keyword\",\"unique_count\":1.0,\"unique_terms\":[\"text\"]},\"field1\":{\"min_value\":200.0,\"type\":\"long\",\"unique_count\":1.0,\"unique_terms\":[200.0],\"max_value\":200.0}}}",
                 Map.class
             );
         assertEquals(gson.fromJson((String) indexInsight.get("content"), Map.class), targetContent);
