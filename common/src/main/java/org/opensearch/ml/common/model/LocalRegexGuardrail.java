@@ -226,12 +226,7 @@ public class LocalRegexGuardrail extends Guardrail {
         CountDownLatch latch = new CountDownLatch(1);
         try {
             queryBody = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(queryBodyMap));
-            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-            XContentParser queryParser = XContentType.JSON
-                .xContent()
-                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, queryBody);
-            searchSourceBuilder.parseXContent(queryParser);
-            searchSourceBuilder.size(1); // Only need 1 doc returned, if hit.
+            SearchDataObjectRequest searchDataObjectRequest = buildSearchDataObjectRequest(indexName, queryBody);
             var responseListener = new LatchedActionListener<>(ActionListener.<SearchResponse>wrap(r -> {
                 if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                     passedStopWordCheck.set(true);
@@ -240,12 +235,6 @@ public class LocalRegexGuardrail extends Guardrail {
                 log.error("Failed to search stop words index {}", indexName, e);
                 passedStopWordCheck.set(true);
             }), latch);
-            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                .builder()
-                .indices(indexName)
-                .searchSourceBuilder(searchSourceBuilder)
-                .tenantId(tenantId)
-                .build();
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
                     .searchDataObjectAsync(searchDataObjectRequest)
@@ -264,5 +253,16 @@ public class LocalRegexGuardrail extends Guardrail {
             throw new IllegalStateException(e);
         }
         return passedStopWordCheck.get();
+    }
+
+    protected SearchDataObjectRequest buildSearchDataObjectRequest(String indexName, String queryBody) throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        XContentParser queryParser = XContentType.JSON
+            .xContent()
+            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, queryBody);
+        searchSourceBuilder.parseXContent(queryParser);
+        searchSourceBuilder.size(1); // Only need 1 doc returned, if hit.
+
+        return SearchDataObjectRequest.builder().indices(indexName).searchSourceBuilder(searchSourceBuilder).tenantId(tenantId).build();
     }
 }
