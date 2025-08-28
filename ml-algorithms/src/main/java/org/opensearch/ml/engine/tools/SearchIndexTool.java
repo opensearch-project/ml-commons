@@ -6,7 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.*;
-import static org.opensearch.ml.common.utils.StringUtils.plainDoubleGson;
+import static org.opensearch.ml.common.utils.StringUtils.PLAIN_DOUBLE_GSON;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -178,8 +178,8 @@ public class SearchIndexTool implements Tool {
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
 
                         if (queryElement != null) {
-                            Object queryObject = plainDoubleGson.fromJson(queryElement, Object.class);
-                            query = plainDoubleGson.toJson(queryObject);
+                            Object queryObject = PLAIN_DOUBLE_GSON.fromJson(queryElement, Object.class);
+                            query = PLAIN_DOUBLE_GSON.toJson(queryObject);
                         }
                     }
                 } catch (JsonSyntaxException e) {
