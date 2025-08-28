@@ -881,6 +881,42 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(toolParamsCapture.getValue().containsKey(MLChatAgentRunner.CHAT_HISTORY));
     }
 
+    @Test
+    public void testParsingJsonBlockFromResponseNoMemory() {
+        // Prepare the response with JSON block
+        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
+            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
+        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
+
+        // Mock LLM response to not contain "thought" but contain "response" with JSON block
+        Map<String, String> llmResponse = new HashMap<>();
+        llmResponse.put("response", responseWithJsonBlock);
+        doAnswer(getLLMAnswer(llmResponse))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        // Create an MLAgent and run the MLChatAgentRunner
+        MLAgent mlAgent = createMLAgentNoMemory();
+        Map<String, String> params = new HashMap<>();
+        params.put("verbose", "true");
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Capture the response passed to the listener
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(agentActionListener).onResponse(responseCaptor.capture());
+
+        // Extract the captured response
+        Object capturedResponse = responseCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+
+        ModelTensor modelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
+
+        assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
+        assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
+        assertEquals("parsed final answer", modelTensor.getResult());
+    }
+
     // Helper methods to create MLAgent and parameters
     private MLAgent createMLAgentWithTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
@@ -915,6 +951,23 @@ public class MLChatAgentRunnerTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .tools(Arrays.asList(firstToolSpec))
             .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .build();
+    }
+
+    private MLAgent createMLAgentNoMemory() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
+        return MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .tools(Arrays.asList(firstToolSpec))
             .llm(llmSpec)
             .build();
     }
