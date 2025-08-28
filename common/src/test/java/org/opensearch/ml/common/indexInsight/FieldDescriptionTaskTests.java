@@ -85,7 +85,7 @@ public class FieldDescriptionTaskTests {
 
     @Test
     public void testBatchProcessing_LargeFieldCount() {
-        StringBuilder mappingBuilder = new StringBuilder("{\"mapping\": {");
+        StringBuilder mappingBuilder = new StringBuilder("{\"important_column_and_distribution\": {");
         for (int i = 0; i < 66; i++) {
             if (i > 0)
                 mappingBuilder.append(",");
@@ -112,7 +112,7 @@ public class FieldDescriptionTaskTests {
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("No mapping properties found for index: test-index", exceptionCaptor.getValue().getMessage());
+        assertEquals("No data distribution found for index: test-index", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -133,7 +133,7 @@ public class FieldDescriptionTaskTests {
 
     @Test
     public void testRunTask_MLExecuteFailure() {
-        String statisticalContent = "{\"mapping\": {\"field1\": {\"type\": \"text\"}}}";
+        String statisticalContent = "{\"important_column_and_distribution\": {\"field1\": {\"type\": \"text\"}}}";
 
         mockGetSuccess(client, statisticalContent);
         mockMLConfigSuccess(client);
@@ -159,7 +159,7 @@ public class FieldDescriptionTaskTests {
 
         ArgumentCaptor<IllegalStateException> exceptionCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("No mapping properties found for index: test-index", exceptionCaptor.getValue().getMessage());
+        assertEquals("No data distribution found for index: test-index", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -173,39 +173,31 @@ public class FieldDescriptionTaskTests {
 
         ArgumentCaptor<IllegalStateException> exceptionCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("No mapping properties found for index: test-index", exceptionCaptor.getValue().getMessage());
+        assertEquals("No data distribution found for index: test-index", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
     public void testRunTask_EmptyFieldsList() {
-        String statisticalContentWithNoTypeFields = "{"
-            + "\"mapping\": {"
-            + "\"nested_object\": {"
-            + "\"properties\": {"
-            + "\"inner_object\": {\"properties\": {}}"
-            + "}"
-            + "}"
-            + "}"
-            + "}";
+        String statisticalContentWithNoTypeFields = "{" + "\"important_column_and_distribution\": {" + "}}";
 
         mockGetSuccess(client, statisticalContentWithNoTypeFields);
         mockMLConfigSuccess(client);
         mockUpdateSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
-
         ArgumentCaptor<IndexInsight> insightCaptor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(insightCaptor.capture());
 
         IndexInsight insight = insightCaptor.getValue();
         assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, insight.getTaskType());
         assertEquals("", insight.getContent());
+
     }
 
     @Test
     public void testRunTask_SuccessfulFieldDescriptionGeneration() {
         String statisticalContent = "{"
-            + "\"mapping\": {"
+            + "\"important_column_and_distribution\": {"
             + "\"user_name\": {\"type\": \"text\"},"
             + "\"user_age\": {\"type\": \"integer\"}"
             + "}"

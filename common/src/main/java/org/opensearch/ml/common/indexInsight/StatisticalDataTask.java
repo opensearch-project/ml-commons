@@ -11,9 +11,11 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.search.SearchRequest;
@@ -26,6 +28,9 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.AggregatorFactories;
+import org.opensearch.search.aggregations.bucket.filter.FiltersAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.filter.FiltersAggregator.KeyedFilter;
+import org.opensearch.search.aggregations.bucket.filter.InternalFilters;
 import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
 import org.opensearch.search.aggregations.bucket.sampler.SamplerAggregationBuilder;
 import org.opensearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
@@ -53,6 +58,11 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> PREFIXS = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
+    private static final String NOT_NULL_KEYWORD = "not_null";
+    private static final Double THRESHOLD = 0.001;
+    private static final int SAMPLE_NUMBER = 100000;
+    public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
+    public static final String EXAMPLE_DOC_KEYWORD = "example_docs";
 
     private final String sourceIndex;
     private final Client client;
@@ -125,11 +135,9 @@ public class StatisticalDataTask implements IndexInsightTask {
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put("mapping", allFields);
-                result.put("distribution", parseSearchResult(searchResponse));
+                Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
 
-                String statisticalContent = gson.toJson(result);
+                String statisticalContent = gson.toJson(parseSearchResult(fieldsToType, highPriorityColumns, searchResponse));
                 saveResult(statisticalContent, storageIndex, listener);
             }, e -> {
                 log.error("Failed to collect statistical data for index: {}", sourceIndex, e);
@@ -176,11 +184,19 @@ public class StatisticalDataTask implements IndexInsightTask {
         }
 
         // Add top hits example_docs
-        TopHitsAggregationBuilder topHitsAgg = AggregationBuilders.topHits("example_docs").size(5);
+        TopHitsAggregationBuilder topHitsAgg = AggregationBuilders.topHits(EXAMPLE_DOC_KEYWORD).size(5);
         subAggs.addAggregator(topHitsAgg);
 
+        // Add not none count
+        List<KeyedFilter> keyedFilters = new ArrayList<>();
+        for (String fieldName : fields.keySet()) {
+            keyedFilters.add(new KeyedFilter(fieldName + "_" + NOT_NULL_KEYWORD, QueryBuilders.existsQuery(fieldName)));
+        }
+        FiltersAggregationBuilder nonNullAgg = AggregationBuilders.filters(NOT_NULL_KEYWORD, keyedFilters.toArray(new KeyedFilter[0]));
+        subAggs.addAggregator(nonNullAgg);
+
         // Wrap everything in a Sampler aggregation
-        SamplerAggregationBuilder samplerAgg = AggregationBuilders.sampler("sample").shardSize(100000).subAggregations(subAggs);
+        SamplerAggregationBuilder samplerAgg = AggregationBuilders.sampler("sample").shardSize(SAMPLE_NUMBER).subAggregations(subAggs);
 
         // Build search source
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder()
@@ -192,16 +208,21 @@ public class StatisticalDataTask implements IndexInsightTask {
         return sourceBuilder;
     }
 
-    private Map<String, Object> parseSearchResult(SearchResponse searchResponse) {
+    private Map<String, Object> parseSearchResult(
+        Map<String, String> allFieldsToType,
+        Set<String> filteredNames,
+        SearchResponse searchResponse
+    ) {
         Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
             .getAggregations()
             .getAsMap();
         Map<String, Object> result = new LinkedHashMap<>();
+        Map<String, Object> finalResult = new LinkedHashMap<>();
         List<Object> exampleDocs = null;
         for (Map.Entry<String, Aggregation> entry : aggregationMap.entrySet()) {
             String key = entry.getKey();
             Aggregation aggregation = entry.getValue();
-            if (key.equals("example_docs")) {
+            if (key.equals(EXAMPLE_DOC_KEYWORD)) {
                 SearchHit[] hits = ((InternalTopHits) aggregation).getHits().getHits();
                 exampleDocs = new ArrayList<>(hits.length);
                 for (SearchHit hit : hits) {
@@ -211,6 +232,9 @@ public class StatisticalDataTask implements IndexInsightTask {
                 for (String prefix : PREFIXS) {
                     if (key.startsWith(prefix)) {
                         String targetField = key.substring(prefix.length());
+                        if (!filteredNames.contains(targetField)) {
+                            continue;
+                        }
                         String aggregationType = key.substring(0, prefix.length() - 1);
                         Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
                         Object targetValue;
@@ -233,7 +257,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                                     targetValue = aggResult.get("value");
                                 }
                             }
-                            result.computeIfAbsent(targetField, k -> new HashMap<>());
+                            result.computeIfAbsent(targetField, k -> new HashMap<>(Map.of("type", allFieldsToType.get(targetField))));
                             ((Map<String, Object>) result.get(targetField)).put(aggregationType, targetValue);
                             break;
                         } catch (Exception e) {
@@ -244,9 +268,28 @@ public class StatisticalDataTask implements IndexInsightTask {
             }
         }
         if (exampleDocs != null) {
-            result.put("example_docs", exampleDocs);
+            finalResult.put(EXAMPLE_DOC_KEYWORD, exampleDocs);
         }
-        return result;
+        finalResult.put(IMPORTANT_COLUMN_KEYWORD, result);
+        return finalResult;
+    }
+
+    private Set<String> filterColumns(Map<String, String> allFieldsToType, SearchResponse searchResponse) {
+        Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
+            .getAggregations()
+            .getAsMap();
+        long totalDocCount = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample")).getDocCount();
+        Set<String> filteredNames = new HashSet<>();
+        InternalFilters aggregation = (InternalFilters) aggregationMap.get(NOT_NULL_KEYWORD);
+        for (InternalFilters.InternalBucket bucket : aggregation.getBuckets()) {
+            String targetField = bucket.getKey();
+            targetField = targetField.substring(0, targetField.length() - 1 - NOT_NULL_KEYWORD.length());
+            long docCount = bucket.getDocCount();
+            if (docCount > THRESHOLD * totalDocCount && allFieldsToType.containsKey(targetField)) {
+                filteredNames.add(targetField);
+            }
+        }
+        return filteredNames;
     }
 
 }
