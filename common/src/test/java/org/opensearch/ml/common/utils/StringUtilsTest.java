@@ -994,18 +994,19 @@ public class StringUtilsTest {
 
     @Test
     public void testSerializeNaNAndInfinity_BecomesNull() {
-        Map<String, Double> data = new java.util.HashMap<>();
+        Map<String, Double> data = new HashMap<>();
         data.put("nan", Double.NaN);
         data.put("inf", Double.POSITIVE_INFINITY);
         data.put("ninf", Double.NEGATIVE_INFINITY);
 
-        Gson gson = new GsonBuilder().serializeNulls().registerTypeAdapter(Double.class, createPlainDoubleAdapter()).create();
-
-        String json = gson.toJson(data);
+        String json = StringUtils.PLAIN_DOUBLE_GSON.toJson(data);
 
         assertTrue(json.contains("\"nan\":null"));
         assertTrue(json.contains("\"inf\":null"));
         assertTrue(json.contains("\"ninf\":null"));
+
+        assertFalse(json.contains("NaN"));
+        assertFalse(json.contains("Infinity"));
     }
 
     @Test

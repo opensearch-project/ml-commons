@@ -78,7 +78,10 @@ public class StringUtils {
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
     public static final Gson gson = new Gson();
-    public static final Gson PLAIN_DOUBLE_GSON = new GsonBuilder().registerTypeAdapter(Double.class, new PlainDoubleAdapter()).create();;
+    public static final Gson PLAIN_DOUBLE_GSON = new GsonBuilder()
+        .serializeNulls()
+        .registerTypeAdapter(Double.class, new PlainDoubleAdapter())
+        .create();
 
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
