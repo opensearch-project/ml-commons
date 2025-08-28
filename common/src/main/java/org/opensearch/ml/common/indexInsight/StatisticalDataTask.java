@@ -29,8 +29,7 @@ import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.AggregatorFactories;
 import org.opensearch.search.aggregations.bucket.filter.FiltersAggregationBuilder;
-import org.opensearch.search.aggregations.bucket.filter.FiltersAggregator;
-import org.opensearch.search.aggregations.bucket.filter.InternalFilter;
+import org.opensearch.search.aggregations.bucket.filter.FiltersAggregator.KeyedFilter;
 import org.opensearch.search.aggregations.bucket.filter.InternalFilters;
 import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
 import org.opensearch.search.aggregations.bucket.sampler.SamplerAggregationBuilder;
@@ -43,7 +42,6 @@ import org.opensearch.search.aggregations.metrics.TopHitsAggregationBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.transport.client.Client;
-import org.opensearch.search.aggregations.bucket.filter.FiltersAggregator.KeyedFilter;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -61,7 +59,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
     private static final String NOT_NULL_KEYWORD = "not_null";
-    private static final Double THRESHOLD = 0.2;
+    private static final Double THRESHOLD = 0.01;
     private static final int SAMPLE_NUMBER = 100000;
     public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
     public static final String EXAMPLE_DOC_KEYWORD = "example_docs";
@@ -194,10 +192,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         for (String fieldName : fields.keySet()) {
             keyedFilters.add(new KeyedFilter(fieldName + "_" + NOT_NULL_KEYWORD, QueryBuilders.existsQuery(fieldName)));
         }
-        FiltersAggregationBuilder nonNullAgg = AggregationBuilders.filters(
-                NOT_NULL_KEYWORD,
-                keyedFilters.toArray(new KeyedFilter[0])
-        );
+        FiltersAggregationBuilder nonNullAgg = AggregationBuilders.filters(NOT_NULL_KEYWORD, keyedFilters.toArray(new KeyedFilter[0]));
         subAggs.addAggregator(nonNullAgg);
 
         // Wrap everything in a Sampler aggregation
@@ -213,7 +208,11 @@ public class StatisticalDataTask implements IndexInsightTask {
         return sourceBuilder;
     }
 
-    private Map<String, Object> parseSearchResult(Map<String, String> allFieldsToType, Set<String> filteredNames, SearchResponse searchResponse) {
+    private Map<String, Object> parseSearchResult(
+        Map<String, String> allFieldsToType,
+        Set<String> filteredNames,
+        SearchResponse searchResponse
+    ) {
         Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
             .getAggregations()
             .getAsMap();
@@ -277,12 +276,12 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     private Set<String> filterColumns(Map<String, String> allFieldsToType, SearchResponse searchResponse) {
         Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
-                .getAggregations()
-                .getAsMap();
-        long totalDocCount =  ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample")).getDocCount();
+            .getAggregations()
+            .getAsMap();
+        long totalDocCount = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample")).getDocCount();
         Set<String> filteredNames = new HashSet<>();
         InternalFilters aggregation = (InternalFilters) aggregationMap.get(NOT_NULL_KEYWORD);
-        for (InternalFilters.InternalBucket bucket: aggregation.getBuckets()) {
+        for (InternalFilters.InternalBucket bucket : aggregation.getBuckets()) {
             String targetField = bucket.getKey();
             targetField = targetField.substring(0, targetField.length() - 1 - NOT_NULL_KEYWORD.length());
             long docCount = bucket.getDocCount();

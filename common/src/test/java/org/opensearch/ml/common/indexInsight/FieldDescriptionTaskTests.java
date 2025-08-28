@@ -178,9 +178,7 @@ public class FieldDescriptionTaskTests {
 
     @Test
     public void testRunTask_EmptyFieldsList() {
-        String statisticalContentWithNoTypeFields = "{"
-            + "\"important_column_and_distribution\": {"
-            + "}}";
+        String statisticalContentWithNoTypeFields = "{" + "\"important_column_and_distribution\": {" + "}}";
 
         mockGetSuccess(client, statisticalContentWithNoTypeFields);
         mockMLConfigSuccess(client);

@@ -16,7 +16,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -196,7 +195,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 log.error("Error parsing response for batch in index {}: {}", sourceIndex, e.getMessage());
                 listener.onFailure(e);
             }
-        }, e -> {listener.onFailure(e);}));
+        }, e -> { listener.onFailure(e); }));
     }
 
     private String generateBatchPrompt(List<String> batchFields, Map<String, Object> statisticalContentMap) {
@@ -249,7 +248,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
             if (!relevantMapping.isEmpty()) {
                 result.put(IMPORTANT_COLUMN_KEYWORD, relevantMapping);
             }
-
 
             // Extract example docs from distribution
             List<Map<String, Object>> exampleDocs = (List<Map<String, Object>>) statisticalContentMap.get(EXAMPLE_DOC_KEYWORD);
