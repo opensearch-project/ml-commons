@@ -5,9 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
@@ -24,13 +22,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.xcontent.DeprecationHandler;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.*;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -407,5 +405,39 @@ public class SearchIndexToolTests {
         assertTrue(result instanceof String);
         assertFalse(((String) result).contains("_shards"));
         assertFalse(((String) result).contains("took"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withMatchQuery_triggersPlainDoubleGson() {
+        String input = "{\"index\":\"test-index\",\"query\":{}}";
+        Map<String, String> params = Map.of("input", input);
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        mockedSearchIndexTool.run(params, listener);
+
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        verify(client, never()).execute(any(), any(), any());
+
+        assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withRangeQuery_triggersPlainDoubleGson() {
+        String input = "{\"index\":\"test-index\",\"query\":{}}";
+        Map<String, String> params = Map.of("input", input);
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        mockedSearchIndexTool.run(params, listener);
+
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        verify(client, never()).execute(any(), any(), any());
+
+        assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
     }
 }
