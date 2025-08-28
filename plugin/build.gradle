@@ -334,12 +334,6 @@ jacocoTestReport {
 
 List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
-        'org.opensearch.ml.constant.CommonValue',
-        'org.opensearch.ml.indices.MLIndicesHandler',
-        'org.opensearch.ml.rest.RestMLPredictionAction',
-        'org.opensearch.ml.profile.MLModelProfile',
-        'org.opensearch.ml.profile.MLPredictRequestStats',
-        'org.opensearch.ml.action.deploy.TransportDeployModelAction',
         'org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction',
         'org.opensearch.ml.action.undeploy.TransportUndeployModelsAction',
         'org.opensearch.ml.action.prediction.TransportPredictionTaskAction',
@@ -360,7 +354,6 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
         'org.opensearch.ml.task.MLExecuteTaskRunner',
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
-        'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.breaker.DiskCircuitBreaker',
         'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory',
         'org.opensearch.ml.action.training.TrainingITTests',
