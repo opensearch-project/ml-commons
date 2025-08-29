@@ -10,6 +10,7 @@ import java.util.Map;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 public class MLInferenceSearchResponse extends SearchResponse {
@@ -41,16 +42,21 @@ public class MLInferenceSearchResponse extends SearchResponse {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        innerToXContent(builder, params);
-
+    public XContentBuilder innerToXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
+        super.innerToXContent(builder, params);
         if (this.params != null) {
             builder.startObject(EXT_SECTION_NAME);
             builder.field(MLInferenceSearchResponseProcessor.TYPE, this.params);
 
             builder.endObject();
         }
+        return builder;
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
+        innerToXContent(builder, params);
         builder.endObject();
         return builder;
     }
