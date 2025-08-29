@@ -27,7 +27,7 @@ public class RestMLGetIndexInsightConfigIT extends RestBaseAgentToolsIT {
         deleteExternalIndices();
     }
 
-    public void testGetIndexInsightContainer_successful() throws IOException, ParseException {
+    public void testGetIndexInsightConfig_successful() throws IOException, ParseException {
         String putIndexInsightConfigBody = """
             {
                 "is_enable": true
