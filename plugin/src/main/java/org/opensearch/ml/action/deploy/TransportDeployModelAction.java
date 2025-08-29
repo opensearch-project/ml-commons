@@ -177,22 +177,29 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if (!access) {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model",
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            } else {
-                                deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
-                            }
-                        }, e -> {
-                            log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
-                            wrappedListener.onFailure(e);
-                        }));
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            MLDeployModelAction.NAME,
+                            client,
+
+                            ActionListener.wrap(access -> {
+                                if (!access) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                } else {
+                                    deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
+                                }
+                            }, e -> {
+                                log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
+                                wrappedListener.onFailure(e);
+                            })
+                        );
                 }
 
             }, e -> {

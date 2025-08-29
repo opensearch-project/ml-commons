@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
@@ -183,21 +184,35 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroup mlModelGroup,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
-        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
-            if (!access) {
-                wrappedListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "User doesn't have privilege to perform this operation on this model group",
-                            RestStatus.FORBIDDEN
-                        )
-                    );
-            } else {
-                wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
-            }
-        }, e -> {
-            log.error("Failed to validate access for Model Group {}", modelGroupId, e);
-            wrappedListener.onFailure(e);
-        }));
+        // if resource sharing feature is enabled, security plugin will have automatically evaluated access to this model group, hence no
+        // need to validate again
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+            return;
+        }
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                user,
+                modelGroupId,
+                MLModelGroupGetAction.NAME,
+                client,
+
+                ActionListener.wrap(access -> {
+                    if (!access) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User doesn't have privilege to perform this operation on this model group",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
+                    } else {
+                        wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+                    }
+                }, e -> {
+                    log.error("Failed to validate access for Model Group {}", modelGroupId, e);
+                    wrappedListener.onFailure(e);
+                })
+            );
     }
 }
