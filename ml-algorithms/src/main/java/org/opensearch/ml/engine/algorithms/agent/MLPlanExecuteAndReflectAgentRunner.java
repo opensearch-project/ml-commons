@@ -34,7 +34,6 @@ import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_R
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -401,10 +400,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         planListener.whenComplete(llmOutput -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
-            Map<String, String> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
+            Map<String, Object> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
-                String finalResult = parseLLMOutput.get(RESULT_FIELD);
+                String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
                 saveAndReturnFinalResult(
                     (ConversationIndexMemory) memory,
                     parentInteractionId,
@@ -415,8 +414,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     finalListener
                 );
             } else {
-                // todo: optimize double conversion of steps (string to list to string)
-                List<String> steps = Arrays.stream(parseLLMOutput.get(STEPS_FIELD).split(", ")).toList();
+                List<String> steps = (List<String>) parseLLMOutput.get(STEPS_FIELD);
                 addSteps(steps, allParams, STEPS_FIELD);
 
                 String stepToExecute = steps.getFirst();
@@ -546,8 +544,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    Map<String, String> parseLLMOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
-        Map<String, String> modelOutput = new HashMap<>();
+    Map<String, Object> parseLLMOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
+        Map<String, Object> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
         String llmResponse;
         if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
@@ -571,7 +569,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         if (parsedJson.containsKey(STEPS_FIELD)) {
             List<String> steps = (List<String>) parsedJson.get(STEPS_FIELD);
-            modelOutput.put(STEPS_FIELD, String.join(", ", steps));
+            modelOutput.put(STEPS_FIELD, steps);
         }
 
         if (parsedJson.containsKey(RESULT_FIELD)) {

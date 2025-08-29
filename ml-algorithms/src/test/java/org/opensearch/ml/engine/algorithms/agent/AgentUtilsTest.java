@@ -1861,4 +1861,41 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         verify(factory).create(argThat(toolParamsMap -> ((Map<String, Object>) toolParamsMap).get("param1").equals("value1")));
     }
+
+    @Test
+    public void testParseLLMOutput_PathNotFoundExceptionWithEmptyToolCalls() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        parameters.put(TOOL_CALLS_PATH, "$.output.message.content[*].toolUse");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "toolUseId");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.stopReason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = Map
+            .of("output", Map.of("message", Map.of("content", Collections.emptyList(), "role", "assistant")), "stopReason", "end_turn");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output.get(THOUGHT));
+        Assert.assertEquals("", output.get(ACTION_INPUT));
+        Assert.assertEquals("", output.get(TOOL_CALL_ID));
+        Assert.assertTrue(output.containsKey(FINAL_ANSWER));
+        Assert.assertTrue(output.get(FINAL_ANSWER).contains("[]"));
+    }
 }

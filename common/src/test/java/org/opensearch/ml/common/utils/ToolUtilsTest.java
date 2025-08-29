@@ -280,4 +280,67 @@ public class ToolUtilsTest {
         // Should contain only the targeted deep value
         assertEquals("targetValue", result);
     }
+
+    @Test
+    public void testExtractInputParameters_WithJsonInput() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("param1", "value1");
+        parameters.put("input", "{\"key1\": \"jsonValue1\", \"key2\": \"jsonValue2\"}");
+
+        Map<String, Object> attributes = new HashMap<>();
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, attributes);
+
+        assertEquals(4, result.size());
+        assertEquals("value1", result.get("param1"));
+        assertEquals("{\"key1\": \"jsonValue1\", \"key2\": \"jsonValue2\"}", result.get("input"));
+        assertEquals("jsonValue1", result.get("key1"));
+        assertEquals("jsonValue2", result.get("key2"));
+    }
+
+    @Test
+    public void testExtractInputParameters_WithParameterSubstitution() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("param1", "substitutedValue");
+        parameters.put("input", "{\"message\": \"Hello ${parameters.param1}\"}");
+
+        Map<String, Object> attributes = new HashMap<>();
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, attributes);
+
+        assertEquals(3, result.size());
+        assertEquals("substitutedValue", result.get("param1"));
+        assertEquals("{\"message\": \"Hello substitutedValue\"}", result.get("input"));
+        assertEquals("Hello substitutedValue", result.get("message"));
+    }
+
+    @Test
+    public void testExtractInputParameters_WithInvalidJson() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("param1", "value1");
+        parameters.put("input", "invalid json string");
+
+        Map<String, Object> attributes = new HashMap<>();
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, attributes);
+
+        assertEquals(2, result.size());
+        assertEquals("value1", result.get("param1"));
+        assertEquals("invalid json string", result.get("input"));
+    }
+
+    @Test
+    public void testExtractInputParameters_NoInputParameter() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("param1", "value1");
+        parameters.put("param2", "value2");
+
+        Map<String, Object> attributes = new HashMap<>();
+
+        Map<String, String> result = ToolUtils.extractInputParameters(parameters, attributes);
+
+        assertEquals(2, result.size());
+        assertEquals("value1", result.get("param1"));
+        assertEquals("value2", result.get("param2"));
+    }
 }
