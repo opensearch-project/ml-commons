@@ -203,8 +203,13 @@ public class MLMemory implements ToXContentObject, Writeable {
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case MEMORY_EMBEDDING_FIELD:
-                    // Parse embedding as generic object (could be array or sparse map)
-                    memoryEmbedding = parser.map();
+                    if (parser.currentToken() == XContentParser.Token.START_ARRAY) {
+                        memoryEmbedding = parser.list(); // Simple list parsing like ModelTensor
+                    } else if (parser.currentToken() == XContentParser.Token.START_OBJECT) {
+                        memoryEmbedding = parser.map(); // For sparse embeddings
+                    } else {
+                        parser.skipChildren();
+                    }
                     break;
                 default:
                     parser.skipChildren();
