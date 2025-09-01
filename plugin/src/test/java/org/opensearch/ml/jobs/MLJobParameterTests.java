@@ -6,18 +6,25 @@
 package org.opensearch.ml.jobs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
+import org.opensearch.search.SearchModule;
 
 public class MLJobParameterTests {
 
@@ -69,5 +76,60 @@ public class MLJobParameterTests {
         assertNull(nullParameter.getLockDurationSeconds());
         assertNull(nullParameter.getJitter());
         assertNull(nullParameter.getJobType());
+    }
+
+    @Test
+    public void testGetters() {
+        assertNotNull(jobParameter.getLastUpdateTime());
+        assertNotNull(jobParameter.getEnabledTime());
+    }
+
+    @Test
+    public void testParseWithAllFields() throws IOException {
+        String json = "{"
+            + "\"name\":\"test-job\","
+            + "\"enabled\":true,"
+            + "\"enabled_time\":1234567890000,"
+            + "\"last_update_time\":1234567890000,"
+            + "\"schedule\":{\"interval\":{\"start_time\":1234567890000,\"period\":1,\"unit\":\"Minutes\"}},"
+            + "\"lock_duration_seconds\":30,"
+            + "\"jitter\":0.5,"
+            + "\"type\":\"STATS_COLLECTOR\""
+            + "}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
+        MLJobParameter parsed = MLJobParameter.parse(parser);
+
+        assertEquals("test-job", parsed.getName());
+        assertTrue(parsed.isEnabled());
+        assertNotNull(parsed.getEnabledTime());
+        assertNotNull(parsed.getLastUpdateTime());
+        assertNotNull(parsed.getSchedule());
+        assertEquals(Long.valueOf(30), parsed.getLockDurationSeconds());
+        assertEquals(Double.valueOf(0.5), parsed.getJitter());
+        assertEquals(MLJobType.STATS_COLLECTOR, parsed.getJobType());
+    }
+
+    @Test
+    public void testParseWithMinimalFields() throws IOException {
+        String json = "{\"name\":\"minimal-job\",\"enabled\":false}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
+        MLJobParameter parsed = MLJobParameter.parse(parser);
+
+        assertEquals("minimal-job", parsed.getName());
+        assertEquals(false, parsed.isEnabled());
     }
 }

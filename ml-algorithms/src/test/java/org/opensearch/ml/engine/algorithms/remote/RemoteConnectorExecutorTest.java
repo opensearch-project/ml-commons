@@ -7,8 +7,10 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
@@ -17,7 +19,9 @@ import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
@@ -31,6 +35,7 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
@@ -40,6 +45,10 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -64,6 +73,9 @@ public class RemoteConnectorExecutorTest {
 
     @Mock
     ActionListener<Tuple<Integer, ModelTensors>> actionListener;
+
+    @Mock
+    private MLAlgoParams mlInputParams;
 
     @Before
     public void setUp() {
@@ -174,5 +186,166 @@ public class RemoteConnectorExecutorTest {
                 () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
+    }
+
+    @Test
+    public void executePreparePayloadAndInvoke_PassingParameter() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "You are a ${parameters.role}"))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .embeddingContentType(null)
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(inputParams)
+            .inputDataset(inputDataSet)
+            .build();
+
+        Exception exception = Assert
+            .assertThrows(
+                IllegalArgumentException.class,
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
+            );
+        assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
+    }
+
+    @Test
+    public void executePreparePayloadAndInvoke_GetParamsIOException() throws Exception {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "test input"))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        doThrow(new IOException("UT test IOException")).when(mlInputParams).toXContent(any(XContentBuilder.class), any());
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(mlInputParams)
+            .inputDataset(inputDataSet)
+            .build();
+
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
+        verify(actionListener).onFailure(argThat(e -> e instanceof IOException && e.getMessage().contains("UT test IOException")));
+    }
+
+    @Test
+    public void executeGetParams_MissingParameter() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "${parameters.input}"))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .embeddingContentType(null)
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(inputParams)
+            .inputDataset(inputDataSet)
+            .build();
+
+        try {
+            Map<String, String> paramsMap = RemoteConnectorExecutor.getParams(mlInput);
+            Map<String, String> expectedMap = new HashMap<>();
+            expectedMap.put("sparse_embedding_format", "WORD");
+            Assert.assertEquals(expectedMap, paramsMap);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void executeGetParams_PassingParameter() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "${parameters.input}"))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        AsymmetricTextEmbeddingParameters inputParams = AsymmetricTextEmbeddingParameters
+            .builder()
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
+            .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.PASSAGE)
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(inputParams)
+            .inputDataset(inputDataSet)
+            .build();
+
+        try {
+            Map<String, String> paramsMap = RemoteConnectorExecutor.getParams(mlInput);
+            Map<String, String> expectedMap = new HashMap<>();
+            expectedMap.put("sparse_embedding_format", "WORD");
+            expectedMap.put("content_type", "PASSAGE");
+            Assert.assertEquals(expectedMap, paramsMap);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void executeGetParams_ConvertToString() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "${parameters.input}"))
+            .actionType(PREDICT)
+            .build();
+        KMeansParams inputParams = KMeansParams
+            .builder()
+            .centroids(5)
+            .iterations(100)
+            .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
+            .build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .parameters(inputParams)
+            .inputDataset(inputDataSet)
+            .build();
+
+        try {
+            Map<String, String> paramsMap = RemoteConnectorExecutor.getParams(mlInput);
+            Map<String, String> expectedMap = new HashMap<>();
+            expectedMap.put("centroids", "5");
+            expectedMap.put("iterations", "100");
+            expectedMap.put("distance_type", "EUCLIDEAN");
+            Assert.assertEquals(expectedMap, paramsMap);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
