@@ -11,7 +11,6 @@ import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.Future;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -222,7 +221,7 @@ public class MLEngine {
         }
     }
 
-    public Future<String> encrypt(String credential, String tenantId) {
+    public String encrypt(String credential, String tenantId) {
         return encryptor.encrypt(credential, tenantId);
     }
 

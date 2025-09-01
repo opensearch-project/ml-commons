@@ -21,8 +21,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -307,7 +305,7 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, Future<String>> function) {
+    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -384,30 +382,15 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void decrypt(String action, BiFunction<String, String, Future<String>> function, String tenantId) {
-        Map<String, Future<String>> decryptingTempCredential = new HashMap<>();
-        decryptedCredential = new HashMap<>();
+    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
+        Map<String, String> decrypted = new HashMap<>();
         for (String key : credential.keySet()) {
-            decryptingTempCredential.put(key, function.apply(credential.get(key), tenantId));
+            decrypted.put(key, function.apply(credential.get(key), tenantId));
         }
-        fillCredential(decryptingTempCredential, decryptedCredential);
+        this.decryptedCredential = decrypted;
         Optional<ConnectorAction> connectorAction = findAction(action);
         Map<String, String> headers = connectorAction.map(ConnectorAction::getHeaders).orElse(null);
         this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    private void fillCredential(Map<String, Future<String>> decrypted, Map<String, String> decryptedCredential) {
-        for (String key : decrypted.keySet()) {
-            try {
-                if (decrypted.get(key) != null) {
-                    decryptedCredential.put(key, decrypted.get(key).get());
-                } else {
-                    decryptedCredential.put(key, null);
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-            }
-        }
     }
 
     @Override
@@ -422,12 +405,11 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void encrypt(BiFunction<String, String, Future<String>> function, String tenantId) {
-        Map<String, Future<String>> encryptingCredential = new HashMap<>();
+    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
         for (String key : credential.keySet()) {
-            encryptingCredential.put(key, function.apply(credential.get(key), tenantId));
+            String encrypted = function.apply(credential.get(key), tenantId);
+            credential.put(key, encrypted);
         }
-        fillCredential(encryptingCredential, credential);
     }
 
     @Override

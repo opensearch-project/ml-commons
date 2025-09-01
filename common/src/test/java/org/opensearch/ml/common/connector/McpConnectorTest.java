@@ -16,8 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 
 import org.junit.Assert;
@@ -42,16 +40,16 @@ public class McpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, Future<String>> encryptFunction;
-    BiFunction<String, String, Future<String>> decryptFunction;
+    BiFunction<String, String, String> encryptFunction;
+    BiFunction<String, String, String> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING =
         "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
 
     @Before
     public void setUp() {
-        encryptFunction = (s, v) -> CompletableFuture.supplyAsync(() -> "encrypted: " + s.toLowerCase(Locale.ROOT));
-        decryptFunction = (s, v) -> CompletableFuture.supplyAsync(() -> "decrypted: " + s.toUpperCase(Locale.ROOT));
+        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
+        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
     }
 
     @Test

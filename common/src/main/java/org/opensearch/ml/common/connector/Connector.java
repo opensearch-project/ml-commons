@@ -16,7 +16,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -80,9 +79,9 @@ public interface Connector extends ToXContentObject, Writeable {
 
     <T> T createPayload(String action, Map<String, String> parameters);
 
-    void decrypt(String action, BiFunction<String, String, Future<String>> function, String tenantId);
+    void decrypt(String action, BiFunction<String, String, String> function, String tenantId);
 
-    void encrypt(BiFunction<String, String, Future<String>> function, String tenantId);
+    void encrypt(BiFunction<String, String, String> function, String tenantId);
 
     Connector cloneConnector();
 
@@ -92,7 +91,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     void writeTo(StreamOutput out) throws IOException;
 
-    void update(MLCreateConnectorInput updateContent, BiFunction<String, String, Future<String>> function);
+    void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function);
 
     <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException;
 
