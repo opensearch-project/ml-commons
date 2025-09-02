@@ -95,6 +95,11 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
+    public Boolean allowToMatchPattern() {
+        return false;
+    }
+
+    @Override
     public Client getClient() {
         return client;
     }

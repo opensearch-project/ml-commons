@@ -72,6 +72,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
+    public Boolean allowToMatchPattern() {
+        return true;
+    }
+
+    @Override
     public Client getClient() {
         return client;
     }

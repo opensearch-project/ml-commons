@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_AGENT_NAME;
+import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
+import static org.opensearch.ml.common.indexInsight.IndexInsight.TASK_TYPE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.nio.charset.StandardCharsets;
@@ -14,8 +16,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.RegexpQueryBuilder;
 import org.opensearch.index.query.ScriptQueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -29,6 +34,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
+import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
@@ -96,30 +102,20 @@ public class IndexInsightUtils {
         return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
     }
 
-    public static SearchSourceBuilder buildPatternSourceBuilder(String targetIndexName) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("text", targetIndexName);
+    public static SearchSourceBuilder buildPatternSourceBuilder( String taskType) {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.size(100);
 
-        String source = ""
-                        + "if (doc['index_name'].size() == 0) return false;"
-                        + "String pat = doc['index_name'].value;"
-                        + "return java.util.regex.Pattern"
-                        + "         .compile(pat)"
-                        + "         .matcher(params.text)"
-                        + "         .find();";
+        RegexpQueryBuilder regexpQuery = QueryBuilders
+                .regexpQuery(INDEX_NAME_FIELD, ".*[*?,].*");
 
-        Script script = new Script(ScriptType.INLINE, "painless", source, params);
+        TermQueryBuilder termQuery = QueryBuilders.termQuery(TASK_TYPE_FIELD, taskType);
 
-        ScriptQueryBuilder scriptQuery = QueryBuilders.scriptQuery(script);
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery()
+                .filter(regexpQuery).filter(termQuery);
 
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.query(scriptQuery);
-        searchSourceBuilder.size(100);
-
-        return searchSourceBuilder;
-
-
-
+        sourceBuilder.query(boolQuery);
+        return sourceBuilder;
     }
 
 
@@ -134,6 +130,17 @@ public class IndexInsightUtils {
             return JsonPath.read(data, "$.content[0].text");
         }
         return JsonPath.read(data, "$.response");
+    }
+
+    public static  Map<String, Object> matchPattern(SearchHit[] hits, String targetIndex) {
+        for (SearchHit hit: hits) {
+            Map<String, Object> source = hit.getSourceAsMap();
+            String pattern = (String) source.get(INDEX_NAME_FIELD);
+            if (targetIndex.matches(pattern)) {
+                return source;
+            }
+        }
+        return null;
     }
 
     /**
