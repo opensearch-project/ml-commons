@@ -82,7 +82,7 @@ spotless {
         removeUnusedImports()
         importOrder 'java', 'javax', 'org', 'com'
 
-        eclipse().configFile rootProject.file('buildSrc/formatterConfig.xml')
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
     }
 }
 
