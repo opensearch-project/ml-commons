@@ -10,9 +10,12 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.ScriptQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -24,6 +27,9 @@ import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.script.Script;
+import org.opensearch.script.ScriptType;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.hash.Hashing;
@@ -89,6 +95,33 @@ public class IndexInsightUtils {
         String combined = sourceIndex + "_" + taskType.toString();
         return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
     }
+
+    public static SearchSourceBuilder buildPatternSourceBuilder(String targetIndexName) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("text", targetIndexName);
+
+        String source = ""
+                        + "if (doc['index_name'].size() == 0) return false;"
+                        + "String pat = doc['index_name'].value;"
+                        + "return java.util.regex.Pattern"
+                        + "         .compile(pat)"
+                        + "         .matcher(params.text)"
+                        + "         .find();";
+
+        Script script = new Script(ScriptType.INLINE, "painless", source, params);
+
+        ScriptQueryBuilder scriptQuery = QueryBuilders.scriptQuery(script);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(scriptQuery);
+        searchSourceBuilder.size(100);
+
+        return searchSourceBuilder;
+
+
+
+    }
+
 
     /**
      * Auto-detects LLM response format and extracts the response text if response_filter is not configured
