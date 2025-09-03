@@ -337,8 +337,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    @SuppressWarnings("removal")
-    private ActionListener<Object> createAgentActionListener(
+    @VisibleForTesting
+    ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
@@ -357,7 +357,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         });
     }
 
-    private ActionListener<Object> createAsyncTaskUpdater(MLTask mlTask, List<ModelTensors> outputs, List<ModelTensor> modelTensors) {
+    @VisibleForTesting
+    ActionListener<Object> createAsyncTaskUpdater(MLTask mlTask, List<ModelTensors> outputs, List<ModelTensor> modelTensors) {
         String taskId = mlTask.getTaskId();
         Map<String, Object> agentResponse = new HashMap<>();
         Map<String, Object> updatedTask = new HashMap<>();
@@ -534,7 +535,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    private void handleAgentRetrievalError(Throwable throwable, String agentId, ActionListener<MLAgent> listener) {
+    @VisibleForTesting
+    void handleAgentRetrievalError(Throwable throwable, String agentId, ActionListener<MLAgent> listener) {
         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
         if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
             log.error("Failed to get Agent index", cause);
@@ -545,7 +547,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    private void parseAgentResponse(Object response, String agentId, String tenantId, ActionListener<MLAgent> listener) {
+    @VisibleForTesting
+    void parseAgentResponse(Object response, String agentId, String tenantId, ActionListener<MLAgent> listener) {
         try {
             // Cast to GetDataObjectResponse to access parser method
             org.opensearch.remote.metadata.client.GetDataObjectResponse getDataObjectResponse =
@@ -582,7 +585,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    private MLMemorySpec configureMemorySpec(MLAgent mlAgent, AgentMLInput agentMLInput, RemoteInferenceInputDataSet inputDataSet) {
+    @VisibleForTesting
+    MLMemorySpec configureMemorySpec(MLAgent mlAgent, AgentMLInput agentMLInput, RemoteInferenceInputDataSet inputDataSet) {
         MLMemorySpec memorySpec = mlAgent.getMemory();
 
         log.info("Request parameters keys: {}", inputDataSet.getParameters().keySet());
@@ -605,7 +609,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         return memorySpec;
     }
 
-    private MLMemorySpec configureMemoryFromInput(Map<String, Object> memoryMap, RemoteInferenceInputDataSet inputDataSet) {
+    @VisibleForTesting
+    MLMemorySpec configureMemoryFromInput(Map<String, Object> memoryMap, RemoteInferenceInputDataSet inputDataSet) {
         String memoryType = (String) memoryMap.get("type");
         if (memoryType == null)
             return null;
@@ -642,7 +647,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         return MLMemorySpec.builder().type(memoryType).build();
     }
 
-    private void handleMemoryCreation(
+    @VisibleForTesting
+    void handleMemoryCreation(
         MLMemorySpec memorySpec,
         AgentMLInput agentMLInput,
         String agentId,
@@ -748,7 +754,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }));
     }
 
-    private void handleBedrockMemory(
+    @VisibleForTesting
+    void handleBedrockMemory(
         BedrockAgentCoreMemory.Factory factory,
         AgentMLInput agentMLInput,
         String agentId,
