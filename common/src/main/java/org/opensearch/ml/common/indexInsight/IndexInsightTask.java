@@ -20,9 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -37,7 +35,7 @@ import org.opensearch.transport.client.Client;
 public interface IndexInsightTask {
 
     /**
-     * Execute the index insight task following the new design:
+     * Execute the index insight task:
      * 1. Check if record exists in storage
      * 2. Check status and last updated time
      * 3. Check prerequisites
@@ -52,31 +50,27 @@ public interface IndexInsightTask {
             if (getResponse.isExists()) {
                 handleExistingDoc(getResponse.getSourceAsMap(), storageIndex, tenantId, listener);
             } else {
-                if (allowToMatchPattern()) {
-                    SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
-                    SearchRequest patternSearchRequest = new SearchRequest(storageIndex).source(patternSourceBuilder);
-                    getClient().search(patternSearchRequest, ActionListener.wrap(
-                            r -> {
-                                SearchHit[] hits = r.getHits().getHits();
-                                Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
-                                if (Objects.isNull(mappedPatternSource)) {
-                                    beginGeneration(storageIndex, tenantId, listener);
-                                } else {
-                                    handleExistingDoc(mappedPatternSource, storageIndex, tenantId, listener);
-                                }
-                            },
-                            listener::onFailure
-                    ));
-                } else {
-                    beginGeneration(storageIndex, tenantId, listener);
-                }
-
+                SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
+                SearchRequest patternSearchRequest = new SearchRequest(storageIndex).source(patternSourceBuilder);
+                getClient().search(patternSearchRequest, ActionListener.wrap(r -> {
+                    SearchHit[] hits = r.getHits().getHits();
+                    Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
+                    if (Objects.isNull(mappedPatternSource)) {
+                        beginGeneration(storageIndex, tenantId, listener);
+                    } else {
+                        handlePatternMatchedDoc(mappedPatternSource, storageIndex, tenantId, listener);
+                    }
+                }, listener::onFailure));
             }
         }, e -> { listener.onFailure(new Exception("Failed to check existing document", e)); }));
     }
 
-    default void handleExistingDoc(Map<String, Object> source, String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        //Map<String, Object> source = getResponse.getSourceAsMap();
+    default void handleExistingDoc(
+        Map<String, Object> source,
+        String storageIndex,
+        String tenantId,
+        ActionListener<IndexInsight> listener
+    ) {
         String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
         Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
         long currentTime = Instant.now().toEpochMilli();
@@ -117,6 +111,28 @@ public interface IndexInsightTask {
                 beginGeneration(storageIndex, tenantId, listener);
                 break;
         }
+    }
+
+    /**
+     * Handle pattern matched document
+     */
+    default void handlePatternMatchedDoc(
+        Map<String, Object> patternSource,
+        String storageIndex,
+        String tenantId,
+        ActionListener<IndexInsight> listener
+    ) {
+        String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
+        IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
+
+        if (status != IndexInsightTaskStatus.COMPLETED) {
+            // If pattern source is not completed, fall back to normal generation
+            beginGeneration(storageIndex, tenantId, listener);
+            return;
+        }
+
+        // Handle pattern result
+        handlePatternResult(patternSource, storageIndex, tenantId, listener);
     }
 
     /**
@@ -245,8 +261,6 @@ public interface IndexInsightTask {
      */
     String getSourceIndex();
 
-    Boolean allowToMatchPattern();
-
     /**
      * Get the prerequisites of this task
      * @return list of task types that this task depends on
@@ -268,4 +282,27 @@ public interface IndexInsightTask {
      * Create prerequisite task instance (to be implemented by each task)
      */
     IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType);
+
+    /**
+     * Handle pattern result
+     */
+    default void handlePatternResult(
+        Map<String, Object> patternSource,
+        String storageIndex,
+        String tenantId,
+        ActionListener<IndexInsight> listener
+    ) {
+        // Default implementation: return pattern result as-is
+        Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
+        IndexInsight insight = IndexInsight
+            .builder()
+            .index(getSourceIndex())
+            .taskType(getTaskType())
+            .content((String) patternSource.get(IndexInsight.CONTENT_FIELD))
+            .status(IndexInsightTaskStatus.COMPLETED)
+            .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
+            .build();
+        listener.onResponse(insight);
+    }
+
 }

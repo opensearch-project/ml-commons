@@ -111,11 +111,6 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     }
 
     @Override
-    public Boolean allowToMatchPattern() {
-        return true;
-    }
-
-    @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.emptyList();
     }

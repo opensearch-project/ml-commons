@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.EXAMPLE_
 import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.IMPORTANT_COLUMN_KEYWORD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -61,6 +62,28 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
     }
 
+    /**
+     * Filter pattern-matched field descriptions to only include fields present in current index
+     */
+    private Map<String, Object> filterFieldDescriptions(
+        Map<String, Object> patternFieldDescriptions,
+        Map<String, Object> currentIndexFields
+    ) {
+        Map<String, Object> filteredDescriptions = new LinkedHashMap<>();
+
+        if (patternFieldDescriptions == null || currentIndexFields == null) {
+            return filteredDescriptions;
+        }
+
+        for (String fieldName : currentIndexFields.keySet()) {
+            if (patternFieldDescriptions.containsKey(fieldName)) {
+                filteredDescriptions.put(fieldName, patternFieldDescriptions.get(fieldName));
+            }
+        }
+
+        return filteredDescriptions;
+    }
+
     @Override
     public MLIndexInsightType getTaskType() {
         return MLIndexInsightType.FIELD_DESCRIPTION;
@@ -72,8 +95,69 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public Boolean allowToMatchPattern() {
-        return true;
+    public void handlePatternResult(
+        Map<String, Object> patternSource,
+        String storageIndex,
+        String tenantId,
+        ActionListener<IndexInsight> listener
+    ) {
+        try {
+            String patternContent = (String) patternSource.get(IndexInsight.CONTENT_FIELD);
+            Map<String, Object> patternFieldDescriptions = gson.fromJson(patternContent, Map.class);
+
+            // Get current index mapping
+            org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest getMappingsRequest =
+                new org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest().indices(sourceIndex);
+
+            getClient().admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
+                try {
+                    Map<String, org.opensearch.cluster.metadata.MappingMetadata> mappings = getMappingsResponse.getMappings();
+                    if (mappings.isEmpty()) {
+                        beginGeneration(storageIndex, tenantId, listener);
+                        return;
+                    }
+
+                    // Extract field names from current index mapping
+                    Map<String, String> currentFields = new java.util.HashMap<>();
+                    for (org.opensearch.cluster.metadata.MappingMetadata mappingMetadata : mappings.values()) {
+                        Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
+                        if (mappingSource != null) {
+                            IndexInsightUtils.extractFieldNamesTypes(mappingSource, currentFields, "", false);
+                        }
+                    }
+
+                    Map<String, Object> currentFieldsMap = new java.util.HashMap<>();
+                    for (String fieldName : currentFields.keySet()) {
+                        currentFieldsMap.put(fieldName, currentFields.get(fieldName));
+                    }
+
+                    Map<String, Object> filteredDescriptions = filterFieldDescriptions(patternFieldDescriptions, currentFieldsMap);
+
+                    // Create filtered result without storing
+                    Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
+                    IndexInsight insight = IndexInsight
+                        .builder()
+                        .index(getSourceIndex())
+                        .taskType(getTaskType())
+                        .content(gson.toJson(filteredDescriptions))
+                        .status(IndexInsightTaskStatus.COMPLETED)
+                        .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
+                        .build();
+                    listener.onResponse(insight);
+
+                } catch (Exception e) {
+                    log.error("Failed to process current index mapping for index {}", sourceIndex, e);
+                    listener.onFailure(e);
+                }
+            }, e -> {
+                log.error("Failed to get current index mapping for index {}", sourceIndex, e);
+                listener.onFailure(e);
+            }));
+
+        } catch (Exception e) {
+            log.error("Failed to filter field descriptions for index {}", sourceIndex, e);
+            listener.onFailure(e);
+        }
     }
 
     @Override

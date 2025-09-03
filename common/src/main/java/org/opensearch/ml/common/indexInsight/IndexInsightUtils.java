@@ -12,14 +12,12 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.RegexpQueryBuilder;
-import org.opensearch.index.query.ScriptQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLConfig;
@@ -32,8 +30,6 @@ import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
-import org.opensearch.script.Script;
-import org.opensearch.script.ScriptType;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -102,22 +98,19 @@ public class IndexInsightUtils {
         return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
     }
 
-    public static SearchSourceBuilder buildPatternSourceBuilder( String taskType) {
+    public static SearchSourceBuilder buildPatternSourceBuilder(String taskType) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.size(100);
 
-        RegexpQueryBuilder regexpQuery = QueryBuilders
-                .regexpQuery(INDEX_NAME_FIELD, ".*[*?,].*");
+        RegexpQueryBuilder regexpQuery = QueryBuilders.regexpQuery(INDEX_NAME_FIELD, ".*[*?,].*");
 
         TermQueryBuilder termQuery = QueryBuilders.termQuery(TASK_TYPE_FIELD, taskType);
 
-        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery()
-                .filter(regexpQuery).filter(termQuery);
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().filter(regexpQuery).filter(termQuery);
 
         sourceBuilder.query(boolQuery);
         return sourceBuilder;
     }
-
 
     /**
      * Auto-detects LLM response format and extracts the response text if response_filter is not configured
@@ -132,11 +125,13 @@ public class IndexInsightUtils {
         return JsonPath.read(data, "$.response");
     }
 
-    public static  Map<String, Object> matchPattern(SearchHit[] hits, String targetIndex) {
-        for (SearchHit hit: hits) {
+    public static Map<String, Object> matchPattern(SearchHit[] hits, String targetIndex) {
+        for (SearchHit hit : hits) {
             Map<String, Object> source = hit.getSourceAsMap();
             String pattern = (String) source.get(INDEX_NAME_FIELD);
-            if (targetIndex.matches(pattern)) {
+            // Convert wildcard pattern to regex pattern
+            String regexPattern = pattern.replace("*", ".*").replace("?", ".");
+            if (targetIndex.matches(regexPattern)) {
                 return source;
             }
         }

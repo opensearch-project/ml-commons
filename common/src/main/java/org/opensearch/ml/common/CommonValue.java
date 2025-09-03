@@ -119,5 +119,4 @@ public class CommonValue {
     public static final long INDEX_INSIGHT_GENERATING_TIMEOUT = 3 * 60 * 1000;
     public static final long INDEX_INSIGHT_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
 
-
 }

@@ -75,11 +75,17 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     @Override
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+        runTask(storageIndex, tenantId, listener, true);
+    }
+
+    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
         try {
-            collectStatisticalData(storageIndex, listener);
+            collectStatisticalData(storageIndex, listener, shouldStore);
         } catch (Exception e) {
             log.error("Failed to execute statistical data task for index {}", sourceIndex, e);
-            saveFailedStatus(storageIndex);
+            if (shouldStore) {
+                saveFailedStatus(storageIndex);
+            }
             listener.onFailure(e);
         }
     }
@@ -95,8 +101,23 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
-    public Boolean allowToMatchPattern() {
-        return false;
+    public void handlePatternMatchedDoc(
+        Map<String, Object> patternSource,
+        String storageIndex,
+        String tenantId,
+        ActionListener<IndexInsight> listener
+    ) {
+        String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
+        IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
+
+        if (status != IndexInsightTaskStatus.COMPLETED) {
+            // If pattern source is not completed, fall back to normal generation
+            runTask(storageIndex, tenantId, listener, true);
+            return;
+        }
+
+        // For StatisticalDataTask, run without storing when pattern matched
+        runTask(storageIndex, tenantId, listener, false);
     }
 
     @Override
@@ -116,12 +137,10 @@ public class StatisticalDataTask implements IndexInsightTask {
         return getMappingsRequest;
     }
 
-    private void collectStatisticalData(String storageIndex, ActionListener<IndexInsight> listener) {
-
+    private void collectStatisticalData(String storageIndex, ActionListener<IndexInsight> listener, boolean shouldStore) {
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(sourceIndex);
 
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
-
             Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
             if (mappings.isEmpty()) {
                 listener.onFailure(new IllegalArgumentException("No matching mapping with index name: " + sourceIndex));
@@ -141,17 +160,30 @@ public class StatisticalDataTask implements IndexInsightTask {
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
                 Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
-
                 String statisticalContent = gson.toJson(parseSearchResult(fieldsToType, highPriorityColumns, searchResponse));
-                saveResult(statisticalContent, storageIndex, listener);
+                
+                if (shouldStore) {
+                    saveResult(statisticalContent, storageIndex, listener);
+                } else {
+                    // Return IndexInsight directly without storing
+                    IndexInsight insight = IndexInsight
+                        .builder()
+                        .index(sourceIndex)
+                        .taskType(getTaskType())
+                        .content(statisticalContent)
+                        .status(IndexInsightTaskStatus.COMPLETED)
+                        .lastUpdatedTime(java.time.Instant.now())
+                        .build();
+                    listener.onResponse(insight);
+                }
             }, e -> {
                 log.error("Failed to collect statistical data for index: {}", sourceIndex, e);
-                saveFailedStatus(storageIndex);
+                if (shouldStore) {
+                    saveFailedStatus(storageIndex);
+                }
                 listener.onFailure(e);
             }));
-
         }, listener::onFailure));
-
     }
 
     @Override
