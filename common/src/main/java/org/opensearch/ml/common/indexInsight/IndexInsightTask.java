@@ -7,9 +7,11 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_UPDATE_INTERVAL;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_STORAGE_INDEX;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.buildPatternSourceBuilder;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.matchPattern;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.reflections.Reflections.log;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -18,13 +20,21 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.swing.*;
+
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -43,31 +53,42 @@ public interface IndexInsightTask {
      * 5. Write back to storage
      */
     default void execute(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        String docId = generateDocId();
-        GetRequest getRequest = new GetRequest(storageIndex, docId);
-
-        getClient().get(getRequest, ActionListener.wrap(getResponse -> {
+        getIndexInsight(tenantId, ActionListener.wrap(getResponse -> {
             if (getResponse.isExists()) {
                 handleExistingDoc(getResponse.getSourceAsMap(), storageIndex, tenantId, listener);
             } else {
                 if (allowToMatchPattern()) {
                     SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
-                    SearchRequest patternSearchRequest = new SearchRequest(storageIndex).source(patternSourceBuilder);
-                    getClient().search(patternSearchRequest, ActionListener.wrap(r -> {
-                        SearchHit[] hits = r.getHits().getHits();
-                        Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
-                        if (Objects.isNull(mappedPatternSource)) {
-                            beginGeneration(storageIndex, tenantId, listener);
-                        } else {
-                            handleExistingDoc(mappedPatternSource, storageIndex, tenantId, listener);
-                        }
-                    }, listener::onFailure));
+                    getSdkClient()
+                        .searchDataObjectAsync(
+                            SearchDataObjectRequest
+                                .builder()
+                                .tenantId(tenantId)
+                                .indices(storageIndex)
+                                .searchSourceBuilder(patternSourceBuilder)
+                                .build()
+                        )
+                        .whenComplete((r, throwable) -> {
+                            if (throwable != null) {
+                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                                log.error("Failed to index failed index insight", cause);
+                                listener.onFailure(cause);
+                            } else {
+                                SearchResponse searchResponse = r.searchResponse();
+                                SearchHit[] hits = searchResponse.getHits().getHits();
+                                Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
+                                if (Objects.isNull(mappedPatternSource)) {
+                                    beginGeneration(storageIndex, tenantId, listener);
+                                } else {
+                                    handleExistingDoc(mappedPatternSource, storageIndex, tenantId, listener);
+                                }
+                            }
+                        });
                 } else {
                     beginGeneration(storageIndex, tenantId, listener);
                 }
-
             }
-        }, e -> { listener.onFailure(new Exception("Failed to check existing document", e)); }));
+        }, listener::onFailure));
     }
 
     default void handleExistingDoc(
@@ -108,6 +129,7 @@ public interface IndexInsightTask {
                         .content((String) source.get(IndexInsight.CONTENT_FIELD))
                         .status(IndexInsightTaskStatus.COMPLETED)
                         .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
+                        .tenantId(tenantId)
                         .build();
                     listener.onResponse(insight);
                 }
@@ -123,19 +145,22 @@ public interface IndexInsightTask {
      * Begin the index insight generation process by updating task status to GENERATING and executing the task with prerequisites.
      */
     default void beginGeneration(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        String docId = generateDocId();
-        Map<String, Object> docMap = new HashMap<>();
-        docMap.put(IndexInsight.INDEX_NAME_FIELD, getSourceIndex());
-        docMap.put(IndexInsight.TASK_TYPE_FIELD, getTaskType().toString());
-        docMap.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.GENERATING.toString());
-        docMap.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
+        IndexInsight indexInsight = IndexInsight
+            .builder()
+            .index(getSourceIndex())
+            .tenantId(tenantId)
+            .taskType(getTaskType())
+            .status(IndexInsightTaskStatus.GENERATING)
+            .lastUpdatedTime(Instant.now())
+            .build();
 
-        UpdateRequest updateRequest = new UpdateRequest(storageIndex, docId).doc(docMap, MediaTypeRegistry.JSON).docAsUpsert(true);
-
-        getClient().update(updateRequest, ActionListener.wrap(r -> { runWithPrerequisites(storageIndex, tenantId, listener); }, e -> {
-            saveFailedStatus(storageIndex);
-            listener.onFailure(e);
-        }));
+        writeIndexInsight(
+            indexInsight,
+            tenantId,
+            ActionListener.wrap(r -> { runWithPrerequisites(storageIndex, tenantId, listener); }, e -> {
+                saveFailedStatus(tenantId, e, listener);
+            })
+        );
     }
 
     default void runWithPrerequisites(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
@@ -153,54 +178,39 @@ public interface IndexInsightTask {
                 if (completedCount.incrementAndGet() == prerequisites.size()) {
                     runTask(storageIndex, tenantId, listener);
                 }
-            }, e -> {
-                saveFailedStatus(storageIndex);
-                listener.onFailure(new Exception("Failed to run prerequisite: " + prerequisite, e));
-            }));
+            }, e -> { saveFailedStatus(tenantId, new Exception("Failed to run prerequisite: " + prerequisite, e), listener); }));
         }
     }
 
-    default void saveResult(String content, String storageIndex, ActionListener<IndexInsight> listener) {
-        String docId = generateDocId();
-        long currentTime = Instant.now().toEpochMilli();
-        Map<String, Object> docMap = new HashMap<>();
-        docMap.put(IndexInsight.INDEX_NAME_FIELD, getSourceIndex());
-        docMap.put(IndexInsight.TASK_TYPE_FIELD, getTaskType().toString());
-        docMap.put(IndexInsight.CONTENT_FIELD, content);
-        docMap.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString());
-        docMap.put(IndexInsight.LAST_UPDATE_FIELD, currentTime);
+    default void saveResult(String content, String tenantId, ActionListener<IndexInsight> listener) {
+        IndexInsight insight = IndexInsight
+            .builder()
+            .index(getSourceIndex())
+            .taskType(getTaskType())
+            .content(content)
+            .status(IndexInsightTaskStatus.COMPLETED)
+            .lastUpdatedTime(Instant.now())
+            .tenantId(tenantId)
+            .build();
 
-        UpdateRequest updateRequest = new UpdateRequest(storageIndex, docId).doc(docMap, MediaTypeRegistry.JSON).docAsUpsert(true);
-
-        getClient().update(updateRequest, ActionListener.wrap(r -> {
-            // Construct IndexInsight object directly instead of querying again
-            IndexInsight insight = IndexInsight
-                .builder()
-                .index(getSourceIndex())
-                .taskType(getTaskType())
-                .content(content)
-                .status(IndexInsightTaskStatus.COMPLETED)
-                .lastUpdatedTime(Instant.ofEpochMilli(currentTime))
-                .build();
-            listener.onResponse(insight);
-        }, e -> {
-            saveFailedStatus(storageIndex);
-            listener.onFailure(e);
+        writeIndexInsight(insight, tenantId, ActionListener.wrap(r -> { listener.onResponse(insight); }, e -> {
+            saveFailedStatus(tenantId, e, listener);
         }));
+
     }
 
-    default void saveFailedStatus(String storageIndex) {
-        String docId = generateDocId();
-        Map<String, Object> docMap = new HashMap<>();
-        docMap.put(IndexInsight.INDEX_NAME_FIELD, getSourceIndex());
-        docMap.put(IndexInsight.TASK_TYPE_FIELD, getTaskType().toString());
-        docMap.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.FAILED.toString());
-        docMap.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
-
-        UpdateRequest updateRequest = new UpdateRequest(storageIndex, docId).doc(docMap, MediaTypeRegistry.JSON).docAsUpsert(true);
-
-        getClient()
-            .update(updateRequest, ActionListener.wrap(r -> {/* Status saved to storage */}, e -> {/* Silently ignore storage failure */}));
+    default void saveFailedStatus(String tenantId, Exception error, ActionListener<IndexInsight> listener) {
+        IndexInsight indexInsight = IndexInsight
+            .builder()
+            .tenantId(tenantId)
+            .index(getSourceIndex())
+            .taskType(getTaskType())
+            .status(IndexInsightTaskStatus.FAILED)
+            .build();
+        writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> {
+            log.info("Successfully created failed index insight with ID: {}");
+            listener.onFailure(error);
+        }, e -> { listener.onFailure(new RuntimeException("Failed to put failed index insight doc", e)); }));
     }
 
     default String generateDocId() {
@@ -211,26 +221,90 @@ public interface IndexInsightTask {
      * Get insight content from storage for a specific task type
      */
     default void getInsightContentFromContainer(
-        String storageIndex,
         MLIndexInsightType taskType,
+        String tenantId,
         ActionListener<Map<String, Object>> listener
     ) {
-        String docId = IndexInsightUtils.generateDocId(getSourceIndex(), taskType);
-        GetRequest getRequest = new GetRequest(storageIndex, docId);
-
-        getClient().get(getRequest, ActionListener.wrap(response -> {
+        getIndexInsight(tenantId, ActionListener.wrap(getResponse -> {
             try {
-                String content = response.isExists() ? response.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
+                String content = getResponse.isExists() ? getResponse.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
                 Map<String, Object> contentMap = gson.fromJson(content, Map.class);
                 listener.onResponse(contentMap);
             } catch (Exception e) {
                 // Return empty content on JSON parsing failure
                 listener.onResponse(new HashMap<>());
             }
-        }, e -> {
-            // Return empty content on failure instead of propagating error
-            listener.onResponse(new HashMap<>());
-        }));
+        }, listener::onFailure));
+
+    }
+
+    private void getIndexInsight(String tenantId, ActionListener<GetResponse> listener) {
+        String docId = generateDocId();
+        try (ThreadContext.StoredContext context = getClient().threadPool().getThreadContext().stashContext()) {
+            getSdkClient()
+                .getDataObjectAsync(
+                    GetDataObjectRequest.builder().tenantId(tenantId).index(ML_INDEX_INSIGHT_STORAGE_INDEX).id(docId).build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to get index insight ", cause);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            GetResponse getResponse = r.getResponse();
+                            assert getResponse != null;
+                            listener.onResponse(getResponse);
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    private void writeIndexInsight(IndexInsight indexInsight, String tenantId, ActionListener<Boolean> listener) {
+        String docId = generateDocId();
+        try (ThreadContext.StoredContext context = getClient().threadPool().getThreadContext().stashContext()) {
+            getSdkClient()
+                .putDataObjectAsync(
+                    PutDataObjectRequest
+                        .builder()
+                        .tenantId(tenantId)
+                        .index(ML_INDEX_INSIGHT_STORAGE_INDEX)
+                        .dataObject(indexInsight)
+                        .id(docId)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to index failed index insight", cause);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            IndexResponse indexResponse = r.indexResponse();
+                            assert indexResponse != null;
+                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED
+                                || indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+                                listener.onResponse(true);
+                            } else {
+                                listener.onFailure(new RuntimeException("Failed to put generating index insight doc"));
+                            }
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    }
+                }
+
+                );
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     /**
@@ -258,6 +332,8 @@ public interface IndexInsightTask {
      * @return the client
      */
     Client getClient();
+
+    SdkClient getSdkClient();
 
     /**
      * Run the specific task logic (to be implemented by each task)

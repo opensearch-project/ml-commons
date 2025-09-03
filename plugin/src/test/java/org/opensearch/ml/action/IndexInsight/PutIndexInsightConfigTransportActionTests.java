@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.IndexInsight;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -36,6 +37,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutRequest;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -316,12 +318,12 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void testCreateIndexInsightConfig_FailToCreateIndexIndex() {
+    public void testCreateIndexInsightConfig_FailToCreateStorageIndex() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(1);
             listener.onResponse(true);
             return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.INDEX_INSIGHT_CONFIG), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.CREATED);
@@ -331,16 +333,11 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
         CompletableFuture<PutDataObjectResponse> putFuture = CompletableFuture.completedFuture(sdkPutResponse);
         when(sdkClient.putDataObjectAsync(any())).thenReturn(putFuture);
 
-        AdminClient adminClient = mock(AdminClient.class);
-        when(client.admin()).thenReturn(adminClient);
-        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
-        when(adminClient.indices()).thenReturn(indicesAdminClient);
-        RuntimeException runtimeException = new RuntimeException("Test Exception");
         doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            listener.onFailure(runtimeException);
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Test Exception"));
             return null;
-        }).when(indicesAdminClient).create(any(), any());
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.INDEX_INSIGHT_STORAGE), any());
 
         putIndexInsightConfigTransportAction.doExecute(null, mlIndexInsightConfigPutRequest, actionListener);
 

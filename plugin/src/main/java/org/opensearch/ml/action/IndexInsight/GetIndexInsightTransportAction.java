@@ -263,11 +263,11 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
     IndexInsightTask createTask(MLIndexInsightGetRequest request) {
         switch (request.getTargetIndexInsight()) {
             case STATISTICAL_DATA:
-                return new StatisticalDataTask(request.getIndexName(), client);
+                return new StatisticalDataTask(request.getIndexName(), client, sdkClient);
             case FIELD_DESCRIPTION:
-                return new FieldDescriptionTask(request.getIndexName(), client);
+                return new FieldDescriptionTask(request.getIndexName(), client, sdkClient);
             case LOG_RELATED_INDEX_CHECK:
-                return new LogRelatedIndexCheckTask(request.getIndexName(), client);
+                return new LogRelatedIndexCheckTask(request.getIndexName(), client, sdkClient);
             default:
                 throw new IllegalArgumentException("Unsupported task type: " + request.getTargetIndexInsight());
         }

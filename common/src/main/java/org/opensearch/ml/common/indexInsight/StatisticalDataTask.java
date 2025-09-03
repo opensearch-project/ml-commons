@@ -24,6 +24,7 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.utils.mergeMetaDataUtils.MergeRuleHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
@@ -66,21 +67,22 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     private final String sourceIndex;
     private final Client client;
+    private final SdkClient sdkClient;
     private SearchHit[] sampleDocuments;
 
-    public StatisticalDataTask(String sourceIndex, Client client) {
+    public StatisticalDataTask(String sourceIndex, Client client, SdkClient sdkClient) {
         this.sourceIndex = sourceIndex;
         this.client = client;
+        this.sdkClient = sdkClient;
     }
 
     @Override
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         try {
-            collectStatisticalData(storageIndex, listener);
+            collectStatisticalData(storageIndex, tenantId, listener);
         } catch (Exception e) {
             log.error("Failed to execute statistical data task for index {}", sourceIndex, e);
-            saveFailedStatus(storageIndex);
-            listener.onFailure(e);
+            saveFailedStatus(tenantId, e, listener);
         }
     }
 
@@ -105,6 +107,11 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
+    public SdkClient getSdkClient() {
+        return sdkClient;
+    }
+
+    @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.emptyList();
     }
@@ -116,7 +123,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return getMappingsRequest;
     }
 
-    private void collectStatisticalData(String storageIndex, ActionListener<IndexInsight> listener) {
+    private void collectStatisticalData(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
 
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(sourceIndex);
 
@@ -143,11 +150,10 @@ public class StatisticalDataTask implements IndexInsightTask {
                 Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
 
                 String statisticalContent = gson.toJson(parseSearchResult(fieldsToType, highPriorityColumns, searchResponse));
-                saveResult(statisticalContent, storageIndex, listener);
+                saveResult(statisticalContent, tenantId, listener);
             }, e -> {
                 log.error("Failed to collect statistical data for index: {}", sourceIndex, e);
-                saveFailedStatus(storageIndex);
-                listener.onFailure(e);
+                saveFailedStatus(tenantId, e, listener);
             }));
 
         }, listener::onFailure));
