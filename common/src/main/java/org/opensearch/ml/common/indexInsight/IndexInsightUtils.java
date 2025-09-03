@@ -129,7 +129,9 @@ public class IndexInsightUtils {
         for (SearchHit hit : hits) {
             Map<String, Object> source = hit.getSourceAsMap();
             String pattern = (String) source.get(INDEX_NAME_FIELD);
-            if (targetIndex.matches(pattern)) {
+            // Convert wildcard pattern to regex pattern
+            String regexPattern = pattern.replace("*", ".*").replace("?", ".");
+            if (targetIndex.matches(regexPattern)) {
                 return source;
             }
         }
