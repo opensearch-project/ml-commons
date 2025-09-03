@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.common.spi.memory;
 
-import org.opensearch.core.action.ActionListener;
-
 import java.util.Map;
+
+import org.opensearch.core.action.ActionListener;
 
 /**
  * A general memory interface.
@@ -28,15 +28,18 @@ public interface Memory<T extends Message> {
      */
     default void save(String id, T message) {}
 
-    default <S> void save(String id, T message, ActionListener<S> listener){}
+    default <S> void save(String id, T message, ActionListener<S> listener) {}
 
     /**
      * Get messages of memory id.
      * @param id memory id
      * @return
      */
-    default T[] getMessages(String id){return null;}
-    default void getMessages(String id, ActionListener<T> listener){}
+    default T[] getMessages(String id) {
+        return null;
+    }
+
+    default void getMessages(String id, ActionListener<T> listener) {}
 
     /**
      * Clear all memory.

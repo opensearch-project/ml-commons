@@ -9,7 +9,6 @@ plugins {
     id 'jacoco'
     id 'io.github.goooler.shadow' version "8.1.7"
     id 'maven-publish'
-    id 'com.diffplug.spotless' version '6.25.0'
     id 'signing'
 }
 
@@ -21,15 +20,6 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
 
-}
-
-spotless {
-    java {
-        removeUnusedImports()
-        importOrder 'java', 'javax', 'org', 'com'
-
-        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
-    }
 }
 
 jacocoTestReport {
