@@ -1042,6 +1042,104 @@ public class MLAgentExecutorTest {
         return new AgentMLInput("test", null, FunctionName.AGENT, dataset);
     }
 
+    @Test
+    public void test_handleMemoryCreation_noMemorySpec() throws IOException {
+        // Test execution when no memory spec is provided
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        // Test with no memory spec (null memory in agent)
+        Map<String, String> params = new HashMap<>();
+        params.put(MEMORY_ID, "test-memory-id");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test-parent-id");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
+        Assert.assertEquals(1, output.getMlModelOutputs().size());
+    }
+
+    @Test
+    public void test_handleMemoryCreation_unsupportedMemoryFactory() throws IOException {
+        // Test handling of unsupported memory factory type
+        Memory.Factory unsupportedFactory = Mockito.mock(Memory.Factory.class);
+        Map<String, Memory.Factory> memoryFactoryMap = ImmutableMap.of("unsupported_type", unsupportedFactory);
+
+        MLAgentExecutor executor = Mockito
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    mlFeatureEnabledSetting,
+                    null
+                )
+            );
+
+        // Create an agent with unsupported memory type
+        MLMemorySpec unsupportedMemorySpec = MLMemorySpec.builder().type("unsupported_type").build();
+        MLAgent mlAgentWithUnsupportedMemory = new MLAgent(
+            "test",
+            MLAgentType.CONVERSATIONAL.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            Collections.emptyList(),
+            Map.of("test", "test"),
+            unsupportedMemorySpec,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null
+        );
+
+        // Create GetResponse with the MLAgent that has unsupported memory
+        XContentBuilder content = mlAgentWithUnsupportedMemory.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "test-agent-id", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse agentGetResponse = new GetResponse(getResult);
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doReturn(mlAgentRunner).when(executor).getAgentRunner(Mockito.any());
+
+        // Test with unsupported memory factory
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        executor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof IllegalArgumentException);
+        Assert.assertTrue(exception.getMessage().contains("Unsupported memory factory type"));
+    }
+
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
 
         mlAgent = new MLAgent(
@@ -1076,6 +1174,232 @@ public class MLAgentExecutorTest {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", agentId, 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    @Test
+    public void testConfigureMemorySpecBranches() {
+        // Test with null memory in AgentMLInput
+        MLAgent agent = MLAgent.builder().name("test").type("flow").build();
+        AgentMLInput input = new AgentMLInput("test", null, FunctionName.AGENT, null);
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        MLMemorySpec result = mlAgentExecutor.configureMemorySpec(agent, input, dataset);
+        Assert.assertNull(result);
+
+        // Test with bedrock_agentcore_memory in parameters
+        params.put("memory_type", "bedrock_agentcore_memory");
+        result = mlAgentExecutor.configureMemorySpec(agent, input, dataset);
+        Assert.assertNotNull(result);
+        Assert.assertEquals("bedrock_agentcore_memory", result.getType());
+
+        // Test with memory in AgentMLInput
+        Map<String, Object> memoryMap = new HashMap<>();
+        memoryMap.put("type", "test_memory");
+        input = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+        input.setMemory(memoryMap);
+        result = mlAgentExecutor.configureMemorySpec(agent, input, dataset);
+        Assert.assertNotNull(result);
+        Assert.assertEquals("test_memory", result.getType());
+    }
+
+    @Test
+    public void testConfigureMemoryFromInputBranches() {
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        // Test with null memory type
+        Map<String, Object> memoryMap = new HashMap<>();
+        MLMemorySpec result = mlAgentExecutor.configureMemoryFromInput(memoryMap, dataset);
+        Assert.assertNull(result);
+
+        // Test with valid memory type and all parameters
+        memoryMap.put("type", "bedrock_agentcore_memory");
+        memoryMap.put("memory_arn", "test-arn");
+        memoryMap.put("region", "us-west-2");
+
+        Map<String, Object> credentials = new HashMap<>();
+        credentials.put("access_key", "test-access");
+        credentials.put("secret_key", "test-secret");
+        credentials.put("session_token", "test-token");
+        memoryMap.put("credentials", credentials);
+
+        result = mlAgentExecutor.configureMemoryFromInput(memoryMap, dataset);
+        Assert.assertNotNull(result);
+        Assert.assertEquals("bedrock_agentcore_memory", result.getType());
+        Assert.assertEquals("bedrock_agentcore_memory", params.get("memory_type"));
+        Assert.assertEquals("test-arn", params.get("memory_arn"));
+        Assert.assertEquals("us-west-2", params.get("memory_region"));
+        Assert.assertEquals("test-access", params.get("memory_access_key"));
+        Assert.assertEquals("test-secret", params.get("memory_secret_key"));
+        Assert.assertEquals("test-token", params.get("memory_session_token"));
+
+        // Test without credentials
+        memoryMap.remove("credentials");
+        params.clear();
+        result = mlAgentExecutor.configureMemoryFromInput(memoryMap, dataset);
+        Assert.assertNotNull(result);
+        Assert.assertNull(params.get("memory_access_key"));
+    }
+
+    @Test
+    public void testHandleBedrockMemoryBranches() throws IOException {
+        // Mock BedrockAgentCoreMemory.Factory
+        org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory.Factory bedrockFactory = Mockito
+            .mock(org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory.Factory.class);
+        org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory bedrockMemory = Mockito
+            .mock(org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory.class);
+
+        // Test without regenerate interaction
+        Map<String, Object> memoryMap = new HashMap<>();
+        memoryMap.put("memory_arn", "test-arn");
+        memoryMap.put("region", "us-west-2");
+
+        AgentMLInput input = new AgentMLInput("test", null, FunctionName.AGENT, null);
+        input.setMemory(memoryMap);
+
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        org.opensearch.ml.common.MLTask task = org.opensearch.ml.common.MLTask
+            .builder()
+            .taskType(org.opensearch.ml.common.MLTaskType.AGENT_EXECUTION)
+            .build();
+        MLAgent agent = MLAgent.builder().name("test").type("flow").build();
+
+        Mockito.when(bedrockMemory.getConversationId()).thenReturn("bedrock-conversation-id");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onResponse(bedrockMemory);
+            return null;
+        }).when(bedrockFactory).create(Mockito.any(), Mockito.any());
+
+        mlAgentExecutor
+            .handleBedrockMemory(
+                bedrockFactory,
+                input,
+                "agent-id",
+                dataset,
+                task,
+                false,
+                Arrays.asList(),
+                Arrays.asList(),
+                agent,
+                agentActionListener
+            );
+
+        Assert.assertEquals("bedrock-conversation-id", params.get(MEMORY_ID));
+
+        // Test with regenerate interaction
+        params.put(REGENERATE_INTERACTION_ID, "regen-id");
+        Interaction mockInteraction = Mockito.mock(Interaction.class);
+        Mockito.when(mockInteraction.getInput()).thenReturn("regenerate question");
+        GetInteractionResponse interactionResponse = Mockito.mock(GetInteractionResponse.class);
+        Mockito.when(interactionResponse.getInteraction()).thenReturn(mockInteraction);
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetInteractionResponse> listener = invocation.getArgument(2);
+            listener.onResponse(interactionResponse);
+            return null;
+        }).when(client).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
+
+        mlAgentExecutor
+            .handleBedrockMemory(
+                bedrockFactory,
+                input,
+                "agent-id",
+                dataset,
+                task,
+                false,
+                Arrays.asList(),
+                Arrays.asList(),
+                agent,
+                agentActionListener
+            );
+
+        Assert.assertEquals("regenerate question", params.get(QUESTION));
+    }
+
+    @Test
+    public void testHandleAgentRetrievalErrorBranches() {
+        ActionListener<MLAgent> listener = Mockito.mock(ActionListener.class);
+
+        // Test with IndexNotFoundException
+        org.opensearch.index.IndexNotFoundException indexException = new org.opensearch.index.IndexNotFoundException("test-index");
+        mlAgentExecutor.handleAgentRetrievalError(indexException, "agent-id", listener);
+
+        Mockito.verify(listener).onFailure(Mockito.any(org.opensearch.OpenSearchStatusException.class));
+
+        // Test with other exception
+        RuntimeException otherException = new RuntimeException("other error");
+        mlAgentExecutor.handleAgentRetrievalError(otherException, "agent-id", listener);
+
+        Mockito.verify(listener, times(2)).onFailure(Mockito.any());
+    }
+
+    @Test
+    public void testParseAgentResponseBranches() throws IOException {
+        ActionListener<MLAgent> listener = Mockito.mock(ActionListener.class);
+
+        // Test with null parser response
+        org.opensearch.remote.metadata.client.GetDataObjectResponse mockResponse = Mockito
+            .mock(org.opensearch.remote.metadata.client.GetDataObjectResponse.class);
+        Mockito.when(mockResponse.parser()).thenReturn(null);
+
+        mlAgentExecutor.parseAgentResponse(mockResponse, "agent-id", null, listener);
+
+        Mockito.verify(listener).onFailure(Mockito.any(org.opensearch.OpenSearchStatusException.class));
+    }
+
+    @Test
+    public void testMultiTenancyEnabledScenarios() {
+        // Test onMultiTenancyEnabledChanged
+        mlAgentExecutor.onMultiTenancyEnabledChanged(true);
+        Assert.assertTrue(mlAgentExecutor.getIsMultiTenancyEnabled());
+
+        // Test execute with multi-tenancy enabled but no tenant ID
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        mlAgentExecutor.setIsMultiTenancyEnabled(true);
+
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput input = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+        input.setTenantId(null);
+
+        try {
+            mlAgentExecutor.execute(input, agentActionListener);
+        } catch (org.opensearch.OpenSearchStatusException e) {
+            // Expected exception for multi-tenancy violation
+            Assert.assertTrue(e.getMessage().contains("You don't have permission to access this resource"));
+        }
+    }
+
+    @Test
+    public void testAsyncTaskUpdaterBranches() {
+        org.opensearch.ml.common.MLTask task = org.opensearch.ml.common.MLTask.builder().taskId("test-task").build();
+        ActionListener<Object> updater = mlAgentExecutor.createAsyncTaskUpdater(task, Arrays.asList(), Arrays.asList());
+
+        // Test with null output
+        updater.onResponse(null);
+
+        // Test with exception
+        updater.onFailure(new RuntimeException("test error"));
+
+        // Verify task state changes
+        Assert.assertNotNull(task.getResponse());
+    }
+
+    @Test
+    public void testCreateAgentActionListenerBranches() {
+        ActionListener<Object> actionListener = mlAgentExecutor
+            .createAgentActionListener(agentActionListener, Arrays.asList(), Arrays.asList(), "test-agent");
+
+        // Test with null output
+        actionListener.onResponse(null);
+        Mockito.verify(agentActionListener).onResponse(null);
+
+        // Test with exception
+        actionListener.onFailure(new RuntimeException("test error"));
+        Mockito.verify(agentActionListener).onFailure(Mockito.any());
     }
 
 }

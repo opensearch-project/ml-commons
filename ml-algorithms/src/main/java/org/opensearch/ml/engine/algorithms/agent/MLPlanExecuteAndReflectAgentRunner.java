@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -71,6 +72,8 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemoryRecord;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
@@ -83,6 +86,9 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
+    // CRITICAL FIX: Cache BedrockAgentCoreMemory configuration to persist across internal calls
+    private static final Map<String, Map<String, String>> bedrockMemoryConfigCache = new ConcurrentHashMap<>();
+
     private final Client client;
     private final Settings settings;
     private final ClusterService clusterService;
@@ -94,6 +100,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
     private final Map<String, Object> taskUpdates = new HashMap<>();
+
+    // CRITICAL FIX: Master session ID to maintain conversation continuity across all agent calls
+    private String masterSessionId = null;
+
+    // CRITICAL FIX: Executor memory ID shared across all executor calls for BedrockAgentCoreMemory
+    private String executorMemoryId = null;
 
     // prompts
     private String plannerPrompt;
@@ -272,49 +284,171 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener) {
-        Map<String, String> allParams = new HashMap<>();
-        allParams.putAll(apiParams);
-        allParams.putAll(mlAgent.getParameters());
-
-        setupPromptParameters(allParams);
-
-        // planner prompt for the first call
-        usePlannerPromptTemplate(allParams);
+        Map<String, String> allParams = setupAllParameters(mlAgent, apiParams);
+        String memoryType = configureMemoryType(mlAgent, allParams);
 
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        String memoryType = mlAgent.getMemory().getType();
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
-        // todo: use chat history instead of completed steps
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory
-            .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-                memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
-                    List<String> completedSteps = new ArrayList<>();
-                    for (Interaction interaction : interactions) {
-                        String question = interaction.getInput();
-                        String response = interaction.getResponse();
+        // If no memory type is available, use default
+        if (memoryType == null) {
+            log.info("No memory type found in agent configuration or parameters, using default conversation_index");
+            memoryType = "conversation_index";
+        }
 
-                        if (Strings.isNullOrEmpty(response)) {
-                            continue;
+        // CRITICAL FIX: Initialize session IDs once for BedrockAgentCoreMemory to maintain conversation continuity
+        if ("bedrock_agentcore_memory".equals(memoryType) && masterSessionId == null) {
+            masterSessionId = "bedrock-session-" + System.currentTimeMillis();
+            executorMemoryId = "bedrock-executor-" + System.currentTimeMillis();
+            log.info("DEBUG: Created master session ID for BedrockAgentCoreMemory: {}", masterSessionId);
+            log.info("DEBUG: Created executor memory ID for BedrockAgentCoreMemory: {}", executorMemoryId);
+        }
+
+        // Handle different memory types
+        Object memoryFactory = memoryFactoryMap.get(memoryType);
+        if (memoryFactory instanceof ConversationIndexMemory.Factory) {
+            ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactory;
+            conversationIndexMemoryFactory
+                .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+                    memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
+                        List<String> completedSteps = new ArrayList<>();
+                        for (Interaction interaction : interactions) {
+                            String question = interaction.getInput();
+                            String response = interaction.getResponse();
+
+                            if (Strings.isNullOrEmpty(response)) {
+                                continue;
+                            }
+
+                            completedSteps.add(question);
+                            completedSteps.add(response);
                         }
 
-                        completedSteps.add(question);
-                        completedSteps.add(response);
-                    }
+                        if (!completedSteps.isEmpty()) {
+                            addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
+                            usePlannerWithHistoryPromptTemplate(allParams);
+                        }
 
-                    if (!completedSteps.isEmpty()) {
-                        addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
-                        usePlannerWithHistoryPromptTemplate(allParams);
-                    }
+                        setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getConversationId(), listener);
+                    }, e -> {
+                        log.error("Failed to get chat history", e);
+                        listener.onFailure(e);
+                    }), messageHistoryLimit);
+                }, listener::onFailure));
+        } else if (memoryFactory instanceof BedrockAgentCoreMemory.Factory) {
+            handleBedrockAgentCoreMemory(
+                (BedrockAgentCoreMemory.Factory) memoryFactory,
+                mlAgent,
+                allParams,
+                memoryId,
+                masterSessionId,
+                listener
+            );
+        } else {
+            // For other memory types, skip chat history
+            log.info("Skipping chat history for memory type: {}", memoryType);
+            List<String> completedSteps = new ArrayList<>();
+            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, memoryId, listener);
+        }
+    }
 
-                    setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getConversationId(), listener);
-                }, e -> {
-                    log.error("Failed to get chat history", e);
-                    listener.onFailure(e);
-                }), messageHistoryLimit);
-            }, listener::onFailure));
+    @VisibleForTesting
+    void handleBedrockAgentCoreMemory(
+        BedrockAgentCoreMemory.Factory bedrockMemoryFactory,
+        MLAgent mlAgent,
+        Map<String, String> allParams,
+        String memoryId,
+        String masterSessionId,
+        ActionListener<Object> listener
+    ) {
+        // Build parameters for BedrockAgentCoreMemory from request parameters
+        Map<String, Object> memoryParams = new HashMap<>();
+
+        // Extract memory configuration from parameters passed by MLAgentExecutor
+        String memoryArn = allParams.get("memory_arn");
+        String memoryRegion = allParams.get("memory_region");
+        String accessKey = allParams.get("memory_access_key");
+        String secretKey = allParams.get("memory_secret_key");
+        String sessionToken = allParams.get("memory_session_token");
+
+        if (memoryArn != null) {
+            memoryParams.put("memory_arn", memoryArn);
+        }
+        if (memoryRegion != null) {
+            memoryParams.put("region", memoryRegion);
+        }
+
+        // Use masterSessionId for BedrockAgentCoreMemory to maintain conversation continuity
+        String sessionIdToUse = masterSessionId != null ? masterSessionId : memoryId;
+        if (sessionIdToUse != null) {
+            memoryParams.put("session_id", sessionIdToUse);
+            log.info("DEBUG: Using session ID for BedrockAgentCoreMemory: {}", sessionIdToUse);
+        }
+
+        // Use agent ID from parameters (the actual agent execution ID) as agent_id - MANDATORY
+        String agentIdToUse = allParams.get("agent_id");
+        if (agentIdToUse == null) {
+            throw new IllegalArgumentException(
+                "Agent ID is mandatory but not found in parameters. This indicates a configuration issue - please check agent setup."
+            );
+        }
+        memoryParams.put("agent_id", agentIdToUse);
+        log.info("DEBUG: Using mandatory agent ID for BedrockAgentCoreMemory actorId: {}", agentIdToUse);
+
+        // Add credentials if available
+        if (accessKey != null && secretKey != null) {
+            Map<String, String> credentials = new HashMap<>();
+            credentials.put("access_key", accessKey);
+            credentials.put("secret_key", secretKey);
+            if (sessionToken != null) {
+                credentials.put("session_token", sessionToken);
+            }
+            memoryParams.put("credentials", credentials);
+        }
+
+        log.info("Creating BedrockAgentCoreMemory with params: memory_arn={}, region={}", memoryArn, memoryRegion);
+
+        bedrockMemoryFactory.create(memoryParams, ActionListener.wrap(bedrockMemory -> {
+            // Get conversation history from Bedrock AgentCore using master session ID
+            String sessionForHistory = masterSessionId != null ? masterSessionId : memoryId;
+            bedrockMemory.getConversationHistory(sessionForHistory, ActionListener.wrap(records -> {
+                List<String> completedSteps = new ArrayList<>();
+
+                // Convert BedrockAgentCoreMemoryRecords to completed steps format (similar to ConversationIndexMemory)
+                for (BedrockAgentCoreMemoryRecord record : records) {
+                    if (record != null && record.getContent() != null && record.getResponse() != null) {
+                        completedSteps.add(record.getContent());    // Question
+                        completedSteps.add(record.getResponse());   // Response
+                    }
+                }
+
+                if (!completedSteps.isEmpty()) {
+                    addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
+                    usePlannerWithHistoryPromptTemplate(allParams);
+                }
+
+                setToolsAndRunAgent(
+                    mlAgent,
+                    allParams,
+                    completedSteps,
+                    bedrockMemory,
+                    masterSessionId != null ? masterSessionId : memoryId,
+                    listener
+                );
+            }, e -> {
+                log.warn("Failed to get conversation history from BedrockAgentCoreMemory, proceeding without history", e);
+                List<String> completedSteps = new ArrayList<>();
+                setToolsAndRunAgent(
+                    mlAgent,
+                    allParams,
+                    completedSteps,
+                    bedrockMemory,
+                    masterSessionId != null ? masterSessionId : memoryId,
+                    listener
+                );
+            }));
+        }, listener::onFailure));
     }
 
     private void setToolsAndRunAgent(
@@ -375,12 +509,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     completedSteps.getLast()
                 );
             saveAndReturnFinalResult(
-                (ConversationIndexMemory) memory,
+                memory,
                 parentInteractionId,
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
                 finalResult,
-                null,
+                allParams.get(QUESTION_FIELD), // Use question if available, null otherwise for backward compatibility
                 finalListener
             );
             return;
@@ -406,12 +540,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = parseLLMOutput.get(RESULT_FIELD);
                 saveAndReturnFinalResult(
-                    (ConversationIndexMemory) memory,
+                    memory,
                     parentInteractionId,
                     allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                     allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
                     finalResult,
-                    null,
+                    allParams.get(QUESTION_FIELD), // Use question if available, null otherwise for backward compatibility
                     finalListener
                 );
             } else {
@@ -436,12 +570,72 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
                     );
 
+                // CRITICAL FIX: Preserve BedrockAgentCoreMemory parameters for subsequent agent calls
+                if ("bedrock_agentcore_memory".equals(allParams.get("memory_type"))) {
+                    reactParams.put("memory_type", allParams.get("memory_type"));
+                    reactParams.put("memory_arn", allParams.get("memory_arn"));
+                    reactParams.put("memory_region", allParams.get("memory_region"));
+                    reactParams.put("memory_access_key", allParams.get("memory_access_key"));
+                    reactParams.put("memory_secret_key", allParams.get("memory_secret_key"));
+                    reactParams.put("memory_session_token", allParams.get("memory_session_token"));
+
+                    // CRITICAL FIX: Pass executor memory ID to executor agents
+                    if (executorMemoryId != null) {
+                        reactParams.put("executor_memory_id", executorMemoryId);
+                        allParams.put("executor_memory_id", executorMemoryId); // Track executor memory ID
+                    }
+
+                    // CRITICAL FIX: Use executor memory ID for executor agent calls to maintain shared conversation context
+                    if (executorMemoryId != null) {
+                        reactParams.put("session_id", executorMemoryId);
+                        log.info("DEBUG: Using executor memory ID for executor conversation context: {}", executorMemoryId);
+                    } else {
+                        // Fallback: check if session_id exists in allParams
+                        String existingSessionId = allParams.get("session_id");
+                        if (existingSessionId != null) {
+                            reactParams.put("session_id", existingSessionId);
+                            log.info("DEBUG: Reusing existing session_id for conversation context: {}", existingSessionId);
+                        } else {
+                            // Last resort: generate new session_id only if none exists
+                            String sessionId = "bedrock-session-" + System.currentTimeMillis();
+                            reactParams.put("session_id", sessionId);
+                            allParams.put("session_id", sessionId);
+                            log.info("DEBUG: Generated new session_id: {}", sessionId);
+                        }
+                    }
+                }
+
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
                     .agentId(reActAgentId)
                     .functionName(FunctionName.AGENT)
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
                     .build();
+
+                // CRITICAL FIX: Set memory field for BedrockAgentCoreMemory
+                if ("bedrock_agentcore_memory".equals(allParams.get("memory_type"))) {
+                    Map<String, Object> memoryConfig = new HashMap<>();
+                    memoryConfig.put("type", allParams.get("memory_type"));
+                    memoryConfig.put("memory_arn", allParams.get("memory_arn"));
+                    memoryConfig.put("region", allParams.get("memory_region"));
+
+                    // Add credentials if present
+                    Map<String, String> credentials = new HashMap<>();
+                    if (allParams.get("memory_access_key") != null) {
+                        credentials.put("access_key", allParams.get("memory_access_key"));
+                    }
+                    if (allParams.get("memory_secret_key") != null) {
+                        credentials.put("secret_key", allParams.get("memory_secret_key"));
+                    }
+                    if (allParams.get("memory_session_token") != null) {
+                        credentials.put("session_token", allParams.get("memory_session_token"));
+                    }
+                    if (!credentials.isEmpty()) {
+                        memoryConfig.put("credentials", credentials);
+                    }
+
+                    agentInput.setMemory(memoryConfig);
+                }
 
                 MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
@@ -506,17 +700,19 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     completedSteps.add(String.format("\nStep %d: %s\n", stepsExecuted + 1, stepToExecute));
                     completedSteps.add(String.format("\nStep %d Result: %s\n", stepsExecuted + 1, results.get(STEP_RESULT_FIELD)));
 
-                    saveTraceData(
-                        (ConversationIndexMemory) memory,
-                        memory.getType(),
-                        stepToExecute,
-                        results.get(STEP_RESULT_FIELD),
-                        conversationId,
-                        false,
-                        parentInteractionId,
-                        traceNumber,
-                        "PlanExecuteReflect Agent"
-                    );
+                    if (memory instanceof ConversationIndexMemory) {
+                        saveTraceData(
+                            (ConversationIndexMemory) memory,
+                            memory.getType(),
+                            stepToExecute,
+                            results.get(STEP_RESULT_FIELD),
+                            conversationId,
+                            false,
+                            parentInteractionId,
+                            traceNumber,
+                            "PlanExecuteReflect Agent"
+                        );
+                    }
 
                     addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
 
@@ -631,7 +827,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void saveAndReturnFinalResult(
-        ConversationIndexMemory memory,
+        Memory memory,
         String parentInteractionId,
         String reactAgentMemoryId,
         String reactParentInteractionId,
@@ -639,34 +835,119 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String input,
         ActionListener<Object> finalListener
     ) {
-        Map<String, Object> updateContent = new HashMap<>();
-        updateContent.put(INTERACTIONS_RESPONSE_FIELD, finalResult);
+        log
+            .info(
+                "saveAndReturnFinalResult called with memory: {}, parentInteractionId: {}",
+                memory != null ? memory.getClass().getSimpleName() : "null",
+                parentInteractionId
+            );
 
-        if (input != null) {
-            updateContent.put(INTERACTIONS_INPUT_FIELD, input);
-        }
-
-        memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+        if (memory == null) {
+            log.warn("Memory is null in saveAndReturnFinalResult, skipping interaction save");
             List<ModelTensors> finalModelTensors = createModelTensors(
-                memory.getConversationId(),
+                reactAgentMemoryId,
                 parentInteractionId,
                 reactAgentMemoryId,
-                reactParentInteractionId
+                reactParentInteractionId,
+                finalResult
             );
-            finalModelTensors
-                .add(
-                    ModelTensors
-                        .builder()
-                        .mlModelTensors(
-                            List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
-                        )
-                        .build()
-                );
             finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-        }, e -> {
-            log.error("Failed to update interaction with final result", e);
-            finalListener.onFailure(e);
-        }));
+            return;
+        }
+
+        if (memory instanceof ConversationIndexMemory) {
+            ConversationIndexMemory conversationMemory = (ConversationIndexMemory) memory;
+            Map<String, Object> updateContent = new HashMap<>();
+            updateContent.put(INTERACTIONS_RESPONSE_FIELD, finalResult);
+
+            if (input != null) {
+                updateContent.put(INTERACTIONS_INPUT_FIELD, input);
+            }
+
+            conversationMemory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+                List<ModelTensors> finalModelTensors = createModelTensors(
+                    conversationMemory.getConversationId(),
+                    parentInteractionId,
+                    reactAgentMemoryId,
+                    reactParentInteractionId,
+                    finalResult
+                );
+                finalModelTensors
+                    .add(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            )
+                            .build()
+                    );
+                finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }, finalListener::onFailure));
+        } else if (memory instanceof BedrockAgentCoreMemory) {
+            BedrockAgentCoreMemory bedrockMemory = (BedrockAgentCoreMemory) memory;
+
+            log.info("Saving interaction to BedrockAgentCoreMemory main memory with sessionId: {}", bedrockMemory.getSessionId());
+
+            // Save interaction to Bedrock AgentCore main memory (not executor memory)
+            BedrockAgentCoreMemoryRecord record = new BedrockAgentCoreMemoryRecord();
+            record.setSessionId(bedrockMemory.getSessionId());  // Use main memory session ID
+            record.setContent(input);
+            record.setResponse(finalResult);
+
+            bedrockMemory.save(bedrockMemory.getSessionId(), record, ActionListener.wrap(saveResult -> {
+                log.info("Successfully saved interaction to BedrockAgentCoreMemory");
+                List<ModelTensors> finalModelTensors = createModelTensors(
+                    reactAgentMemoryId,
+                    parentInteractionId,
+                    reactAgentMemoryId,
+                    reactParentInteractionId,
+                    null // Don't add response in createModelTensors for BedrockAgentCore
+                );
+                // Add response as separate ModelTensors for BedrockAgentCoreMemory (like ConversationIndexMemory)
+                finalModelTensors
+                    .add(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            )
+                            .build()
+                    );
+                finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }, saveError -> {
+                log.error("Failed to save interaction to BedrockAgentCoreMemory", saveError);
+                // Still return results even if save fails
+                List<ModelTensors> finalModelTensors = createModelTensors(
+                    reactAgentMemoryId,
+                    parentInteractionId,
+                    reactAgentMemoryId,
+                    reactParentInteractionId,
+                    null
+                );
+                // Add response even on save failure
+                finalModelTensors
+                    .add(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            )
+                            .build()
+                    );
+                finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }));
+        } else {
+            // For other memory types, skip saving interaction
+            log.info("Skipping interaction save for memory type: {}", memory.getClass().getSimpleName());
+            List<ModelTensors> finalModelTensors = createModelTensors(
+                reactAgentMemoryId,
+                parentInteractionId,
+                reactAgentMemoryId,
+                reactParentInteractionId,
+                finalResult
+            );
+            finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+        }
     }
 
     @VisibleForTesting
@@ -675,6 +956,16 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String parentInteractionId,
         String reactAgentMemoryId,
         String reactParentInteractionId
+    ) {
+        return createModelTensors(sessionId, parentInteractionId, reactAgentMemoryId, reactParentInteractionId, null);
+    }
+
+    static List<ModelTensors> createModelTensors(
+        String sessionId,
+        String parentInteractionId,
+        String reactAgentMemoryId,
+        String reactParentInteractionId,
+        String finalResult
     ) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         List<ModelTensor> tensors = new ArrayList<>();
@@ -690,6 +981,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD).result(reactParentInteractionId).build());
         }
 
+        // Add the actual agent response/result only for BedrockAgentCoreMemory
+        // ConversationIndexMemory adds this separately to maintain backward compatibility
+        if (finalResult != null && !finalResult.isEmpty()) {
+            // Only add response tensor for non-ConversationIndexMemory cases
+            // ConversationIndexMemory handles this in the calling method
+        }
+
         modelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
         return modelTensors;
     }
@@ -697,5 +995,79 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     @VisibleForTesting
     Map<String, Object> getTaskUpdates() {
         return taskUpdates;
+    }
+
+    private Map<String, String> setupAllParameters(MLAgent mlAgent, Map<String, String> apiParams) {
+        Map<String, String> allParams = new HashMap<>();
+        allParams.putAll(apiParams);
+        allParams.putAll(mlAgent.getParameters());
+
+        setupPromptParameters(allParams);
+
+        // planner prompt for the first call
+        usePlannerPromptTemplate(allParams);
+
+        return allParams;
+    }
+
+    @VisibleForTesting
+    String configureMemoryType(MLAgent mlAgent, Map<String, String> allParams) {
+        String memoryType = null;
+
+        // Get memory type from agent configuration (with null check)
+        if (mlAgent.getMemory() != null) {
+            memoryType = mlAgent.getMemory().getType();
+            log.debug("Using memory type from agent configuration: {}", memoryType);
+        } else {
+            log.warn("Agent configuration has no memory specification - this may indicate incomplete agent setup");
+        }
+
+        // DEBUG: Log all parameters available in MLPlanExecuteAndReflectAgentRunner
+        log.info("DEBUG: MLPlanExecuteAndReflectAgentRunner allParams keys: {}", allParams.keySet());
+
+        // Check if memory parameters indicate BedrockAgentCoreMemory (from internal calls)
+        String memoryTypeFromParams = allParams.get("memory_type");
+        if ("bedrock_agentcore_memory".equals(memoryTypeFromParams)) {
+            memoryType = memoryTypeFromParams;
+            log.info("Using BedrockAgentCoreMemory from parameters in internal call");
+            cacheBedrockMemoryConfig(mlAgent, allParams);
+        } else if (mlAgent.getMemory() != null && "bedrock_agentcore_memory".equals(mlAgent.getMemory().getType())) {
+            memoryType = "bedrock_agentcore_memory";
+            log.info("DEBUG: Agent has bedrock_agentcore_memory but parameters missing - restoring from cache");
+            restoreBedrockMemoryConfig(mlAgent, allParams);
+        }
+        return memoryType;
+    }
+
+    @VisibleForTesting
+    void cacheBedrockMemoryConfig(MLAgent mlAgent, Map<String, String> allParams) {
+        String cacheKey = mlAgent.getName() + "_bedrock_config";
+        Map<String, String> bedrockConfig = new HashMap<>();
+        bedrockConfig.put("memory_type", "bedrock_agentcore_memory");
+        bedrockConfig.put("memory_arn", allParams.get("memory_arn"));
+        bedrockConfig.put("memory_region", allParams.get("memory_region"));
+        bedrockConfig.put("memory_access_key", allParams.get("memory_access_key"));
+        bedrockConfig.put("memory_secret_key", allParams.get("memory_secret_key"));
+        bedrockConfig.put("memory_session_token", allParams.get("memory_session_token"));
+        bedrockMemoryConfigCache.put(cacheKey, bedrockConfig);
+        log.info("DEBUG: Cached BedrockAgentCoreMemory config for agent: {}", mlAgent.getName());
+    }
+
+    @VisibleForTesting
+    void restoreBedrockMemoryConfig(MLAgent mlAgent, Map<String, String> allParams) {
+        String cacheKey = mlAgent.getName() + "_bedrock_config";
+        Map<String, String> cachedConfig = bedrockMemoryConfigCache.get(cacheKey);
+
+        if (cachedConfig != null) {
+            allParams.put("memory_type", cachedConfig.get("memory_type"));
+            allParams.put("memory_arn", cachedConfig.get("memory_arn"));
+            allParams.put("memory_region", cachedConfig.get("memory_region"));
+            allParams.put("memory_access_key", cachedConfig.get("memory_access_key"));
+            allParams.put("memory_secret_key", cachedConfig.get("memory_secret_key"));
+            allParams.put("memory_session_token", cachedConfig.get("memory_session_token"));
+            log.info("DEBUG: Restored BedrockAgentCoreMemory parameters to allParams for subsequent calls");
+        } else {
+            log.info("DEBUG: No cached BedrockAgentCoreMemory config found - subsequent call will fail");
+        }
     }
 }

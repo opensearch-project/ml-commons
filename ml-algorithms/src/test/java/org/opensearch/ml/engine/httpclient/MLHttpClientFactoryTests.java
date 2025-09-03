@@ -18,7 +18,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 public class MLHttpClientFactoryTests {
 
-    private static final String TEST_HOST = "api.openai.com";
+    private static final String TEST_HOST = "api.mockai.com";
     private static final String HTTP = "http";
     private static final String HTTPS = "https";
     private static final AtomicBoolean PRIVATE_IP_DISABLED = new AtomicBoolean(false);

@@ -67,24 +67,25 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.30.18')
-    api 'software.amazon.awssdk:auth:2.30.18'
+    implementation platform('software.amazon.awssdk:bom:2.32.31')
+    api 'software.amazon.awssdk:auth:2.32.31'
     implementation 'software.amazon.awssdk:apache-client'
+    implementation 'software.amazon.awssdk:bedrockagentcore'
     implementation ('com.amazonaws:aws-encryption-sdk-java:2.4.1') {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
     // needed by aws-encryption-sdk-java
     implementation "org.bouncycastle:bc-fips:${versions.bouncycastle_jce}"
-    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
-    compileOnly group: 'software.amazon.awssdk', name: 's3', version: "2.30.18"
-    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "2.30.18"
+    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "2.32.31"
+    compileOnly group: 'software.amazon.awssdk', name: 's3', version: "2.32.31"
+    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "2.32.31"
 
     implementation ('com.jayway.jsonpath:json-path:2.9.0') {
         exclude group: 'net.minidev', module: 'json-smart'
     }
     implementation('net.minidev:json-smart:2.5.2')
     implementation group: 'org.json', name: 'json', version: '20231013'
-    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.32.31"
     api('io.modelcontextprotocol.sdk:mcp:0.9.0')
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
@@ -98,7 +99,7 @@ lombok {
 configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
-    resolutionStrategy.force 'software.amazon.awssdk:bom:2.30.18'
+    resolutionStrategy.force 'software.amazon.awssdk:bom:2.32.31'
 }
 
 jacocoTestReport {

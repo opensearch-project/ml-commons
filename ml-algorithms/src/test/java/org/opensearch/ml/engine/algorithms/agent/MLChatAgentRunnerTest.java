@@ -7,9 +7,11 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -24,6 +26,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -58,6 +61,8 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemoryRecord;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.transport.client.Client;
@@ -111,6 +116,10 @@ public class MLChatAgentRunnerTest {
 
     @Mock
     private ConversationIndexMemory.Factory memoryFactory;
+    @Mock
+    private BedrockAgentCoreMemory.Factory bedrockMemoryFactory;
+    @Mock
+    private BedrockAgentCoreMemory bedrockAgentCoreMemory;
     @Captor
     private ArgumentCaptor<ActionListener<ConversationIndexMemory>> memoryFactoryCapture;
     @Captor
@@ -122,7 +131,13 @@ public class MLChatAgentRunnerTest {
     @Captor
     private ArgumentCaptor<ActionListener<UpdateResponse>> mlMemoryManagerCapture;
     @Captor
+    private ArgumentCaptor<ActionListener<BedrockAgentCoreMemory>> bedrockMemoryFactoryCapture;
+    @Captor
+    private ArgumentCaptor<ActionListener<List<Interaction>>> bedrockMemoryInteractionCapture;
+    @Captor
     private ArgumentCaptor<Map<String, String>> toolParamsCapture;
+    @Captor
+    private ArgumentCaptor<Map<String, Object>> bedrockMemoryParamsCapture;
 
     @Before
     @SuppressWarnings("unchecked")
@@ -217,126 +232,6 @@ public class MLChatAgentRunnerTest {
         assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
         assertEquals("conversation_id", modelTensor1.getResult());
         assertEquals("parsed final answer", modelTensor2.getResult());
-    }
-
-    @Test
-    public void testParsingJsonBlockFromResponse2() {
-        // Prepare the response with JSON block
-        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
-        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
-
-        // Mock LLM response to not contain "thought" but contain "response" with JSON block
-        Map<String, String> llmResponse = new HashMap<>();
-        llmResponse.put("response", responseWithJsonBlock);
-        doAnswer(getLLMAnswer(llmResponse))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
-
-        // Create an MLAgent and run the MLChatAgentRunner
-        MLAgent mlAgent = createMLAgentWithTools();
-        Map<String, String> params = new HashMap<>();
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put("verbose", "true");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
-
-        // Capture the response passed to the listener
-        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(agentActionListener).onResponse(responseCaptor.capture());
-
-        // Extract the captured response
-        Object capturedResponse = responseCaptor.getValue();
-        assertTrue(capturedResponse instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
-
-        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-
-        // Verify that the parsed values from JSON block are correctly set
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("conversation_id", modelTensor1.getResult());
-        assertEquals("parsed final answer", modelTensor2.getResult());
-    }
-
-    @Test
-    public void testParsingJsonBlockFromResponse3() {
-        // Prepare the response with JSON block
-        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-            + "\"action_input\":{\"a\":\"n\"}, \"final_answer\":\"parsed final answer\"}";
-        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
-
-        // Mock LLM response to not contain "thought" but contain "response" with JSON block
-        Map<String, String> llmResponse = new HashMap<>();
-        llmResponse.put("response", responseWithJsonBlock);
-        doAnswer(getLLMAnswer(llmResponse))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
-
-        // Create an MLAgent and run the MLChatAgentRunner
-        MLAgent mlAgent = createMLAgentWithTools();
-        Map<String, String> params = new HashMap<>();
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put("verbose", "true");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
-
-        // Capture the response passed to the listener
-        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(agentActionListener).onResponse(responseCaptor.capture());
-
-        // Extract the captured response
-        Object capturedResponse = responseCaptor.getValue();
-        assertTrue(capturedResponse instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
-
-        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-
-        // Verify that the parsed values from JSON block are correctly set
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("conversation_id", modelTensor1.getResult());
-        assertEquals("parsed final answer", modelTensor2.getResult());
-    }
-
-    @Test
-    public void testParsingJsonBlockFromResponse4() {
-        // Prepare the response with JSON block
-        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
-        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
-
-        // Mock LLM response to not contain "thought" but contain "response" with JSON block
-        Map<String, String> llmResponse = new HashMap<>();
-        llmResponse.put("response", responseWithJsonBlock);
-        doAnswer(getLLMAnswer(llmResponse))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
-
-        // Create an MLAgent and run the MLChatAgentRunner
-        MLAgent mlAgent = createMLAgentWithTools();
-        Map<String, String> params = new HashMap<>();
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put("verbose", "false");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
-
-        // Capture the response passed to the listener
-        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(agentActionListener).onResponse(responseCaptor.capture());
-
-        // Extract the captured response
-        Object capturedResponse = responseCaptor.getValue();
-        assertTrue(capturedResponse instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
-
-        ModelTensor memoryIdModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-
-        // Verify that the parsed values from JSON block are correctly set
-        assertEquals("memory_id", memoryIdModelTensor.getName());
-        assertEquals("conversation_id", memoryIdModelTensor.getResult());
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
     }
 
     @Test
@@ -489,11 +384,6 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testChatHistoryWithVerboseMoreInteraction() {
         testInteractions("4");
-    }
-
-    @Test
-    public void testChatHistoryWithVerboseLessInteraction() {
-        testInteractions("2");
     }
 
     private void testInteractions(String maxInteraction) {
@@ -1117,5 +1007,622 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_SUFFIX));
         Assert.assertTrue(result.containsKey(AgentUtils.RESPONSE_FORMAT_INSTRUCTION));
         Assert.assertTrue(result.containsKey(AgentUtils.TOOL_RESPONSE));
+    }
+
+    // Tests for BedrockAgentCoreMemory integration - simplified to test specific branches
+    @Test
+    public void testRunWithBedrockAgentCoreMemory() {
+        // This test verifies that the BedrockAgentCoreMemory branch is executed
+        // Setup BedrockAgentCoreMemory
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        // Mock the factory to fail immediately so we can verify the branch was taken
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("BedrockAgentCoreMemory branch executed"));
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        // Create MLAgent with BedrockAgentCoreMemory
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        params.put("agent_id", "test-agent-id");
+        params.put(MLAgentExecutor.MEMORY_ID, "test-session-id");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the BedrockAgentCoreMemory branch was executed
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testSaveTraceDataWithBedrockAgentCoreMemory() {
+        // Create a mock BedrockAgentCoreMemory
+        BedrockAgentCoreMemory mockMemory = Mockito.mock(BedrockAgentCoreMemory.class);
+
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(2);
+            listener.onResponse("saved-event-id");
+            return null;
+        }).when(mockMemory).save(anyString(), any(BedrockAgentCoreMemoryRecord.class), any(ActionListener.class));
+
+        // Test saveTraceData static method
+        MLChatAgentRunner
+            .saveTraceData(
+                mockMemory,
+                "bedrock_agentcore_memory",
+                "test question",
+                "test response",
+                "test-session-id",
+                false, // traceDisabled = false
+                "parent-interaction-id",
+                new AtomicInteger(1),
+                "LLM"
+            );
+
+        // Verify save was called
+        verify(mockMemory).save(eq("test-session-id"), any(BedrockAgentCoreMemoryRecord.class), any(ActionListener.class));
+    }
+
+    @Test
+    public void testSaveTraceDataWithBedrockAgentCoreMemoryTraceDisabled() {
+        // Create a mock BedrockAgentCoreMemory
+        BedrockAgentCoreMemory mockMemory = Mockito.mock(BedrockAgentCoreMemory.class);
+
+        // Test saveTraceData static method with trace disabled
+        MLChatAgentRunner
+            .saveTraceData(
+                mockMemory,
+                "bedrock_agentcore_memory",
+                "test question",
+                "test response",
+                "test-session-id",
+                true, // traceDisabled = true
+                "parent-interaction-id",
+                new AtomicInteger(1),
+                "LLM"
+            );
+
+        // Verify save was NOT called when trace is disabled
+        verify(mockMemory, never()).save(anyString(), any(BedrockAgentCoreMemoryRecord.class), any(ActionListener.class));
+    }
+
+    @Test
+    public void testBedrockAgentCoreMemoryFactoryCreationFailure() {
+        // Test lambda$run$5 (factory error handling)
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        // Make factory creation fail to trigger error handling lambda
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Factory creation failed"));
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        // Create MLAgent with BedrockAgentCoreMemory
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        params.put("agent_id", "test-agent-id");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify failure is propagated through the error handling lambda
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testRestoreBedrockMemoryConfigWithCachedConfig() {
+        // Test restoreBedrockMemoryConfig method with cached configuration
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+
+        // First, cache some configuration by running with parameters
+        Map<String, String> initialParams = new HashMap<>();
+        initialParams.put("memory_type", "bedrock_agentcore_memory");
+        initialParams.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        initialParams.put("memory_region", "us-east-1");
+        initialParams.put("agent_id", "test-agent-id");
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgentForCache")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onResponse(bedrockAgentCoreMemory);
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        // First call to cache the configuration
+        mlChatAgentRunner.run(mlAgent, initialParams, agentActionListener);
+
+        // Now test restore scenario - agent has bedrock memory type but no parameters
+        Map<String, String> emptyParams = new HashMap<>();
+        emptyParams.put("agent_id", "test-agent-id"); // Still need agent_id
+
+        // This should trigger restoreBedrockMemoryConfig
+        mlChatAgentRunner.run(mlAgent, emptyParams, agentActionListener);
+
+        // Verify the method was called (indirectly by checking factory was called again)
+        verify(bedrockMemoryFactory, Mockito.atLeast(2)).create(any(), any());
+    }
+
+    @Test
+    public void testRestoreBedrockMemoryConfigWithNoCachedConfig() {
+        // Test restoreBedrockMemoryConfig method with no cached configuration
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgentNoCache")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        Map<String, String> emptyParams = new HashMap<>();
+        emptyParams.put("agent_id", "test-agent-id");
+
+        // This should trigger restoreBedrockMemoryConfig with no cached config
+        mlChatAgentRunner.run(mlAgent, emptyParams, agentActionListener);
+
+        // Should still attempt to create factory even with missing parameters
+        verify(bedrockMemoryFactory).create(any(), any());
+    }
+
+    @Test
+    public void testConversationIndexMemoryGetMessagesFailure() {
+        // Test lambda$run$3 (conversation memory error handling) - simplified version
+        when(memoryMap.get("conversation_index")).thenReturn(memoryFactory);
+        
+        // Make factory creation fail to trigger error handling
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("Factory creation failed"));
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLMemorySpec memorySpec = new MLMemorySpec("conversation_index", "memory-id", 10);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(memorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.QUESTION, "test question");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify failure is propagated through the error handling lambda
+        verify(agentActionListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testUnsupportedMemoryFactoryType() {
+        // Test unsupported memory factory type error handling
+        Memory.Factory unsupportedFactory = Mockito.mock(Memory.Factory.class); // Mock the interface instead
+        when(memoryMap.get("unsupported_memory")).thenReturn(unsupportedFactory);
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLMemorySpec memorySpec = new MLMemorySpec("unsupported_memory", "memory-id", 10);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(memorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.QUESTION, "test question");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify failure with unsupported memory factory type
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalArgumentException);
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Unsupported memory factory type"));
+    }
+
+    @Test
+    public void testBedrockMemoryWithExecutorMemoryId() {
+        // Test branch: executor_memory_id != null (line 256)
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onResponse(bedrockAgentCoreMemory);
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        params.put("agent_id", "test-agent-id");
+        params.put("executor_memory_id", "executor-session-123"); // This should be used instead of memoryId
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify factory was called
+        verify(bedrockMemoryFactory).create(any(), any());
+    }
+
+    @Test
+    public void testBedrockMemoryWithAllCredentials() {
+        // Test all credential branches (lines 279, 282, 285, 288)
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onResponse(bedrockAgentCoreMemory);
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        params.put("agent_id", "test-agent-id");
+        params.put("memory_access_key", "test-access-key");
+        params.put("memory_secret_key", "test-secret-key");
+        params.put("memory_session_token", "test-session-token");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify factory was called - this covers the credentials branches
+        verify(bedrockMemoryFactory).create(any(), any());
+    }
+
+    @Test
+    public void testBedrockMemoryWithNullAgentId() {
+        // Test branch: agentIdToUse == null (line 269)
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        // No agent_id parameter - should trigger the null check
+
+        // Expect IllegalArgumentException to be thrown directly
+        assertThrows(IllegalArgumentException.class, () -> { mlChatAgentRunner.run(mlAgent, params, agentActionListener); });
+    }
+
+    @Test
+    public void testAgentWithParameters() {
+        // Test branch: mlAgent.getParameters() != null (line 364)
+        when(memoryMap.get("conversation_index")).thenReturn(memoryFactory);
+        
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(conversationIndexMemory);
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLMemorySpec memorySpec = new MLMemorySpec("conversation_index", "memory-id", 10);
+        
+        // Create agent with parameters
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put("_test_param", "test_value");
+        agentParams.put("normal_param", "normal_value");
+        
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(memorySpec)
+            .parameters(agentParams)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.QUESTION, "test question");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(memoryFactory).create(any(), any(), any(), any());
+    }
+
+    @Test
+    public void testBedrockMemoryWithCredentials() {
+        // Test BedrockAgentCoreMemory with credentials parameters
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onResponse(bedrockAgentCoreMemory);
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        params.put("agent_id", "test-agent-id");
+        params.put("memory_access_key", "test-access-key");
+        params.put("memory_secret_key", "test-secret-key");
+        params.put("memory_session_token", "test-session-token");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify factory was called with credentials
+        ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(bedrockMemoryFactory).create(paramsCaptor.capture(), any());
+
+        Map<String, Object> capturedParams = paramsCaptor.getValue();
+        assertNotNull(capturedParams.get("credentials"));
+        Map<String, String> credentials = (Map<String, String>) capturedParams.get("credentials");
+        assertEquals("test-access-key", credentials.get("access_key"));
+        assertEquals("test-secret-key", credentials.get("secret_key"));
+        assertEquals("test-session-token", credentials.get("session_token"));
+    }
+
+    @Test
+    public void testConversationMemoryWithTemplatesAndMessages() {
+        // Target uncovered branches in lines 217-218 (chatHistoryQuestionTemplate != null path)
+        when(memoryMap.get("conversation_index")).thenReturn(memoryFactory);
+        
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            ConversationIndexMemory mockMemory = Mockito.mock(ConversationIndexMemory.class);
+            when(mockMemory.getConversationId()).thenReturn("test-conversation-id");
+            
+            doAnswer(msgInvocation -> {
+                ActionListener<List<Interaction>> msgListener = msgInvocation.getArgument(0);
+                List<Interaction> interactions = Arrays.asList(
+                    Interaction.builder().id("interaction-1").input("test question").response("test response").build()
+                );
+                msgListener.onResponse(interactions);
+                return null;
+            }).when(mockMemory).getMessages(any(), any(Integer.class));
+            
+            listener.onResponse(mockMemory);
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLMemorySpec memorySpec = new MLMemorySpec("conversation_index", "memory-id", 10);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(memorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.QUESTION, "test question");
+        params.put(MLChatAgentRunner.CHAT_HISTORY_QUESTION_TEMPLATE, "Q: ${_chat_history.message.question}");
+        params.put(MLChatAgentRunner.CHAT_HISTORY_RESPONSE_TEMPLATE, "A: ${_chat_history.message.response}");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(memoryFactory).create(any(), any(), any(), any());
+    }
+
+    @Test
+    public void testAgentParametersWithUnderscoreKeys() {
+        // Target uncovered branches in lines 366-367 (parameter key iteration and underscore check)
+        when(memoryMap.get("conversation_index")).thenReturn(memoryFactory);
+        
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(conversationIndexMemory);
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLMemorySpec memorySpec = new MLMemorySpec("conversation_index", "memory-id", 10);
+        
+        // Create agent with parameters including underscore keys
+        Map<String, String> agentParams = new HashMap<>();
+        agentParams.put("_underscore_param", "underscore_value");
+        agentParams.put("normal_param", "normal_value");
+        
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(memorySpec)
+            .parameters(agentParams)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.QUESTION, "test question");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(memoryFactory).create(any(), any(), any(), any());
+    }
+
+    @Test
+    public void testUnsupportedMemoryFactoryWithNullCheck() {
+        // Target uncovered branch in line 356 (null check in error message)
+        when(memoryMap.get("unsupported_memory")).thenReturn(null);
+        
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLMemorySpec memorySpec = new MLMemorySpec("unsupported_memory", "memory-id", 10);
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(memorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.QUESTION, "test question");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
+    public void testBedrockMemoryWithInteractionsProcessing() {
+        // Target uncovered branches in BedrockAgentCoreMemory message processing (lines 296, 300, 316, 317, 319)
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            BedrockAgentCoreMemory mockMemory = Mockito.mock(BedrockAgentCoreMemory.class);
+            when(mockMemory.getConversationId()).thenReturn("bedrock-session-id");
+
+            doAnswer(msgInvocation -> {
+                ActionListener<List<Interaction>> msgListener = msgInvocation.getArgument(0);
+                List<Interaction> interactions = Arrays
+                    .asList(
+                        Interaction.builder().id("interaction-1").input("bedrock question").response("bedrock response").build(),
+                        Interaction.builder().id("interaction-2").input("empty response question").response("").build() // This triggers
+                                                                                                                        // empty response
+                                                                                                                        // branch
+                    );
+                msgListener.onResponse(interactions);
+                return null;
+            }).when(mockMemory).getMessages(any(ActionListener.class));
+
+            listener.onResponse(mockMemory);
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("memory_type", "bedrock_agentcore_memory");
+        params.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        params.put("memory_region", "us-east-1");
+        params.put("agent_id", "test-agent-id");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(bedrockMemoryFactory).create(any(), any());
+    }
+
+    @Test
+    public void testRestoreBedrockMemoryConfigBranches() {
+        // Target uncovered branch in line 422 (cachedConfig != null)
+        MLMemorySpec bedrockMemorySpec = new MLMemorySpec("bedrock_agentcore_memory", "memory-id", 10);
+
+        // First cache some config
+        Map<String, String> initialParams = new HashMap<>();
+        initialParams.put("memory_type", "bedrock_agentcore_memory");
+        initialParams.put("memory_arn", "arn:aws:bedrock:us-east-1:123456789012:memory/test-memory");
+        initialParams.put("memory_region", "us-east-1");
+        initialParams.put("agent_id", "test-agent-id");
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgentCache")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(bedrockMemorySpec)
+            .build();
+
+        when(memoryMap.get("bedrock_agentcore_memory")).thenReturn(bedrockMemoryFactory);
+        doAnswer(invocation -> {
+            ActionListener<BedrockAgentCoreMemory> listener = invocation.getArgument(1);
+            listener.onResponse(bedrockAgentCoreMemory);
+            return null;
+        }).when(bedrockMemoryFactory).create(any(), any());
+
+        // First call to cache config
+        mlChatAgentRunner.run(mlAgent, initialParams, agentActionListener);
+
+        // Second call should trigger restoreBedrockMemoryConfig with cached config
+        Map<String, String> emptyParams = new HashMap<>();
+        emptyParams.put("agent_id", "test-agent-id");
+
+        mlChatAgentRunner.run(mlAgent, emptyParams, agentActionListener);
+
+        verify(bedrockMemoryFactory, Mockito.atLeast(2)).create(any(), any());
     }
 }

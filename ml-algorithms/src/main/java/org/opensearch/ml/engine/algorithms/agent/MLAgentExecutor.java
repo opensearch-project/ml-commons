@@ -71,6 +71,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
@@ -148,6 +149,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             throw new IllegalArgumentException("wrong input");
         }
         AgentMLInput agentMLInput = (AgentMLInput) input;
+
+        // DEBUG: Log agentMLInput memory field immediately after cast
+        log.info("DEBUG: AgentMLInput memory field immediately after cast: {}", agentMLInput.getMemory());
+
         String agentId = agentMLInput.getAgentId();
         String tenantId = agentMLInput.getTenantId();
         Boolean isAsync = agentMLInput.getIsAsync();
@@ -165,155 +170,42 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors = new ArrayList<>();
         outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
 
-        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-            .builder()
-            .index(ML_AGENT_INDEX)
-            .id(agentId)
-            .tenantId(tenantId)
-            .fetchSourceContext(fetchSourceContext)
-            .build();
-
-        if (MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                sdkClient
-                    .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))
-                    .whenComplete((response, throwable) -> {
-                        context.restore();
-                        log.debug("Completed Get Agent Request, Agent id:{}", agentId);
-                        if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                                log.error("Failed to get Agent index", cause);
-                                listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
-                            } else {
-                                log.error("Failed to get ML Agent {}", agentId, cause);
-                                listener.onFailure(cause);
-                            }
-                        } else {
-                            try {
-                                GetResponse getAgentResponse = response.parser() == null
-                                    ? null
-                                    : GetResponse.fromXContent(response.parser());
-                                if (getAgentResponse != null && getAgentResponse.isExists()) {
-                                    try (
-                                        XContentParser parser = jsonXContent
-                                            .createParser(
-                                                xContentRegistry,
-                                                LoggingDeprecationHandler.INSTANCE,
-                                                getAgentResponse.getSourceAsString()
-                                            )
-                                    ) {
-                                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                        MLAgent mlAgent = MLAgent.parse(parser);
-                                        if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
-                                            listener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        "You don't have permission to access this resource",
-                                                        RestStatus.FORBIDDEN
-                                                    )
-                                                );
-                                        }
-                                        MLMemorySpec memorySpec = mlAgent.getMemory();
-                                        String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
-                                        String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
-                                        String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
-                                        String appType = mlAgent.getAppType();
-                                        String question = inputDataSet.getParameters().get(QUESTION);
-
-                                        MLTask mlTask = MLTask
-                                            .builder()
-                                            .taskType(MLTaskType.AGENT_EXECUTION)
-                                            .functionName(FunctionName.AGENT)
-                                            .state(MLTaskState.CREATED)
-                                            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
-                                            .createTime(Instant.now())
-                                            .lastUpdateTime(Instant.now())
-                                            .async(false)
-                                            .tenantId(tenantId)
-                                            .build();
-
-                                        if (memoryId == null && regenerateInteractionId != null) {
-                                            throw new IllegalArgumentException("A memory ID must be provided to regenerate.");
-                                        }
-                                        if (memorySpec != null
-                                            && memorySpec.getType() != null
-                                            && memoryFactoryMap.containsKey(memorySpec.getType())
-                                            && (memoryId == null || parentInteractionId == null)) {
-                                            ConversationIndexMemory.Factory conversationIndexMemoryFactory =
-                                                (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
-                                            conversationIndexMemoryFactory
-                                                .create(question, memoryId, appType, ActionListener.wrap(memory -> {
-                                                    inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
-                                                    // get question for regenerate
-                                                    if (regenerateInteractionId != null) {
-                                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                                                        client
-                                                            .execute(
-                                                                GetInteractionAction.INSTANCE,
-                                                                new GetInteractionRequest(regenerateInteractionId),
-                                                                ActionListener.wrap(interactionRes -> {
-                                                                    inputDataSet
-                                                                        .getParameters()
-                                                                        .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
-                                                                    saveRootInteractionAndExecute(
-                                                                        listener,
-                                                                        memory,
-                                                                        inputDataSet,
-                                                                        mlTask,
-                                                                        isAsync,
-                                                                        outputs,
-                                                                        modelTensors,
-                                                                        mlAgent
-                                                                    );
-                                                                }, e -> {
-                                                                    log.error("Failed to get existing interaction for regeneration", e);
-                                                                    listener.onFailure(e);
-                                                                })
-                                                            );
-                                                    } else {
-                                                        saveRootInteractionAndExecute(
-                                                            listener,
-                                                            memory,
-                                                            inputDataSet,
-                                                            mlTask,
-                                                            isAsync,
-                                                            outputs,
-                                                            modelTensors,
-                                                            mlAgent
-                                                        );
-                                                    }
-                                                }, ex -> {
-                                                    log.error("Failed to read conversation memory", ex);
-                                                    listener.onFailure(ex);
-                                                }));
-                                        } else {
-                                            executeAgent(inputDataSet, mlTask, isAsync, memoryId, mlAgent, outputs, modelTensors, listener);
-                                        }
-                                    } catch (Exception e) {
-                                        log.error("Failed to parse ml agent {}", agentId, e);
-                                        listener.onFailure(e);
-                                    }
-                                } else {
-                                    listener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "Failed to find agent with the provided agent id: " + agentId,
-                                                RestStatus.NOT_FOUND
-                                            )
-                                        );
-                                }
-                            } catch (Exception e) {
-                                log.error("Failed to get agent", e);
-                                listener.onFailure(e);
-                            }
-                        }
-                    });
-            }
-        } else {
+        if (!MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), ML_AGENT_INDEX)) {
             listener.onFailure(new ResourceNotFoundException("Agent index not found"));
+            return;
         }
+
+        retrieveAgent(agentId, tenantId, ActionListener.wrap(mlAgent -> {
+            MLMemorySpec memorySpec = configureMemorySpec(mlAgent, agentMLInput, inputDataSet);
+
+            // Pass agent ID to agent runners for use as actorId
+            inputDataSet.getParameters().put("agent_id", agentId);
+
+            MLTask mlTask = MLTask
+                .builder()
+                .taskType(MLTaskType.AGENT_EXECUTION)
+                .functionName(FunctionName.AGENT)
+                .state(MLTaskState.CREATED)
+                .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+                .createTime(Instant.now())
+                .lastUpdateTime(Instant.now())
+                .async(false)
+                .tenantId(tenantId)
+                .build();
+
+            handleMemoryCreation(
+                memorySpec,
+                agentMLInput,
+                agentId,
+                inputDataSet,
+                mlTask,
+                isAsync,
+                outputs,
+                modelTensors,
+                mlAgent,
+                listener
+            );
+        }, listener::onFailure));
     }
 
     /**
@@ -445,8 +337,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    @SuppressWarnings("removal")
-    private ActionListener<Object> createAgentActionListener(
+    @VisibleForTesting
+    ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
@@ -465,7 +357,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         });
     }
 
-    private ActionListener<Object> createAsyncTaskUpdater(MLTask mlTask, List<ModelTensors> outputs, List<ModelTensor> modelTensors) {
+    @VisibleForTesting
+    ActionListener<Object> createAsyncTaskUpdater(MLTask mlTask, List<ModelTensors> outputs, List<ModelTensor> modelTensors) {
         String taskId = mlTask.getTaskId();
         Map<String, Object> agentResponse = new HashMap<>();
         Map<String, Object> updatedTask = new HashMap<>();
@@ -615,5 +508,314 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log.error("Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
             listener.onFailure(e);
         }
+    }
+
+    private void retrieveAgent(String agentId, String tenantId, ActionListener<MLAgent> listener) {
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_AGENT_INDEX)
+            .id(agentId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor("opensearch_ml_general"))
+                .whenComplete((response, throwable) -> {
+                    context.restore();
+                    log.debug("Completed Get Agent Request, Agent id:{}", agentId);
+                    if (throwable != null) {
+                        handleAgentRetrievalError(throwable, agentId, listener);
+                    } else {
+                        parseAgentResponse(response, agentId, tenantId, listener);
+                    }
+                });
+        }
+    }
+
+    @VisibleForTesting
+    void handleAgentRetrievalError(Throwable throwable, String agentId, ActionListener<MLAgent> listener) {
+        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+        if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+            log.error("Failed to get Agent index", cause);
+            listener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
+        } else {
+            log.error("Failed to get ML Agent {}", agentId, cause);
+            listener.onFailure(cause);
+        }
+    }
+
+    @VisibleForTesting
+    void parseAgentResponse(Object response, String agentId, String tenantId, ActionListener<MLAgent> listener) {
+        try {
+            // Cast to GetDataObjectResponse to access parser method
+            org.opensearch.remote.metadata.client.GetDataObjectResponse getDataObjectResponse =
+                (org.opensearch.remote.metadata.client.GetDataObjectResponse) response;
+            GetResponse getAgentResponse = getDataObjectResponse.parser() == null
+                ? null
+                : GetResponse.fromXContent(getDataObjectResponse.parser());
+            if (getAgentResponse != null && getAgentResponse.isExists()) {
+                try (
+                    XContentParser parser = jsonXContent
+                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getAgentResponse.getSourceAsString())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    MLAgent mlAgent = MLAgent.parse(parser);
+
+                    if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException("You don't have permission to access this resource", RestStatus.FORBIDDEN)
+                            );
+                    } else {
+                        listener.onResponse(mlAgent);
+                    }
+                }
+            } else {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException("Failed to find agent with the provided agent id: " + agentId, RestStatus.NOT_FOUND)
+                    );
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse ml agent {}", agentId, e);
+            listener.onFailure(e);
+        }
+    }
+
+    @VisibleForTesting
+    MLMemorySpec configureMemorySpec(MLAgent mlAgent, AgentMLInput agentMLInput, RemoteInferenceInputDataSet inputDataSet) {
+        MLMemorySpec memorySpec = mlAgent.getMemory();
+
+        log.info("Request parameters keys: {}", inputDataSet.getParameters().keySet());
+        log.info("Agent default memory type: {}", memorySpec != null ? memorySpec.getType() : "null");
+        log.info("AgentMLInput memory field: {}", agentMLInput.getMemory());
+
+        if (agentMLInput.getMemory() != null) {
+            return configureMemoryFromInput(agentMLInput.getMemory(), inputDataSet);
+        }
+
+        log.info("No memory field found in AgentMLInput, using agent default");
+
+        // Handle subsequent internal calls
+        String memoryTypeFromParams = inputDataSet.getParameters().get("memory_type");
+        if ("bedrock_agentcore_memory".equals(memoryTypeFromParams)) {
+            log.info("DEBUG: Found BedrockAgentCoreMemory parameters in request, using bedrock_agentcore_memory");
+            return MLMemorySpec.builder().type("bedrock_agentcore_memory").build();
+        }
+
+        return memorySpec;
+    }
+
+    @VisibleForTesting
+    MLMemorySpec configureMemoryFromInput(Map<String, Object> memoryMap, RemoteInferenceInputDataSet inputDataSet) {
+        String memoryType = (String) memoryMap.get("type");
+        if (memoryType == null)
+            return null;
+
+        log.info("Using memory type from request: {}", memoryType);
+
+        // Pass memory configuration to agent runner through parameters
+        inputDataSet.getParameters().put("memory_config", memoryMap.toString());
+        inputDataSet.getParameters().put("memory_type", memoryType);
+
+        if (memoryMap.get("memory_arn") != null) {
+            inputDataSet.getParameters().put("memory_arn", (String) memoryMap.get("memory_arn"));
+        }
+        if (memoryMap.get("region") != null) {
+            inputDataSet.getParameters().put("memory_region", (String) memoryMap.get("region"));
+        }
+
+        // Pass credentials as separate parameters for easier extraction
+        @SuppressWarnings("unchecked")
+        Map<String, Object> credentials = (Map<String, Object>) memoryMap.get("credentials");
+        if (credentials != null) {
+            inputDataSet.getParameters().put("memory_access_key", (String) credentials.get("access_key"));
+            inputDataSet.getParameters().put("memory_secret_key", (String) credentials.get("secret_key"));
+            inputDataSet.getParameters().put("memory_session_token", (String) credentials.get("session_token"));
+        }
+
+        log
+            .info(
+                "DEBUG: Added BedrockAgentCoreMemory parameters to request: memory_type={}, memory_arn={}",
+                memoryType,
+                memoryMap.get("memory_arn")
+            );
+
+        return MLMemorySpec.builder().type(memoryType).build();
+    }
+
+    @VisibleForTesting
+    void handleMemoryCreation(
+        MLMemorySpec memorySpec,
+        AgentMLInput agentMLInput,
+        String agentId,
+        RemoteInferenceInputDataSet inputDataSet,
+        MLTask mlTask,
+        Boolean isAsync,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors,
+        MLAgent mlAgent,
+        ActionListener<Output> listener
+    ) {
+
+        String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
+        String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
+        String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
+
+        if (memoryId == null && regenerateInteractionId != null) {
+            listener.onFailure(new IllegalArgumentException("A memory ID must be provided to regenerate."));
+            return;
+        }
+
+        if (memorySpec == null
+            || memorySpec.getType() == null
+            || !memoryFactoryMap.containsKey(memorySpec.getType())
+            || (memoryId != null && parentInteractionId != null)) {
+            executeAgent(inputDataSet, mlTask, isAsync, memoryId, mlAgent, outputs, modelTensors, listener);
+            return;
+        }
+
+        Object memoryFactory = memoryFactoryMap.get(memorySpec.getType());
+        log.info("Selected memory factory type: {} for memory type: {}", memoryFactory.getClass().getSimpleName(), memorySpec.getType());
+
+        if (memoryFactory instanceof ConversationIndexMemory.Factory) {
+            handleConversationMemory(
+                (ConversationIndexMemory.Factory) memoryFactory,
+                inputDataSet,
+                mlTask,
+                isAsync,
+                outputs,
+                modelTensors,
+                mlAgent,
+                listener
+            );
+        } else if (memoryFactory instanceof BedrockAgentCoreMemory.Factory) {
+            handleBedrockMemory(
+                (BedrockAgentCoreMemory.Factory) memoryFactory,
+                agentMLInput,
+                agentId,
+                inputDataSet,
+                mlTask,
+                isAsync,
+                outputs,
+                modelTensors,
+                mlAgent,
+                listener
+            );
+        } else {
+            listener.onFailure(new IllegalArgumentException("Unsupported memory factory type: " + memoryFactory.getClass()));
+        }
+    }
+
+    private void handleConversationMemory(
+        ConversationIndexMemory.Factory factory,
+        RemoteInferenceInputDataSet inputDataSet,
+        MLTask mlTask,
+        Boolean isAsync,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors,
+        MLAgent mlAgent,
+        ActionListener<Output> listener
+    ) {
+        String question = inputDataSet.getParameters().get(QUESTION);
+        String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
+        String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
+        String appType = mlAgent.getAppType();
+
+        factory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
+            inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
+
+            if (regenerateInteractionId != null) {
+                log.info("Regenerate for existing interaction {}", regenerateInteractionId);
+                client
+                    .execute(
+                        GetInteractionAction.INSTANCE,
+                        new GetInteractionRequest(regenerateInteractionId),
+                        ActionListener.wrap(interactionRes -> {
+                            String interactionInput = interactionRes.getInteraction().getInput();
+                            if (!Strings.isNullOrEmpty(interactionInput)) {
+                                inputDataSet.getParameters().putIfAbsent(QUESTION, interactionInput);
+                            }
+                            saveRootInteractionAndExecute(listener, memory, inputDataSet, mlTask, isAsync, outputs, modelTensors, mlAgent);
+                        }, e -> {
+                            log.error("Failed to get existing interaction for regeneration", e);
+                            listener.onFailure(e);
+                        })
+                    );
+            } else {
+                saveRootInteractionAndExecute(listener, memory, inputDataSet, mlTask, isAsync, outputs, modelTensors, mlAgent);
+            }
+        }, ex -> {
+            log.error("Failed to read conversation memory", ex);
+            listener.onFailure(ex);
+        }));
+    }
+
+    @VisibleForTesting
+    void handleBedrockMemory(
+        BedrockAgentCoreMemory.Factory factory,
+        AgentMLInput agentMLInput,
+        String agentId,
+        RemoteInferenceInputDataSet inputDataSet,
+        MLTask mlTask,
+        Boolean isAsync,
+        List<ModelTensors> outputs,
+        List<ModelTensor> modelTensors,
+        MLAgent mlAgent,
+        ActionListener<Output> listener
+    ) {
+        String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
+
+        // Build parameters for BedrockAgentCoreMemory from AgentMLInput
+        Map<String, Object> memoryParams = new HashMap<>();
+        Map<String, Object> memoryObj = agentMLInput.getMemory();
+        if (memoryObj != null) {
+            memoryParams.put("memory_arn", memoryObj.get("memory_arn"));
+            memoryParams.put("region", memoryObj.get("region"));
+            memoryParams.put("credentials", memoryObj.get("credentials"));
+            memoryParams.put("session_id", "bedrock-session-" + System.currentTimeMillis());
+        }
+
+        memoryParams.put("agent_id", agentId);
+
+        factory.create(memoryParams, ActionListener.wrap(memory -> {
+            inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
+
+            if (regenerateInteractionId != null) {
+                log.info("Regenerate for existing interaction {}", regenerateInteractionId);
+                client
+                    .execute(
+                        GetInteractionAction.INSTANCE,
+                        new GetInteractionRequest(regenerateInteractionId),
+                        ActionListener.wrap(interactionRes -> {
+                            String interactionInput = interactionRes.getInteraction().getInput();
+                            if (!Strings.isNullOrEmpty(interactionInput)) {
+                                inputDataSet.getParameters().putIfAbsent(QUESTION, interactionInput);
+                            }
+                            executeAgent(
+                                inputDataSet,
+                                mlTask,
+                                isAsync,
+                                memory.getConversationId(),
+                                mlAgent,
+                                outputs,
+                                modelTensors,
+                                listener
+                            );
+                        }, e -> {
+                            log.error("Failed to get existing interaction for regeneration", e);
+                            listener.onFailure(e);
+                        })
+                    );
+            } else {
+                executeAgent(inputDataSet, mlTask, isAsync, memory.getConversationId(), mlAgent, outputs, modelTensors, listener);
+            }
+        }, ex -> {
+            log.error("Failed to read bedrock agentcore memory", ex);
+            listener.onFailure(ex);
+        }));
     }
 }

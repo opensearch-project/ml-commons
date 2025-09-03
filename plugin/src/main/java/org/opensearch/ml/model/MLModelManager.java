@@ -1890,6 +1890,7 @@ public class MLModelManager {
      *
      * @param modelId  model id
      * @param tenantId  tenant id
+     *
      * @param listener action listener
      */
     public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {

@@ -249,6 +249,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.memory.bedrockagentcore.BedrockAgentCoreMemory;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
@@ -781,6 +782,10 @@ public class MachineLearningPlugin extends Plugin
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
         conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
+
+        BedrockAgentCoreMemory.Factory bedrockAgentCoreMemoryFactory = new BedrockAgentCoreMemory.Factory();
+        bedrockAgentCoreMemoryFactory.init(client, mlIndicesHandler, memoryManager);
+        memoryFactoryMap.put(BedrockAgentCoreMemory.TYPE, bedrockAgentCoreMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,
