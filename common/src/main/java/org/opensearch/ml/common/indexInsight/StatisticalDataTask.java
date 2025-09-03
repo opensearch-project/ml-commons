@@ -161,7 +161,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                 sampleDocuments = searchResponse.getHits().getHits();
                 Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
                 String statisticalContent = gson.toJson(parseSearchResult(fieldsToType, highPriorityColumns, searchResponse));
-                
+
                 if (shouldStore) {
                     saveResult(statisticalContent, storageIndex, listener);
                 } else {
