@@ -14,7 +14,9 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
@@ -22,6 +24,7 @@ import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIE
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_FIELDS_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SYSTEM_PROMPT_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.TEMPLATE_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_PROMPT_FIELD;
 
 import java.util.Collections;
@@ -39,10 +42,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.script.StoredScriptSource;
+import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.ClusterAdminClient;
 
 /**
  * Units test for QueryPlanningTools
@@ -97,7 +104,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         // test try to update the prompt
@@ -113,6 +120,119 @@ public class QueryPlanningToolTests {
     }
 
     @Test
+    public void testRunWithUserProvidedSearchTemplates() throws ExecutionException, InterruptedException {
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+
+        // Stub cluster admin client response
+        AdminClient adminClient = mock(AdminClient.class);
+        ClusterAdminClient clusterAdminClient = mock(ClusterAdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+        doAnswer(invocation -> {
+            // Stub stored script response
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
+            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
+            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
+            when(storedScriptSource.getSource()).thenReturn("test");
+            actionListener.onResponse(getStoredScriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(), any());
+
+        // Stub template selection and query planning responses
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("template_id");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool("user_templates", queryGenerationTool, client);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        // test try to update the prompt
+        validParams
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        validParams.put("query_text", "help me find some books related to wind");
+        validParams.put("search_templates", "[{'template_id': 'template_id', 'template_description': 'test_description'}]");
+        tool.run(validParams, listener);
+
+        assertEquals(matchQueryString, future.get());
+    }
+
+    @Test
+    public void testRunWithDefaultSearchTemplate() throws ExecutionException, InterruptedException {
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+
+        // Stub template selection and query planning responses
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        // test try to update the prompt
+        validParams
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        validParams.put("query_text", "help me find some books related to wind");
+        tool.run(validParams, listener);
+
+        assertEquals(matchQueryString, future.get());
+
+        // ensure query generation tool is invoked only once
+        verify(queryGenerationTool, times(1)).run(any(), any());
+        // ensure cluster admin client is not used to retrieve search templates
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    public void testRimWithUserProvidedSearchTemplatesAndNoLMMTemplateChoice() throws ExecutionException, InterruptedException {
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+
+        // Stub template selection as blank and query planning responses
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool("user_templates", queryGenerationTool, client);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        // test try to update the prompt
+        validParams
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        validParams.put("query_text", "help me find some books related to wind");
+        validParams.put("search_templates", "[{'template_id': 'template_id', 'template_description': 'test_description'}]");
+        tool.run(validParams, listener);
+
+        assertEquals(matchQueryString, future.get());
+        // Client should not be invoked since non-LLM response should default to a default search template
+        verifyNoInteractions(client);
+        // Ensure query generation tool is invoked twice, for template selection and query planning
+        verify(queryGenerationTool, times(2)).run(any(), any());
+    }
+
+    @Test
     public void testRun_PredictionReturnsList_ThrowsIllegalArgumentException() throws ExecutionException, InterruptedException {
         thrown.expect(ExecutionException.class);
         thrown.expectCause(org.hamcrest.Matchers.isA(IllegalArgumentException.class));
@@ -124,7 +244,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
@@ -141,7 +261,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
@@ -158,7 +278,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
@@ -175,7 +295,7 @@ public class QueryPlanningToolTests {
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
@@ -212,7 +332,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testRunWithNoPrompt() {
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("query_text", "some query");
         @SuppressWarnings("unchecked")
@@ -230,7 +350,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testRunWithInvalidParameters() {
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
@@ -243,7 +363,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testRunModelReturnsNull() {
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("query_text", "some query");
         @SuppressWarnings("unchecked")
@@ -264,7 +384,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testSetName() {
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         tool.setName("NewName");
         assertEquals("NewName", tool.getName());
     }
@@ -286,12 +406,15 @@ public class QueryPlanningToolTests {
         map.put(QueryPlanningTool.MODEL_ID_FIELD, "modelId");
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(map));
-        assertEquals("Invalid generation type: invalid. The current supported types are llmGenerated.", exception.getMessage());
+        assertEquals(
+            "Invalid generation type: invalid. The current supported types are llmGenerated and user_templates.",
+            exception.getMessage()
+        );
     }
 
     @Test
     public void testAllParameterProcessing() {
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("query_text", "test query");
         parameters.put(INDEX_MAPPING_FIELD, "{\"properties\":{\"title\":{\"type\":\"text\"}}}");
@@ -321,6 +444,69 @@ public class QueryPlanningToolTests {
         assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
         assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
 
+        // LLM Generated type should have template param for default search template
+        assertTrue(capturedParams.containsKey(TEMPLATE_FIELD));
+
+        // Processed parameters should be JSON strings
+        assertTrue(capturedParams.get(INDEX_MAPPING_FIELD).startsWith("\""));
+        assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
+    }
+
+    @Test
+    public void testAllParameterProcessing_WithUserSearchTemplates() {
+        QueryPlanningTool tool = new QueryPlanningTool("user_templates", queryGenerationTool, client);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("query_text", "test query");
+        parameters.put(INDEX_MAPPING_FIELD, "{\"properties\":{\"title\":{\"type\":\"text\"}}}");
+        parameters.put(QUERY_FIELDS_FIELD, "[\"title\", \"content\"]");
+        validParams.put("search_templates", "[{'template_id': 'template_id', 'template_description': 'test_description'}]");
+        // No system_prompt - should use default
+
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        // Stub cluster admin client response
+        AdminClient adminClient = mock(AdminClient.class);
+        ClusterAdminClient clusterAdminClient = mock(ClusterAdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+        doAnswer(invocation -> {
+            // Stub stored script response
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
+            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
+            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
+            when(storedScriptSource.getSource()).thenReturn("test");
+            actionListener.onResponse(getStoredScriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(), any());
+
+        // Stub template and query planning responses
+        doAnswer(invocation -> {
+            ActionListener<String> templateSelectionListener = invocation.getArgument(1);
+            templateSelectionListener.onResponse("template_id");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        tool.run(parameters, listener);
+
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool, times(2)).run(captor.capture(), any());
+
+        Map<String, String> capturedParams = captor.getValue();
+
+        // All parameters should be processed
+        assertTrue(capturedParams.containsKey("query_text"));
+        assertTrue(capturedParams.containsKey(INDEX_MAPPING_FIELD));
+        assertTrue(capturedParams.containsKey(QUERY_FIELDS_FIELD));
+        assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
+        assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
+        assertTrue(capturedParams.containsKey(TEMPLATE_FIELD));
+
         // Processed parameters should be JSON strings
         assertTrue(capturedParams.get(INDEX_MAPPING_FIELD).startsWith("\""));
         assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
@@ -328,7 +514,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testUserPromptParameterProcessing() {
-        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool, client);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("query_text", "test query");
         parameters.put(USER_PROMPT_FIELD, "custom user prompt");
