@@ -20,9 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -55,18 +53,15 @@ public interface IndexInsightTask {
                 if (allowToMatchPattern()) {
                     SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
                     SearchRequest patternSearchRequest = new SearchRequest(storageIndex).source(patternSourceBuilder);
-                    getClient().search(patternSearchRequest, ActionListener.wrap(
-                            r -> {
-                                SearchHit[] hits = r.getHits().getHits();
-                                Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
-                                if (Objects.isNull(mappedPatternSource)) {
-                                    beginGeneration(storageIndex, tenantId, listener);
-                                } else {
-                                    handleExistingDoc(mappedPatternSource, storageIndex, tenantId, listener);
-                                }
-                            },
-                            listener::onFailure
-                    ));
+                    getClient().search(patternSearchRequest, ActionListener.wrap(r -> {
+                        SearchHit[] hits = r.getHits().getHits();
+                        Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
+                        if (Objects.isNull(mappedPatternSource)) {
+                            beginGeneration(storageIndex, tenantId, listener);
+                        } else {
+                            handleExistingDoc(mappedPatternSource, storageIndex, tenantId, listener);
+                        }
+                    }, listener::onFailure));
                 } else {
                     beginGeneration(storageIndex, tenantId, listener);
                 }
@@ -75,8 +70,13 @@ public interface IndexInsightTask {
         }, e -> { listener.onFailure(new Exception("Failed to check existing document", e)); }));
     }
 
-    default void handleExistingDoc(Map<String, Object> source, String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        //Map<String, Object> source = getResponse.getSourceAsMap();
+    default void handleExistingDoc(
+        Map<String, Object> source,
+        String storageIndex,
+        String tenantId,
+        ActionListener<IndexInsight> listener
+    ) {
+        // Map<String, Object> source = getResponse.getSourceAsMap();
         String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
         Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
         long currentTime = Instant.now().toEpochMilli();

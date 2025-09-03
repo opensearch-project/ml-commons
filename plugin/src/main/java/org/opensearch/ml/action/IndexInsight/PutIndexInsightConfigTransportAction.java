@@ -5,22 +5,12 @@
 
 package org.opensearch.ml.action.IndexInsight;
 
-import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_INDEX_NAME;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.CONTENT_FIELD;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.LAST_UPDATE_FIELD;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.STATUS_FIELD;
-import static org.opensearch.ml.common.indexInsight.IndexInsight.TASK_TYPE_FIELD;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 import static org.opensearch.ml.helper.ConnectorAccessControlHelper.isAdmin;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -105,7 +95,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
         mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_CONFIG, ActionListener.wrap(r -> {
             indexIndexInsightConfig(indexInsightConfig, ActionListener.wrap(r1 -> {
                 if (indexInsightConfig.getIsEnable()) {
-                    initIndexInsightIndex(INDEX_INSIGHT_INDEX_NAME, ActionListener.wrap(r2 -> {
+                    mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_STORAGE, ActionListener.wrap(r2 -> {
                         log.info("Successfully created index insight data index");
                         listener.onResponse(new AcknowledgedResponse(true));
                     }, e -> {
@@ -163,40 +153,5 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
             log.error("Failed to create index insight config", e);
             listener.onFailure(e);
         }
-    }
-
-    private void initIndexInsightIndex(String indexName, ActionListener<Boolean> listener) {
-        Map<String, Object> indexSettings = new HashMap<>();
-        Map<String, Object> indexMappings = new HashMap<>();
-
-        // Build index mappings based on semantic storage config
-        Map<String, Object> properties = new HashMap<>();
-
-        // Common fields for all index types
-        properties.put(INDEX_NAME_FIELD, Map.of("type", "keyword"));
-        properties.put(CONTENT_FIELD, Map.of("type", "text"));
-        properties.put(STATUS_FIELD, Map.of("type", "keyword"));
-        properties.put(TASK_TYPE_FIELD, Map.of("type", "keyword"));
-        properties.put(LAST_UPDATE_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
-        indexMappings.put("properties", properties);
-        client
-            .admin()
-            .indices()
-            .create(new CreateIndexRequest(indexName).settings(indexSettings).mapping(indexMappings), ActionListener.wrap(response -> {
-                if (response.isAcknowledged()) {
-                    log.info("Successfully created index insight data index: {}", indexName);
-                    listener.onResponse(true);
-                } else {
-                    listener.onFailure(new RuntimeException("Failed to create index insight data index: " + indexName));
-                }
-            }, e -> {
-                if (e instanceof org.opensearch.ResourceAlreadyExistsException) {
-                    log.info("index insight data index already exists: {}", indexName);
-                    listener.onResponse(true);
-                } else {
-                    log.error("Error creating index insight data index: {}", indexName, e);
-                    listener.onFailure(e);
-                }
-            }));
     }
 }

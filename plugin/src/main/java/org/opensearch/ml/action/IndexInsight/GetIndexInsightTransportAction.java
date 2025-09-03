@@ -7,8 +7,8 @@ package org.opensearch.ml.action.IndexInsight;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_INDEX_NAME;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_STORAGE_INDEX;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.time.Instant;
@@ -130,7 +130,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                             .runBefore(actionListener, () -> context.restore());
                                         executeTaskAndReturn(
                                             mlIndexInsightGetRequest,
-                                            INDEX_INSIGHT_INDEX_NAME,
+                                            ML_INDEX_INSIGHT_STORAGE_INDEX,
                                             mlIndexInsightGetRequest.getTenantId(),
                                             wrappedListener
                                         );
