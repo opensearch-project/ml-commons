@@ -173,11 +173,10 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
         Map<String, Object> properties = new HashMap<>();
 
         // Common fields for all index types
-        // Use keyword type for ID fields that need exact matching
         properties.put(INDEX_NAME_FIELD, Map.of("type", "keyword"));
         properties.put(CONTENT_FIELD, Map.of("type", "text"));
         properties.put(STATUS_FIELD, Map.of("type", "keyword"));
-        properties.put(TASK_TYPE_FIELD, Map.of("type", "text")); // Keep as text for full-text search
+        properties.put(TASK_TYPE_FIELD, Map.of("type", "keyword"));
         properties.put(LAST_UPDATE_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
         indexMappings.put("properties", properties);
         client

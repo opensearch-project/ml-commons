@@ -316,6 +316,11 @@ public class IndexInsightTaskTests {
         }
 
         @Override
+        public Boolean allowToMatchPattern() {
+            return true;
+        }
+
+        @Override
         public List<MLIndexInsightType> getPrerequisites() {
             return Arrays.asList(MLIndexInsightType.STATISTICAL_DATA);
         }
@@ -352,6 +357,11 @@ public class IndexInsightTaskTests {
         @Override
         public String getSourceIndex() {
             return "test-index";
+        }
+
+        @Override
+        public Boolean allowToMatchPattern() {
+            return true;
         }
 
         @Override
