@@ -11,7 +11,6 @@ import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_STORAGE_INDE
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.buildPatternSourceBuilder;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.matchPattern;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.reflections.Reflections.log;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -45,6 +44,7 @@ import org.opensearch.transport.client.Client;
 /**
  * Interface representing an index insight execution task
  */
+
 public interface IndexInsightTask {
 
     /**
@@ -73,7 +73,6 @@ public interface IndexInsightTask {
                         .whenComplete((r, throwable) -> {
                             if (throwable != null) {
                                 Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                log.error("Failed to index failed index insight", cause);
                                 listener.onFailure(cause);
                             } else {
                                 SearchResponse searchResponse = r.searchResponse();
@@ -229,9 +228,10 @@ public interface IndexInsightTask {
             .status(IndexInsightTaskStatus.FAILED)
             .build();
         writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> {
-            log.info("Successfully created failed index insight with ID: {}");
             listener.onFailure(error);
-        }, e -> { listener.onFailure(new RuntimeException("Failed to put failed index insight doc", e)); }));
+        },
+                e -> {
+            listener.onFailure(e); }));
     }
 
     default String generateDocId() {
@@ -270,7 +270,6 @@ public interface IndexInsightTask {
                     context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to get index insight ", cause);
                         listener.onFailure(cause);
                     } else {
                         try {
@@ -304,7 +303,6 @@ public interface IndexInsightTask {
                     context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to index failed index insight", cause);
                         listener.onFailure(cause);
                     } else {
                         try {

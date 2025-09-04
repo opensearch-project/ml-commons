@@ -137,7 +137,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test content",
             IndexInsightTaskStatus.COMPLETED,
             STATISTICAL_DATA,
-            Instant.ofEpochMilli(0)
+            Instant.ofEpochMilli(0), ""
         );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
@@ -171,7 +171,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test content",
             IndexInsightTaskStatus.COMPLETED,
             STATISTICAL_DATA,
-            Instant.ofEpochMilli(0)
+            Instant.ofEpochMilli(0), ""
         );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
@@ -213,7 +213,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test content",
             IndexInsightTaskStatus.COMPLETED,
             STATISTICAL_DATA,
-            Instant.ofEpochMilli(0)
+            Instant.ofEpochMilli(0), ""
         );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
@@ -253,7 +253,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             "test content",
             IndexInsightTaskStatus.COMPLETED,
             STATISTICAL_DATA,
-            Instant.ofEpochMilli(0)
+            Instant.ofEpochMilli(0), ""
         );
         doAnswer(invocation -> {
             ActionListener<IndexInsight> listener = invocation.getArgument(2);
@@ -375,7 +375,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
                         content,
                         IndexInsightTaskStatus.COMPLETED,
                         taskType,
-                        Instant.now()
+                        Instant.now(), ""
                     );
                     listener.onResponse(insight);
                 }

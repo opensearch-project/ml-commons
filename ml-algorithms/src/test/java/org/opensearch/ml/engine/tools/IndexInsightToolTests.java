@@ -45,7 +45,7 @@ public class IndexInsightToolTests {
                     MLIndexInsightGetResponse
                         .builder()
                         .indexInsight(
-                            new IndexInsight("demo", "demo", IndexInsightTaskStatus.COMPLETED, FIELD_DESCRIPTION, Instant.ofEpochMilli(0))
+                            new IndexInsight("demo", "demo", IndexInsightTaskStatus.COMPLETED, FIELD_DESCRIPTION, Instant.ofEpochMilli(0), "")
                         )
                         .build()
                 );
@@ -63,7 +63,7 @@ public class IndexInsightToolTests {
             "demo",
             IndexInsightTaskStatus.COMPLETED,
             FIELD_DESCRIPTION,
-            Instant.ofEpochMilli(0)
+            Instant.ofEpochMilli(0), null
         );
         assertEquals(expected.toString(), future.get());
     }

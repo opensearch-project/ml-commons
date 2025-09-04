@@ -20,11 +20,16 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 public class LogRelatedIndexCheckTaskTests {
@@ -33,12 +38,21 @@ public class LogRelatedIndexCheckTaskTests {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private Client client;
+    private SdkClient sdkClient;
     private LogRelatedIndexCheckTask task;
+    private ThreadContext threadContext;
+    private ThreadPool threadPool;
 
     @Before
     public void setUp() {
         client = mock(Client.class);
-        task = new LogRelatedIndexCheckTask("test-index", client);
+        sdkClient = mock(SdkClient.class);
+        task = new LogRelatedIndexCheckTask("test-index", client, sdkClient);
+        threadPool = mock(ThreadPool.class);
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     private void mockSearchResponse() {
@@ -247,7 +261,7 @@ public class LogRelatedIndexCheckTaskTests {
         mockMLExecuteSuccess(client, response);
 
         // Mock update call for saveResult
-        mockUpdateSuccess(client);
+        mockUpdateSuccess(sdkClient);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runTask("storage-index", "tenant-id", listener);
@@ -280,6 +294,7 @@ public class LogRelatedIndexCheckTaskTests {
         mockSearchResponse();
         // Mock getAgentIdToRun
         mockMLConfigSuccess(client);
+        mockUpdateSuccess(sdkClient);
         mockMLExecuteFailure(client, "ML execution failed");
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
