@@ -377,6 +377,7 @@ public interface IndexInsightTask {
             .content((String) patternSource.get(IndexInsight.CONTENT_FIELD))
             .status(IndexInsightTaskStatus.COMPLETED)
             .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
+            .tenantId(tenantId)
             .build();
         listener.onResponse(insight);
     }

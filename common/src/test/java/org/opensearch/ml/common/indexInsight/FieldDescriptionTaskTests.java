@@ -17,13 +17,17 @@ import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockM
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
+import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -31,7 +35,9 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.IndicesAdminClient;
 
 public class FieldDescriptionTaskTests {
 
@@ -234,5 +240,40 @@ public class FieldDescriptionTaskTests {
         assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, insight.getTaskType());
         assertTrue(insight.getContent().contains("\"user_name\":\"name of the user\""));
         assertTrue(insight.getContent().contains("\"user_age\":\"age of the user in years\""));
+    }
+
+    @Test
+    public void testHandlePatternResult_FilterFields() {
+        Map<String, Object> patternSource = new HashMap<>();
+        patternSource.put(IndexInsight.CONTENT_FIELD, "{\"field1\": \"desc1\", \"field2\": \"desc2\"}");
+        patternSource.put(IndexInsight.LAST_UPDATE_FIELD, System.currentTimeMillis());
+
+        // Mock mappings with only field1 present
+        AdminClient adminClient = mock(AdminClient.class);
+        IndicesAdminClient indicesClient = mock(IndicesAdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesClient);
+
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            GetMappingsResponse response = mock(GetMappingsResponse.class);
+            MappingMetadata metadata = mock(MappingMetadata.class);
+            when(metadata.getSourceAsMap()).thenReturn(Map.of("properties", Map.of("field1", Map.of("type", "text"))));
+            when(response.getMappings()).thenReturn(Map.of("test-index", metadata));
+            listener.onResponse(response);
+            return null;
+        }).when(indicesClient).getMappings(any(), any());
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.handlePatternResult(patternSource, "storage-index", "tenant-id", listener);
+
+        ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
+        verify(listener).onResponse(captor.capture());
+
+        IndexInsight result = captor.getValue();
+        assertEquals("test-index", result.getIndex());
+        assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, result.getTaskType());
+        assertTrue(result.getContent().contains("field1"));
+        assertTrue(!result.getContent().contains("field2"));
     }
 }

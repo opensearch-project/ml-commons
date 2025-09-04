@@ -11,10 +11,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_GENERATING_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.INDEX_INSIGHT_UPDATE_INTERVAL;
-import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetFailToGet;
-import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
-import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockSearchSuccess;
-import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.*;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -22,6 +19,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.TotalHits.Relation;
@@ -29,14 +27,18 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.threadpool.ThreadPool;
@@ -62,61 +64,22 @@ public class IndexInsightTaskTests {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    private void mockClientGetResponse(Client client, GetResponse response) {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
+    private void mockSearchWithPatternHit(SdkClient sdkClient, SearchHit[] hits) {
+        SearchHits searchHits = new SearchHits(hits, new TotalHits(hits.length, Relation.EQUAL_TO), 1.0f);
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+
+        SearchDataObjectResponse sdkResponse = mock(SearchDataObjectResponse.class);
+        when(sdkResponse.searchResponse()).thenReturn(searchResponse);
+
+        CompletableFuture<SearchDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(future);
     }
 
-    private void mockClientUpdateResponse(Client client, UpdateResponse response) {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(response);
-            return null;
-        }).when(client).update(any(), any());
-    }
-
-    private void mockClientUpdateFailure(Client client, Exception exception) {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(exception);
-            return null;
-        }).when(client).update(any(), any());
-    }
-
-    private void mockFullFlowExecution(Client client, SdkClient sdkClient) throws IOException {
-        // Mock update responses
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(mock(UpdateResponse.class));
-            return null;
-        }).when(client).update(any(), any());
-
-        mockUpdateSuccess(sdkClient);
-
-        // Mock get request - return not exists to trigger new prerequisite execution
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            listener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-
-        mockGetSuccess(sdkClient, "");
-
-        // Mock search request - return no hits to avoid pattern matching
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            SearchHits noHits = new SearchHits(new SearchHit[0], new TotalHits(0, Relation.EQUAL_TO), 1.0f);
-            SearchResponse searchResponse = mock(SearchResponse.class);
-            when(searchResponse.getHits()).thenReturn(noHits);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+    private void mockFullFlowExecution(SdkClient sdkClient) throws IOException {
+        mockGetFailToGet(sdkClient, "");
         mockSearchSuccess(sdkClient);
+        mockUpdateSuccess(sdkClient);
     }
 
     @Test
@@ -149,8 +112,6 @@ public class IndexInsightTaskTests {
 
     @Test
     public void testSaveResult() {
-        UpdateResponse updateResponse = mock(UpdateResponse.class);
-        mockClientUpdateResponse(client, updateResponse);
         mockUpdateSuccess(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.saveResult("test content", "test-tenant", listener);
@@ -163,7 +124,10 @@ public class IndexInsightTaskTests {
 
     @Test
     public void testSaveResult_Failure() {
-        mockClientUpdateFailure(client, new Exception("Update failed"));
+        // Mock SDK Client failure
+        CompletableFuture<PutDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new Exception("SDK Client update failed"));
+        when(sdkClient.putDataObjectAsync(any())).thenReturn(failedFuture);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.saveResult("test content", "test-storage", listener);
@@ -173,8 +137,6 @@ public class IndexInsightTaskTests {
 
     @Test
     public void testSaveFailedStatus() {
-        UpdateResponse updateResponse = mock(UpdateResponse.class);
-        mockClientUpdateResponse(client, updateResponse);
         mockUpdateSuccess(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.saveFailedStatus("", new RuntimeException("test error"), listener);
@@ -185,7 +147,7 @@ public class IndexInsightTaskTests {
     @Test
     public void testHandleExistingDoc_Completed_NoUpdate() {
         Map<String, Object> source = new HashMap<>();
-        source.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        source.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString());
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - 3600);
         source.put(IndexInsight.INDEX_NAME_FIELD, "test-index");
         source.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
@@ -202,19 +164,18 @@ public class IndexInsightTaskTests {
     @Test
     public void testHandleExistingDoc_Completed_NeedUpdate() throws IOException {
         Map<String, Object> source = new HashMap<>();
-        source.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        source.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString());
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - INDEX_INSIGHT_UPDATE_INTERVAL - 3600);
         source.put(IndexInsight.INDEX_NAME_FIELD, "test-index");
         source.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
         source.put(IndexInsight.CONTENT_FIELD, "test content");
 
-        mockFullFlowExecution(client, sdkClient);
-        mockGetFailToGet(sdkClient, "");
+        mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
 
-        // Should call update 4 times: beginGeneration + prerequisite beginGeneration + prerequisite saveResult + main task saveResult
-        // verify(client, times(4)).update(any(), any());
+        // Verify prerequisite task execution: 5 threadPool calls indicate both prerequisite and main task ran
+        verify(client, times(5)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -239,12 +200,11 @@ public class IndexInsightTaskTests {
         source.put(IndexInsight.STATUS_FIELD, "GENERATING");
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - INDEX_INSIGHT_GENERATING_TIMEOUT - 3600);
 
-        mockFullFlowExecution(client, sdkClient);
-        mockGetFailToGet(sdkClient, "");
+        mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
 
-        // verify(client, times(4)).update(any(), any());
+        verify(client, times(5)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -254,19 +214,17 @@ public class IndexInsightTaskTests {
         source.put(IndexInsight.STATUS_FIELD, "FAILED");
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
 
-        mockFullFlowExecution(client, sdkClient);
-        mockGetFailToGet(sdkClient, "test-storage");
+        mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
 
-        // verify(client, times(4)).update(any(), any());
+        verify(client, times(5)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
     @Test
     public void testRunWithPrerequisites_Success() throws IOException {
-        mockFullFlowExecution(client, sdkClient);
-        mockGetFailToGet(sdkClient, "");
+        mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runWithPrerequisites("test-storage", "test-tenant", listener);
 
@@ -275,14 +233,10 @@ public class IndexInsightTaskTests {
 
     @Test
     public void testRunWithPrerequisites_PrerequisiteFailure() {
-        mockClientUpdateResponse(client, mock(UpdateResponse.class));
-
-        // Mock prerequisite task execution failure
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new Exception("Prerequisite failed"));
-            return null;
-        }).when(client).get(any(), any());
+        // Mock SDK Client get failure
+        CompletableFuture<GetDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new Exception("Prerequisite failed"));
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runWithPrerequisites("test-storage", "test-tenant", listener);
@@ -292,26 +246,52 @@ public class IndexInsightTaskTests {
 
     @Test
     public void testRunWithPrerequisites_PrerequisiteCompleted() {
-        mockClientUpdateResponse(client, mock(UpdateResponse.class));
-
-        // Mock prerequisite already completed with all required fields
-        GetResponse prereqResponse = mock(GetResponse.class);
+        // Mock prerequisite completed data
         Map<String, Object> prereqSource = new HashMap<>();
-        prereqSource.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        prereqSource.put(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString());
         prereqSource.put(IndexInsight.CONTENT_FIELD, "prerequisite content");
         prereqSource.put(IndexInsight.INDEX_NAME_FIELD, "test-index");
         prereqSource.put(IndexInsight.TASK_TYPE_FIELD, "STATISTICAL_DATA");
         prereqSource.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - 3600);
-        when(prereqResponse.isExists()).thenReturn(true);
-        when(prereqResponse.getSourceAsMap()).thenReturn(prereqSource);
-        mockClientGetResponse(client, prereqResponse);
+
         mockGetSuccess(sdkClient, prereqSource);
         mockUpdateSuccess(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runWithPrerequisites("test-storage", "test-tenant", listener);
 
-        // verify(client, times(1)).update(any(), any());
+        verify(client, times(2)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
+    }
+
+    @Test
+    public void testExecute_WithPatternMatch_Success() throws IOException {
+        mockGetFailToGet(sdkClient, "");
+
+        XContentBuilder sourceContent = XContentBuilder
+            .builder(XContentType.JSON.xContent())
+            .startObject()
+            .field(IndexInsight.INDEX_NAME_FIELD, "test-*")
+            .field(IndexInsight.TASK_TYPE_FIELD, "FIELD_DESCRIPTION")
+            .field(IndexInsight.STATUS_FIELD, IndexInsightTaskStatus.COMPLETED.toString())
+            .field(IndexInsight.CONTENT_FIELD, "pattern matched content")
+            .field(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli() - 3600)
+            .endObject();
+
+        SearchHit patternHit = new SearchHit(0, "pattern-doc", Map.of(), Map.of());
+        patternHit.sourceRef(BytesReference.bytes(sourceContent));
+
+        SearchHit[] hits = new SearchHit[] { patternHit };
+        mockSearchWithPatternHit(sdkClient, hits);
+
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+        task.execute("test-storage", "test-tenant", listener);
+
+        ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
+        verify(listener).onResponse(captor.capture());
+        IndexInsight result = captor.getValue();
+        assertEquals("test-index", result.getIndex());
+        assertEquals("pattern matched content", result.getContent());
+        assertEquals(IndexInsightTaskStatus.COMPLETED, result.getStatus());
     }
 
     // Test implementation with prerequisites

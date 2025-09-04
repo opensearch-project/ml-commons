@@ -152,4 +152,32 @@ public class IndexInsightConfigTests {
         assertNull(config.getIsEnable());
         assertNull(config.getTenantId());
     }
+
+    @Test
+    public void testStreamInputConstructor() throws IOException {
+        IndexInsightConfig original = IndexInsightConfig.builder().isEnable(true).tenantId("test-tenant").build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        IndexInsightConfig deserialized = new IndexInsightConfig(input);
+
+        assertEquals(original.getIsEnable(), deserialized.getIsEnable());
+        assertEquals(original.getTenantId(), deserialized.getTenantId());
+    }
+
+    @Test
+    public void testFromStream() throws IOException {
+        IndexInsightConfig original = IndexInsightConfig.builder().isEnable(false).tenantId(null).build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        IndexInsightConfig deserialized = IndexInsightConfig.fromStream(input);
+
+        assertEquals(original.getIsEnable(), deserialized.getIsEnable());
+        assertEquals(original.getTenantId(), deserialized.getTenantId());
+    }
 }

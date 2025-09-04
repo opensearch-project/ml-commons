@@ -208,4 +208,50 @@ public class IndexInsightTests {
         assertEquals(insight1, insight2);
         assertEquals(insight1.hashCode(), insight2.hashCode());
     }
+
+    @Test
+    public void testFromStream() throws IOException {
+        Instant now = Instant.now();
+        IndexInsight original = IndexInsight
+            .builder()
+            .index("test-index")
+            .content("test content")
+            .status(IndexInsightTaskStatus.GENERATING)
+            .taskType(MLIndexInsightType.LOG_RELATED_INDEX_CHECK)
+            .lastUpdatedTime(now)
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        IndexInsight deserialized = IndexInsight.fromStream(input);
+
+        assertEquals(original.getIndex(), deserialized.getIndex());
+        assertEquals(original.getContent(), deserialized.getContent());
+        assertEquals(original.getStatus(), deserialized.getStatus());
+        assertEquals(original.getTaskType(), deserialized.getTaskType());
+        assertEquals(original.getLastUpdatedTime(), deserialized.getLastUpdatedTime());
+    }
+
+    @Test
+    public void testToString() {
+        Instant now = Instant.now();
+        IndexInsight insight = IndexInsight
+            .builder()
+            .index("test-index")
+            .content("test content")
+            .status(IndexInsightTaskStatus.COMPLETED)
+            .taskType(MLIndexInsightType.STATISTICAL_DATA)
+            .lastUpdatedTime(now)
+            .build();
+
+        String result = insight.toString();
+
+        assertTrue(result.contains("test-index"));
+        assertTrue(result.contains("test content"));
+        assertTrue(result.contains("COMPLETED"));
+        assertTrue(result.contains("STATISTICAL_DATA"));
+        assertTrue(result.contains(String.valueOf(now.toEpochMilli())));
+    }
 }

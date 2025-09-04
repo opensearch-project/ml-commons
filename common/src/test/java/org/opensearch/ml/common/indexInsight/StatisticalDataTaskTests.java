@@ -6,14 +6,18 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 
+import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Rule;
 import org.junit.Test;
@@ -26,6 +30,10 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.search.aggregations.Aggregations;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.aggregations.bucket.filter.InternalFilters;
+import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
@@ -148,7 +156,6 @@ public class StatisticalDataTaskTests {
 
         task.runTask("storage-index", "tenant-id", listener);
 
-        // Verify that getMappings was called
         verify(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
     }
 
@@ -175,7 +182,6 @@ public class StatisticalDataTaskTests {
 
         setupGetMappingsCall(client, getMappingsResponse);
 
-        // Mock search call to fail
         doAnswer(invocation -> {
             ActionListener<SearchResponse> responseListener = invocation.getArgument(1);
             responseListener.onFailure(new RuntimeException("Search failed"));
@@ -187,29 +193,85 @@ public class StatisticalDataTaskTests {
         mockGetSuccess(sdkClient, "");
         mockUpdateSuccess(sdkClient);
 
-        StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient));
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
         task.runTask("storage-index", "tenant-id", listener);
 
         verify(listener).onFailure(any(RuntimeException.class));
     }
 
     @Test
-    public void testRunTask_SearchRequestCreation() {
+    public void testHandlePatternMatchedDoc_RunWithoutStoring() {
         Client client = setupBasicClientMocks();
         GetMappingsResponse getMappingsResponse = setupMappingResponse();
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
 
+        Map<String, Object> patternSource = new HashMap<>();
+        patternSource.put(IndexInsight.STATUS_FIELD, "COMPLETED");
+        patternSource.put(IndexInsight.CONTENT_FIELD, "{\"test\": \"data\"}");
+
         setupGetMappingsCall(client, getMappingsResponse);
 
         doAnswer(invocation -> {
-            SearchRequest searchRequest = invocation.getArgument(0);
-            assertEquals("test-index", searchRequest.indices()[0]);
+            ActionListener<SearchResponse> responseListener = invocation.getArgument(1);
+            SearchResponse searchResponse = mock(SearchResponse.class);
+            responseListener.onResponse(searchResponse);
             return null;
         }).when(client).search(any(SearchRequest.class), any());
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
-        task.runTask("storage-index", "tenant-id", listener);
+        StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient));
+        task.handlePatternMatchedDoc(patternSource, "storage-index", "tenant-id", listener);
 
-        verify(client).search(any(SearchRequest.class), any());
+        verify(task).runTask(eq("storage-index"), eq("tenant-id"), eq(listener), eq(false));
+    }
+
+    @Test
+    public void testParseSearchResult_WithEmptyAggregations() throws Exception {
+        Client client = mock(Client.class);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+
+        Map<String, String> fieldsToType = Map.of("field1", "text");
+        Set<String> filteredNames = Set.of("field1");
+
+        InternalSampler mockSampler = mock(InternalSampler.class);
+        when(mockSampler.getName()).thenReturn("sample");
+        when(mockSampler.getAggregations()).thenReturn(InternalAggregations.EMPTY);
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        when(mockResponse.getAggregations()).thenReturn(new Aggregations(Arrays.asList(mockSampler)));
+
+        Method parseMethod = StatisticalDataTask.class.getDeclaredMethod("parseSearchResult", Map.class, Set.class, SearchResponse.class);
+        parseMethod.setAccessible(true);
+
+        Map<String, Object> result = (Map<String, Object>) parseMethod.invoke(task, fieldsToType, filteredNames, mockResponse);
+
+        assertNotNull(result);
+        assertTrue(result.containsKey(StatisticalDataTask.IMPORTANT_COLUMN_KEYWORD));
+    }
+
+    @Test
+    public void testFilterColumns_WithFiltersAggregation() throws Exception {
+        Client client = mock(Client.class);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+
+        Map<String, String> fieldsToType = Map.of("field1", "text");
+
+        InternalFilters mockFilters = mock(InternalFilters.class);
+        when(mockFilters.getName()).thenReturn("not_null");
+        when(mockFilters.getBuckets()).thenReturn(Arrays.asList());
+
+        InternalSampler mockSampler = mock(InternalSampler.class);
+        when(mockSampler.getName()).thenReturn("sample");
+        when(mockSampler.getDocCount()).thenReturn(1000L);
+        when(mockSampler.getAggregations()).thenReturn(new InternalAggregations(Arrays.asList(mockFilters)));
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        when(mockResponse.getAggregations()).thenReturn(new Aggregations(Arrays.asList(mockSampler)));
+
+        Method filterMethod = StatisticalDataTask.class.getDeclaredMethod("filterColumns", Map.class, SearchResponse.class);
+        filterMethod.setAccessible(true);
+
+        Set<String> result = (Set<String>) filterMethod.invoke(task, fieldsToType, mockResponse);
+
+        assertNotNull(result);
     }
 }

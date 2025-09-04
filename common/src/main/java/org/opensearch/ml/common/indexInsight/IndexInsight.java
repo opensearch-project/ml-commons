@@ -94,8 +94,10 @@ public class IndexInsight implements ToXContentObject, Writeable {
                     break;
                 case LAST_UPDATE_FIELD:
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

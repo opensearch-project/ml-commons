@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.CONTENT_FIELD;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
@@ -144,7 +145,7 @@ public class IndexInsightTestHelper {
 
     public static void mockSearchSuccess(SdkClient sdkClient) throws IOException {
         SearchResponse searchResponse = mock(SearchResponse.class);
-        SearchHit searchHit = new SearchHit(0, "iId", null, null).sourceRef(BytesReference.bytes(buildSampleDoc()));
+        SearchHit searchHit = new SearchHit(0, "id", null, null).sourceRef(BytesReference.bytes(buildSampleDoc()));
         SearchHit[] searchHits1 = List.of(searchHit).toArray(new SearchHit[0]);
         SearchHits searchHits = new SearchHits(searchHits1, null, 0, null, null, null);
         when(searchResponse.getHits()).thenReturn(searchHits);
@@ -164,6 +165,7 @@ public class IndexInsightTestHelper {
         content.field(TASK_TYPE_FIELD, FIELD_DESCRIPTION.toString());
         content.field(CONTENT_FIELD, "test_Content");
         content.field(LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
+        content.field(TENANT_ID_FIELD, "tenant-id");
         content.field(STATUS_FIELD, COMPLETED);
         content.endObject();
         return content;
