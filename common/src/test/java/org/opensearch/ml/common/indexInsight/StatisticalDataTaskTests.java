@@ -9,6 +9,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -179,14 +181,15 @@ public class StatisticalDataTaskTests {
             responseListener.onFailure(new RuntimeException("Search failed"));
             return null;
         }).when(client).search(any(SearchRequest.class), any());
+        sdkClient = mock(SdkClient.class);
+
+        when(sdkClient.searchDataObjectAsync(any())).thenThrow(new RuntimeException("Search failed"));
+        mockGetSuccess(sdkClient, "");
+        mockUpdateSuccess(sdkClient);
 
         StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient));
-        doNothing().when(task).saveFailedStatus(any(), any(), any());
-
         task.runTask("storage-index", "tenant-id", listener);
 
-        verify(client).search(any(SearchRequest.class), any());
-        //verify(task).saveFailedStatus(eq("storage-index"));
         verify(listener).onFailure(any(RuntimeException.class));
     }
 

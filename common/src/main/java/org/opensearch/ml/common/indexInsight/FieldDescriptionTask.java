@@ -382,7 +382,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
     }
 
-    private void handleError(String message,  Exception e, String tenantId, ActionListener<IndexInsight> listener) {
+    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {
         log.error(message, sourceIndex, e);
         saveFailedStatus(tenantId, e, listener);
     }

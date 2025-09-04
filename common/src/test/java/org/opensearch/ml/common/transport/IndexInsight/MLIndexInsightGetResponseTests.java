@@ -41,7 +41,7 @@ public class MLIndexInsightGetResponseTests {
             IndexInsightTaskStatus.COMPLETED,
             MLIndexInsightType.FIELD_DESCRIPTION,
             Instant.ofEpochMilli(0),
-                null
+            null
         );
     }
 

@@ -27,9 +27,6 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -62,29 +59,29 @@ public interface IndexInsightTask {
             } else {
                 SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
                 getSdkClient()
-                        .searchDataObjectAsync(
-                                SearchDataObjectRequest
-                                        .builder()
-                                        .tenantId(tenantId)
-                                        .indices(storageIndex)
-                                        .searchSourceBuilder(patternSourceBuilder)
-                                        .build()
-                        )
-                        .whenComplete((r, throwable) -> {
-                            if (throwable != null) {
-                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                listener.onFailure(cause);
+                    .searchDataObjectAsync(
+                        SearchDataObjectRequest
+                            .builder()
+                            .tenantId(tenantId)
+                            .indices(storageIndex)
+                            .searchSourceBuilder(patternSourceBuilder)
+                            .build()
+                    )
+                    .whenComplete((r, throwable) -> {
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            listener.onFailure(cause);
+                        } else {
+                            SearchResponse searchResponse = r.searchResponse();
+                            SearchHit[] hits = searchResponse.getHits().getHits();
+                            Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
+                            if (Objects.isNull(mappedPatternSource)) {
+                                beginGeneration(storageIndex, tenantId, listener);
                             } else {
-                                SearchResponse searchResponse = r.searchResponse();
-                                SearchHit[] hits = searchResponse.getHits().getHits();
-                                Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
-                                if (Objects.isNull(mappedPatternSource)) {
-                                    beginGeneration(storageIndex, tenantId, listener);
-                                } else {
-                                    handlePatternMatchedDoc(mappedPatternSource, storageIndex, tenantId, listener);
-                                }
+                                handlePatternMatchedDoc(mappedPatternSource, storageIndex, tenantId, listener);
                             }
-                        });
+                        }
+                    });
             }
         }, listener::onFailure));
     }
@@ -227,11 +224,11 @@ public interface IndexInsightTask {
             .taskType(getTaskType())
             .status(IndexInsightTaskStatus.FAILED)
             .build();
-        writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> {
-            listener.onFailure(error);
-        },
-                e -> {
-            listener.onFailure(e); }));
+        writeIndexInsight(
+            indexInsight,
+            tenantId,
+            ActionListener.wrap(r -> { listener.onFailure(error); }, e -> { listener.onFailure(e); })
+        );
     }
 
     default String generateDocId() {

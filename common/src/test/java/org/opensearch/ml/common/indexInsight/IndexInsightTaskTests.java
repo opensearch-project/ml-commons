@@ -214,7 +214,7 @@ public class IndexInsightTaskTests {
         task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
 
         // Should call update 4 times: beginGeneration + prerequisite beginGeneration + prerequisite saveResult + main task saveResult
-        //verify(client, times(4)).update(any(), any());
+        // verify(client, times(4)).update(any(), any());
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -244,7 +244,7 @@ public class IndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
 
-        //verify(client, times(4)).update(any(), any());
+        // verify(client, times(4)).update(any(), any());
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -259,7 +259,7 @@ public class IndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
 
-        //verify(client, times(4)).update(any(), any());
+        // verify(client, times(4)).update(any(), any());
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -310,7 +310,7 @@ public class IndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runWithPrerequisites("test-storage", "test-tenant", listener);
 
-       // verify(client, times(1)).update(any(), any());
+        // verify(client, times(1)).update(any(), any());
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -363,7 +363,7 @@ public class IndexInsightTaskTests {
     // Simple task without prerequisites
     private static class SimpleTestTask implements IndexInsightTask {
         private final Client client;
-        private  final SdkClient sdkClient;
+        private final SdkClient sdkClient;
 
         SimpleTestTask(Client client, SdkClient sdkClient) {
             this.client = client;

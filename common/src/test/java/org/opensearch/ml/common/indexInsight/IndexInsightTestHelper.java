@@ -25,12 +25,9 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -38,7 +35,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLConfig;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -134,7 +130,6 @@ public class IndexInsightTestHelper {
         when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
     }
 
-
     public static void mockGetFailToGet(SdkClient sdkClient, String content) {
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
@@ -149,11 +144,11 @@ public class IndexInsightTestHelper {
 
     public static void mockSearchSuccess(SdkClient sdkClient) throws IOException {
         SearchResponse searchResponse = mock(SearchResponse.class);
-        SearchHit searchHit =  new SearchHit(0, "iId", null, null).sourceRef(BytesReference.bytes(buildSampleDoc()));
+        SearchHit searchHit = new SearchHit(0, "iId", null, null).sourceRef(BytesReference.bytes(buildSampleDoc()));
         SearchHit[] searchHits1 = List.of(searchHit).toArray(new SearchHit[0]);
         SearchHits searchHits = new SearchHits(searchHits1, null, 0, null, null, null);
         when(searchResponse.getHits()).thenReturn(searchHits);
-        //when(searchHits.getHits()).thenReturn(searchHits1);
+        // when(searchHits.getHits()).thenReturn(searchHits1);
         SearchDataObjectResponse sdkResponse = mock(SearchDataObjectResponse.class);
         when(sdkResponse.searchResponse()).thenReturn(searchResponse);
 
