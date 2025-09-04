@@ -15,6 +15,7 @@ import org.opensearch.ml.common.connector.functions.postprocess.BedrockEmbedding
 import org.opensearch.ml.common.connector.functions.postprocess.BedrockRerankPostProcessFunction;
 import org.opensearch.ml.common.connector.functions.postprocess.CohereRerankPostProcessFunction;
 import org.opensearch.ml.common.connector.functions.postprocess.EmbeddingPostProcessFunction;
+import org.opensearch.ml.common.connector.functions.postprocess.RemoteMlCommonsPassthroughPostProcessFunction;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
@@ -35,6 +36,8 @@ public class MLPostProcessFunction {
     public static final String BEDROCK_RERANK = "connector.post_process.bedrock.rerank";
     public static final String DEFAULT_EMBEDDING = "connector.post_process.default.embedding";
     public static final String DEFAULT_RERANK = "connector.post_process.default.rerank";
+    // ML commons passthrough unwraps a remote ml-commons response and reconstructs model tensors directly based on remote inference
+    public static final String ML_COMMONS_PASSTHROUGH = "connector.post_process.mlcommons.passthrough";
 
     private static final Map<String, String> JSON_PATH_EXPRESSION = new HashMap<>();
 
@@ -46,6 +49,8 @@ public class MLPostProcessFunction {
         BedrockBatchJobArnPostProcessFunction batchJobArnPostProcessFunction = new BedrockBatchJobArnPostProcessFunction();
         CohereRerankPostProcessFunction cohereRerankPostProcessFunction = new CohereRerankPostProcessFunction();
         BedrockRerankPostProcessFunction bedrockRerankPostProcessFunction = new BedrockRerankPostProcessFunction();
+        RemoteMlCommonsPassthroughPostProcessFunction remoteMlCommonsPassthroughPostProcessFunction =
+            new RemoteMlCommonsPassthroughPostProcessFunction();
         JSON_PATH_EXPRESSION.put(OPENAI_EMBEDDING, "$.data[*].embedding");
         JSON_PATH_EXPRESSION.put(COHERE_EMBEDDING, "$.embeddings");
         JSON_PATH_EXPRESSION.put(COHERE_V2_EMBEDDING_FLOAT32, "$.embeddings.float");
@@ -61,6 +66,7 @@ public class MLPostProcessFunction {
         JSON_PATH_EXPRESSION.put(COHERE_RERANK, "$.results");
         JSON_PATH_EXPRESSION.put(BEDROCK_RERANK, "$.results");
         JSON_PATH_EXPRESSION.put(DEFAULT_RERANK, "$[*]");
+        JSON_PATH_EXPRESSION.put(ML_COMMONS_PASSTHROUGH, "$");  // Get the entire response
         POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_V2_EMBEDDING_FLOAT32, embeddingPostProcessFunction);
@@ -76,6 +82,7 @@ public class MLPostProcessFunction {
         POST_PROCESS_FUNCTIONS.put(COHERE_RERANK, cohereRerankPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(BEDROCK_RERANK, bedrockRerankPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(DEFAULT_RERANK, cohereRerankPostProcessFunction);
+        POST_PROCESS_FUNCTIONS.put(ML_COMMONS_PASSTHROUGH, remoteMlCommonsPassthroughPostProcessFunction);
     }
 
     public static String getResponseFilter(String postProcessFunction) {
