@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
+import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -53,13 +56,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
                     batchProcessFields(statisticalContentMap, agentId, storageIndex, tenantId, listener);
                 }, listener::onFailure));
-            }, e -> {
-                log.error("Failed to get statistical content for index {}", sourceIndex, e);
-                saveFailedStatus(tenantId, e, listener);
-            }));
+            }, e -> handleError("Failed to get statistical content for index {}", e, tenantId, listener)));
         } catch (Exception e) {
-            log.error("Failed to execute field description task for index {}", sourceIndex, e);
-            saveFailedStatus(tenantId, e, listener);
+            handleError("Failed to execute field description task for index {}", e, tenantId, listener);
         }
     }
 
@@ -76,11 +75,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
             return filteredDescriptions;
         }
 
-        for (String fieldName : currentIndexFields.keySet()) {
-            if (patternFieldDescriptions.containsKey(fieldName)) {
-                filteredDescriptions.put(fieldName, patternFieldDescriptions.get(fieldName));
-            }
-        }
+        currentIndexFields
+            .keySet()
+            .stream()
+            .filter(patternFieldDescriptions::containsKey)
+            .forEach(fieldName -> filteredDescriptions.put(fieldName, patternFieldDescriptions.get(fieldName)));
 
         return filteredDescriptions;
     }
@@ -107,30 +106,26 @@ public class FieldDescriptionTask implements IndexInsightTask {
             Map<String, Object> patternFieldDescriptions = gson.fromJson(patternContent, Map.class);
 
             // Get current index mapping
-            org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest getMappingsRequest =
-                new org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest().indices(sourceIndex);
+            GetMappingsRequest getMappingsRequest = new GetMappingsRequest().indices(sourceIndex);
 
             getClient().admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
                 try {
-                    Map<String, org.opensearch.cluster.metadata.MappingMetadata> mappings = getMappingsResponse.getMappings();
+                    Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
                     if (mappings.isEmpty()) {
                         beginGeneration(storageIndex, tenantId, listener);
                         return;
                     }
 
                     // Extract field names from current index mapping
-                    Map<String, String> currentFields = new java.util.HashMap<>();
-                    for (org.opensearch.cluster.metadata.MappingMetadata mappingMetadata : mappings.values()) {
+                    Map<String, String> currentFields = new HashMap<>();
+                    for (MappingMetadata mappingMetadata : mappings.values()) {
                         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
                         if (mappingSource != null) {
                             IndexInsightUtils.extractFieldNamesTypes(mappingSource, currentFields, "", false);
                         }
                     }
 
-                    Map<String, Object> currentFieldsMap = new java.util.HashMap<>();
-                    for (String fieldName : currentFields.keySet()) {
-                        currentFieldsMap.put(fieldName, currentFields.get(fieldName));
-                    }
+                    Map<String, Object> currentFieldsMap = new HashMap<>(currentFields);
 
                     Map<String, Object> filteredDescriptions = filterFieldDescriptions(patternFieldDescriptions, currentFieldsMap);
 
@@ -186,9 +181,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
         Map<String, Object> mappingSource;
         Object obj = statisticalContentMap.get(IMPORTANT_COLUMN_KEYWORD);
         if (!(obj instanceof Map)) {
-            log.error("No mapping properties found for index: {}", sourceIndex);
-            IllegalStateException error = new IllegalStateException("No data distribution found for index: " + sourceIndex);
-            saveFailedStatus(tenantId, error, listener);
+            handleError(
+                "No mapping properties found for index: {}",
+                new IllegalStateException("No data distribution found for index: " + sourceIndex),
+                tenantId,
+                listener
+            );
             return;
         }
         mappingSource = (Map<String, Object>) obj;
@@ -200,10 +198,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             saveResult("", tenantId, ActionListener.wrap(insight -> {
                 log.info("Empty field description completed for: {}", sourceIndex);
                 listener.onResponse(insight);
-            }, e -> {
-                log.error("Failed to save empty field description result for index {}", sourceIndex, e);
-                saveFailedStatus(tenantId, e, listener);
-            }));
+            }, e -> handleError("Failed to save empty field description result for index {}", e, tenantId, listener)));
             return;
         }
 
@@ -224,12 +219,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
                     saveResult(gson.toJson(resultsMap), tenantId, ActionListener.wrap(insight -> {
                         log.info("Field description completed for: {}", sourceIndex);
                         listener.onResponse(insight);
-                    }, e -> {
-                        log.error("Failed to save field description result for index {}", sourceIndex, e);
-                        saveFailedStatus(tenantId, e, listener);
-                    }));
+                    }, e -> handleError("Failed to save field description result for index {}", e, tenantId, listener)));
                 } else {
-                    saveFailedStatus(tenantId, new Exception("Batch processing failed"), listener);
+                    handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
                 }
             }
         }, e -> {
@@ -237,7 +229,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             hasErrors.set(true);
             log.error("Batch processing failed for index {}: {}", sourceIndex, e.getMessage());
             if (countDownLatch.getCount() == 0) {
-                saveFailedStatus(tenantId, new Exception("Batch processing failed"), listener);
+                handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
             }
         });
 
@@ -388,5 +380,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
             return new StatisticalDataTask(sourceIndex, client, sdkClient);
         }
         throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
+    }
+
+    private void handleError(String message,  Exception e, String tenantId, ActionListener<IndexInsight> listener) {
+        log.error(message, sourceIndex, e);
+        saveFailedStatus(tenantId, e, listener);
+        listener.onFailure(e);
     }
 }
