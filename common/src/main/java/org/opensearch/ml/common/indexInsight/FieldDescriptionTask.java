@@ -385,6 +385,5 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private void handleError(String message,  Exception e, String tenantId, ActionListener<IndexInsight> listener) {
         log.error(message, sourceIndex, e);
         saveFailedStatus(tenantId, e, listener);
-        listener.onFailure(e);
     }
 }

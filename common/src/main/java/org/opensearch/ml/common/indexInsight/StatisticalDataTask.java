@@ -331,8 +331,9 @@ public class StatisticalDataTask implements IndexInsightTask {
         log.error(message, sourceIndex, e);
         if (shouldStore) {
             saveFailedStatus(tenantId, e, listener);
+        } else {
+            listener.onFailure(e);
         }
-        listener.onFailure(e);
     }
 
 }
