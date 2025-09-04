@@ -82,11 +82,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         try {
             collectStatisticalData(storageIndex, listener, shouldStore);
         } catch (Exception e) {
-            log.error("Failed to execute statistical data task for index {}", sourceIndex, e);
-            if (shouldStore) {
-                saveFailedStatus(storageIndex);
-            }
-            listener.onFailure(e);
+            handleError("Failed to execute statistical data task for index {}", storageIndex, e, listener, shouldStore);
         }
     }
 
@@ -176,13 +172,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                         .build();
                     listener.onResponse(insight);
                 }
-            }, e -> {
-                log.error("Failed to collect statistical data for index: {}", sourceIndex, e);
-                if (shouldStore) {
-                    saveFailedStatus(storageIndex);
-                }
-                listener.onFailure(e);
-            }));
+            }, e -> handleError("Failed to collect statistical data for index: {}", storageIndex, e, listener, shouldStore)));
         }, listener::onFailure));
     }
 
@@ -327,6 +317,14 @@ public class StatisticalDataTask implements IndexInsightTask {
             }
         }
         return filteredNames;
+    }
+
+    private void handleError(String message, String storageIndex, Exception e, ActionListener<IndexInsight> listener, boolean shouldStore) {
+        log.error(message, sourceIndex, e);
+        if (shouldStore) {
+            saveFailedStatus(storageIndex);
+        }
+        listener.onFailure(e);
     }
 
 }

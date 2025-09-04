@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
+import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.transport.client.Client;
 
@@ -50,15 +53,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
                     batchProcessFields(statisticalContentMap, agentId, storageIndex, listener);
                 }, listener::onFailure));
-            }, e -> {
-                log.error("Failed to get statistical content for index {}", sourceIndex, e);
-                saveFailedStatus(storageIndex);
-                listener.onFailure(e);
-            }));
+            }, e -> handleError("Failed to get statistical content for index {}", storageIndex, e, listener)));
         } catch (Exception e) {
-            log.error("Failed to execute field description task for index {}", sourceIndex, e);
-            saveFailedStatus(storageIndex);
-            listener.onFailure(e);
+            handleError("Failed to execute field description task for index {}", storageIndex, e, listener);
         }
     }
 
@@ -75,11 +72,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
             return filteredDescriptions;
         }
 
-        for (String fieldName : currentIndexFields.keySet()) {
-            if (patternFieldDescriptions.containsKey(fieldName)) {
-                filteredDescriptions.put(fieldName, patternFieldDescriptions.get(fieldName));
-            }
-        }
+        currentIndexFields
+            .keySet()
+            .stream()
+            .filter(patternFieldDescriptions::containsKey)
+            .forEach(fieldName -> filteredDescriptions.put(fieldName, patternFieldDescriptions.get(fieldName)));
 
         return filteredDescriptions;
     }
@@ -106,30 +103,26 @@ public class FieldDescriptionTask implements IndexInsightTask {
             Map<String, Object> patternFieldDescriptions = gson.fromJson(patternContent, Map.class);
 
             // Get current index mapping
-            org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest getMappingsRequest =
-                new org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest().indices(sourceIndex);
+            GetMappingsRequest getMappingsRequest = new GetMappingsRequest().indices(sourceIndex);
 
             getClient().admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
                 try {
-                    Map<String, org.opensearch.cluster.metadata.MappingMetadata> mappings = getMappingsResponse.getMappings();
+                    Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
                     if (mappings.isEmpty()) {
                         beginGeneration(storageIndex, tenantId, listener);
                         return;
                     }
 
                     // Extract field names from current index mapping
-                    Map<String, String> currentFields = new java.util.HashMap<>();
-                    for (org.opensearch.cluster.metadata.MappingMetadata mappingMetadata : mappings.values()) {
+                    Map<String, String> currentFields = new HashMap<>();
+                    for (MappingMetadata mappingMetadata : mappings.values()) {
                         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
                         if (mappingSource != null) {
                             IndexInsightUtils.extractFieldNamesTypes(mappingSource, currentFields, "", false);
                         }
                     }
 
-                    Map<String, Object> currentFieldsMap = new java.util.HashMap<>();
-                    for (String fieldName : currentFields.keySet()) {
-                        currentFieldsMap.put(fieldName, currentFields.get(fieldName));
-                    }
+                    Map<String, Object> currentFieldsMap = new HashMap<>(currentFields);
 
                     Map<String, Object> filteredDescriptions = filterFieldDescriptions(patternFieldDescriptions, currentFieldsMap);
 
@@ -179,9 +172,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
         Map<String, Object> mappingSource;
         Object obj = statisticalContentMap.get(IMPORTANT_COLUMN_KEYWORD);
         if (!(obj instanceof Map)) {
-            log.error("No mapping properties found for index: {}", sourceIndex);
-            saveFailedStatus(storageIndex);
-            listener.onFailure(new IllegalStateException("No data distribution found for index: " + sourceIndex));
+            handleError(
+                "No mapping properties found for index: {}",
+                storageIndex,
+                new IllegalStateException("No data distribution found for index: " + sourceIndex),
+                listener
+            );
             return;
         }
         mappingSource = (Map<String, Object>) obj;
@@ -193,11 +189,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             saveResult("", storageIndex, ActionListener.wrap(insight -> {
                 log.info("Empty field description completed for: {}", sourceIndex);
                 listener.onResponse(insight);
-            }, e -> {
-                log.error("Failed to save empty field description result for index {}", sourceIndex, e);
-                saveFailedStatus(storageIndex);
-                listener.onFailure(e);
-            }));
+            }, e -> handleError("Failed to save empty field description result for index {}", storageIndex, e, listener)));
             return;
         }
 
@@ -218,14 +210,9 @@ public class FieldDescriptionTask implements IndexInsightTask {
                     saveResult(gson.toJson(resultsMap), storageIndex, ActionListener.wrap(insight -> {
                         log.info("Field description completed for: {}", sourceIndex);
                         listener.onResponse(insight);
-                    }, e -> {
-                        log.error("Failed to save field description result for index {}", sourceIndex, e);
-                        saveFailedStatus(storageIndex);
-                        listener.onFailure(e);
-                    }));
+                    }, e -> handleError("Failed to save field description result for index {}", storageIndex, e, listener)));
                 } else {
-                    saveFailedStatus(storageIndex);
-                    listener.onFailure(new Exception("Batch processing failed"));
+                    handleError("Batch processing failed for index {}", storageIndex, new Exception("Batch processing failed"), listener);
                 }
             }
         }, e -> {
@@ -233,8 +220,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             hasErrors.set(true);
             log.error("Batch processing failed for index {}: {}", sourceIndex, e.getMessage());
             if (countDownLatch.getCount() == 0) {
-                saveFailedStatus(storageIndex);
-                listener.onFailure(new Exception("Batch processing failed"));
+                handleError("Batch processing failed for index {}", storageIndex, new Exception("Batch processing failed"), listener);
             }
         });
 
@@ -385,5 +371,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
             return new StatisticalDataTask(sourceIndex, client);
         }
         throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
+    }
+
+    private void handleError(String message, String storageIndex, Exception e, ActionListener<IndexInsight> listener) {
+        log.error(message, sourceIndex, e);
+        saveFailedStatus(storageIndex);
+        listener.onFailure(e);
     }
 }

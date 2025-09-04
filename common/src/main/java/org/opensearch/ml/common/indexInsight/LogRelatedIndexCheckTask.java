@@ -92,10 +92,8 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                     ActionListener.wrap(agentId -> performLogAnalysis(agentId, storageIndex, listener), listener::onFailure)
                 );
             }, listener::onFailure));
-        } catch (Exception ex) {
-            log.error("Failed log related check for {}", sourceIndex, ex);
-            saveFailedStatus(storageIndex);
-            listener.onFailure(ex);
+        } catch (Exception e) {
+            handleError("Failed log related check for {}", storageIndex, e, listener);
         }
     }
 
@@ -153,21 +151,11 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 saveResult(MAPPER.writeValueAsString(parsed), storageIndex, ActionListener.wrap(insight -> {
                     log.info("Log related check completed for index {}", sourceIndex);
                     listener.onResponse(insight);
-                }, e -> {
-                    log.error("Failed to save log related check result for index {}", sourceIndex, e);
-                    saveFailedStatus(storageIndex);
-                    listener.onFailure(e);
-                }));
+                }, e -> handleError("Failed to save log related check result for index {}", storageIndex, e, listener)));
             } catch (Exception e) {
-                log.error("Error parsing response of log related check for {}", sourceIndex, e);
-                saveFailedStatus(storageIndex);
-                listener.onFailure(e);
+                handleError("Error parsing response of log related check for {}", storageIndex, e, listener);
             }
-        }, e -> {
-            log.error("Failed to call LLM for log related check: {}", e.getMessage(), e);
-            saveFailedStatus(storageIndex);
-            listener.onFailure(e);
-        }));
+        }, e -> handleError("Failed to call LLM for log related check: {}", storageIndex, e, listener)));
     }
 
     private Map<String, Object> parseCheckResponse(String resp) {
@@ -188,5 +176,11 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
         throw new IllegalArgumentException("LogRelatedIndexCheckTask has no prerequisites");
+    }
+
+    private void handleError(String message, String storageIndex, Exception e, ActionListener<IndexInsight> listener) {
+        log.error(message, sourceIndex, e);
+        saveFailedStatus(storageIndex);
+        listener.onFailure(e);
     }
 }
