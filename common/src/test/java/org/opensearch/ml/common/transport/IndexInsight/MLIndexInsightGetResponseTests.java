@@ -40,7 +40,8 @@ public class MLIndexInsightGetResponseTests {
             "demo-content",
             IndexInsightTaskStatus.COMPLETED,
             MLIndexInsightType.FIELD_DESCRIPTION,
-            Instant.ofEpochMilli(0)
+            Instant.ofEpochMilli(0),
+            null
         );
     }
 

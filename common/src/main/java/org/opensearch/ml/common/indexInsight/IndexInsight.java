@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -38,14 +39,23 @@ public class IndexInsight implements ToXContentObject, Writeable {
     private IndexInsightTaskStatus status;
     private MLIndexInsightType taskType;
     private Instant lastUpdatedTime;
+    private String tenantId;
 
     @Builder(toBuilder = true)
-    public IndexInsight(String index, String content, IndexInsightTaskStatus status, MLIndexInsightType taskType, Instant lastUpdatedTime) {
+    public IndexInsight(
+        String index,
+        String content,
+        IndexInsightTaskStatus status,
+        MLIndexInsightType taskType,
+        Instant lastUpdatedTime,
+        String tenantId
+    ) {
         this.index = index;
         this.content = content;
         this.status = status;
         this.taskType = taskType;
         this.lastUpdatedTime = lastUpdatedTime;
+        this.tenantId = tenantId;
     }
 
     public IndexInsight(StreamInput input) throws IOException {
@@ -54,6 +64,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
         taskType = MLIndexInsightType.fromString(input.readString());
         lastUpdatedTime = input.readInstant();
         content = input.readOptionalString();
+        tenantId = input.readOptionalString();
     }
 
     public static IndexInsight parse(XContentParser parser) throws IOException {
@@ -62,6 +73,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
         IndexInsightTaskStatus status = null;
         String taskType = null;
         Instant lastUpdatedTime = null;
+        String tenantId = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -82,6 +94,8 @@ public class IndexInsight implements ToXContentObject, Writeable {
                     break;
                 case LAST_UPDATE_FIELD:
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
+                case TENANT_ID_FIELD:
+                    tenantId = parser.text();
                 default:
                     parser.skipChildren();
                     break;
@@ -94,6 +108,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
             .status(status)
             .taskType(MLIndexInsightType.fromString(taskType))
             .lastUpdatedTime(lastUpdatedTime)
+            .tenantId(tenantId)
             .build();
     }
 
@@ -104,6 +119,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
         out.writeString(taskType.toString());
         out.writeInstant(lastUpdatedTime);
         out.writeOptionalString(content);
+        out.writeOptionalString(tenantId);
     }
 
     @Override
@@ -117,6 +133,9 @@ public class IndexInsight implements ToXContentObject, Writeable {
         }
         if (status != null) {
             builder.field(STATUS_FIELD, status.toString());
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
         }
         builder.field(TASK_TYPE_FIELD, taskType.toString());
         builder.field(LAST_UPDATE_FIELD, lastUpdatedTime.toEpochMilli());

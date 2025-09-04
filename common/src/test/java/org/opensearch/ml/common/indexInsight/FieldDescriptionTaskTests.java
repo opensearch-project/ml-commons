@@ -24,9 +24,13 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 public class FieldDescriptionTaskTests {
@@ -35,14 +39,23 @@ public class FieldDescriptionTaskTests {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private Client client;
+    private SdkClient sdkClient;
     private FieldDescriptionTask task;
     private ActionListener<IndexInsight> listener;
+    private ThreadContext threadContext;
+    private ThreadPool threadPool;
 
     @Before
     public void setUp() {
         client = mock(Client.class);
-        task = new FieldDescriptionTask("test-index", client);
+        sdkClient = mock(SdkClient.class);
+        task = new FieldDescriptionTask("test-index", client, sdkClient);
         listener = mock(ActionListener.class);
+        threadPool = mock(ThreadPool.class);
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     @Test
@@ -93,7 +106,7 @@ public class FieldDescriptionTaskTests {
         }
         mappingBuilder.append("}}");
 
-        mockGetSuccess(client, mappingBuilder.toString());
+        mockGetSuccess(sdkClient, mappingBuilder.toString());
         mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
@@ -105,7 +118,8 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_InvalidJsonContent() {
         String invalidStatisticalContent = "invalid json content";
 
-        mockGetSuccess(client, invalidStatisticalContent);
+        mockGetSuccess(sdkClient, invalidStatisticalContent);
+        mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
@@ -119,7 +133,7 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_MLConfigRetrievalFailure() {
         String statisticalContent = "{\"mapping\": {\"field1\": {\"type\": \"text\"}}}";
 
-        mockGetSuccess(client, statisticalContent);
+        mockGetSuccess(sdkClient, statisticalContent);
         mockMLConfigFailure(client, "Config not found");
 
         task.runTask("storage-index", "tenant-id", listener);
@@ -135,7 +149,8 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_MLExecuteFailure() {
         String statisticalContent = "{\"important_column_and_distribution\": {\"field1\": {\"type\": \"text\"}}}";
 
-        mockGetSuccess(client, statisticalContent);
+        mockGetSuccess(sdkClient, statisticalContent);
+        mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
         mockMLExecuteFailure(client, "ML execution failed");
 
@@ -152,7 +167,8 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_EmptyMappingSource() {
         String statisticalContentWithEmptyMapping = "{\"mapping\": {}}";
 
-        mockGetSuccess(client, statisticalContentWithEmptyMapping);
+        mockGetSuccess(sdkClient, statisticalContentWithEmptyMapping);
+        mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
@@ -166,7 +182,8 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_NullMappingSource() {
         String statisticalContentWithNullMapping = "{\"other_field\": \"value\"}";
 
-        mockGetSuccess(client, statisticalContentWithNullMapping);
+        mockGetSuccess(sdkClient, statisticalContentWithNullMapping);
+        mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
 
         task.runTask("storage-index", "tenant-id", listener);
@@ -180,9 +197,9 @@ public class FieldDescriptionTaskTests {
     public void testRunTask_EmptyFieldsList() {
         String statisticalContentWithNoTypeFields = "{" + "\"important_column_and_distribution\": {" + "}}";
 
-        mockGetSuccess(client, statisticalContentWithNoTypeFields);
+        mockGetSuccess(sdkClient, statisticalContentWithNoTypeFields);
         mockMLConfigSuccess(client);
-        mockUpdateSuccess(client);
+        mockUpdateSuccess(sdkClient);
 
         task.runTask("storage-index", "tenant-id", listener);
         ArgumentCaptor<IndexInsight> insightCaptor = ArgumentCaptor.forClass(IndexInsight.class);
@@ -203,10 +220,10 @@ public class FieldDescriptionTaskTests {
             + "}"
             + "}";
 
-        mockGetSuccess(client, statisticalContent);
+        mockGetSuccess(sdkClient, statisticalContent);
         mockMLConfigSuccess(client);
         mockMLExecuteSuccess(client, "user_name: name of the user\nuser_age: age of the user in years");
-        mockUpdateSuccess(client);
+        mockUpdateSuccess(sdkClient);
 
         task.runTask("storage-index", "tenant-id", listener);
 

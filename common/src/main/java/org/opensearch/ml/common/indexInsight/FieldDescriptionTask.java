@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -40,22 +41,24 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
     private final String sourceIndex;
     private final Client client;
+    private final SdkClient sdkClient;
 
-    public FieldDescriptionTask(String sourceIndex, Client client) {
+    public FieldDescriptionTask(String sourceIndex, Client client, SdkClient sdkClient) {
         this.sourceIndex = sourceIndex;
         this.client = client;
+        this.sdkClient = sdkClient;
     }
 
     @Override
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         try {
-            getInsightContentFromContainer(storageIndex, MLIndexInsightType.STATISTICAL_DATA, ActionListener.wrap(statisticalContentMap -> {
+            getInsightContentFromContainer(MLIndexInsightType.STATISTICAL_DATA, tenantId, ActionListener.wrap(statisticalContentMap -> {
                 getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
-                    batchProcessFields(statisticalContentMap, agentId, storageIndex, listener);
+                    batchProcessFields(statisticalContentMap, agentId, storageIndex, tenantId, listener);
                 }, listener::onFailure));
-            }, e -> handleError("Failed to get statistical content for index {}", storageIndex, e, listener)));
+            }, e -> handleError("Failed to get statistical content for index {}", e, tenantId, listener)));
         } catch (Exception e) {
-            handleError("Failed to execute field description task for index {}", storageIndex, e, listener);
+            handleError("Failed to execute field description task for index {}", e, tenantId, listener);
         }
     }
 
@@ -159,6 +162,11 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
+    public SdkClient getSdkClient() {
+        return sdkClient;
+    }
+
+    @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
     }
@@ -167,6 +175,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         Map<String, Object> statisticalContentMap,
         String agentId,
         String storageIndex,
+        String tenantId,
         ActionListener<IndexInsight> listener
     ) {
         Map<String, Object> mappingSource;
@@ -174,8 +183,8 @@ public class FieldDescriptionTask implements IndexInsightTask {
         if (!(obj instanceof Map)) {
             handleError(
                 "No mapping properties found for index: {}",
-                storageIndex,
                 new IllegalStateException("No data distribution found for index: " + sourceIndex),
+                tenantId,
                 listener
             );
             return;
@@ -186,10 +195,10 @@ public class FieldDescriptionTask implements IndexInsightTask {
 
         if (allFields.isEmpty()) {
             log.warn("No important fields found for index: {}", sourceIndex);
-            saveResult("", storageIndex, ActionListener.wrap(insight -> {
+            saveResult("", tenantId, ActionListener.wrap(insight -> {
                 log.info("Empty field description completed for: {}", sourceIndex);
                 listener.onResponse(insight);
-            }, e -> handleError("Failed to save empty field description result for index {}", storageIndex, e, listener)));
+            }, e -> handleError("Failed to save empty field description result for index {}", e, tenantId, listener)));
             return;
         }
 
@@ -207,12 +216,12 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 // All-or-nothing strategy: only save results if ALL batches succeed
                 // If any batch fails, the entire task is marked as failed and no partial results are saved
                 if (!hasErrors.get()) {
-                    saveResult(gson.toJson(resultsMap), storageIndex, ActionListener.wrap(insight -> {
+                    saveResult(gson.toJson(resultsMap), tenantId, ActionListener.wrap(insight -> {
                         log.info("Field description completed for: {}", sourceIndex);
                         listener.onResponse(insight);
-                    }, e -> handleError("Failed to save field description result for index {}", storageIndex, e, listener)));
+                    }, e -> handleError("Failed to save field description result for index {}", e, tenantId, listener)));
                 } else {
-                    handleError("Batch processing failed for index {}", storageIndex, new Exception("Batch processing failed"), listener);
+                    handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
                 }
             }
         }, e -> {
@@ -220,7 +229,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             hasErrors.set(true);
             log.error("Batch processing failed for index {}: {}", sourceIndex, e.getMessage());
             if (countDownLatch.getCount() == 0) {
-                handleError("Batch processing failed for index {}", storageIndex, new Exception("Batch processing failed"), listener);
+                handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
             }
         });
 
@@ -368,14 +377,13 @@ public class FieldDescriptionTask implements IndexInsightTask {
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
         if (prerequisiteType == MLIndexInsightType.STATISTICAL_DATA) {
-            return new StatisticalDataTask(sourceIndex, client);
+            return new StatisticalDataTask(sourceIndex, client, sdkClient);
         }
         throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
     }
 
-    private void handleError(String message, String storageIndex, Exception e, ActionListener<IndexInsight> listener) {
+    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {
         log.error(message, sourceIndex, e);
-        saveFailedStatus(storageIndex);
-        listener.onFailure(e);
+        saveFailedStatus(tenantId, e, listener);
     }
 }

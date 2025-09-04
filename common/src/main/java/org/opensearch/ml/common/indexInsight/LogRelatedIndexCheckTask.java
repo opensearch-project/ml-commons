@@ -18,6 +18,7 @@ import java.util.Map;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -37,6 +38,7 @@ import lombok.extern.log4j.Log4j2;
 public class LogRelatedIndexCheckTask implements IndexInsightTask {
     private final String sourceIndex;
     private final Client client;
+    private final SdkClient sdkClient;
 
     private String sampleDocString;
 
@@ -77,9 +79,10 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             - Your judgment should be based on both semantics and field patterns (e.g., field names like "message", "log", "trace", "span", etc).
             """;
 
-    public LogRelatedIndexCheckTask(String sourceIndex, Client client) {
+    public LogRelatedIndexCheckTask(String sourceIndex, Client client, SdkClient sdkClient) {
         this.sourceIndex = sourceIndex;
         this.client = client;
+        this.sdkClient = sdkClient;
     }
 
     @Override
@@ -89,11 +92,11 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
                 getAgentIdToRun(
                     client,
                     tenantId,
-                    ActionListener.wrap(agentId -> performLogAnalysis(agentId, storageIndex, listener), listener::onFailure)
+                    ActionListener.wrap(agentId -> performLogAnalysis(agentId, storageIndex, tenantId, listener), listener::onFailure)
                 );
             }, listener::onFailure));
         } catch (Exception e) {
-            handleError("Failed log related check for {}", storageIndex, e, listener);
+            handleError("Failed log related check for {}", e, tenantId, listener);
         }
     }
 
@@ -116,6 +119,11 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     @Override
     public Client getClient() {
         return client;
+    }
+
+    @Override
+    public SdkClient getSdkClient() {
+        return sdkClient;
     }
 
     private void collectSampleDocString(ActionListener<String> listener) {
@@ -142,20 +150,20 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         }));
     }
 
-    private void performLogAnalysis(String agentId, String storageIndex, ActionListener<IndexInsight> listener) {
+    private void performLogAnalysis(String agentId, String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
         String prompt = RCA_TEMPLATE.replace("{indexName}", sourceIndex).replace("{samples}", sampleDocString);
 
         callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {
             try {
                 Map<String, Object> parsed = parseCheckResponse(response);
-                saveResult(MAPPER.writeValueAsString(parsed), storageIndex, ActionListener.wrap(insight -> {
+                saveResult(MAPPER.writeValueAsString(parsed), tenantId, ActionListener.wrap(insight -> {
                     log.info("Log related check completed for index {}", sourceIndex);
                     listener.onResponse(insight);
-                }, e -> handleError("Failed to save log related check result for index {}", storageIndex, e, listener)));
+                }, e -> handleError("Failed to save log related check result for index {}", e, tenantId, listener)));
             } catch (Exception e) {
-                handleError("Error parsing response of log related check for {}", storageIndex, e, listener);
+                handleError("Error parsing response of log related check for {}", e, tenantId, listener);
             }
-        }, e -> handleError("Failed to call LLM for log related check: {}", storageIndex, e, listener)));
+        }, e -> handleError("Failed to call LLM for log related check: {}", e, tenantId, listener)));
     }
 
     private Map<String, Object> parseCheckResponse(String resp) {
@@ -178,9 +186,8 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         throw new IllegalArgumentException("LogRelatedIndexCheckTask has no prerequisites");
     }
 
-    private void handleError(String message, String storageIndex, Exception e, ActionListener<IndexInsight> listener) {
+    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {
         log.error(message, sourceIndex, e);
-        saveFailedStatus(storageIndex);
-        listener.onFailure(e);
+        saveFailedStatus(tenantId, e, listener);
     }
 }

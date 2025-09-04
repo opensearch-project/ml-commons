@@ -24,6 +24,7 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.utils.mergeMetaDataUtils.MergeRuleHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
@@ -66,11 +67,13 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     private final String sourceIndex;
     private final Client client;
+    private final SdkClient sdkClient;
     private SearchHit[] sampleDocuments;
 
-    public StatisticalDataTask(String sourceIndex, Client client) {
+    public StatisticalDataTask(String sourceIndex, Client client, SdkClient sdkClient) {
         this.sourceIndex = sourceIndex;
         this.client = client;
+        this.sdkClient = sdkClient;
     }
 
     @Override
@@ -80,9 +83,9 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
         try {
-            collectStatisticalData(storageIndex, listener, shouldStore);
+            collectStatisticalData(tenantId, shouldStore, listener);
         } catch (Exception e) {
-            handleError("Failed to execute statistical data task for index {}", storageIndex, e, listener, shouldStore);
+            handleError("Failed to execute statistical data task for index {}", e, tenantId, listener, shouldStore);
         }
     }
 
@@ -122,6 +125,11 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
+    public SdkClient getSdkClient() {
+        return sdkClient;
+    }
+
+    @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.emptyList();
     }
@@ -133,7 +141,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return getMappingsRequest;
     }
 
-    private void collectStatisticalData(String storageIndex, ActionListener<IndexInsight> listener, boolean shouldStore) {
+    private void collectStatisticalData(String tenantId, Boolean shouldStore, ActionListener<IndexInsight> listener) {
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(sourceIndex);
 
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
@@ -159,7 +167,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                 String statisticalContent = gson.toJson(parseSearchResult(fieldsToType, highPriorityColumns, searchResponse));
 
                 if (shouldStore) {
-                    saveResult(statisticalContent, storageIndex, listener);
+                    saveResult(statisticalContent, tenantId, listener);
                 } else {
                     // Return IndexInsight directly without storing
                     IndexInsight insight = IndexInsight
@@ -172,7 +180,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                         .build();
                     listener.onResponse(insight);
                 }
-            }, e -> handleError("Failed to collect statistical data for index: {}", storageIndex, e, listener, shouldStore)));
+            }, e -> handleError("Failed to collect statistical data for index: {}", e, tenantId, listener, shouldStore)));
         }, listener::onFailure));
     }
 
@@ -319,12 +327,13 @@ public class StatisticalDataTask implements IndexInsightTask {
         return filteredNames;
     }
 
-    private void handleError(String message, String storageIndex, Exception e, ActionListener<IndexInsight> listener, boolean shouldStore) {
+    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
         log.error(message, sourceIndex, e);
         if (shouldStore) {
-            saveFailedStatus(storageIndex);
+            saveFailedStatus(tenantId, e, listener);
+        } else {
+            listener.onFailure(e);
         }
-        listener.onFailure(e);
     }
 
 }

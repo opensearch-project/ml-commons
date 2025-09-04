@@ -9,6 +9,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,12 +18,14 @@ import java.util.Map;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.Mock;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
@@ -31,6 +35,9 @@ public class StatisticalDataTaskTests {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Mock
+    public SdkClient sdkClient;
 
     private Client setupBasicClientMocks() {
         Client client = mock(Client.class);
@@ -73,7 +80,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testGetTaskType() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
         assertEquals(MLIndexInsightType.STATISTICAL_DATA, task.getTaskType());
     }
@@ -81,7 +88,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testGetSourceIndex() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
         assertEquals("test-index", task.getSourceIndex());
     }
@@ -89,7 +96,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testGetClient() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
         assertEquals(client, task.getClient());
     }
@@ -97,7 +104,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testGetPrerequisites() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
         assertTrue(task.getPrerequisites().isEmpty());
     }
@@ -105,7 +112,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testCreatePrerequisiteTask_ThrowsException() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("StatisticalDataTask has no prerequisites");
@@ -115,7 +122,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testBuildQuery() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
         Map<String, String> fields = new HashMap<>();
         fields.put("text_field", "text");
@@ -136,7 +143,7 @@ public class StatisticalDataTaskTests {
 
         doAnswer(invocation -> { return null; }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
 
         task.runTask("storage-index", "tenant-id", listener);
@@ -154,7 +161,7 @@ public class StatisticalDataTaskTests {
         when(getMappingsResponse.getMappings()).thenReturn(new HashMap<>());
         setupGetMappingsCall(client, getMappingsResponse);
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
         task.runTask("storage-index", "tenant-id", listener);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
@@ -174,14 +181,15 @@ public class StatisticalDataTaskTests {
             responseListener.onFailure(new RuntimeException("Search failed"));
             return null;
         }).when(client).search(any(SearchRequest.class), any());
+        sdkClient = mock(SdkClient.class);
 
-        StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client));
-        doNothing().when(task).saveFailedStatus(any());
+        when(sdkClient.searchDataObjectAsync(any())).thenThrow(new RuntimeException("Search failed"));
+        mockGetSuccess(sdkClient, "");
+        mockUpdateSuccess(sdkClient);
 
+        StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient));
         task.runTask("storage-index", "tenant-id", listener);
 
-        verify(client).search(any(SearchRequest.class), any());
-        verify(task).saveFailedStatus(eq("storage-index"));
         verify(listener).onFailure(any(RuntimeException.class));
     }
 
@@ -199,7 +207,7 @@ public class StatisticalDataTaskTests {
             return null;
         }).when(client).search(any(SearchRequest.class), any());
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
         task.runTask("storage-index", "tenant-id", listener);
 
         verify(client).search(any(SearchRequest.class), any());
