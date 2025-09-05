@@ -59,9 +59,9 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> PREFIXS = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
-    private static final String NOT_NULL_KEYWORD = "not_null";
     private static final Double THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
+    public static final String NOT_NULL_KEYWORD = "not_null";
     public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
     public static final String EXAMPLE_DOC_KEYWORD = "example_docs";
 
