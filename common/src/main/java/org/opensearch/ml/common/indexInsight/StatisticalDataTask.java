@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFie
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,7 +67,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> PREFIXS = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
-    private static final Double THRESHOLD = 0.001;
+    private static final Double IMPORTANT_COLUMN_THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
     private static final String PARSE_COLUMN_NAME_PATTERN = "<column_name>(.*?)</column_name>";
     private static final int FILTER_LLM_NUMBERS = 30;
@@ -87,7 +88,6 @@ public class StatisticalDataTask implements IndexInsightTask {
     private final String sourceIndex;
     private final Client client;
     private final SdkClient sdkClient;
-    private SearchHit[] sampleDocuments;
 
     public StatisticalDataTask(String sourceIndex, Client client, SdkClient sdkClient) {
         this.sourceIndex = sourceIndex;
@@ -155,7 +155,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return getMappingsRequest;
     }
 
-    private void collectStatisticalData(String tenantId, Boolean shouldStore, ActionListener<IndexInsight> listener) {
+    private void collectStatisticalData(String tenantId, boolean shouldStore, ActionListener<IndexInsight> listener) {
         GetMappingsRequest getMappingsRequest = buildGetMappingRequest(sourceIndex);
 
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
@@ -176,9 +176,8 @@ public class StatisticalDataTask implements IndexInsightTask {
             searchRequest.source(buildQuery(fieldsToType));
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-                sampleDocuments = searchResponse.getHits().getHits();
-                Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
-                Map<String, Object> parsedResult = parseSearchResult(fieldsToType, highPriorityColumns, searchResponse);
+                Set<String> importantColumns = filterColumns(fieldsToType, searchResponse);
+                Map<String, Object> parsedResult = parseSearchResult(fieldsToType, importantColumns, searchResponse);
                 filterImportantColumnByLLM(parsedResult, tenantId, ActionListener.wrap(response -> {
                     Map<String, Object> filteredResponse = new HashMap<>();
                     filteredResponse
@@ -205,7 +204,7 @@ public class StatisticalDataTask implements IndexInsightTask {
                             .taskType(getTaskType())
                             .content(statisticalContent)
                             .status(IndexInsightTaskStatus.COMPLETED)
-                            .lastUpdatedTime(java.time.Instant.now())
+                            .lastUpdatedTime(Instant.now())
                             .build();
                         listener.onResponse(insight);
                     }
@@ -216,7 +215,7 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
-        throw new IllegalArgumentException("StatisticalDataTask has no prerequisites");
+        throw new IllegalStateException("StatisticalDataTask has no prerequisites");
     }
 
     public SearchSourceBuilder buildQuery(Map<String, String> fields) {
@@ -383,13 +382,14 @@ public class StatisticalDataTask implements IndexInsightTask {
                             if (prefix.equals("unique_terms_")) {
                                 // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
                                 Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
-                                List<Map<String, Object>> buckets = (List<Map<String, Object>>) aggResult.get("buckets");
-
-                                List<Object> values = new ArrayList<>();
-                                for (Map<String, Object> bucket : buckets) {
-                                    values.add(bucket.get("key"));
+                                List<Map<String, Object>> buckets = aggResult != null
+                                    ? (List<Map<String, Object>>) aggResult.get("buckets")
+                                    : null;
+                                if (buckets == null) {
+                                    continue;
                                 }
-                                targetValue = values;
+
+                                targetValue = buckets.stream().filter(bucket -> bucket != null).map(bucket -> bucket.get("key")).toList();
                             } else {
                                 Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
                                 if (aggResult.containsKey("value_as_string")) {
@@ -402,7 +402,12 @@ public class StatisticalDataTask implements IndexInsightTask {
                             ((Map<String, Object>) result.get(targetField)).put(aggregationType, targetValue);
                             break;
                         } catch (Exception e) {
-                            log.error("fail to parse result from DSL in statistical index insight for: ", e);
+                            log
+                                .error(
+                                    "Failed to parse aggregation result from DSL in statistical index insight for index name: {}",
+                                    sourceIndex,
+                                    e
+                                );
                         }
                     }
                 }
@@ -416,17 +421,16 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     private Set<String> filterColumns(Map<String, String> allFieldsToType, SearchResponse searchResponse) {
-        Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
-            .getAggregations()
-            .getAsMap();
-        long totalDocCount = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample")).getDocCount();
+        InternalSampler sampleAggregation = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"));
+        Map<String, Aggregation> aggregationMap = sampleAggregation.getAggregations().getAsMap();
+        long totalDocCount = sampleAggregation.getDocCount();
         Set<String> filteredNames = new HashSet<>();
         InternalFilters aggregation = (InternalFilters) aggregationMap.get(NOT_NULL_KEYWORD);
         for (InternalFilters.InternalBucket bucket : aggregation.getBuckets()) {
             String targetField = bucket.getKey();
             targetField = targetField.substring(0, targetField.length() - 1 - NOT_NULL_KEYWORD.length());
             long docCount = bucket.getDocCount();
-            if (docCount > THRESHOLD * totalDocCount && allFieldsToType.containsKey(targetField)) {
+            if (docCount > IMPORTANT_COLUMN_THRESHOLD * totalDocCount && allFieldsToType.containsKey(targetField)) {
                 filteredNames.add(targetField);
             }
         }

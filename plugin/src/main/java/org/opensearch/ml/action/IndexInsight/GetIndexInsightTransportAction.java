@@ -50,12 +50,10 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class GetIndexInsightTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightGetResponse> {
-    private Client client;
-    private SdkClient sdkClient;
-    private NamedXContentRegistry xContentRegistry;
-    private MLIndicesHandler mlIndicesHandler;
-    private ClusterService clusterService;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final Client client;
+    private final SdkClient sdkClient;
+    private final NamedXContentRegistry xContentRegistry;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public GetIndexInsightTransportAction(
@@ -71,8 +69,6 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         super(MLIndexInsightGetAction.NAME, transportService, actionFilters, MLIndexInsightGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
-        this.mlIndicesHandler = mlIndicesHandler;
-        this.clusterService = clusterService;
         this.sdkClient = sdkClient;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }

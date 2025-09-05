@@ -358,7 +358,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         if (prerequisiteType == MLIndexInsightType.STATISTICAL_DATA) {
             return new StatisticalDataTask(sourceIndex, client, sdkClient);
         }
-        throw new IllegalArgumentException("Unsupported prerequisite type: " + prerequisiteType);
+        throw new IllegalStateException("Unsupported prerequisite type: " + prerequisiteType);
     }
 
     private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {

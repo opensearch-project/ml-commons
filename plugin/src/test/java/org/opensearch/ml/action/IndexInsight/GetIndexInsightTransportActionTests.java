@@ -83,15 +83,6 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLIndicesHandler mlIndicesHandler;
 
-    @Mock
-    private CompletionStage<GetDataObjectResponse> responseCompletionStage;
-
-    @Mock
-    private GetDataObjectResponse getDataObjectResponse;
-
-    @Mock
-    private Throwable throwable;
-
     GetIndexInsightTransportAction getIndexInsightTransportAction;
     MLIndexInsightGetRequest mlIndexInsightGetRequest;
     ThreadContext threadContext;
@@ -149,7 +140,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
         ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
-        assertEquals(argumentCaptor.getValue().getIndexInsight().getIndex(), "test_index");
+        assertEquals("test_index", argumentCaptor.getValue().getIndexInsight().getIndex());
     }
 
     @Test
@@ -284,8 +275,8 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         for (MLIndexInsightType taskType : List.of(FIELD_DESCRIPTION, STATISTICAL_DATA, LOG_RELATED_INDEX_CHECK)) {
             MLIndexInsightGetRequest request = new MLIndexInsightGetRequest("test_index", taskType, null);
             IndexInsightTask task = getIndexInsightTransportAction.createTask(request);
-            assertEquals(task.getSourceIndex(), "test_index");
-            assertEquals(task.getTaskType(), taskType);
+            assertEquals("test_index", task.getSourceIndex());
+            assertEquals(taskType, task.getTaskType());
         }
     }
 
@@ -312,7 +303,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(argumentCaptor.getValue().getMessage(), "Fail to get data object.");
+        assertEquals("Fail to get data object.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -324,7 +315,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
-        assertEquals(argumentCaptor.getValue().getMessage(), "You don't have permission to access this resource");
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
     }
 
     @Test

@@ -14,7 +14,6 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -23,7 +22,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -31,7 +29,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetResponse;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
@@ -63,21 +60,6 @@ public class GetIndexInsightConfigTransportActionTests {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Mock
-    private ClusterService clusterService;
-
-    @Mock
-    private MLIndicesHandler mlIndicesHandler;
-
-    @Mock
-    private CompletionStage<GetDataObjectResponse> responseCompletionStage;
-
-    @Mock
-    private GetDataObjectResponse getDataObjectResponse;
-
-    @Mock
-    private Throwable throwable;
-
     GetIndexInsightConfigTransportAction getIndexInsightConfigTransportAction;
     MLIndexInsightConfigGetRequest mlIndexInsightConfigGetRequest;
     ThreadContext threadContext;
@@ -94,9 +76,7 @@ public class GetIndexInsightConfigTransportActionTests {
                 xContentRegistry,
                 mlFeatureEnabledSetting,
                 client,
-                sdkClient,
-                mlIndicesHandler,
-                clusterService
+                sdkClient
             )
         );
 

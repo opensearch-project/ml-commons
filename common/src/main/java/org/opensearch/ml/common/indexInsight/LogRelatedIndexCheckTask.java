@@ -7,6 +7,7 @@ package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
+import static org.opensearch.ml.common.utils.StringUtils.MAPPER;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Arrays;
@@ -24,7 +25,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -42,7 +42,12 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
 
     private String sampleDocString;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Map<String, Object> DEFAULT_RCA_RESULT = Map.of(
+        "is_log_index", false,
+        "log_message_field", null,
+        "trace_id_field", null
+    );
+
     private static final String RCA_TEMPLATE =
         """
             I will provide you an index with the types and statistics of each field, and a few sample documents.
@@ -173,17 +178,13 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             });
         } catch (Exception e) {
             log.warn("Failed to parse RCA analysis response, returning default values", e);
-            Map<String, Object> defaultResult = new HashMap<>();
-            defaultResult.put("is_log_index", false);
-            defaultResult.put("log_message_field", null);
-            defaultResult.put("trace_id_field", null);
-            return defaultResult;
+            return DEFAULT_RCA_RESULT;
         }
     }
 
     @Override
     public IndexInsightTask createPrerequisiteTask(MLIndexInsightType prerequisiteType) {
-        throw new IllegalArgumentException("LogRelatedIndexCheckTask has no prerequisites");
+        throw new IllegalStateException("LogRelatedIndexCheckTask has no prerequisites");
     }
 
     private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {

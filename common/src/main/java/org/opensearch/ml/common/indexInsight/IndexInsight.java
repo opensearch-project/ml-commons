@@ -34,12 +34,12 @@ public class IndexInsight implements ToXContentObject, Writeable {
     public static final String STATUS_FIELD = "status";
     public static final String TASK_TYPE_FIELD = "task_type";
 
-    private String index;
-    private String content;
-    private IndexInsightTaskStatus status;
-    private MLIndexInsightType taskType;
-    private Instant lastUpdatedTime;
-    private String tenantId;
+    private final String index;
+    private final String content;
+    private final IndexInsightTaskStatus status;
+    private final MLIndexInsightType taskType;
+    private final Instant lastUpdatedTime;
+    private final String tenantId;
 
     @Builder(toBuilder = true)
     public IndexInsight(

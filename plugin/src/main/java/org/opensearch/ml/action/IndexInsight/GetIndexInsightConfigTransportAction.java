@@ -16,7 +16,6 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -28,7 +27,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetResponse;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -44,8 +42,6 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
     private Client client;
     private SdkClient sdkClient;
     private NamedXContentRegistry xContentRegistry;
-    private MLIndicesHandler mlIndicesHandler;
-    private ClusterService clusterService;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
@@ -55,15 +51,11 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
         NamedXContentRegistry xContentRegistry,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Client client,
-        SdkClient sdkClient,
-        MLIndicesHandler mlIndicesHandler,
-        ClusterService clusterService
+        SdkClient sdkClient
     ) {
         super(MLIndexInsightConfigGetAction.NAME, transportService, actionFilters, MLIndexInsightConfigGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
-        this.mlIndicesHandler = mlIndicesHandler;
-        this.clusterService = clusterService;
         this.sdkClient = sdkClient;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
