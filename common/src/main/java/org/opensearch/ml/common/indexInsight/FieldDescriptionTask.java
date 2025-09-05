@@ -233,8 +233,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
             }
         } catch (InterruptedException e) {
             log.error("Batch processing interrupted for index: " + getSourceIndex());
-            throw new IllegalStateException(e);
-            // handleError("Batch processing interrupted for index {}", e, tenantId, listener);
+            handleError("Batch processing interrupted for index {}", e, tenantId, listener);
         }
     }
 
