@@ -53,7 +53,7 @@ public interface IndexInsightTask {
      * 5. Write back to storage
      */
     default void execute(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        getIndexInsight(tenantId, ActionListener.wrap(getResponse -> {
+        getIndexInsight(generateDocId(), tenantId, ActionListener.wrap(getResponse -> {
             if (getResponse.isExists()) {
                 handleExistingDoc(getResponse.getSourceAsMap(), storageIndex, tenantId, listener);
             } else {
@@ -243,7 +243,8 @@ public interface IndexInsightTask {
         String tenantId,
         ActionListener<Map<String, Object>> listener
     ) {
-        getIndexInsight(tenantId, ActionListener.wrap(getResponse -> {
+        String docId = IndexInsightUtils.generateDocId(getSourceIndex(), taskType);
+        getIndexInsight(docId, tenantId, ActionListener.wrap(getResponse -> {
             try {
                 String content = getResponse.isExists() ? getResponse.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
                 Map<String, Object> contentMap = gson.fromJson(content, Map.class);
@@ -256,8 +257,7 @@ public interface IndexInsightTask {
 
     }
 
-    private void getIndexInsight(String tenantId, ActionListener<GetResponse> listener) {
-        String docId = generateDocId();
+    private void getIndexInsight(String docId, String tenantId, ActionListener<GetResponse> listener) {
         try (ThreadContext.StoredContext context = getClient().threadPool().getThreadContext().stashContext()) {
             getSdkClient()
                 .getDataObjectAsync(
