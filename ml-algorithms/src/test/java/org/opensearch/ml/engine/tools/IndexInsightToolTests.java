@@ -1,6 +1,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -77,7 +78,7 @@ public class IndexInsightToolTests {
     }
 
     @Test
-    public void testIndexInsightTool_faile() throws ExecutionException, InterruptedException {
+    public void testIndexInsightTool_fail() throws ExecutionException, InterruptedException {
         doAnswer(invocation -> {
 
             ActionListener<MLIndexInsightGetResponse> actionListener = invocation.getArgument(2);
@@ -94,5 +95,34 @@ public class IndexInsightToolTests {
         RuntimeException runtimeException = assertThrows(RuntimeException.class, () -> { future.join(); });
 
         assertEquals("fail to get index insight", runtimeException.getCause().getMessage());
+    }
+
+    @Test
+    public void testIndexInsightTool_failDueToRunType() throws ExecutionException, InterruptedException {
+        doAnswer(invocation -> {
+
+            ActionListener<MLIndexInsightGetResponse> actionListener = invocation.getArgument(2);
+
+            actionListener.onFailure(new RuntimeException("fail to get index insight"));
+            return null;
+        }).when(client).execute(eq(MLIndexInsightGetAction.INSTANCE), any(), any());
+
+        Tool tool = IndexInsightTool.Factory.getInstance().create(Map.of("model_id", "modelId"));
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+        tool.run(Map.of("indexName", "demo", "taskType", "wrong type"), listener);
+
+        RuntimeException runtimeException = assertThrows(RuntimeException.class, () -> { future.join(); });
+
+        assertEquals("Wrong index insight type", runtimeException.getCause().getMessage());
+    }
+
+    @Test
+    public void testTool() {
+        Tool tool = IndexInsightTool.Factory.getInstance().create(Map.of("model_id", "modelId"));
+        assertEquals(IndexInsightTool.TYPE, tool.getName());
+        assertEquals(IndexInsightTool.TYPE, tool.getType());
+        assertNull(tool.getVersion());
+        assertEquals(IndexInsightTool.DEFAULT_DESCRIPTION, tool.getDescription());
     }
 }
