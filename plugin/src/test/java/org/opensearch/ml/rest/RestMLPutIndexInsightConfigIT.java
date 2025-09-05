@@ -48,7 +48,14 @@ public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
         assertTrue(body.containsKey("acknowledged"));
         assertEquals(true, body.get("acknowledged"));
         Response indexReponse = TestHelper
-            .makeRequest(client(), "GET", "/ml_index_insight/", null, TestHelper.toHttpEntity(putIndexInsightConfigBody), null);
+            .makeRequest(
+                client(),
+                "GET",
+                "/.plugins-ml-index-insight-storage/",
+                null,
+                TestHelper.toHttpEntity(putIndexInsightConfigBody),
+                null
+            );
         assertNotNull(indexReponse);
     }
 
