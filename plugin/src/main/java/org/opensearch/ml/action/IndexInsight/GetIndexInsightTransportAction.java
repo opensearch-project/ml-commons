@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_STORAGE_INDE
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
@@ -84,11 +85,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             return;
         }
         String indexName = mlIndexInsightGetRequest.getIndexName();
-        String docId = mlIndexInsightGetRequest.getTenantId();
-        if (docId == null) {
-            docId = DEFAULT_TENANT_ID;
-        }
-        String finalDocId = docId;
+        String docId = Optional.ofNullable(mlIndexInsightGetRequest.getTenantId()).orElse(DEFAULT_TENANT_ID);
         ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
             try (ThreadContext.StoredContext getContext = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
@@ -96,7 +93,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                         GetDataObjectRequest
                             .builder()
                             .tenantId(mlIndexInsightGetRequest.getTenantId())
-                            .id(finalDocId)
+                            .id(docId)
                             .index(ML_INDEX_INSIGHT_CONFIG_INDEX)
                             .build()
                     )
@@ -116,7 +113,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     IndexInsightConfig indexInsightConfig = IndexInsightConfig.parse(parser);
                                     Boolean isEnable = indexInsightConfig.getIsEnable();
-                                    if (!isEnable) {
+                                    if (Boolean.FALSE.equals(isEnable)) {
                                         actionListener
                                             .onFailure(
                                                 new RuntimeException(

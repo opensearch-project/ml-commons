@@ -118,7 +118,6 @@ public class CommonValue {
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
 
     public static final String INDEX_INSIGHT_AGENT_NAME = "os_index_insight_agent";
-    public static final String INDEX_INSIGHT_INDEX_NAME = "ml_index_insight";
     public static final long INDEX_INSIGHT_GENERATING_TIMEOUT = 3 * 60 * 1000;
     public static final long INDEX_INSIGHT_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
 

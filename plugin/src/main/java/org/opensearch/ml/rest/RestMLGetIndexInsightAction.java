@@ -31,7 +31,7 @@ import com.google.common.collect.ImmutableList;
 public class RestMLGetIndexInsightAction extends BaseRestHandler {
     private static final String ML_GET_INDEX_INSIGHT_ACTION = "ml_get_index_insight_action";
 
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public RestMLGetIndexInsightAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;

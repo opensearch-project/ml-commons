@@ -22,8 +22,8 @@ import lombok.Getter;
 
 @Getter
 public class IndexInsightConfig implements ToXContentObject, Writeable {
-    private Boolean isEnable;
-    private String tenantId;
+    private final Boolean isEnable;
+    private final String tenantId;
 
     public static final String IS_ENABLE_FILED = "is_enable";
 
