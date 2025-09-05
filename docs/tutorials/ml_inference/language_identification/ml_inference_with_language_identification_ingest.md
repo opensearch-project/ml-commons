@@ -42,7 +42,7 @@ huggingface_model = HuggingFaceModel(
 # Deploy model to SageMaker Inference
 predictor = huggingface_model.deploy(
     initial_instance_count=1,
-    instance_type='ml.m5.xlarge'
+    instance_type='ml.m7g.xlarge'
 )
 
 # After deployment, you can find your endpoint name in the

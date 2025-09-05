@@ -93,11 +93,11 @@ public class ToolUtils {
                 StringSubstitutor stringSubstitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 String input = stringSubstitutor.replace(parameters.get("input"));
                 extractedParameters.put("input", input);
-                Map<String, String> inputParameters = gson
-                    .fromJson(input, TypeToken.getParameterized(Map.class, String.class, String.class).getType());
-                extractedParameters.putAll(inputParameters);
+                Map<String, Object> parsedInputParameters = gson
+                    .fromJson(input, TypeToken.getParameterized(Map.class, String.class, Object.class).getType());
+                extractedParameters.putAll(StringUtils.getParameterMap(parsedInputParameters));
             } catch (Exception exception) {
-                log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
+                log.info("Failed to extract parameters from key 'input'. Falling back to raw input string.", exception);
             }
         }
         return extractedParameters;

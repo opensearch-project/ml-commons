@@ -525,9 +525,11 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
 
-        Map<String, String> result = mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput);
+        Map<String, Object> result = mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput);
 
-        assertEquals("step1, step2", result.get(MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD));
+        List<String> expectedSteps = Arrays.asList("step1", "step2");
+        List<String> actualSteps = (List<String>) result.get(MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD);
+        assertEquals(expectedSteps, actualSteps);
         assertEquals("final result", result.get(MLPlanExecuteAndReflectAgentRunner.RESULT_FIELD));
 
         modelTensor = ModelTensor.builder().dataAsMap(Map.of(MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD, "random response")).build();

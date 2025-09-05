@@ -130,8 +130,8 @@ public class MLTaskManager implements SettingsChangeListener {
                 .must(
                     QueryBuilders
                         .boolQuery()
-                        .should(QueryBuilders.termQuery(STATE_FIELD, CREATED))
-                        .should(QueryBuilders.termQuery(STATE_FIELD, RUNNING))
+                        .should(QueryBuilders.termQuery(STATE_FIELD, CREATED.name()))
+                        .should(QueryBuilders.termQuery(STATE_FIELD, RUNNING.name()))
                 );
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(boolQuery);
