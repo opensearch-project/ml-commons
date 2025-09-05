@@ -12,28 +12,43 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
+import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.EXAMPLE_DOC_KEYWORD;
+import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.NOT_NULL_KEYWORD;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import javax.swing.*;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.Aggregations;
+import org.opensearch.search.aggregations.InternalAggregation;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.aggregations.bucket.filter.InternalFilters;
 import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
+import org.opensearch.search.aggregations.metrics.InternalTopHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
@@ -273,5 +288,91 @@ public class StatisticalDataTaskTests {
         Set<String> result = (Set<String>) filterMethod.invoke(task, fieldsToType, mockResponse);
 
         assertNotNull(result);
+    }
+
+    @Test
+    public void test_parseSearchResult() throws IOException {
+        Client client = setupBasicClientMocks();
+        GetMappingsResponse getMappingsResponse = setupMappingResponse();
+        ActionListener<IndexInsight> listener = mock(ActionListener.class);
+
+        setupGetMappingsCall(client, getMappingsResponse);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        SearchResponse searchResponse = mock(SearchResponse.class);
+
+        XContentBuilder sourceContent = XContentBuilder
+            .builder(XContentType.JSON.xContent())
+            .startObject()
+            .field(IndexInsight.INDEX_NAME_FIELD, "test-*")
+            .endObject();
+
+        SearchHit searchHit = new SearchHit(0, "pattern-doc", Map.of(), Map.of());
+        searchHit.sourceRef(BytesReference.bytes(sourceContent));
+
+        SearchHit[] hits = new SearchHit[] { searchHit };
+        SearchHits searchHits = new SearchHits(hits, null, 0);
+
+        // prepare sparse filter
+
+        InternalSampler sampler = mock(InternalSampler.class);
+        // Map<String, Aggregation> topAggregationMap = Map.of("sample", sampler);
+
+        Aggregations aggregations = new Aggregations(List.of(sampler));
+
+        when(sampler.getDocCount()).thenReturn(1L);
+        when(sampler.getName()).thenReturn("sample");
+
+        InternalFilters internalFilters = mock(InternalFilters.class);
+        InternalFilters.InternalBucket bucket = mock(InternalFilters.InternalBucket.class);
+        when(bucket.getKey()).thenReturn("field1_not_null");
+        when(bucket.getDocCount()).thenReturn(1L);
+        List<InternalFilters.InternalBucket> buckets = List.of(bucket);
+        when(internalFilters.getBuckets()).thenReturn(buckets);
+        when(internalFilters.getName()).thenReturn(NOT_NULL_KEYWORD);
+
+        InternalTopHits internalTopHits = mock(InternalTopHits.class);
+        when(internalTopHits.getName()).thenReturn(EXAMPLE_DOC_KEYWORD);
+        when(internalTopHits.getHits()).thenReturn(searchHits);
+
+        InternalAggregation uniqueAggregation = mock(InternalAggregation.class);
+        when(uniqueAggregation.getName()).thenReturn("unique_terms_field1");
+        when(uniqueAggregation.toString())
+            .thenReturn(gson.toJson(Map.of("unique_terms_field1", Map.of("buckets", List.of(Map.of("key", "demo"))))));
+
+        InternalAggregation uniqueCountAggregation = mock(InternalAggregation.class);
+        when(uniqueCountAggregation.getName()).thenReturn("unique_count_field1");
+        when(uniqueCountAggregation.toString()).thenReturn(gson.toJson(Map.of("unique_count_field1", Map.of("value_as_string", "demo2"))));
+
+        InternalAggregation maxAggregation = mock(InternalAggregation.class);
+        when(maxAggregation.getName()).thenReturn("max_value_field1");
+        when(maxAggregation.toString()).thenReturn(gson.toJson(Map.of("max_value_field1", Map.of("value", "demo2"))));
+
+        InternalAggregations sampleAggregations = new InternalAggregations(
+            List.of(internalFilters, uniqueAggregation, uniqueCountAggregation, maxAggregation, internalTopHits)
+        );
+        when(sampler.getAggregations()).thenReturn(sampleAggregations);
+
+        when(searchResponse.getAggregations()).thenReturn(aggregations);
+
+        when(searchResponse.getHits()).thenReturn(searchHits);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> responseListener = invocation.getArgument(1);
+            responseListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), any());
+        sdkClient = mock(SdkClient.class);
+
+        task.runTask("", "", listener, false);
+
+        ArgumentCaptor<IndexInsight> argumentCaptor = ArgumentCaptor.forClass(IndexInsight.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+        IndexInsight response = argumentCaptor.getValue();
+        Map<String, Object> expectedContent = gson
+            .fromJson(
+                "{\"example_docs\":[{\"index_name\":\"test-*\"}],\"important_column_and_distribution\":{\"field1\":{\"type\":\"text\",\"unique_count\":\"demo2\",\"unique_terms\":[\"demo\"],\"max_value\":\"demo2\"}}}",
+                Map.class
+            );
+        assertEquals(expectedContent, gson.fromJson(response.getContent(), Map.class));
     }
 }
