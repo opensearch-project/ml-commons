@@ -10,6 +10,8 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
+import java.util.Optional;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -74,10 +76,7 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
         }
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            String docId = mlIndexInsightConfigGetRequest.getTenantId();
-            if (docId == null) {
-                docId = DEFAULT_TENANT_ID;
-            }
+            String docId = Optional.ofNullable(mlIndexInsightConfigGetRequest.getTenantId()).orElse(DEFAULT_TENANT_ID);
             sdkClient
                 .getDataObjectAsync(
                     GetDataObjectRequest
