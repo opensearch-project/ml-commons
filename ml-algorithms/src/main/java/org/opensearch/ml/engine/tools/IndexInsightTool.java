@@ -15,6 +15,7 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -41,7 +42,8 @@ public class IndexInsightTool implements Tool {
         this.client = client;
     }
 
-    private static String DEFAULT_DESCRIPTION =
+    @VisibleForTesting
+    static String DEFAULT_DESCRIPTION =
         "Use this tool to get details of one index according to different tast type, including STATISTICAL_DATA: the data distribution and index mapping of the index, FIELD_DESCRIPTION: The description of each column, LOG_RELATED_INDEX_CHECK: Whether the index is related to log/trace and whether it contains trace/log fields";
 
     @Override
@@ -57,7 +59,7 @@ public class IndexInsightTool implements Tool {
             }, listener::onFailure));
 
         } catch (Exception e) {
-            log.error("Failed to run index insight tool for: {}", e);
+            log.error("Failed to run index insight tool.", e);
             listener.onFailure(e);
         }
     }
