@@ -9,6 +9,8 @@ import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 import static org.opensearch.ml.helper.ConnectorAccessControlHelper.isAdmin;
 
+import java.util.Optional;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexResponse;
@@ -112,10 +114,7 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
 
     private void indexIndexInsightConfig(IndexInsightConfig indexInsightConfig, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            String docId = indexInsightConfig.getTenantId();
-            if (docId == null) {
-                docId = DEFAULT_TENANT_ID;
-            }
+            String docId = Optional.ofNullable(indexInsightConfig.getTenantId()).orElse(DEFAULT_TENANT_ID);
             sdkClient
                 .putDataObjectAsync(
                     PutDataObjectRequest
