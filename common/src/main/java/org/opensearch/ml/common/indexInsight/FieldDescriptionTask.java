@@ -236,38 +236,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
             throw new IllegalStateException(e);
             // handleError("Batch processing interrupted for index {}", e, tenantId, listener);
         }
-        /*
-        ActionListener<Map<String, Object>> batchListener = ActionListener.wrap(batchResult -> {
-            if (batchResult != null) {
-                resultsMap.putAll(batchResult);
-            }
-            countDownLatch.countDown();
-            if (countDownLatch.getCount() == 0) {
-                // All-or-nothing strategy: only save results if ALL batches succeed
-                // If any batch fails, the entire task is marked as failed and no partial results are saved
-                if (!hasErrors.get()) {
-                    saveResult(gson.toJson(resultsMap), tenantId, ActionListener.wrap(insight -> {
-                        log.info("Field description completed for: {}", sourceIndex);
-                        listener.onResponse(insight);
-                    }, e -> handleError("Failed to save field description result for index {}", e, tenantId, listener)));
-                } else {
-                    handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
-                }
-            }
-        }, e -> {
-            countDownLatch.countDown();
-            hasErrors.set(true);
-            log.error("Batch processing failed for index {}: {}", sourceIndex, e.getMessage());
-            if (countDownLatch.getCount() == 0) {
-                handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
-            }
-        });
-        
-        for (List<String> batch : batches) {
-            processBatch(batch, statisticalContentMap, agentId, batchListener);
-        }
-        
-         */
     }
 
     private List<List<String>> createBatches(List<String> fields, int batchSize) {
