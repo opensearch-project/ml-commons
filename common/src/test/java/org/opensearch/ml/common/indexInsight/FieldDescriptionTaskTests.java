@@ -115,7 +115,7 @@ public class FieldDescriptionTaskTests {
         mockGetSuccess(sdkClient, mappingBuilder.toString());
         mockMLConfigSuccess(client);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         verify(client, times(2)).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any(ActionListener.class));
     }
@@ -128,7 +128,7 @@ public class FieldDescriptionTaskTests {
         mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
@@ -142,7 +142,7 @@ public class FieldDescriptionTaskTests {
         mockGetSuccess(sdkClient, statisticalContent);
         mockMLConfigFailure(client, "Config not found");
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
         verify(listener).onFailure(captor.capture());
@@ -160,7 +160,7 @@ public class FieldDescriptionTaskTests {
         mockMLConfigSuccess(client);
         mockMLExecuteFailure(client, "ML execution failed");
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
@@ -177,7 +177,7 @@ public class FieldDescriptionTaskTests {
         mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<IllegalStateException> exceptionCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
@@ -192,7 +192,7 @@ public class FieldDescriptionTaskTests {
         mockUpdateSuccess(sdkClient);
         mockMLConfigSuccess(client);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<IllegalStateException> exceptionCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
@@ -207,7 +207,7 @@ public class FieldDescriptionTaskTests {
         mockMLConfigSuccess(client);
         mockUpdateSuccess(sdkClient);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
         ArgumentCaptor<IndexInsight> insightCaptor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(insightCaptor.capture());
 
@@ -231,7 +231,7 @@ public class FieldDescriptionTaskTests {
         mockMLExecuteSuccess(client, "user_name: name of the user\nuser_age: age of the user in years");
         mockUpdateSuccess(sdkClient);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<IndexInsight> insightCaptor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(insightCaptor.capture());
@@ -265,7 +265,7 @@ public class FieldDescriptionTaskTests {
         }).when(indicesClient).getMappings(any(), any());
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.handlePatternResult(patternSource, "storage-index", "tenant-id", listener);
+        task.handlePatternResult(patternSource, "tenant-id", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(captor.capture());

@@ -77,11 +77,11 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-        runTask(storageIndex, tenantId, listener, true);
+    public void runTask(String tenantId, ActionListener<IndexInsight> listener) {
+        runTask(tenantId, listener, true);
     }
 
-    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
+    public void runTask(String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
         try {
             collectStatisticalData(tenantId, shouldStore, listener);
         } catch (Exception e) {
@@ -100,23 +100,18 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
-    public void handlePatternMatchedDoc(
-        Map<String, Object> patternSource,
-        String storageIndex,
-        String tenantId,
-        ActionListener<IndexInsight> listener
-    ) {
+    public void handlePatternMatchedDoc(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
 
         if (status != IndexInsightTaskStatus.COMPLETED) {
             // If pattern source is not completed, fall back to normal generation
-            runTask(storageIndex, tenantId, listener, true);
+            runTask(tenantId, listener, true);
             return;
         }
 
         // For StatisticalDataTask, run without storing when pattern matched
-        runTask(storageIndex, tenantId, listener, false);
+        runTask(tenantId, listener, false);
     }
 
     @Override

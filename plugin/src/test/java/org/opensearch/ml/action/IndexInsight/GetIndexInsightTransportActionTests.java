@@ -141,10 +141,10 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             ""
         );
         doAnswer(invocation -> {
-            ActionListener<IndexInsight> listener = invocation.getArgument(2);
+            ActionListener<IndexInsight> listener = invocation.getArgument(1);
             listener.onResponse(insight);
             return null;
-        }).when(indexInsightTask).execute(any(), any(), any());
+        }).when(indexInsightTask).execute(any(), any());
 
         getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
         ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
@@ -176,10 +176,10 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             ""
         );
         doAnswer(invocation -> {
-            ActionListener<IndexInsight> listener = invocation.getArgument(2);
+            ActionListener<IndexInsight> listener = invocation.getArgument(1);
             listener.onResponse(insight);
             return null;
-        }).when(indexInsightTask).execute(any(), any(), any());
+        }).when(indexInsightTask).execute(any(), any());
 
         SearchResponse searchResponse = mock(SearchResponse.class);
         doAnswer(invocation -> {
@@ -219,10 +219,10 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             ""
         );
         doAnswer(invocation -> {
-            ActionListener<IndexInsight> listener = invocation.getArgument(2);
+            ActionListener<IndexInsight> listener = invocation.getArgument(1);
             listener.onResponse(insight);
             return null;
-        }).when(indexInsightTask).execute(any(), any(), any());
+        }).when(indexInsightTask).execute(any(), any());
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
@@ -260,10 +260,10 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             ""
         );
         doAnswer(invocation -> {
-            ActionListener<IndexInsight> listener = invocation.getArgument(2);
+            ActionListener<IndexInsight> listener = invocation.getArgument(1);
             listener.onResponse(insight);
             return null;
-        }).when(indexInsightTask).execute(any(), any(), any());
+        }).when(indexInsightTask).execute(any(), any());
 
         SearchResponse searchResponse = mock(SearchResponse.class);
         doAnswer(invocation -> {
@@ -368,7 +368,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             MLIndexInsightType taskType = request.getTargetIndexInsight();
 
             doAnswer(taskInvocation -> {
-                ActionListener<IndexInsight> listener = taskInvocation.getArgument(2);
+                ActionListener<IndexInsight> listener = taskInvocation.getArgument(1);
 
                 if (taskType.equals(failedType)) {
                     listener.onFailure(new RuntimeException("Task failed"));
@@ -385,7 +385,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
                     listener.onResponse(insight);
                 }
                 return null;
-            }).when(task).execute(any(), any(), any());
+            }).when(task).execute(any(), any());
 
             return task;
         }).when(getIndexInsightTransportAction).createTask(any());

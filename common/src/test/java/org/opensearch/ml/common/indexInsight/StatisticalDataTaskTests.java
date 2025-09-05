@@ -169,7 +169,7 @@ public class StatisticalDataTaskTests {
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
 
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         verify(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
     }
@@ -184,7 +184,7 @@ public class StatisticalDataTaskTests {
         setupGetMappingsCall(client, getMappingsResponse);
 
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
@@ -209,7 +209,7 @@ public class StatisticalDataTaskTests {
         mockUpdateSuccess(sdkClient);
 
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         verify(listener).onFailure(any(RuntimeException.class));
     }
@@ -234,9 +234,9 @@ public class StatisticalDataTaskTests {
         }).when(client).search(any(SearchRequest.class), any());
 
         StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient));
-        task.handlePatternMatchedDoc(patternSource, "storage-index", "tenant-id", listener);
+        task.handlePatternMatchedDoc(patternSource, "tenant-id", listener);
 
-        verify(task).runTask(eq("storage-index"), eq("tenant-id"), eq(listener), eq(false));
+        verify(task).runTask(eq("tenant-id"), eq(listener), eq(false));
     }
 
     @Test
@@ -363,7 +363,7 @@ public class StatisticalDataTaskTests {
         }).when(client).search(any(SearchRequest.class), any());
         sdkClient = mock(SdkClient.class);
 
-        task.runTask("", "", listener, false);
+        task.runTask("", listener, false);
 
         ArgumentCaptor<IndexInsight> argumentCaptor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(argumentCaptor.capture());

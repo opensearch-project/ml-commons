@@ -154,7 +154,7 @@ public class IndexInsightTaskTests {
         source.put(IndexInsight.CONTENT_FIELD, "test content");
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
+        task.handleExistingDoc(source, "test-tenant", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(captor.capture());
@@ -172,7 +172,7 @@ public class IndexInsightTaskTests {
 
         mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
+        task.handleExistingDoc(source, "test-tenant", listener);
 
         // Verify prerequisite task execution: 5 threadPool calls indicate both prerequisite and main task ran
         verify(client, times(5)).threadPool();
@@ -186,7 +186,7 @@ public class IndexInsightTaskTests {
         source.put(IndexInsight.LAST_UPDATE_FIELD, Instant.now().toEpochMilli());
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
+        task.handleExistingDoc(source, "test-tenant", listener);
 
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(listener).onFailure(captor.capture());
@@ -202,7 +202,7 @@ public class IndexInsightTaskTests {
 
         mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
+        task.handleExistingDoc(source, "test-tenant", listener);
 
         verify(client, times(5)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
@@ -216,7 +216,7 @@ public class IndexInsightTaskTests {
 
         mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.handleExistingDoc(source, "test-storage", "test-tenant", listener);
+        task.handleExistingDoc(source, "test-tenant", listener);
 
         verify(client, times(5)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
@@ -226,7 +226,7 @@ public class IndexInsightTaskTests {
     public void testRunWithPrerequisites_Success() throws IOException {
         mockFullFlowExecution(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.runWithPrerequisites("test-storage", "test-tenant", listener);
+        task.runWithPrerequisites("test-tenant", listener);
 
         verify(listener).onResponse(any(IndexInsight.class));
     }
@@ -239,7 +239,7 @@ public class IndexInsightTaskTests {
         when(sdkClient.getDataObjectAsync(any())).thenReturn(failedFuture);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.runWithPrerequisites("test-storage", "test-tenant", listener);
+        task.runWithPrerequisites("test-tenant", listener);
 
         verify(listener).onFailure(any());
     }
@@ -257,7 +257,7 @@ public class IndexInsightTaskTests {
         mockGetSuccess(sdkClient, prereqSource);
         mockUpdateSuccess(sdkClient);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.runWithPrerequisites("test-storage", "test-tenant", listener);
+        task.runWithPrerequisites("test-tenant", listener);
 
         verify(client, times(2)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
@@ -284,7 +284,7 @@ public class IndexInsightTaskTests {
         mockSearchWithPatternHit(sdkClient, hits);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.execute("test-storage", "test-tenant", listener);
+        task.execute("test-tenant", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(captor.capture());
@@ -330,8 +330,8 @@ public class IndexInsightTaskTests {
         }
 
         @Override
-        public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-            saveResult("main task result", storageIndex, listener);
+        public void runTask(String tenantId, ActionListener<IndexInsight> listener) {
+            saveResult("main task result", tenantId, listener);
         }
 
         @Override
@@ -376,8 +376,8 @@ public class IndexInsightTaskTests {
         }
 
         @Override
-        public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
-            saveResult("prerequisite result", storageIndex, listener);
+        public void runTask(String tenantId, ActionListener<IndexInsight> listener) {
+            saveResult("prerequisite result", tenantId, listener);
         }
 
         @Override

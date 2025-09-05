@@ -86,13 +86,13 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    public void runTask(String tenantId, ActionListener<IndexInsight> listener) {
         try {
             collectSampleDocString(ActionListener.wrap(sampleDocs -> {
                 getAgentIdToRun(
                     client,
                     tenantId,
-                    ActionListener.wrap(agentId -> performLogAnalysis(agentId, storageIndex, tenantId, listener), listener::onFailure)
+                    ActionListener.wrap(agentId -> performLogAnalysis(agentId, tenantId, listener), listener::onFailure)
                 );
             }, listener::onFailure));
         } catch (Exception e) {
@@ -150,7 +150,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         }));
     }
 
-    private void performLogAnalysis(String agentId, String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    private void performLogAnalysis(String agentId, String tenantId, ActionListener<IndexInsight> listener) {
         String prompt = RCA_TEMPLATE.replace("{indexName}", sourceIndex).replace("{samples}", sampleDocString);
 
         callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {

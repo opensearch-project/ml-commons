@@ -263,7 +263,7 @@ public class LogRelatedIndexCheckTaskTests {
         mockUpdateSuccess(sdkClient);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<IndexInsight> captor = ArgumentCaptor.forClass(IndexInsight.class);
         verify(listener).onResponse(captor.capture());
@@ -279,7 +279,7 @@ public class LogRelatedIndexCheckTaskTests {
         mockMLConfigFailure(client, "Config not found");
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<IllegalStateException> captor = ArgumentCaptor.forClass(IllegalStateException.class);
         verify(listener).onFailure(captor.capture());
@@ -297,7 +297,7 @@ public class LogRelatedIndexCheckTaskTests {
         mockMLExecuteFailure(client, "ML execution failed");
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
-        task.runTask("storage-index", "tenant-id", listener);
+        task.runTask("tenant-id", listener);
 
         ArgumentCaptor<RuntimeException> captor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(listener).onFailure(captor.capture());

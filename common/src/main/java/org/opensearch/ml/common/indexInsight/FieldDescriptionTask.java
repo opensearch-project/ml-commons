@@ -52,7 +52,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    public void runTask(String tenantId, ActionListener<IndexInsight> listener) {
         try {
             getInsightContentFromContainer(MLIndexInsightType.STATISTICAL_DATA, tenantId, ActionListener.wrap(statisticalContentMap -> {
                 getAgentIdToRun(
@@ -100,12 +100,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public void handlePatternResult(
-        Map<String, Object> patternSource,
-        String storageIndex,
-        String tenantId,
-        ActionListener<IndexInsight> listener
-    ) {
+    public void handlePatternResult(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         try {
             String patternContent = (String) patternSource.get(IndexInsight.CONTENT_FIELD);
             Map<String, Object> patternFieldDescriptions = gson.fromJson(patternContent, Map.class);
@@ -117,7 +112,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 try {
                     Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
                     if (mappings.isEmpty()) {
-                        beginGeneration(storageIndex, tenantId, listener);
+                        beginGeneration(tenantId, listener);
                         return;
                     }
 

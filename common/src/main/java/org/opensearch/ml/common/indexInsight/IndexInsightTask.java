@@ -52,10 +52,10 @@ public interface IndexInsightTask {
      * 4. Run task logic
      * 5. Write back to storage
      */
-    default void execute(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    default void execute(String tenantId, ActionListener<IndexInsight> listener) {
         getIndexInsight(generateDocId(), tenantId, ActionListener.wrap(getResponse -> {
             if (getResponse.isExists()) {
-                handleExistingDoc(getResponse.getSourceAsMap(), storageIndex, tenantId, listener);
+                handleExistingDoc(getResponse.getSourceAsMap(), tenantId, listener);
             } else {
                 SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
                 getSdkClient()
@@ -63,7 +63,7 @@ public interface IndexInsightTask {
                         SearchDataObjectRequest
                             .builder()
                             .tenantId(tenantId)
-                            .indices(storageIndex)
+                            .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
                             .searchSourceBuilder(patternSourceBuilder)
                             .build()
                     )
@@ -76,9 +76,9 @@ public interface IndexInsightTask {
                             SearchHit[] hits = searchResponse.getHits().getHits();
                             Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
                             if (Objects.isNull(mappedPatternSource)) {
-                                beginGeneration(storageIndex, tenantId, listener);
+                                beginGeneration(tenantId, listener);
                             } else {
-                                handlePatternMatchedDoc(mappedPatternSource, storageIndex, tenantId, listener);
+                                handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
                             }
                         }
                     });
@@ -86,12 +86,7 @@ public interface IndexInsightTask {
         }, listener::onFailure));
     }
 
-    default void handleExistingDoc(
-        Map<String, Object> source,
-        String storageIndex,
-        String tenantId,
-        ActionListener<IndexInsight> listener
-    ) {
+    default void handleExistingDoc(Map<String, Object> source, String tenantId, ActionListener<IndexInsight> listener) {
 
         String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
         Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
@@ -102,7 +97,7 @@ public interface IndexInsightTask {
             case GENERATING:
                 // Check if generating timeout
                 if (lastUpdateTime != null && (currentTime - lastUpdateTime) > INDEX_INSIGHT_GENERATING_TIMEOUT) {
-                    beginGeneration(storageIndex, tenantId, listener);
+                    beginGeneration(tenantId, listener);
                 } else {
                     // If still generating and not timeout, task is already running
                     listener
@@ -114,7 +109,7 @@ public interface IndexInsightTask {
             case COMPLETED:
                 // Check if needs update
                 if (lastUpdateTime != null && (currentTime - lastUpdateTime) > INDEX_INSIGHT_UPDATE_INTERVAL) {
-                    beginGeneration(storageIndex, tenantId, listener);
+                    beginGeneration(tenantId, listener);
                 } else {
                     // Return existing result
                     IndexInsight insight = IndexInsight
@@ -131,7 +126,7 @@ public interface IndexInsightTask {
                 break;
             case FAILED:
                 // Retry failed task
-                beginGeneration(storageIndex, tenantId, listener);
+                beginGeneration(tenantId, listener);
                 break;
         }
     }
@@ -139,29 +134,24 @@ public interface IndexInsightTask {
     /**
      * Handle pattern matched document
      */
-    default void handlePatternMatchedDoc(
-        Map<String, Object> patternSource,
-        String storageIndex,
-        String tenantId,
-        ActionListener<IndexInsight> listener
-    ) {
+    default void handlePatternMatchedDoc(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
 
         if (status != IndexInsightTaskStatus.COMPLETED) {
             // If pattern source is not completed, fall back to normal generation
-            beginGeneration(storageIndex, tenantId, listener);
+            beginGeneration(tenantId, listener);
             return;
         }
 
         // Handle pattern result
-        handlePatternResult(patternSource, storageIndex, tenantId, listener);
+        handlePatternResult(patternSource, tenantId, listener);
     }
 
     /**
      * Begin the index insight generation process by updating task status to GENERATING and executing the task with prerequisites.
      */
-    default void beginGeneration(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    default void beginGeneration(String tenantId, ActionListener<IndexInsight> listener) {
         IndexInsight indexInsight = IndexInsight
             .builder()
             .index(getSourceIndex())
@@ -171,29 +161,25 @@ public interface IndexInsightTask {
             .lastUpdatedTime(Instant.now())
             .build();
 
-        writeIndexInsight(
-            indexInsight,
-            tenantId,
-            ActionListener.wrap(r -> { runWithPrerequisites(storageIndex, tenantId, listener); }, e -> {
-                saveFailedStatus(tenantId, e, listener);
-            })
-        );
+        writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, e -> {
+            saveFailedStatus(tenantId, e, listener);
+        }));
     }
 
-    default void runWithPrerequisites(String storageIndex, String tenantId, ActionListener<IndexInsight> listener) {
+    default void runWithPrerequisites(String tenantId, ActionListener<IndexInsight> listener) {
         List<MLIndexInsightType> prerequisites = getPrerequisites();
         AtomicInteger completedCount = new AtomicInteger(0);
         if (prerequisites.isEmpty()) {
-            runTask(storageIndex, tenantId, listener);
+            runTask(tenantId, listener);
             return;
         }
 
         // Run all prerequisites
         for (MLIndexInsightType prerequisite : prerequisites) {
             IndexInsightTask prerequisiteTask = createPrerequisiteTask(prerequisite);
-            prerequisiteTask.execute(storageIndex, tenantId, ActionListener.wrap(prereqInsight -> {
+            prerequisiteTask.execute(tenantId, ActionListener.wrap(prereqInsight -> {
                 if (completedCount.incrementAndGet() == prerequisites.size()) {
-                    runTask(storageIndex, tenantId, listener);
+                    runTask(tenantId, listener);
                 }
             }, e -> { saveFailedStatus(tenantId, new Exception("Failed to run prerequisite: " + prerequisite, e), listener); }));
         }
@@ -352,7 +338,7 @@ public interface IndexInsightTask {
     /**
      * Run the specific task logic (to be implemented by each task)
      */
-    void runTask(String storageIndex, String tenantId, ActionListener<IndexInsight> listener);
+    void runTask(String tenantId, ActionListener<IndexInsight> listener);
 
     /**
      * Create prerequisite task instance (to be implemented by each task)
@@ -362,12 +348,7 @@ public interface IndexInsightTask {
     /**
      * Handle pattern result
      */
-    default void handlePatternResult(
-        Map<String, Object> patternSource,
-        String storageIndex,
-        String tenantId,
-        ActionListener<IndexInsight> listener
-    ) {
+    default void handlePatternResult(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         // Default implementation: return pattern result as-is
         Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
         IndexInsight insight = IndexInsight

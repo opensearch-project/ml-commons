@@ -8,7 +8,6 @@ package org.opensearch.ml.action.IndexInsight;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_STORAGE_INDEX;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.time.Instant;
@@ -127,7 +126,6 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                             .runBefore(actionListener, () -> context.restore());
                                         executeTaskAndReturn(
                                             mlIndexInsightGetRequest,
-                                            ML_INDEX_INSIGHT_STORAGE_INDEX,
                                             mlIndexInsightGetRequest.getTenantId(),
                                             wrappedListener
                                         );
@@ -155,27 +153,21 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
 
     private void executeTaskAndReturn(
         MLIndexInsightGetRequest request,
-        String storageIndex,
         String tenantId,
         ActionListener<MLIndexInsightGetResponse> listener
     ) {
         if (request.getTargetIndexInsight() == MLIndexInsightType.ALL) {
-            executeAllTasks(request, storageIndex, tenantId, listener);
+            executeAllTasks(request, tenantId, listener);
         } else {
             IndexInsightTask task = createTask(request);
-            task.execute(storageIndex, tenantId, ActionListener.wrap(insight -> {
+            task.execute(tenantId, ActionListener.wrap(insight -> {
                 // Task completed, return result directly
                 listener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(insight).build());
             }, listener::onFailure));
         }
     }
 
-    private void executeAllTasks(
-        MLIndexInsightGetRequest request,
-        String storageIndex,
-        String tenantId,
-        ActionListener<MLIndexInsightGetResponse> listener
-    ) {
+    private void executeAllTasks(MLIndexInsightGetRequest request, String tenantId, ActionListener<MLIndexInsightGetResponse> listener) {
         String indexName = request.getIndexName();
         StringBuilder combinedContent = new StringBuilder();
 
@@ -200,22 +192,22 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             .build();
 
         // Execute STATISTICAL_DATA first
-        executeTaskForAllType(statsRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime1 -> {
+        executeTaskForAllType(statsRequest, tenantId, combinedContent, ActionListener.wrap(lastTime1 -> {
             // Execute FIELD_DESCRIPTION second
-            executeTaskForAllType(fieldRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime2 -> {
+            executeTaskForAllType(fieldRequest, tenantId, combinedContent, ActionListener.wrap(lastTime2 -> {
                 // Execute LOG_RELATED_INDEX_CHECK third
-                executeTaskForAllType(logRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
+                executeTaskForAllType(logRequest, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
                     returnCombinedResult(indexName, combinedContent, lastTime3, listener);
                 }, e -> returnCombinedResult(indexName, combinedContent, lastTime2, listener)));
             }, e -> {
                 // FIELD_DESCRIPTION failed, try LOG_RELATED_INDEX_CHECK
-                executeTaskForAllType(logRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
+                executeTaskForAllType(logRequest, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
                     returnCombinedResult(indexName, combinedContent, lastTime3, listener);
                 }, e2 -> returnCombinedResult(indexName, combinedContent, lastTime1, listener)));
             }));
         }, e -> {
             // STATISTICAL_DATA failed, skip FIELD_DESCRIPTION and only try LOG_RELATED_INDEX_CHECK
-            executeTaskForAllType(logRequest, storageIndex, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
+            executeTaskForAllType(logRequest, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
                 returnCombinedResult(indexName, combinedContent, lastTime3, listener);
             }, e2 -> {
                 // All tasks failed
@@ -226,12 +218,11 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
 
     private void executeTaskForAllType(
         MLIndexInsightGetRequest request,
-        String storageIndex,
         String tenantId,
         StringBuilder combinedContent,
         ActionListener<Instant> listener
     ) {
-        createTask(request).execute(storageIndex, tenantId, ActionListener.wrap(insight -> {
+        createTask(request).execute(tenantId, ActionListener.wrap(insight -> {
             if (combinedContent.length() > 0) {
                 combinedContent.append("\n\n");
             }
