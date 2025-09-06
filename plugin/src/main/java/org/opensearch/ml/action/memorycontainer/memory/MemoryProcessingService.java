@@ -5,11 +5,10 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PERSONAL_INFORMATION_ORGANIZER_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,7 +19,6 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -35,6 +33,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -65,24 +64,12 @@ public class MemoryProcessingService {
         stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
 
         try {
-            XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-            messagesBuilder.startArray();
-
+            StringBuilder user_messages = new StringBuilder();
             for (MessageInput message : messages) {
-                messagesBuilder.startObject();
-                messagesBuilder.field("role", message.getRole() != null ? message.getRole() : "user");
-                messagesBuilder.startArray("content");
-                messagesBuilder.startObject();
-                messagesBuilder.field("type", "text");
-                messagesBuilder.field("text", message.getContent());
-                messagesBuilder.endObject();
-                messagesBuilder.endArray();
-                messagesBuilder.endObject();
+                user_messages.append(message.getContent());
             }
-
-            messagesBuilder.endArray();
-            String messagesJson = messagesBuilder.toString();
-            stringParameters.put("messages", messagesJson);
+            String messagesJson = user_messages.toString();
+            stringParameters.put("messages", escapeJson(messagesJson));
 
             log.debug("LLM request - processing {} messages", messages.size());
         } catch (Exception e) {
@@ -147,22 +134,7 @@ public class MemoryProcessingService {
         String decisionRequestJson = decisionRequest.toJsonString();
 
         try {
-            XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-            messagesBuilder.startArray();
-            messagesBuilder.startObject();
-            messagesBuilder.field("role", "user");
-            messagesBuilder.startArray("content");
-            messagesBuilder.startObject();
-            messagesBuilder.field("type", "text");
-            messagesBuilder.field("text", decisionRequestJson);
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
-
-            String messagesJson = messagesBuilder.toString();
-            stringParameters.put("messages", messagesJson);
-
+            stringParameters.put("messages", escapeJson(decisionRequestJson));
             log
                 .debug(
                     "Making memory decisions for {} extracted facts and {} existing memories",
@@ -214,43 +186,19 @@ public class MemoryProcessingService {
             return facts;
         }
 
-        for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
-            Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
-            if (dataMap != null && dataMap.containsKey("content")) {
-                try {
-                    List<?> contentList = (List<?>) dataMap.get("content");
-                    if (contentList != null && !contentList.isEmpty()) {
-                        Map<String, ?> contentItem = (Map<String, ?>) contentList.get(0);
-                        if (contentItem != null && contentItem.containsKey("text")) {
-                            String responseStr = String.valueOf(contentItem.get("text"));
-
-                            try (
-                                XContentParser parser = jsonXContent
-                                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseStr)
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-
-                                while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                                    String fieldName = parser.currentName();
-                                    if ("facts".equals(fieldName)) {
-                                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
-                                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                                            String fact = parser.text();
-                                            facts.add(fact);
-                                        }
-                                    } else {
-                                        parser.skipChildren();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to extract content from dataMap", e);
-                    throw new IllegalArgumentException("Failed to extract content from LLM response", e);
-                }
-                break;
+        // Parse the JSON response to extract facts
+        try {
+            Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(0).getDataAsMap();
+            // if LLM Response does not contain FACTS_FIELD then fact extraction failed hence throw exception
+            if (dataMap == null || dataMap.isEmpty() || dataMap.get(FACTS_FIELD) == null) {
+                throw new IllegalArgumentException("Failed to parse facts from LLM response");
             }
+            facts = (List<String>) dataMap.get(FACTS_FIELD);
+            facts = facts != null ? facts : new ArrayList<>();
+        } catch (Exception e) {
+            // Should not print the user data in logs
+            log.warn("Failed to parse facts from LLM response", e);
+            throw new IllegalArgumentException("Failed to parse facts from LLM response", e);
         }
 
         return facts;
@@ -271,29 +219,16 @@ public class MemoryProcessingService {
 
             Map<String, ?> dataMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
 
-            String responseContent = null;
-            if (dataMap.containsKey("response")) {
-                responseContent = (String) dataMap.get("response");
-            } else if (dataMap.containsKey("content")) {
-                List<Map<String, Object>> contentList = (List<Map<String, Object>>) dataMap.get("content");
-                if (contentList != null && !contentList.isEmpty()) {
-                    Map<String, Object> firstContent = contentList.get(0);
-                    responseContent = (String) firstContent.get("text");
-                }
-            }
+            String responseContent = StringUtils.toJson(dataMap);
 
-            if (responseContent == null) {
+            if (responseContent == null || responseContent.isEmpty() || responseContent.equals("{}")) {
                 throw new IllegalStateException("No response content found in LLM output");
             }
 
-            // Clean response content
-            if (responseContent.startsWith("```json") && responseContent.endsWith("```")) {
-                responseContent = responseContent.substring(7, responseContent.length() - 3).trim();
-            } else if (responseContent.startsWith("```") && responseContent.endsWith("```")) {
-                responseContent = responseContent.substring(3, responseContent.length() - 3).trim();
-            }
-
+            // Parse memory decisions using XContentParser
             List<MemoryDecision> decisions = new ArrayList<>();
+            boolean foundMemoryDecisionField = false;
+
             try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)) {
                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 
@@ -302,6 +237,7 @@ public class MemoryProcessingService {
                     parser.nextToken();
 
                     if (MEMORY_DECISION_FIELD.equals(fieldName)) {
+                        foundMemoryDecisionField = true;
                         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                             decisions.add(MemoryDecision.parse(parser));
@@ -310,6 +246,11 @@ public class MemoryProcessingService {
                         parser.skipChildren();
                     }
                 }
+            }
+
+            // If MEMORY_DECISION_FIELD is not found in the LLM output, fail the parsing
+            if (!foundMemoryDecisionField) {
+                throw new IllegalStateException("LLM response does not contain required field: " + MEMORY_DECISION_FIELD);
             }
 
             return decisions;
