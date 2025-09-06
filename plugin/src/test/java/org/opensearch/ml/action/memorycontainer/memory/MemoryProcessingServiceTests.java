@@ -10,6 +10,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -243,7 +245,7 @@ public class MemoryProcessingServiceTests {
     }
 
     @Test
-    public void testExtractFactsFromConversation_ParseException() {
+    public void testExtractFactsFromConversation_InvalidFactsDataType() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("Hello").role("user").build());
         MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
         when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
@@ -254,9 +256,7 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        Map<String, Object> contentItem = new HashMap<>();
-        contentItem.put("text", "invalid json");
-        dataMap.put("content", Arrays.asList(contentItem));
+        dataMap.put(FACTS_FIELD, "invalid array"); // Not a List<String>
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -342,7 +342,7 @@ public class MemoryProcessingServiceTests {
     }
 
     @Test
-    public void testExtractFactsFromConversation_NoContentKey() {
+    public void testExtractFactsFromConversation_NoFieldKey() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("Hello").role("user").build());
         MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
         when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
@@ -368,11 +368,11 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(IllegalArgumentException.class));
     }
 
     @Test
-    public void testExtractFactsFromConversation_EmptyContentList() {
+    public void testExtractFactsFromConversation_EmptyFactsList() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("Hello").role("user").build());
         MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
         when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
@@ -383,7 +383,7 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("content", Arrays.asList());
+        dataMap.put(FACTS_FIELD, Arrays.asList());
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -402,7 +402,7 @@ public class MemoryProcessingServiceTests {
     }
 
     @Test
-    public void testExtractFactsFromConversation_NoTextKey() {
+    public void testExtractFactsFromConversation_NoFactsKey() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("Hello").role("user").build());
         MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
         when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
@@ -413,9 +413,7 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        Map<String, Object> contentItem = new HashMap<>();
-        contentItem.put("other", "value");
-        dataMap.put("content", Arrays.asList(contentItem));
+        dataMap.put("other", "value");
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -430,7 +428,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(IllegalArgumentException.class));
     }
 
     @Test
@@ -479,7 +477,7 @@ public class MemoryProcessingServiceTests {
     }
 
     @Test
-    public void testMakeMemoryDecisions_ContentFormat() {
+    public void testMakeMemoryDecisions_EmptyDecisions() {
         List<String> facts = Arrays.asList("User name is John");
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
@@ -491,71 +489,7 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        Map<String, Object> contentItem = new HashMap<>();
-        contentItem.put("text", "{\"memory_decisions\": []}");
-        dataMap.put("content", Arrays.asList(contentItem));
-
-        when(mockResponse.getOutput()).thenReturn(mockOutput);
-        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
-        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
-        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
-
-        doAnswer(invocation -> {
-            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
-            listener.onResponse(mockResponse);
-            return null;
-        }).when(client).execute(any(), any(), any());
-
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
-
-        verify(decisionsListener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testMakeMemoryDecisions_JsonCodeBlock() {
-        List<String> facts = Arrays.asList("User name is John");
-        List<FactSearchResult> searchResults = Arrays.asList();
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
-
-        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
-        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
-        ModelTensors mockTensors = mock(ModelTensors.class);
-        ModelTensor mockTensor = mock(ModelTensor.class);
-
-        Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```json\n{\"memory_decisions\": []}\n```");
-
-        when(mockResponse.getOutput()).thenReturn(mockOutput);
-        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
-        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
-        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
-
-        doAnswer(invocation -> {
-            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
-            listener.onResponse(mockResponse);
-            return null;
-        }).when(client).execute(any(), any(), any());
-
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
-
-        verify(decisionsListener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testMakeMemoryDecisions_PlainCodeBlock() {
-        List<String> facts = Arrays.asList("User name is John");
-        List<FactSearchResult> searchResults = Arrays.asList();
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
-
-        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
-        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
-        ModelTensors mockTensors = mock(ModelTensors.class);
-        ModelTensor mockTensor = mock(ModelTensor.class);
-
-        Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```\n{\"memory_decisions\": []}\n```");
+        dataMap.put(MEMORY_DECISION_FIELD, Arrays.asList());
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -616,9 +550,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        Map<String, Object> contentItem = new HashMap<>();
-        contentItem.put("text", "{\"facts\": [\"User name is John\"], \"other_field\": \"value\", \"metadata\": {\"key\": \"value\"}}");
-        dataMap.put("content", Arrays.asList(contentItem));
+        dataMap.put(FACTS_FIELD, Arrays.asList("User name is John"));
+        dataMap.put("other_field", "value");
+        dataMap.put("metadata", Map.of("key", "value"));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
