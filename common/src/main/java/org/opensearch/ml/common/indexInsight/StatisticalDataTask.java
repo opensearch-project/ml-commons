@@ -68,13 +68,14 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
     private static final Double THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
+    private static final int FILTER_LLM_NUMBERS = 30;
     public static final String NOT_NULL_KEYWORD = "not_null";
     public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
     public static final String EXAMPLE_DOC_KEYWORD = "example_docs";
 
     private static final String PROMPT_TEMPLATE = """
         Now I will give you the sample examples and some field's data distribution of one Opensearch index.
-        You should help me filter at most 30 important columns.
+        You should help me filter at most %s important columns.
         For logs/trace/metric related indices, make sure you contain error/http response/time/latency/metric related columns.
         You should contain your response column name inside tag <column_name></column_name>
         Here is the information of sample examples and some field's data distribution \n.
@@ -272,6 +273,11 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     private void filterImportantColumnByLLM(Map<String, Object> parsedResult, String tenantId, ActionListener<List<String>> listener) {
+        Map<String, Object> importantColumns = (Map<String, Object>) parsedResult.get(IMPORTANT_COLUMN_KEYWORD);
+        if (importantColumns.keySet().size() <= FILTER_LLM_NUMBERS) {
+            listener.onResponse(new ArrayList<>()); // Too few columns and don't need to filter
+            return;
+        }
         String prompt = generateFilterColumnPrompt(parsedResult);
         getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
             callLLMWithAgent(client, agentId, prompt, tenantId, ActionListener.wrap(response -> {
@@ -281,7 +287,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     private String generateFilterColumnPrompt(Map<String, Object> parsedResult) {
-        return String.format(PROMPT_TEMPLATE, sourceIndex, gson.toJson(parsedResult));
+        return String.format(PROMPT_TEMPLATE, FILTER_LLM_NUMBERS, sourceIndex, gson.toJson(parsedResult));
     }
 
     @VisibleForTesting
