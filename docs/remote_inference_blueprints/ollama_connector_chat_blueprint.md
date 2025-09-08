@@ -4,6 +4,8 @@ This is an AI connector blueprint for Ollama or any other local/self-hosted LLM 
 
 ## 1. Add connector endpoint to trusted URLs
 
+Adjust the Regex to your local IP.
+
 ```json
 PUT /_cluster/settings
 {
@@ -27,6 +29,8 @@ PUT /_cluster/settings
 ```
 
 ## 3. Create the connector
+
+In a local setting, `openAI_key` might not be needed. In case you can either set it to something irrelevant, or if removed, you need to update the `Authorization` header in the `actions`.
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -60,16 +64,58 @@ POST /_plugins/_ml/connectors/_create
 
 ```json
 {
-  "connector_id": "DUFXiofepXVT9_cf1h0s_"
+  "connector_id": "Keq5FpkB72uHgF272LWj"
 }
 ```
 
-### 4. Corresponding Predict request example
-
-Notice how you have to create the whole message structure, not just the message to send.
+## 4. Register the model
 
 ```json
-POST /_plugins/_ml/models/<ENTER MODEL ID HERE>/_predict
+POST /_plugins/_ml/models/_register
+{
+  "name": "Local LLM Model",
+  "function_name": "remote",
+  "description": "Ollama model",
+  "connector_id": "Keq5FpkB72uHgF272LWj"
+}
+```
+
+### Sample response
+
+Take note of the `model_id`. It is going to be needed going forward.
+
+```json
+{
+  "task_id": "oEdPqZQBQwAL8-GOCJbw",
+  "status": "CREATED",
+  "model_id": "oUdPqZQBQwAL8-GOCZYL"
+}
+```
+
+## 5. Deploy the model
+
+Use `model_id` in place of the `<MODEL_ID>` placeholder.
+
+```json
+POST /_plugins/_ml/models/<MODEL_ID>/_deploy
+```
+
+### Sample response
+
+```json
+POST /_plugins/_ml/models/WWQI44MBbzI2oUKAvNUt/_deploy
+{
+    "node_ids": ["4PLK7KJWReyX0oWKnBA8nA"]
+}
+```
+
+### 6. Corresponding Predict request example
+
+Notice how you have to create the whole message structure, not just the message to send.
+Use `model_id` in place of the `<MODEL_ID>` placeholder.
+
+```json
+POST /_plugins/_ml/models/<MODEL_ID>/_predict
 {
   "parameters": {
     "messages": [
