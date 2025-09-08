@@ -236,6 +236,9 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         );
     }
 
+    /**
+     * Generate document ID for index insight task
+     */
     protected String generateDocId() {
         String combined = getSourceIndex() + "_" + getTaskType().toString();
         return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
@@ -264,6 +267,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     }
 
     protected void handlePatternResult(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
+        // Default implementation: return pattern result as-is
         Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
         IndexInsight insight = IndexInsight
             .builder()
@@ -349,6 +353,14 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         }, actionListener::onFailure));
     }
 
+    /**
+     * Flatten all the fields in the mappings, insert the field to fieldType mapping to a map
+     * @param mappingSource the mappings of an index
+     * @param fieldsToType the result containing the field to fieldType mapping
+     * @param prefix the parent field path
+     * @param includeFields whether include the `fields` in a text type field, for some use case like PPLTool, `fields` in a text type field
+     *                      cannot be included, but for CreateAnomalyDetectorTool, `fields` must be included.
+     */
     protected static void extractFieldNamesTypes(
         Map<String, Object> mappingSource,
         Map<String, String> fieldsToType,
@@ -367,6 +379,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                 Map<String, Object> vMap = (Map<String, Object>) v;
                 if (vMap.containsKey("type")) {
                     String fieldType = (String) vMap.getOrDefault("type", "");
+                    // no need to extract alias into the result, and for object field, extract the subfields only
                     if (!fieldType.equals("alias") && !fieldType.equals("object")) {
                         fieldsToType.put(prefix + n, (String) vMap.get("type"));
                     }
@@ -393,6 +406,9 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         return sourceBuilder;
     }
 
+    /**
+     * Auto-detects LLM response format and extracts the response text if response_filter is not configured
+     */
     private static String extractModelResponse(Map<String, Object> data) {
         if (data.containsKey("choices")) {
             return JsonPath.read(data, "$.choices[0].message.content");
@@ -407,6 +423,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         for (SearchHit hit : hits) {
             Map<String, Object> source = hit.getSourceAsMap();
             String pattern = (String) source.get(INDEX_NAME_FIELD);
+            // Convert wildcard pattern to regex pattern
             String regexPattern = pattern.replace("*", ".*").replace("?", ".");
             if (targetIndex.matches(regexPattern)) {
                 return source;
@@ -415,6 +432,9 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         return null;
     }
 
+    /**
+     * Common method to call LLM with agent and handle response parsing
+     */
     protected static void callLLMWithAgent(
         Client client,
         String agentId,
@@ -438,10 +458,12 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                 ModelTensor mt = t.getMlModelTensors().get(0);
                 String result = mt.getResult();
                 String response;
+                // response_filter is not configured in the LLM connector
                 if (result.startsWith("{") || result.startsWith("[")) {
                     Map<String, Object> data = gson.fromJson(result, Map.class);
                     response = extractModelResponse(data);
                 } else {
+                    // response_filter is configured in the LLM connector
                     response = result;
                 }
                 listener.onResponse(response);

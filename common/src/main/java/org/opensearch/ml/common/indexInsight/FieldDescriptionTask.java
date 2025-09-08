@@ -225,7 +225,7 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                 handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
             }
         } catch (InterruptedException e) {
-            log.error("Batch processing interrupted for index: " + getSourceIndex());
+            log.error("Batch processing interrupted for index: {}", getSourceIndex());
             handleError("Batch processing interrupted for index {}", e, tenantId, listener);
         }
     }
