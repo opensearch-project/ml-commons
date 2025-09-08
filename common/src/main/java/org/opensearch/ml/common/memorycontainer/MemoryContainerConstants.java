@@ -140,18 +140,18 @@ public class MemoryContainerConstants {
             + "<instruction>Do not make assumptions or inferences beyond what is explicitly stated.</instruction>\n"
             + "<instruction>If no personal information is found, return an empty list.</instruction>";
 
-    public static final String PERSONAL_INFO_RESPONSE_FORMAT_SCHEMA = ""
-        + "<format>You should always return and only return the extracted facts as a JSON object with a \"facts\" array.</format>\n"
-        + "<example>\n"
-        + "{\n"
-        + "  \"facts\": [\n"
-        + "    \"User's name is John Smith\",\n"
-        + "    \"John works as a software engineer at TechCorp\",\n"
-        + "    \"John enjoys hiking on weekends\",\n"
-        + "    \"John is looking to improve his Python skills\"\n"
-        + "  ]\n"
-        + "}\n"
-        + "</example>\n";
+    public static final String PERSONAL_INFO_RESPONSE_FORMAT_SCHEMA =
+        "<format>You should always return and only return the extracted facts as a JSON object with a \"facts\" array.</format>\n"
+            + "<example>\n"
+            + "{\n"
+            + "  \"facts\": [\n"
+            + "    \"User's name is John Smith\",\n"
+            + "    \"John works as a software engineer at TechCorp\",\n"
+            + "    \"John enjoys hiking on weekends\",\n"
+            + "    \"John is looking to improve his Python skills\"\n"
+            + "  ]\n"
+            + "}\n"
+            + "</example>\n";
 
     public static final String PERSONAL_INFO_OUTPUT_FORMAT_INSTRUCTIONS =
         """
