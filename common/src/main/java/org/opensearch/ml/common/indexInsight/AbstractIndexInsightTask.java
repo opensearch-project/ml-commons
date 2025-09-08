@@ -240,7 +240,14 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
      * Generate document ID for current task
      */
     protected String generateDocId() {
-        String combined = getSourceIndex() + "_" + getTaskType().toString();
+        return generateDocId(getTaskType());
+    }
+
+    /**
+     * Generate document ID for specific task type
+     */
+    protected String generateDocId(MLIndexInsightType taskType) {
+        String combined = getSourceIndex() + "_" + taskType.toString();
         return generateDocId(getTaskType());
     }
 
