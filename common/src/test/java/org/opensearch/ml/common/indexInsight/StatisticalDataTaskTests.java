@@ -11,6 +11,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockGetSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLConfigSuccess;
+import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockMLExecuteSuccess;
 import static org.opensearch.ml.common.indexInsight.IndexInsightTestHelper.mockUpdateSuccess;
 import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.EXAMPLE_DOC_KEYWORD;
 import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.NOT_NULL_KEYWORD;
@@ -293,6 +295,8 @@ public class StatisticalDataTaskTests {
     @Test
     public void test_parseSearchResult() throws IOException {
         Client client = setupBasicClientMocks();
+        mockMLConfigSuccess(client);
+        mockMLExecuteSuccess(client, "");
         GetMappingsResponse getMappingsResponse = setupMappingResponse();
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
 

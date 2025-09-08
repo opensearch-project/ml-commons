@@ -271,7 +271,7 @@ public class StatisticalDataTask implements IndexInsightTask {
             callLLMWithAgent(client, agentId, prompt, tenantId, ActionListener.wrap(response -> {
                 listener.onResponse(parseLLMFilteredResult(response));
             }, e -> { listener.onResponse(new ArrayList<>()); }));
-        }, listener::onFailure));
+        }, e -> { listener.onResponse(new ArrayList<>()); }));
     }
 
     private String generateFilterColumnPrompt(Map<String, Object> parsedResult) {
