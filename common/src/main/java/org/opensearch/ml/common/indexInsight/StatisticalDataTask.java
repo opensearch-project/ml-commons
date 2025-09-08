@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.common.indexInsight;
 
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFieldNamesTypes;
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.time.Instant;
@@ -61,7 +58,7 @@ import lombok.extern.log4j.Log4j2;
  * Will expand to support additional data types beyond sample documents in the future.
  */
 @Log4j2
-public class StatisticalDataTask implements IndexInsightTask {
+public class StatisticalDataTask extends AbstractIndexInsightTask {
 
     private static final int TERM_SIZE = 5;
     private static final List<String> PREFIXS = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
@@ -119,7 +116,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
 
     @Override
-    public void handlePatternMatchedDoc(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
+    protected void handlePatternMatchedDoc(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
 
@@ -435,15 +432,6 @@ public class StatisticalDataTask implements IndexInsightTask {
             }
         }
         return filteredNames;
-    }
-
-    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
-        log.error(message, sourceIndex, e);
-        if (shouldStore) {
-            saveFailedStatus(tenantId, e, listener);
-        } else {
-            listener.onFailure(e);
-        }
     }
 
 }

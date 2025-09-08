@@ -245,7 +245,7 @@ public class LogRelatedIndexCheckTaskTests {
 
     @Test
     public void testCreatePrerequisiteTask_ThrowsException() {
-        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("LogRelatedIndexCheckTask has no prerequisites");
         task.createPrerequisiteTask(MLIndexInsightType.STATISTICAL_DATA);
     }

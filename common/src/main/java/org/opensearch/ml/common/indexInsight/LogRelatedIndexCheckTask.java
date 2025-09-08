@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.common.indexInsight;
 
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.utils.StringUtils.MAPPER;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
@@ -35,18 +33,21 @@ import lombok.extern.log4j.Log4j2;
 4. The Whole return is a fixed format which can be parsed in the following process
  */
 @Log4j2
-public class LogRelatedIndexCheckTask implements IndexInsightTask {
+public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
     private final String sourceIndex;
     private final Client client;
     private final SdkClient sdkClient;
 
     private String sampleDocString;
 
-    private static final Map<String, Object> DEFAULT_RCA_RESULT = Map.of(
-        "is_log_index", false,
-        "log_message_field", null,
-        "trace_id_field", null
-    );
+    private static final Map<String, Object> DEFAULT_RCA_RESULT;
+
+    static {
+        DEFAULT_RCA_RESULT = new HashMap<>();
+        DEFAULT_RCA_RESULT.put("is_log_index", false);
+        DEFAULT_RCA_RESULT.put("log_message_field", null);
+        DEFAULT_RCA_RESULT.put("trace_id_field", null);
+    }
 
     private static final String RCA_TEMPLATE =
         """
@@ -187,8 +188,4 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         throw new IllegalStateException("LogRelatedIndexCheckTask has no prerequisites");
     }
 
-    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {
-        log.error(message, sourceIndex, e);
-        saveFailedStatus(tenantId, e, listener);
-    }
 }

@@ -97,7 +97,7 @@ public class FieldDescriptionTaskTests {
     @Test
     public void testCreatePrerequisiteTask_UnsupportedType() {
         MLIndexInsightType unsupportedType = MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
-        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("Unsupported prerequisite type: " + unsupportedType);
         task.createPrerequisiteTask(unsupportedType);
     }
@@ -114,6 +114,8 @@ public class FieldDescriptionTaskTests {
 
         mockGetSuccess(sdkClient, mappingBuilder.toString());
         mockMLConfigSuccess(client);
+        mockMLExecuteSuccess(client, "field0: description for field0\nfield1: description for field1");
+        mockUpdateSuccess(sdkClient);
 
         task.runTask("tenant-id", listener);
 

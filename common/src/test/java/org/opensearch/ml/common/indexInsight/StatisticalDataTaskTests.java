@@ -139,7 +139,7 @@ public class StatisticalDataTaskTests {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
-        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("StatisticalDataTask has no prerequisites");
         task.createPrerequisiteTask(MLIndexInsightType.FIELD_DESCRIPTION);
     }

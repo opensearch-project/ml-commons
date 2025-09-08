@@ -6,8 +6,6 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
-import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.EXAMPLE_DOC_KEYWORD;
 import static org.opensearch.ml.common.indexInsight.StatisticalDataTask.IMPORTANT_COLUMN_KEYWORD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -38,7 +36,7 @@ import lombok.extern.log4j.Log4j2;
  * for each field in the index, helping down-stream tasks understand the purpose and content of fields.
  */
 @Log4j2
-public class FieldDescriptionTask implements IndexInsightTask {
+public class FieldDescriptionTask extends AbstractIndexInsightTask {
 
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
     private final String sourceIndex;
@@ -100,7 +98,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
 
     @Override
-    public void handlePatternResult(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
+    protected void handlePatternResult(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         try {
             String patternContent = (String) patternSource.get(IndexInsight.CONTENT_FIELD);
             Map<String, Object> patternFieldDescriptions = gson.fromJson(patternContent, Map.class);
@@ -121,7 +119,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
                     for (MappingMetadata mappingMetadata : mappings.values()) {
                         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
                         if (mappingSource != null) {
-                            IndexInsightUtils.extractFieldNamesTypes(mappingSource, currentFields, "", false);
+                            extractFieldNamesTypes(mappingSource, currentFields, "", false);
                         }
                     }
 
@@ -361,8 +359,4 @@ public class FieldDescriptionTask implements IndexInsightTask {
         throw new IllegalStateException("Unsupported prerequisite type: " + prerequisiteType);
     }
 
-    private void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener) {
-        log.error(message, sourceIndex, e);
-        saveFailedStatus(tenantId, e, listener);
-    }
 }
