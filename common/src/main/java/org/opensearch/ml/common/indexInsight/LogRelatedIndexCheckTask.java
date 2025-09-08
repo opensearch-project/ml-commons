@@ -175,7 +175,7 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
     private Map<String, Object> parseCheckResponse(String resp) {
         try {
             String json = resp.split("<RCA_analysis>", 2)[1].split("</RCA_analysis>", 2)[0].trim();
-            return MAPPER.readValue(json, new TypeReference<Map<String, Object>>() {
+            return MAPPER.readValue(json, new TypeReference<>() {
             });
         } catch (Exception e) {
             log.warn("Failed to parse RCA analysis response, returning default values", e);

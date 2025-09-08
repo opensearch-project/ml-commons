@@ -237,10 +237,17 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     }
 
     /**
-     * Generate document ID for index insight task
+     * Generate document ID for current task
      */
     protected String generateDocId() {
-        String combined = getSourceIndex() + "_" + getTaskType().toString();
+        return generateDocId(getTaskType());
+    }
+
+    /**
+     * Generate document ID for specific task type
+     */
+    protected String generateDocId(MLIndexInsightType taskType) {
+        String combined = getSourceIndex() + "_" + taskType.toString();
         return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
     }
 
@@ -252,8 +259,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         String tenantId,
         ActionListener<Map<String, Object>> listener
     ) {
-        String combined = getSourceIndex() + "_" + taskType.toString();
-        String docId = Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
+        String docId = generateDocId(taskType);
         getIndexInsight(docId, tenantId, ActionListener.wrap(getResponse -> {
             try {
                 String content = getResponse.isExists() ? getResponse.getSourceAsMap().get(IndexInsight.CONTENT_FIELD).toString() : "";
@@ -381,7 +387,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                     String fieldType = (String) vMap.getOrDefault("type", "");
                     // no need to extract alias into the result, and for object field, extract the subfields only
                     if (!fieldType.equals("alias") && !fieldType.equals("object")) {
-                        fieldsToType.put(prefix + n, (String) vMap.get("type"));
+                        fieldsToType.put(prefix + n, fieldType);
                     }
                 }
                 if (vMap.containsKey("properties")) {

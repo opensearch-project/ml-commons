@@ -25,7 +25,7 @@ public class IndexInsightConfig implements ToXContentObject, Writeable {
     private final Boolean isEnable;
     private final String tenantId;
 
-    public static final String IS_ENABLE_FILED = "is_enable";
+    public static final String IS_ENABLE_FIELD = "is_enable";
 
     @Builder(toBuilder = true)
     public IndexInsightConfig(Boolean isEnable, String tenantId) {
@@ -47,7 +47,7 @@ public class IndexInsightConfig implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(IS_ENABLE_FILED, isEnable);
+        builder.field(IS_ENABLE_FIELD, isEnable);
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -63,7 +63,7 @@ public class IndexInsightConfig implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case IS_ENABLE_FILED:
+                case IS_ENABLE_FIELD:
                     isEnable = parser.booleanValue();
                     break;
                 case TENANT_ID_FIELD:

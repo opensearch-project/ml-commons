@@ -61,7 +61,7 @@ import lombok.extern.log4j.Log4j2;
 public class StatisticalDataTask extends AbstractIndexInsightTask {
 
     private static final int TERM_SIZE = 5;
-    private static final List<String> PREFIXS = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
+    private static final List<String> PREFIXES = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
     private static final Double IMPORTANT_COLUMN_THRESHOLD = 0.001;
@@ -145,15 +145,8 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         return Collections.emptyList();
     }
 
-    private GetMappingsRequest buildGetMappingRequest(String indexName) {
-        String[] indices = new String[] { indexName };
-        GetMappingsRequest getMappingsRequest = new GetMappingsRequest();
-        getMappingsRequest.indices(indices);
-        return getMappingsRequest;
-    }
-
     private void collectStatisticalData(String tenantId, boolean shouldStore, ActionListener<IndexInsight> listener) {
-        GetMappingsRequest getMappingsRequest = buildGetMappingRequest(sourceIndex);
+        GetMappingsRequest getMappingsRequest = new GetMappingsRequest().indices(sourceIndex);
 
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
             Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
@@ -366,7 +359,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                     exampleDocs.add(hit.getSourceAsMap());
                 }
             } else {
-                for (String prefix : PREFIXS) {
+                for (String prefix : PREFIXES) {
                     if (key.startsWith(prefix)) {
                         String targetField = key.substring(prefix.length());
                         if (!filteredNames.contains(targetField)) {
