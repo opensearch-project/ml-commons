@@ -72,7 +72,7 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     private static final String PROMPT_TEMPLATE = """
         Now I will give you the sample examples and some field's data distribution of one Opensearch index.
-        You should help me filter at most 40 important columns.
+        You should help me filter at most 30 important columns.
         For logs/trace/metric related indices, make sure you contain error/http response/time/latency/metric related columns.
         You should contain your response column name inside tag <column_name></column_name>
         Here is the information of sample examples and some field's data distribution \n.
@@ -177,7 +177,11 @@ public class StatisticalDataTask implements IndexInsightTask {
                 Map<String, Object> parsedResult = parseSearchResult(fieldsToType, highPriorityColumns, searchResponse);
                 filterImportantColumnByLLM(parsedResult, tenantId, ActionListener.wrap(response -> {
                     Map<String, Object> filteredResponse = new HashMap<>();
-                    filteredResponse.put(EXAMPLE_DOC_KEYWORD, parsedResult.get(EXAMPLE_DOC_KEYWORD));
+                    filteredResponse
+                        .put(
+                            EXAMPLE_DOC_KEYWORD,
+                            filterSampleColumns((List<Map<String, Object>>) parsedResult.get(EXAMPLE_DOC_KEYWORD), response)
+                        );
                     Map<String, Object> importantColumns = (Map<String, Object>) parsedResult.get(IMPORTANT_COLUMN_KEYWORD);
                     Map<String, Object> filteredImportantColumns = importantColumns
                         .entrySet()
@@ -241,7 +245,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         }
 
         // Add top hits example_docs
-        TopHitsAggregationBuilder topHitsAgg = AggregationBuilders.topHits(EXAMPLE_DOC_KEYWORD).size(5);
+        TopHitsAggregationBuilder topHitsAgg = AggregationBuilders.topHits(EXAMPLE_DOC_KEYWORD).size(3);
         subAggs.addAggregator(topHitsAgg);
 
         // Add not none count
@@ -276,6 +280,49 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     private String generateFilterColumnPrompt(Map<String, Object> parsedResult) {
         return String.format(PROMPT_TEMPLATE, sourceIndex, gson.toJson(parsedResult));
+    }
+
+    private List<Map<String, Object>> filterSampleColumns(List<Map<String, Object>> originalDocs, List<String> targetColumns) {
+        if (targetColumns.isEmpty()) {
+            return originalDocs;
+        }
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (Map<String, Object> originalDoc : originalDocs) {
+            results.add(constructFilterMap("", originalDoc, targetColumns));
+        }
+        return results;
+    }
+
+    private Map<String, Object> constructFilterMap(String prefix, Map<String, Object> currentNode, List<String> targetColumns) {
+        Map<String, Object> filterResult = new HashMap<>();
+        for (Map.Entry<String, Object> entry : currentNode.entrySet()) {
+            String currentKey = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+            Object currentValue = entry.getValue();
+            if (targetColumns.contains(currentKey)) {
+                filterResult.put(entry.getKey(), currentValue);
+            } else if (currentValue instanceof Map) {
+                filterResult.put(entry.getKey(), new HashMap<>());
+                Map<String, Object> tmpNode = constructFilterMap(currentKey, (Map<String, Object>) currentValue, targetColumns);
+                if (!tmpNode.isEmpty()) {
+                    filterResult.put(entry.getKey(), tmpNode);
+                }
+            } else if (currentValue instanceof List) {
+                List<?> list = (List<?>) currentValue;
+                if (!list.isEmpty() && list.get(0) instanceof Map) {
+                    List<Map<String, Object>> newList = new ArrayList<>();
+                    for (Object item : list) {
+                        Map<String, Object> tmpNode = constructFilterMap(currentKey, (Map<String, Object>) item, targetColumns);
+                        if (!tmpNode.isEmpty()) {
+                            newList.add(tmpNode);
+                        }
+                    }
+                    if (!newList.isEmpty()) {
+                        filterResult.put(entry.getKey(), newList);
+                    }
+                }
+            }
+        }
+        return filterResult;
     }
 
     private List<String> parseLLMFilteredResult(String LLMResponse) {
