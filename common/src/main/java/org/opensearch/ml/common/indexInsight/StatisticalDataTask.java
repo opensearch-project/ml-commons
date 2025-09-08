@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.indexInsight;
 
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.callLLMWithAgent;
 import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.extractFieldNamesTypes;
+import static org.opensearch.ml.common.indexInsight.IndexInsightUtils.getAgentIdToRun;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
@@ -16,6 +18,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.opensearch.action.search.SearchRequest;
@@ -64,6 +69,16 @@ public class StatisticalDataTask implements IndexInsightTask {
     public static final String NOT_NULL_KEYWORD = "not_null";
     public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
     public static final String EXAMPLE_DOC_KEYWORD = "example_docs";
+
+    private static final String PROMPT_TEMPLATE = """
+            Now I will give you the sample examples and some field's data distribution of one Opensearch index. 
+            You should help me filter at most 40 important columns.
+            For logs/trace/metric related indices, make sure you contain error/http response/time/latency/metric related columns.
+            You should contain your response column name inside tag <column_name></column_name>
+            Here is the information of sample examples and some field's data distribution \n.
+            IndexName: %s
+            detailed information: %s
+            """;
 
     private final String sourceIndex;
     private final Client client;
@@ -159,22 +174,32 @@ public class StatisticalDataTask implements IndexInsightTask {
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 sampleDocuments = searchResponse.getHits().getHits();
                 Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
-                String statisticalContent = gson.toJson(parseSearchResult(fieldsToType, highPriorityColumns, searchResponse));
+                Map<String, Object> parsedResult = parseSearchResult(fieldsToType, highPriorityColumns, searchResponse);
+                filterImportantColumnByLLM(parsedResult, tenantId, ActionListener.wrap(response -> {
+                    Map<String, Object> filteredResponse = new HashMap<>();
+                    filteredResponse.put(EXAMPLE_DOC_KEYWORD, parsedResult.get(EXAMPLE_DOC_KEYWORD));
+                    Map<String, Object> importantColumns = (Map<String, Object>) parsedResult.get(IMPORTANT_COLUMN_KEYWORD);
+                    Map<String, Object> filteredImportantColumns = importantColumns.entrySet().stream()
+                            .filter(entry -> response.isEmpty() || response.contains(entry.getKey()))
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    filteredResponse.put(IMPORTANT_COLUMN_KEYWORD, filteredImportantColumns);
+                    String statisticalContent = gson.toJson(filteredResponse);
 
-                if (shouldStore) {
-                    saveResult(statisticalContent, tenantId, listener);
-                } else {
-                    // Return IndexInsight directly without storing
-                    IndexInsight insight = IndexInsight
-                        .builder()
-                        .index(sourceIndex)
-                        .taskType(getTaskType())
-                        .content(statisticalContent)
-                        .status(IndexInsightTaskStatus.COMPLETED)
-                        .lastUpdatedTime(java.time.Instant.now())
-                        .build();
-                    listener.onResponse(insight);
-                }
+                    if (shouldStore) {
+                        saveResult(statisticalContent, tenantId, listener);
+                    } else {
+                        // Return IndexInsight directly without storing
+                        IndexInsight insight = IndexInsight
+                                .builder()
+                                .index(sourceIndex)
+                                .taskType(getTaskType())
+                                .content(statisticalContent)
+                                .status(IndexInsightTaskStatus.COMPLETED)
+                                .lastUpdatedTime(java.time.Instant.now())
+                                .build();
+                        listener.onResponse(insight);
+                    }
+                }, listener::onFailure));
             }, e -> handleError("Failed to collect statistical data for index: {}", e, tenantId, listener, shouldStore)));
         }, listener::onFailure));
     }
@@ -236,6 +261,38 @@ public class StatisticalDataTask implements IndexInsightTask {
             .aggregation(samplerAgg);
 
         return sourceBuilder;
+    }
+
+    private void filterImportantColumnByLLM(Map<String, Object> parsedResult, String tenantId, ActionListener<List<String>> listener) {
+        String prompt = generateFilterColumnPrompt(parsedResult);
+        getAgentIdToRun(
+                client,
+                tenantId,
+                ActionListener
+                        .wrap(agentId -> {
+                            callLLMWithAgent(client, agentId, prompt, tenantId, ActionListener.wrap(response -> {
+                                listener.onResponse(parseLLMFilteredResult(response));
+                            },e -> {listener.onResponse(new ArrayList<>());}));
+                        }, listener::onFailure)
+        );
+    }
+
+    private String generateFilterColumnPrompt(Map<String, Object> parsedResult) {
+        return String.format(PROMPT_TEMPLATE, sourceIndex, gson.toJson(parsedResult));
+    }
+
+    private List<String> parseLLMFilteredResult(String LLMResponse) {
+        try {
+            Pattern pattern = Pattern.compile("<column_name>(.*?)</column_name>");
+            Matcher matcher = pattern.matcher(LLMResponse);
+            List<String> columns = new ArrayList<>();
+            while (matcher.find()) {
+                columns.add(matcher.group(1).trim());
+            }
+            return columns;
+        } catch (Exception e) {
+            throw new IllegalArgumentException("fail to parse LLM response");
+        }
     }
 
     private Map<String, Object> parseSearchResult(
