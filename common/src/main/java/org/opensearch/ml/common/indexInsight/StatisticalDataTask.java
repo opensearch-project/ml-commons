@@ -49,6 +49,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -282,7 +284,8 @@ public class StatisticalDataTask implements IndexInsightTask {
         return String.format(PROMPT_TEMPLATE, sourceIndex, gson.toJson(parsedResult));
     }
 
-    private List<Map<String, Object>> filterSampleColumns(List<Map<String, Object>> originalDocs, List<String> targetColumns) {
+    @VisibleForTesting
+    List<Map<String, Object>> filterSampleColumns(List<Map<String, Object>> originalDocs, List<String> targetColumns) {
         if (targetColumns.isEmpty()) {
             return originalDocs;
         }
@@ -293,6 +296,7 @@ public class StatisticalDataTask implements IndexInsightTask {
         return results;
     }
 
+    @VisibleForTesting
     private Map<String, Object> constructFilterMap(String prefix, Map<String, Object> currentNode, List<String> targetColumns) {
         Map<String, Object> filterResult = new HashMap<>();
         for (Map.Entry<String, Object> entry : currentNode.entrySet()) {
@@ -301,7 +305,6 @@ public class StatisticalDataTask implements IndexInsightTask {
             if (targetColumns.contains(currentKey)) {
                 filterResult.put(entry.getKey(), currentValue);
             } else if (currentValue instanceof Map) {
-                filterResult.put(entry.getKey(), new HashMap<>());
                 Map<String, Object> tmpNode = constructFilterMap(currentKey, (Map<String, Object>) currentValue, targetColumns);
                 if (!tmpNode.isEmpty()) {
                     filterResult.put(entry.getKey(), tmpNode);

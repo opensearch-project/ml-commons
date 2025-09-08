@@ -293,6 +293,23 @@ public class StatisticalDataTaskTests {
     }
 
     @Test
+    public void testFilterSamplesColumns_WithFiltersAggregation() throws Exception {
+        Client client = mock(Client.class);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        Map<String, Object> listOriginal = Map.of("a", List.of(Map.of("b", 5, "c", 6)));
+        List<Map<String, Object>> result = task.filterSampleColumns(List.of(listOriginal), List.of("a.b", "a.c"));
+        assertEquals(result, List.of(listOriginal));
+
+        Map<String, Object> mapOriginal = Map.of("a", Map.of("b", 5, "c", 6));
+        List<Map<String, Object>> emptyResult = task.filterSampleColumns(List.of(mapOriginal), List.of("d"));
+        assertEquals(emptyResult, List.of(Map.of()));
+
+        List<Map<String, Object>> mapResult = task.filterSampleColumns(List.of(mapOriginal), List.of("a.b"));
+        assertEquals(mapResult, List.of(Map.of("a", Map.of("b", 5))));
+
+    }
+
+    @Test
     public void test_parseSearchResult() throws IOException {
         Client client = setupBasicClientMocks();
         mockMLConfigSuccess(client);
