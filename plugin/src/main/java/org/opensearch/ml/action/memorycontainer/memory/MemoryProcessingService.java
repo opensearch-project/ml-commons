@@ -8,7 +8,10 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACTS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PERSONAL_INFORMATION_ORGANIZER_PROMPT;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -64,11 +67,11 @@ public class MemoryProcessingService {
         stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
 
         try {
-            StringBuilder user_messages = new StringBuilder();
+            StringBuilder userMessages = new StringBuilder();
             for (MessageInput message : messages) {
-                user_messages.append(message.getContent());
+                userMessages.append(message.getContent());
             }
-            String messagesJson = user_messages.toString();
+            String messagesJson = userMessages.toString();
             stringParameters.put("messages", escapeJson(messagesJson));
 
             log.debug("LLM request - processing {} messages", messages.size());
@@ -190,11 +193,10 @@ public class MemoryProcessingService {
         try {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(0).getDataAsMap();
             // if LLM Response does not contain FACTS_FIELD then fact extraction failed hence throw exception
-            if (dataMap == null || dataMap.isEmpty() || dataMap.get(FACTS_FIELD) == null) {
+            if (dataMap == null || dataMap.get(FACTS_FIELD) == null) {
                 throw new IllegalArgumentException("Failed to parse facts from LLM response");
             }
             facts = (List<String>) dataMap.get(FACTS_FIELD);
-            facts = facts != null ? facts : new ArrayList<>();
         } catch (Exception e) {
             // Should not print the user data in logs
             log.warn("Failed to parse facts from LLM response", e);
