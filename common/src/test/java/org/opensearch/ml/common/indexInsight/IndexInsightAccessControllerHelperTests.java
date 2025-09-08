@@ -56,7 +56,7 @@ public class IndexInsightAccessControllerHelperTests {
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("Access denied"));
+            listener.onFailure(new RuntimeException("no permissions"));
             return null;
         }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
 

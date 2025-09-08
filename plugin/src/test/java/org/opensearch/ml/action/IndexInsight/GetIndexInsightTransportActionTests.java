@@ -216,7 +216,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IllegalArgumentException("You don't have access"));
+            listener.onFailure(new IllegalArgumentException("no permissions"));
             return null;
         }).when(client).search(any(), any());
 

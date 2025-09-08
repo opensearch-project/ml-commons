@@ -19,8 +19,12 @@ public class IndexInsightAccessControllerHelper {
     public static void verifyAccessController(Client client, ActionListener<Boolean> actionListener, String sourceIndex) {
         SearchRequest searchRequest = constructSimpleQueryRequest(sourceIndex);
         client.search(searchRequest, ActionListener.wrap(r -> { actionListener.onResponse(true); }, e -> {
-            log.error("You don't have access to this index");
-            actionListener.onFailure(new IllegalArgumentException("You don't have access to this index"));
+            if (e.getMessage().contains("no permissions")) {
+                log.error("You don't have access to this index");
+                actionListener.onFailure(new IllegalArgumentException("You don't have access to this index"));
+            } else {
+                actionListener.onFailure(e);
+            }
         }));
     }
 
