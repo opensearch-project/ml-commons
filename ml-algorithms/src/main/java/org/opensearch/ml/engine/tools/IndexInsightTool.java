@@ -44,7 +44,7 @@ public class IndexInsightTool implements Tool {
 
     @VisibleForTesting
     static String DEFAULT_DESCRIPTION =
-        "Use this tool to get details of one index according to different tast type, including STATISTICAL_DATA: the data distribution and index mapping of the index, FIELD_DESCRIPTION: The description of each column, LOG_RELATED_INDEX_CHECK: Whether the index is related to log/trace and whether it contains trace/log fields";
+        "Use this tool to get details of one index according to different task type, including STATISTICAL_DATA: the data distribution and index mapping of the index, FIELD_DESCRIPTION: The description of each column, LOG_RELATED_INDEX_CHECK: Whether the index is related to log/trace and whether it contains trace/log fields";
 
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
