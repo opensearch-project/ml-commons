@@ -358,7 +358,8 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             doAnswer(taskInvocation -> {
                 ActionListener<IndexInsight> listener = taskInvocation.getArgument(1);
 
-                if (taskType.equals(failedType)) {
+                if (taskType.equals(failedType)
+                    || (taskType.equals(FIELD_DESCRIPTION) && failedType != null && failedType.equals(STATISTICAL_DATA))) {
                     listener.onFailure(new RuntimeException("Task failed"));
                 } else {
                     String content = contentMap.get(taskType);

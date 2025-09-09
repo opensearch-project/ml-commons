@@ -48,6 +48,11 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class GetIndexInsightTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightGetResponse> {
+    private static final MLIndexInsightType[] ALL_TYPE_ORDER = {
+        MLIndexInsightType.STATISTICAL_DATA,
+        MLIndexInsightType.FIELD_DESCRIPTION,
+        MLIndexInsightType.LOG_RELATED_INDEX_CHECK };
+
     private final Client client;
     private final SdkClient sdkClient;
     private final NamedXContentRegistry xContentRegistry;
@@ -122,7 +127,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
                                             wrappedListener
                                         );
                                     } catch (Exception e) {
-                                        log.error("fail to get index insight", e);
+                                        log.error("Failed to get index insight", e);
                                         actionListener.onFailure(e);
                                     }
                                 } catch (Exception e) {
@@ -149,7 +154,8 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         ActionListener<MLIndexInsightGetResponse> listener
     ) {
         if (request.getTargetIndexInsight() == MLIndexInsightType.ALL) {
-            executeAllTasks(request, tenantId, listener);
+            StringBuilder combinedContent = new StringBuilder();
+            executeTaskChain(request.getIndexName(), tenantId, combinedContent, listener, 0, null);
         } else {
             IndexInsightTask task = createTask(request);
             task.execute(tenantId, ActionListener.wrap(insight -> {
@@ -159,53 +165,43 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         }
     }
 
-    private void executeAllTasks(MLIndexInsightGetRequest request, String tenantId, ActionListener<MLIndexInsightGetResponse> listener) {
-        String indexName = request.getIndexName();
-        StringBuilder combinedContent = new StringBuilder();
-
-        // Create requests for each task type
-        MLIndexInsightGetRequest statsRequest = MLIndexInsightGetRequest
-            .builder()
-            .indexName(indexName)
-            .targetIndexInsight(MLIndexInsightType.STATISTICAL_DATA)
-            .tenantId(tenantId)
-            .build();
-        MLIndexInsightGetRequest fieldRequest = MLIndexInsightGetRequest
-            .builder()
-            .indexName(indexName)
-            .targetIndexInsight(MLIndexInsightType.FIELD_DESCRIPTION)
-            .tenantId(tenantId)
-            .build();
-        MLIndexInsightGetRequest logRequest = MLIndexInsightGetRequest
-            .builder()
-            .indexName(indexName)
-            .targetIndexInsight(MLIndexInsightType.LOG_RELATED_INDEX_CHECK)
-            .tenantId(tenantId)
-            .build();
-
-        // Execute STATISTICAL_DATA first
-        executeTaskForAllType(statsRequest, tenantId, combinedContent, ActionListener.wrap(lastTime1 -> {
-            // Execute FIELD_DESCRIPTION second
-            executeTaskForAllType(fieldRequest, tenantId, combinedContent, ActionListener.wrap(lastTime2 -> {
-                // Execute LOG_RELATED_INDEX_CHECK third
-                executeTaskForAllType(logRequest, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
-                    returnCombinedResult(indexName, combinedContent, lastTime3, listener);
-                }, e -> returnCombinedResult(indexName, combinedContent, lastTime2, listener)));
-            }, e -> {
-                // FIELD_DESCRIPTION failed, try LOG_RELATED_INDEX_CHECK
-                executeTaskForAllType(logRequest, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
-                    returnCombinedResult(indexName, combinedContent, lastTime3, listener);
-                }, e2 -> returnCombinedResult(indexName, combinedContent, lastTime1, listener)));
-            }));
-        }, e -> {
-            // STATISTICAL_DATA failed, skip FIELD_DESCRIPTION and only try LOG_RELATED_INDEX_CHECK
-            executeTaskForAllType(logRequest, tenantId, combinedContent, ActionListener.wrap(lastTime3 -> {
-                returnCombinedResult(indexName, combinedContent, lastTime3, listener);
-            }, e2 -> {
-                // All tasks failed
+    /**
+     * Recursively executes index insight tasks in sequence and combines their results.
+     */
+    private void executeTaskChain(
+        String indexName,
+        String tenantId,
+        StringBuilder combinedContent,
+        ActionListener<MLIndexInsightGetResponse> listener,
+        int taskIndex,
+        Instant lastSuccessTime
+    ) {
+        if (taskIndex >= ALL_TYPE_ORDER.length) {
+            // Check if all tasks failed
+            if (combinedContent.length() == 0) {
                 listener.onFailure(new RuntimeException("All index insight tasks failed"));
-            }));
-        }));
+                return;
+            }
+            returnCombinedResult(indexName, combinedContent, lastSuccessTime, listener);
+            return;
+        }
+
+        MLIndexInsightGetRequest taskRequest = MLIndexInsightGetRequest
+            .builder()
+            .indexName(indexName)
+            .targetIndexInsight(ALL_TYPE_ORDER[taskIndex])
+            .tenantId(tenantId)
+            .build();
+        executeTaskForAllType(
+            taskRequest,
+            tenantId,
+            combinedContent,
+            ActionListener
+                .wrap(
+                    time -> executeTaskChain(indexName, tenantId, combinedContent, listener, taskIndex + 1, time),
+                    e -> executeTaskChain(indexName, tenantId, combinedContent, listener, taskIndex + 1, lastSuccessTime)
+                )
+        );
     }
 
     private void executeTaskForAllType(
