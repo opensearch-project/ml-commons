@@ -68,6 +68,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
     private static final Double THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
+    private static final String PARSE_COLUMN_NAME_PATTERN = "<column_name>(.*?)</column_name>";
     private static final int FILTER_LLM_NUMBERS = 30;
     public static final String NOT_NULL_KEYWORD = "not_null";
     public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
@@ -336,7 +337,7 @@ public class StatisticalDataTask implements IndexInsightTask {
 
     private List<String> parseLLMFilteredResult(String LLMResponse) {
         try {
-            Pattern pattern = Pattern.compile("<column_name>(.*?)</column_name>");
+            Pattern pattern = Pattern.compile(PARSE_COLUMN_NAME_PATTERN);
             Matcher matcher = pattern.matcher(LLMResponse);
             List<String> columns = new ArrayList<>();
             while (matcher.find()) {
