@@ -62,9 +62,7 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         NamedXContentRegistry xContentRegistry,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Client client,
-        SdkClient sdkClient,
-        MLIndicesHandler mlIndicesHandler,
-        ClusterService clusterService
+        SdkClient sdkClient
     ) {
         super(MLIndexInsightGetAction.NAME, transportService, actionFilters, MLIndexInsightGetRequest::new);
         this.client = client;
