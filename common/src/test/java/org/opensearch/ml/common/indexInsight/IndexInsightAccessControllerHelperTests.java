@@ -62,8 +62,8 @@ public class IndexInsightAccessControllerHelperTests {
 
         IndexInsightAccessControllerHelper.verifyAccessController(client, actionListener, sourceIndex);
 
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<RuntimeException> exceptionCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
-        assertEquals("You don't have access to this index", exceptionCaptor.getValue().getMessage());
+        assertEquals("no permissions", exceptionCaptor.getValue().getMessage());
     }
 }

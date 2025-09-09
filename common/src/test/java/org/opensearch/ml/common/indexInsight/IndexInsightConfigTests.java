@@ -51,7 +51,7 @@ public class IndexInsightConfigTests {
 
         StreamInput input = output.bytes().streamInput();
         Boolean isEnable = input.readBoolean();
-        String tenantId = input.readOptionalString();
+        String tenantId = input.readString();
 
         assertEquals(original.getIsEnable(), isEnable);
         assertEquals(original.getTenantId(), tenantId);
@@ -169,7 +169,7 @@ public class IndexInsightConfigTests {
 
     @Test
     public void testFromStream() throws IOException {
-        IndexInsightConfig original = IndexInsightConfig.builder().isEnable(false).tenantId(null).build();
+        IndexInsightConfig original = IndexInsightConfig.builder().isEnable(false).tenantId("default_id").build();
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);

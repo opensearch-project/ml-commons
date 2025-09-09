@@ -106,7 +106,6 @@ public class PutIndexInsightConfigTransportActionTests extends OpenSearchTestCas
             new PutIndexInsightConfigTransportAction(
                 transportService,
                 actionFilters,
-                xContentRegistry,
                 mlFeatureEnabledSetting,
                 client,
                 sdkClient,

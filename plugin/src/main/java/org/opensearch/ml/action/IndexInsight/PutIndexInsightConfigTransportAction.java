@@ -21,7 +21,6 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.indexInsight.IndexInsightConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -46,17 +45,15 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class PutIndexInsightConfigTransportAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
-    private Client client;
+    private final Client client;
     private final SdkClient sdkClient;
-    private NamedXContentRegistry xContentRegistry;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MLIndicesHandler mlIndicesHandler;
 
     @Inject
     public PutIndexInsightConfigTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        NamedXContentRegistry xContentRegistry,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Client client,
         SdkClient sdkClient,
@@ -64,8 +61,6 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
     ) {
         super(MLIndexInsightConfigPutAction.NAME, transportService, actionFilters, MLIndexInsightConfigPutRequest::new);
         this.client = client;
-
-        this.xContentRegistry = xContentRegistry;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.sdkClient = sdkClient;
         this.mlIndicesHandler = mlIndicesHandler;

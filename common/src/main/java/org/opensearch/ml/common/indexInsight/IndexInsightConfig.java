@@ -36,12 +36,12 @@ public class IndexInsightConfig implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeBoolean(isEnable);
-        out.writeOptionalString(tenantId);
+        out.writeString(tenantId);
     }
 
     public IndexInsightConfig(StreamInput input) throws IOException {
         isEnable = input.readBoolean();
-        tenantId = input.readOptionalString();
+        tenantId = input.readString();
     }
 
     @Override

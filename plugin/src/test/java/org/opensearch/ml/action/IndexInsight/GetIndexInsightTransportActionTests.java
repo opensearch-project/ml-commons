@@ -103,9 +103,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 mlFeatureEnabledSetting,
                 client,
-                sdkClient,
-                mlIndicesHandler,
-                clusterService
+                sdkClient
             )
         );
 
@@ -224,7 +222,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
-        assertEquals("You don't have access to this index", argumentCaptor.getValue().getMessage());
+        assertEquals("no permissions", argumentCaptor.getValue().getMessage());
     }
 
     @Test

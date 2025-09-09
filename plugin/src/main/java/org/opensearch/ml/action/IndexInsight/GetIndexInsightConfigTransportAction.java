@@ -39,10 +39,10 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class GetIndexInsightConfigTransportAction extends HandledTransportAction<ActionRequest, MLIndexInsightConfigGetResponse> {
-    private Client client;
-    private SdkClient sdkClient;
-    private NamedXContentRegistry xContentRegistry;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final Client client;
+    private final SdkClient sdkClient;
+    private final NamedXContentRegistry xContentRegistry;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public GetIndexInsightConfigTransportAction(
