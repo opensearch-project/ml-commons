@@ -19,12 +19,8 @@ public class IndexInsightAccessControllerHelper {
     public static void verifyAccessController(Client client, ActionListener<Boolean> actionListener, String sourceIndex) {
         SearchRequest searchRequest = constructSimpleQueryRequest(sourceIndex);
         client.search(searchRequest, ActionListener.wrap(r -> { actionListener.onResponse(true); }, e -> {
-            if (e.getMessage().contains("no permissions")) {
-                log.error(e.getMessage(), e);
-                actionListener.onFailure(e);
-            } else {
-                actionListener.onFailure(e);
-            }
+            log.error(e.getMessage(), e);
+            actionListener.onFailure(e);
         }));
     }
 
