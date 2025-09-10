@@ -101,8 +101,8 @@ public class TransportMcpToolsRemoveOnNodesAction extends
         AtomicReference<Set<String>> errors = new AtomicReference<>();
         errors.set(new HashSet<>());
         Flux.fromStream(tools.stream()).flatMap(toolName -> {
-            if (McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(toolName)) {
-                McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(toolName).onErrorResume(e -> {
+            if (McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(toolName)) {
+                McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().removeTool(toolName).onErrorResume(e -> {
                     log
                         .error(
                             "Failed to remove mcp tool on node: {} with error: {}",
@@ -112,7 +112,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
                         );
                     errors.get().add(toolName);
                     return Mono.empty();
-                }).doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.remove(toolName)).subscribe();
+                }).doOnSuccess(x -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.remove(toolName)).subscribe();
             }
             return Mono.empty();
         }).doOnComplete(() -> log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId())).subscribe();

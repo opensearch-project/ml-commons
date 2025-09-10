@@ -71,7 +71,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final McpToolsHelper mcpToolsHelper;
+    private final McpStatelessToolsHelper mcpStatelessToolsHelper;
 
     @Inject
     public TransportMcpToolsUpdateAction(
@@ -82,7 +82,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
         Client client,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
-        McpToolsHelper mcpToolsHelper,
+        McpStatelessToolsHelper mcpStatelessToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsUpdateAction.NAME, transportService, actionFilters, MLMcpToolsUpdateNodesRequest::new);
@@ -92,7 +92,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
-        this.mcpToolsHelper = mcpToolsHelper;
+        this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -148,7 +148,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                 log.error("Failed to search mcp tools index", e);
                 restoreListener.onFailure(e);
             });
-            mcpToolsHelper
+            mcpStatelessToolsHelper
                 .searchToolsWithPrimaryTermAndSeqNo(
                     updateNodesRequest.getMcpTools().stream().map(McpToolUpdateInput::getName).toList(),
                     searchResultListener

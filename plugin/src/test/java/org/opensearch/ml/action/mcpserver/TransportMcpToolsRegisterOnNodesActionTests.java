@@ -45,7 +45,7 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
-import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 
 public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestCase {
     @Mock
@@ -69,7 +69,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     private Map<String, Tool.Factory> toolFactories = ImmutableMap
         .of("ListIndexTool", ListIndexTool.Factory.getInstance(), "AgentTool", AgentTool.Factory.getInstance());
 
-    private McpToolsHelper mcpToolsHelper;
+    private McpStatelessToolsHelper mcpStatelessToolsHelper;
 
     private TransportMcpToolsRegisterOnNodesAction action;
 
@@ -77,7 +77,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
+        mcpStatelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("clusterName"));
         when(clusterService.localNode().getId()).thenReturn("localNodeId");
@@ -89,8 +89,11 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             client,
             xContentRegistry,
             toolFactoryWrapper,
-            mcpToolsHelper
+            mcpStatelessToolsHelper
         );
+
+        // Initialize the McpStatelessServerHolder for testing
+        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
     }
 
     @Test
@@ -140,7 +143,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     @Test
     public void testNodeOperation() {
         List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
-        McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool("ListIndexTool").subscribe();
+        McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().removeTool("ListIndexTool").subscribe();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
         MLMcpToolsRegisterNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getCreated());
@@ -152,8 +155,8 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             .of(
                 new McpToolRegisterInput("AgentTool", "AgentTool", "test agent tool", Map.of("agent_id", "test_agent_id"), null, null, null)
             );
-        McpServerFeatures.AsyncToolSpecification specification = mcpToolsHelper.createToolSpecification(mcpTools.get(0));
-        McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(specification).subscribe();
+        McpStatelessServerFeatures.AsyncToolSpecification specification = mcpStatelessToolsHelper.createToolSpecification(mcpTools.get(0));
+        McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().addTool(specification).subscribe();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
 
         action.nodeOperation(request);

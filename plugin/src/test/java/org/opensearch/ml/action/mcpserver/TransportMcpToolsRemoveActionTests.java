@@ -88,7 +88,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, threadPool, toolFactoryWrapper));
+    private McpStatelessToolsHelper mcpStatelessToolsHelper = spy(new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper));
 
     private TransportMcpToolsRemoveAction transportMcpToolsRemoveAction;
 
@@ -105,7 +105,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(getRegisterMcpTools());
             return null;
-        }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
+        }).when(mcpStatelessToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
         doAnswer(invocationOnMock -> {
             ActionListener<BulkResponse> actionListener = invocationOnMock.getArgument(1);
             BulkResponse bulkResponse = mock(BulkResponse.class);
@@ -149,7 +149,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper,
+            mcpStatelessToolsHelper,
             mlFeatureEnabledSetting
         );
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
@@ -175,7 +175,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper,
+                mcpStatelessToolsHelper,
                 mlFeatureEnabledSetting
         );
         MLMcpToolsRemoveNodesRequest nodesRequest = mock(MLMcpToolsRemoveNodesRequest.class);
@@ -206,7 +206,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             ActionListener<List<String>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onFailure(new RuntimeException("Network issue"));
             return null;
-        }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
+        }).when(mcpStatelessToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
         MLMcpToolsRemoveNodesRequest nodesRequest = mock(MLMcpToolsRemoveNodesRequest.class);
         List<String> mcpTools = getRemoveMcpTool();
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
@@ -221,7 +221,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(List.of());
             return null;
-        }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
+        }).when(mcpStatelessToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
         MLMcpToolsRemoveNodesRequest nodesRequest = mock(MLMcpToolsRemoveNodesRequest.class);
         List<String> mcpTools = getRemoveMcpTool();
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
@@ -236,7 +236,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(getRegisterMcpTools());
             return null;
-        }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
+        }).when(mcpStatelessToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
         MLMcpToolsRemoveNodesRequest nodesRequest = mock(MLMcpToolsRemoveNodesRequest.class);
         List<String> mcpTools = getRemoveMcpTool();
         mcpTools.add("SearchIndexTool");
