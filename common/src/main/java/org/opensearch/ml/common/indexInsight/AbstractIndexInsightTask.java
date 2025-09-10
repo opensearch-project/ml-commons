@@ -27,6 +27,7 @@ import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.regex.Regex;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -429,9 +430,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         for (SearchHit hit : hits) {
             Map<String, Object> source = hit.getSourceAsMap();
             String pattern = (String) source.get(INDEX_NAME_FIELD);
-            // Convert wildcard pattern to regex pattern
-            String regexPattern = pattern.replace("*", ".*").replace("?", ".");
-            if (targetIndex.matches(regexPattern)) {
+            if (Regex.simpleMatch(pattern, targetIndex)) {
                 return source;
             }
         }
