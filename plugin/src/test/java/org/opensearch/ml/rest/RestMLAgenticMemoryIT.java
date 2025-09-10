@@ -24,7 +24,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RestMLAgenticMemoryIT extends MLCommonsRestTestCase {
 
-    private static final String OPENAI_KEY = System.getProperty("OPENAI_KEY");
+    private static final String OPENAI_KEY = System.getenv("OPENAI_KEY");
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
