@@ -54,24 +54,23 @@ import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.signer.Aws4Signer;
-import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
-import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.http.auth.aws.signer.AwsV4HttpSigner;
+import software.amazon.awssdk.http.auth.spi.signer.SignedRequest;
 
 @Log4j2
 public class ConnectorUtils {
 
-    private static final Aws4Signer signer;
+    private static final AwsV4HttpSigner signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
 
     public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
         .of("sagemaker", "openai", "bedrock", "cohere");
 
     static {
-        signer = Aws4Signer.create();
+        signer = AwsV4HttpSigner.create();
     }
 
     public static RemoteInferenceInputDataSet processInput(
@@ -292,14 +291,16 @@ public class ConnectorUtils {
             ? AwsBasicCredentials.create(accessKey, secretKey)
             : AwsSessionCredentials.create(accessKey, secretKey, sessionToken);
 
-        Aws4SignerParams params = Aws4SignerParams
-            .builder()
-            .awsCredentials(credentials)
-            .signingName(signingName)
-            .signingRegion(Region.of(region))
-            .build();
-
-        return signer.sign(request, params);
+        SignedRequest signedRequest = signer
+            .sign(
+                r -> r
+                    .identity(credentials)
+                    .request(request)
+                    .payload(request.contentStreamProvider().orElse(null))
+                    .putProperty(AwsV4HttpSigner.SERVICE_SIGNING_NAME, signingName)
+                    .putProperty(AwsV4HttpSigner.REGION_NAME, region)
+            );
+        return (SdkHttpFullRequest) signedRequest.request();
     }
 
     public static SdkHttpFullRequest buildSdkRequest(
