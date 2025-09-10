@@ -64,7 +64,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     private static final List<String> PREFIXES = List.of("unique_terms_", "unique_count_", "max_value_", "min_value_");
     private static final List<String> UNIQUE_TERMS_LIST = List.of("text", "keyword", "integer", "long", "short");
     private static final List<String> MIN_MAX_LIST = List.of("integer", "long", "float", "double", "short", "date");
-    private static final Double IMPORTANT_COLUMN_THRESHOLD = 0.001;
+    private static final Double HIGH_PRIORITY_COLUMN_THRESHOLD = 0.001;
     private static final int SAMPLE_NUMBER = 100000;
     private static final String PARSE_COLUMN_NAME_PATTERN = "<column_name>(.*?)</column_name>";
     private static final int FILTER_LLM_NUMBERS = 30;
@@ -78,7 +78,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         For logs/trace/metric related indices, make sure you contain error/http response/time/latency/metric related columns.
         You should contain your response column name inside tag <column_name></column_name>
         Here is the information of sample examples and some field's data distribution.
-        
+
         IndexName: %s
         detailed information: %s
         """;
@@ -167,8 +167,8 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
             searchRequest.source(buildQuery(fieldsToType));
 
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-                Set<String> importantColumns = filterColumns(fieldsToType, searchResponse);
-                Map<String, Object> parsedResult = parseSearchResult(fieldsToType, importantColumns, searchResponse);
+                Set<String> highPriorityColumns = filterColumns(fieldsToType, searchResponse);
+                Map<String, Object> parsedResult = parseSearchResult(fieldsToType, highPriorityColumns, searchResponse);
                 filterImportantColumnByLLM(parsedResult, tenantId, ActionListener.wrap(response -> {
                     Map<String, Object> filteredResponse = new HashMap<>();
                     filteredResponse
@@ -421,7 +421,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
             String targetField = bucket.getKey();
             targetField = targetField.substring(0, targetField.length() - 1 - NOT_NULL_KEYWORD.length());
             long docCount = bucket.getDocCount();
-            if (docCount > IMPORTANT_COLUMN_THRESHOLD * totalDocCount && allFieldsToType.containsKey(targetField)) {
+            if (docCount > HIGH_PRIORITY_COLUMN_THRESHOLD * totalDocCount && allFieldsToType.containsKey(targetField)) {
                 filteredNames.add(targetField);
             }
         }
