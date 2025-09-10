@@ -52,7 +52,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final McpToolsHelper mcpToolsHelper;
+    private final McpStatelessToolsHelper mcpStatelessToolsHelper;
 
     @Inject
     public TransportMcpToolsRemoveAction(
@@ -63,7 +63,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
         Client client,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
-        McpToolsHelper mcpToolsHelper,
+        McpStatelessToolsHelper mcpStatelessToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsRemoveAction.NAME, transportService, actionFilters, MLMcpMessageRequest::new);
@@ -73,7 +73,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
-        this.mcpToolsHelper = mcpToolsHelper;
+        this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -114,7 +114,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                 log.error("Failed to search mcp tools index", e);
                 restoreListener.onFailure(e);
             });
-            mcpToolsHelper.searchToolsWithVersion(removeToolsOnNodesRequest.getMcpTools(), searchResultListener);
+            mcpStatelessToolsHelper.searchToolsWithVersion(removeToolsOnNodesRequest.getMcpTools(), searchResultListener);
         } catch (Exception e) {
             log.error("Failed to remove mcp tools caused by system internal error", e);
             listener.onFailure(e);

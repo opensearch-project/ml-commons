@@ -63,7 +63,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
     DiscoveryNodeHelper nodeFilter;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MLIndicesHandler mlIndicesHandler;
-    private final McpToolsHelper mcpToolsHelper;
+    private final McpStatelessToolsHelper mcpStatelessToolsHelper;
 
     @Inject
     public TransportMcpToolsRegisterAction(
@@ -75,7 +75,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLIndicesHandler mlIndicesHandler,
-        McpToolsHelper mcpToolsHelper,
+        McpStatelessToolsHelper mcpStatelessToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsRegisterAction.NAME, transportService, actionFilters, MLMcpToolsRegisterNodesRequest::new);
@@ -86,7 +86,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
         this.mlIndicesHandler = mlIndicesHandler;
-        this.mcpToolsHelper = mcpToolsHelper;
+        this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -123,7 +123,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     log.error("Failed to search mcp tools index", e);
                     restoreListener.onFailure(e);
                 });
-                mcpToolsHelper
+                mcpStatelessToolsHelper
                     .searchToolsWithVersion(
                         registerNodesRequest.getMcpTools().stream().map(McpToolRegisterInput::getName).toList(),
                         searchResultListener

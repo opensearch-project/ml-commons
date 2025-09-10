@@ -31,7 +31,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class TransportMcpToolsListAction extends HandledTransportAction<ActionRequest, MLMcpToolsListResponse> {
 
-    private final McpToolsHelper mcpToolsHelper;
+    private final McpStatelessToolsHelper mcpStatelessToolsHelper;
     TransportService transportService;
     ClusterService clusterService;
     NamedXContentRegistry xContentRegistry;
@@ -45,13 +45,13 @@ public class TransportMcpToolsListAction extends HandledTransportAction<ActionRe
         ActionFilters actionFilters,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
-        McpToolsHelper mcpToolsHelper,
+        McpStatelessToolsHelper mcpStatelessToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsListAction.NAME, transportService, actionFilters, MLMcpToolsListRequest::new);
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
-        this.mcpToolsHelper = mcpToolsHelper;
+        this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
         this.transportService = transportService;
         this.clusterService = clusterService;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
@@ -68,6 +68,6 @@ public class TransportMcpToolsListAction extends HandledTransportAction<ActionRe
                 log.error("Failed to list MCP tools", e);
                 listener.onFailure(e);
             });
-        mcpToolsHelper.searchAllTools(searchListener);
+        mcpStatelessToolsHelper.searchAllTools(searchListener);
     }
 }

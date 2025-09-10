@@ -67,7 +67,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("SearchIndexTool", SearchIndexTool.Factory.getInstance());
 
-    private McpToolsHelper mcpToolsHelper;
+    private McpStatelessToolsHelper mcpStatelessToolsHelper;
 
     private TransportMcpToolsUpdateOnNodesAction action;
 
@@ -79,8 +79,8 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
         super.setUp();
         MockitoAnnotations.openMocks(this);
 
-        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.clear();
-        mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
+        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.clear();
+        mcpStatelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("test-cluster"));
         when(clusterService.localNode().getId()).thenReturn("local-node");
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
@@ -92,8 +92,11 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
             client,
             xContentRegistry,
             toolFactoryWrapper,
-            mcpToolsHelper
+            mcpStatelessToolsHelper
         );
+
+        // Initialize the McpStatelessServerHolder for testing
+        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
     }
 
     @Test
@@ -138,18 +141,18 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     @Test
     public void testNodeOperationSuccess() {
-        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("SearchIndexTool", 1L);
+        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("SearchIndexTool", 1L);
 
         MLMcpToolsUpdateNodeRequest request = new MLMcpToolsUpdateNodeRequest(List.of(createTestTool(2L)));
 
         MLMcpToolsUpdateNodeResponse response = action.nodeOperation(request);
         assertTrue(response.getUpdated());
-        assertEquals(2L, (long) McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.get("SearchIndexTool"));
+        assertEquals(2L, (long) McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.get("SearchIndexTool"));
     }
 
     @Test
     public void testNodeOperationException() {
-        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("IndexMappingTool", 1L);
+        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("IndexMappingTool", 1L);
         McpToolUpdateInput updateMcpTool = new McpToolUpdateInput(
             "IndexMappingTool",
             "Updated index mapping tool",

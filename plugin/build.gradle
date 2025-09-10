@@ -430,6 +430,14 @@ configurations.all {
     resolutionStrategy.force "org.bouncycastle:bcprov-jdk18on:1.78.1"
     resolutionStrategy.force 'io.projectreactor:reactor-core:3.7.0'
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
+    resolutionStrategy.force 'com.fasterxml.jackson.core:jackson-annotations:2.18.3'
+    resolutionStrategy.force 'com.networknt:json-schema-validator:1.5.7'
+    resolutionStrategy.force 'com.fasterxml.jackson:jackson-bom:2.18.3'
+    resolutionStrategy.force 'org.yaml:snakeyaml:2.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.18.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.18.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
