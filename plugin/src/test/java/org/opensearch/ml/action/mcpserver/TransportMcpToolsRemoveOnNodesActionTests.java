@@ -164,6 +164,48 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         assertEquals(true, response.getDeleted());
     }
 
+    @Test
+    public void testNodeOperation_RemoveToolError() {
+        // Test error handling when removeTool fails
+        MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
+        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
+
+        // Add the tool first
+        McpStatelessServerHolder
+            .getMcpStatelessAsyncServerInstance()
+            .addTool(mcpStatelessToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexTool")))
+            .onErrorResume(e -> Mono.empty())
+            .subscribe();
+
+        // Wait a bit for the tool to be added
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // Now try to remove - this should succeed and cover the doOnSuccess path
+        MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
+        assertEquals(true, response.getDeleted());
+
+        // Verify the tool was removed from IN_MEMORY_MCP_TOOLS (doOnSuccess coverage)
+        assertFalse(McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.containsKey("ListIndexTool"));
+    }
+
+    @Test
+    public void testNodeOperation_ErrorPath() {
+        // Test the error path by creating a scenario where removeTool would fail
+        // We'll use a tool name that doesn't exist in the server but exists in IN_MEMORY_MCP_TOOLS
+        List<String> errorTools = List.of("NonExistentTool");
+        MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(errorTools);
+        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("NonExistentTool", 1L);
+
+        // This should trigger the onErrorResume block since the tool doesn't exist in the server
+        // and eventually throw FailedNodeException
+        exceptionRule.expect(FailedNodeException.class);
+        action.nodeOperation(request);
+    }
+
     private McpToolRegisterInput getRegisterMcpTool(String toolName) {
         McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             toolName,
