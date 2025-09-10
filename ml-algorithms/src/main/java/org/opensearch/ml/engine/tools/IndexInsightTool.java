@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
+
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
@@ -45,6 +47,28 @@ public class IndexInsightTool implements Tool {
     @VisibleForTesting
     static String DEFAULT_DESCRIPTION =
         "Use this tool to get details of one index according to different task type, including STATISTICAL_DATA: the data distribution and index mapping of the index, FIELD_DESCRIPTION: The description of each column, LOG_RELATED_INDEX_CHECK: Whether the index is related to log/trace and whether it contains trace/log fields";
+
+    public static final String STRICT_FIELD = "strict";
+
+    public static final String DEFAULT_INPUT_SCHEMA = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "string",
+                            "description": "OpenSearch index name"
+                        },
+                        "question": {
+                            "type": "string",
+                            "description": "Natural language question to query data from opensearch index"
+                        }
+                    }
+                },
+                "strict": false
+              }
+        """;
+
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
 
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
@@ -124,6 +148,11 @@ public class IndexInsightTool implements Tool {
         @Override
         public String getDefaultType() {
             return TYPE;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
 
         @Override

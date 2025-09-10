@@ -72,6 +72,11 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     public static final String IMPORTANT_COLUMN_KEYWORD = "important_column_and_distribution";
     public static final String EXAMPLE_DOC_KEYWORD = "example_docs";
 
+    private static final String UNIQUE_TERM_PREFIX = "unique_terms_";
+    private static final String MAX_VALUE_PREFIX = "max_value_";
+    private static final String MIN_VALUE_PREFIX = "min_value_";
+    private static final String UNIQUE_COUNT_PREFIX = "unique_count_";
+
     private static final String PROMPT_TEMPLATE = """
         Now I will give you the sample examples and some field's data distribution of one Opensearch index.
         You should help me filter at most %s important columns.
@@ -222,16 +227,16 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
             }
 
             if (UNIQUE_TERMS_LIST.contains(type)) {
-                TermsAggregationBuilder termsAgg = AggregationBuilders.terms("unique_terms_" + name).field(fieldUsed).size(TERM_SIZE);
+                TermsAggregationBuilder termsAgg = AggregationBuilders.terms(UNIQUE_TERM_PREFIX + name).field(fieldUsed).size(TERM_SIZE);
 
-                CardinalityAggregationBuilder countAgg = AggregationBuilders.cardinality("unique_count_" + name).field(fieldUsed);
+                CardinalityAggregationBuilder countAgg = AggregationBuilders.cardinality(UNIQUE_COUNT_PREFIX + name).field(fieldUsed);
 
                 subAggs.addAggregator(termsAgg);
                 subAggs.addAggregator(countAgg);
             }
             if (MIN_MAX_LIST.contains(type)) {
-                MinAggregationBuilder minAgg = AggregationBuilders.min("min_value_" + name).field(fieldUsed);
-                MaxAggregationBuilder maxAgg = AggregationBuilders.max("max_value_" + name).field(fieldUsed);
+                MinAggregationBuilder minAgg = AggregationBuilders.min(MIN_VALUE_PREFIX + name).field(fieldUsed);
+                MaxAggregationBuilder maxAgg = AggregationBuilders.max(MAX_VALUE_PREFIX + name).field(fieldUsed);
 
                 subAggs.addAggregator(minAgg);
                 subAggs.addAggregator(maxAgg);
@@ -265,7 +270,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
     private void filterImportantColumnByLLM(Map<String, Object> parsedResult, String tenantId, ActionListener<List<String>> listener) {
         Map<String, Object> importantColumns = (Map<String, Object>) parsedResult.get(IMPORTANT_COLUMN_KEYWORD);
-        if (importantColumns.keySet().size() <= FILTER_LLM_NUMBERS) {
+        if (importantColumns.size() <= FILTER_LLM_NUMBERS) {
             listener.onResponse(new ArrayList<>()); // Too few columns and don't need to filter
             return;
         }
@@ -293,7 +298,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         return results;
     }
 
-    @VisibleForTesting
     private Map<String, Object> constructFilterMap(String prefix, Map<String, Object> currentNode, List<String> targetColumns) {
         Map<String, Object> filterResult = new HashMap<>();
         for (Map.Entry<String, Object> entry : currentNode.entrySet()) {
@@ -370,7 +374,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                         Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
                         Object targetValue;
                         try {
-                            if (prefix.equals("unique_terms_")) {
+                            if (prefix.equals(UNIQUE_TERM_PREFIX)) {
                                 // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
                                 Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
                                 List<Map<String, Object>> buckets = aggResult != null
