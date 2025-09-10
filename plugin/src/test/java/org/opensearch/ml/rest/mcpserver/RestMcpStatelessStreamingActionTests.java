@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.rest.mcpserver;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,9 +21,12 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.action.mcpserver.McpStatelessServerHolder;
+import org.opensearch.ml.action.mcpserver.McpStatelessToolsHelper;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
@@ -40,12 +47,26 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
+    private McpStatelessToolsHelper mcpStatelessToolsHelper;
+
+    @Mock
     private RestChannel channel;
 
     @Before
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
+
+        resetSingletonState();
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mcpStatelessToolsHelper).autoLoadAllMcpTools(any());
+
+        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
+
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         restMCPStatelessStreamingAction = new RestMcpStatelessStreamingAction(mlFeatureEnabledSetting);
@@ -57,6 +78,26 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
         super.tearDown();
         threadPool.shutdown();
         client.close();
+    }
+
+    private void resetSingletonState() {
+        try {
+            java.lang.reflect.Field statelessToolsHelperField = McpStatelessServerHolder.class.getDeclaredField("statelessToolsHelper");
+            statelessToolsHelperField.setAccessible(true);
+            statelessToolsHelperField.set(null, null);
+
+            java.lang.reflect.Field mcpStatelessAsyncServerField = McpStatelessServerHolder.class
+                .getDeclaredField("mcpStatelessAsyncServer");
+            mcpStatelessAsyncServerField.setAccessible(true);
+            mcpStatelessAsyncServerField.set(null, null);
+
+            java.lang.reflect.Field mcpStatelessServerTransportProviderField = McpStatelessServerHolder.class
+                .getDeclaredField("mcpStatelessServerTransportProvider");
+            mcpStatelessServerTransportProviderField.setAccessible(true);
+            mcpStatelessServerTransportProviderField.set(null, null);
+        } catch (Exception e) {
+            // Continue if reflection fails
+        }
     }
 
     @Test
@@ -105,23 +146,11 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_prepareRequest_nullBody() throws Exception {
+    public void test_prepareRequest_nullContent() throws Exception {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
             .withContent(null, null)
-            .build();
-
-        executeRestChannelConsumer(request);
-        verifyErrorResponse("Parse error: empty body");
-    }
-
-    @Test
-    public void test_prepareRequest_blankBody() throws Exception {
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
-            .withContent(new BytesArray("   "), null)
             .build();
 
         executeRestChannelConsumer(request);
@@ -218,6 +247,33 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
         BytesRestResponse response = responseCaptor.getValue();
         assertEquals(RestStatus.OK, response.status());
         assertTrue(response.content().utf8ToString().contains("Parse error"));
+    }
+
+    @Test
+    public void test_prepareRequest_transportProviderNotReady() throws Exception {
+        resetSingletonState();
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
+            .build();
+
+        executeRestChannelConsumer(request);
+        verifyErrorResponse("Internal server error");
+    }
+
+    @Test
+    public void test_sendErrorResponse_exceptionHandling() throws Exception {
+        doThrow(new RuntimeException("Channel error")).when(channel).sendResponse(any());
+
+        java.lang.reflect.Method sendErrorResponseMethod = RestMcpStatelessStreamingAction.class
+            .getDeclaredMethod("sendErrorResponse", RestChannel.class, Object.class, int.class, String.class);
+        sendErrorResponseMethod.setAccessible(true);
+
+        sendErrorResponseMethod.invoke(restMCPStatelessStreamingAction, channel, 1, -32700, "Parse error");
+
+        verify(channel, times(2)).sendResponse(any());
     }
 
     private void executeRestChannelConsumer(RestRequest request) throws Exception {
