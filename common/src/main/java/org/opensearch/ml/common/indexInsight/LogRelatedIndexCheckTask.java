@@ -34,16 +34,12 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
-    private final String sourceIndex;
-    private final Client client;
-    private final SdkClient sdkClient;
 
     private String sampleDocString;
 
-    private static final Map<String, Object> DEFAULT_RCA_RESULT;
+    private static final Map<String, Object> DEFAULT_RCA_RESULT = new HashMap<>();
 
     static {
-        DEFAULT_RCA_RESULT = new HashMap<>();
         DEFAULT_RCA_RESULT.put("is_log_index", false);
         DEFAULT_RCA_RESULT.put("log_message_field", null);
         DEFAULT_RCA_RESULT.put("trace_id_field", null);
@@ -86,9 +82,7 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
             """;
 
     public LogRelatedIndexCheckTask(String sourceIndex, Client client, SdkClient sdkClient) {
-        this.sourceIndex = sourceIndex;
-        this.client = client;
-        this.sdkClient = sdkClient;
+        super(MLIndexInsightType.LOG_RELATED_INDEX_CHECK, sourceIndex, client, sdkClient);
     }
 
     @Override
@@ -106,30 +100,9 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
         }
     }
 
-    // Standard IndexInsightTask interface methods
-    @Override
-    public MLIndexInsightType getTaskType() {
-        return MLIndexInsightType.LOG_RELATED_INDEX_CHECK;
-    }
-
-    @Override
-    public String getSourceIndex() {
-        return sourceIndex;
-    }
-
     @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.emptyList();
-    }
-
-    @Override
-    public Client getClient() {
-        return client;
-    }
-
-    @Override
-    public SdkClient getSdkClient() {
-        return sdkClient;
     }
 
     private void collectSampleDocString(ActionListener<String> listener) {

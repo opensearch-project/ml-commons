@@ -88,14 +88,8 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         detailed information: %s
         """;
 
-    private final String sourceIndex;
-    private final Client client;
-    private final SdkClient sdkClient;
-
     public StatisticalDataTask(String sourceIndex, Client client, SdkClient sdkClient) {
-        this.sourceIndex = sourceIndex;
-        this.client = client;
-        this.sdkClient = sdkClient;
+        super(MLIndexInsightType.STATISTICAL_DATA, sourceIndex, client, sdkClient);
     }
 
     @Override
@@ -112,16 +106,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     }
 
     @Override
-    public MLIndexInsightType getTaskType() {
-        return MLIndexInsightType.STATISTICAL_DATA;
-    }
-
-    @Override
-    public String getSourceIndex() {
-        return sourceIndex;
-    }
-
-    @Override
     protected void handlePatternMatchedDoc(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
@@ -134,16 +118,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
         // For StatisticalDataTask, run without storing when pattern matched
         runTask(tenantId, listener, false);
-    }
-
-    @Override
-    public Client getClient() {
-        return client;
-    }
-
-    @Override
-    public SdkClient getSdkClient() {
-        return sdkClient;
     }
 
     @Override
@@ -197,7 +171,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                         IndexInsight insight = IndexInsight
                             .builder()
                             .index(sourceIndex)
-                            .taskType(getTaskType())
+                            .taskType(taskType)
                             .content(statisticalContent)
                             .status(IndexInsightTaskStatus.COMPLETED)
                             .lastUpdatedTime(Instant.now())

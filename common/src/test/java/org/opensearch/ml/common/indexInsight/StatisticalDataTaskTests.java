@@ -103,27 +103,27 @@ public class StatisticalDataTaskTests {
     }
 
     @Test
-    public void testGetTaskType() {
+    public void testTaskType() {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
-        assertEquals(MLIndexInsightType.STATISTICAL_DATA, task.getTaskType());
+        assertEquals(MLIndexInsightType.STATISTICAL_DATA, task.taskType);
     }
 
     @Test
-    public void testGetSourceIndex() {
+    public void testSourceIndex() {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
-        assertEquals("test-index", task.getSourceIndex());
+        assertEquals("test-index", task.sourceIndex);
     }
 
     @Test
-    public void testGetClient() {
+    public void testClient() {
         Client client = mock(Client.class);
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
 
-        assertEquals(client, task.getClient());
+        assertEquals(client, task.client);
     }
 
     @Test

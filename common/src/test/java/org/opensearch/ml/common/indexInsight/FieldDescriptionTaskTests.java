@@ -65,13 +65,13 @@ public class FieldDescriptionTaskTests {
     }
 
     @Test
-    public void testGetTaskType() {
-        assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, task.getTaskType());
+    public void testTaskType() {
+        assertEquals(MLIndexInsightType.FIELD_DESCRIPTION, task.taskType);
     }
 
     @Test
-    public void testGetSourceIndex() {
-        assertEquals("test-index", task.getSourceIndex());
+    public void testSourceIndex() {
+        assertEquals("test-index", task.sourceIndex);
     }
 
     @Test
@@ -82,8 +82,8 @@ public class FieldDescriptionTaskTests {
     }
 
     @Test
-    public void testGetClient() {
-        assertEquals(client, task.getClient());
+    public void testClient() {
+        assertEquals(client, task.client);
     }
 
     @Test
@@ -91,7 +91,7 @@ public class FieldDescriptionTaskTests {
         IndexInsightTask prerequisiteTask = task.createPrerequisiteTask(MLIndexInsightType.STATISTICAL_DATA);
 
         assertTrue(prerequisiteTask instanceof StatisticalDataTask);
-        assertEquals("test-index", prerequisiteTask.getSourceIndex());
+        assertEquals("test-index", ((StatisticalDataTask) prerequisiteTask).sourceIndex);
     }
 
     @Test

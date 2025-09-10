@@ -507,37 +507,14 @@ public class AbstractIndexInsightTaskTests {
 
     // Test implementation with prerequisites
     private static class TestIndexInsightTask extends AbstractIndexInsightTask {
-        private final Client client;
-        private final SdkClient sdkClient;
 
         TestIndexInsightTask(Client client, SdkClient sdkClient) {
-            this.client = client;
-            this.sdkClient = sdkClient;
-        }
-
-        @Override
-        public MLIndexInsightType getTaskType() {
-            return MLIndexInsightType.FIELD_DESCRIPTION;
-        }
-
-        @Override
-        public String getSourceIndex() {
-            return "test-index";
+            super(MLIndexInsightType.FIELD_DESCRIPTION, "test-index", client, sdkClient);
         }
 
         @Override
         public List<MLIndexInsightType> getPrerequisites() {
             return Arrays.asList(MLIndexInsightType.STATISTICAL_DATA);
-        }
-
-        @Override
-        public Client getClient() {
-            return client;
-        }
-
-        @Override
-        public SdkClient getSdkClient() {
-            return sdkClient;
         }
 
         @Override
@@ -553,37 +530,14 @@ public class AbstractIndexInsightTaskTests {
 
     // Simple task without prerequisites
     private static class SimpleTestTask extends AbstractIndexInsightTask {
-        private final Client client;
-        private final SdkClient sdkClient;
 
         SimpleTestTask(Client client, SdkClient sdkClient) {
-            this.client = client;
-            this.sdkClient = sdkClient;
-        }
-
-        @Override
-        public MLIndexInsightType getTaskType() {
-            return MLIndexInsightType.STATISTICAL_DATA;
-        }
-
-        @Override
-        public String getSourceIndex() {
-            return "test-index";
+            super(MLIndexInsightType.STATISTICAL_DATA, "test-index", client, sdkClient);
         }
 
         @Override
         public List<MLIndexInsightType> getPrerequisites() {
             return Arrays.asList();
-        }
-
-        @Override
-        public Client getClient() {
-            return client;
-        }
-
-        @Override
-        public SdkClient getSdkClient() {
-            return sdkClient;
         }
 
         @Override

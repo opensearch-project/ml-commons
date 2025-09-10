@@ -19,7 +19,6 @@ import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.STATISTIC
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -31,19 +30,20 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.indexInsight.FieldDescriptionTask;
 import org.opensearch.ml.common.indexInsight.IndexInsight;
 import org.opensearch.ml.common.indexInsight.IndexInsightTask;
 import org.opensearch.ml.common.indexInsight.IndexInsightTaskStatus;
+import org.opensearch.ml.common.indexInsight.LogRelatedIndexCheckTask;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
+import org.opensearch.ml.common.indexInsight.StatisticalDataTask;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -75,12 +75,6 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Mock
-    private ClusterService clusterService;
-
-    @Mock
-    private MLIndicesHandler mlIndicesHandler;
 
     GetIndexInsightTransportAction getIndexInsightTransportAction;
     MLIndexInsightGetRequest mlIndexInsightGetRequest;
@@ -269,12 +263,20 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testCreateTask() {
-        for (MLIndexInsightType taskType : List.of(FIELD_DESCRIPTION, STATISTICAL_DATA, LOG_RELATED_INDEX_CHECK)) {
-            MLIndexInsightGetRequest request = new MLIndexInsightGetRequest("test_index", taskType, null);
-            IndexInsightTask task = getIndexInsightTransportAction.createTask(request);
-            assertEquals("test_index", task.getSourceIndex());
-            assertEquals(taskType, task.getTaskType());
-        }
+        MLIndexInsightGetRequest statisticalRequest = new MLIndexInsightGetRequest("test_index", STATISTICAL_DATA, null);
+        IndexInsightTask statisticalTask = getIndexInsightTransportAction.createTask(statisticalRequest);
+        assertNotNull(statisticalTask);
+        assertTrue(statisticalTask instanceof StatisticalDataTask);
+
+        MLIndexInsightGetRequest fieldRequest = new MLIndexInsightGetRequest("test_index", FIELD_DESCRIPTION, null);
+        IndexInsightTask fieldTask = getIndexInsightTransportAction.createTask(fieldRequest);
+        assertNotNull(fieldTask);
+        assertTrue(fieldTask instanceof FieldDescriptionTask);
+
+        MLIndexInsightGetRequest logRequest = new MLIndexInsightGetRequest("test_index", LOG_RELATED_INDEX_CHECK, null);
+        IndexInsightTask logTask = getIndexInsightTransportAction.createTask(logRequest);
+        assertNotNull(logTask);
+        assertTrue(logTask instanceof LogRelatedIndexCheckTask);
     }
 
     @Test

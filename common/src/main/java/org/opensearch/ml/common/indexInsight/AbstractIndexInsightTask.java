@@ -48,6 +48,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
@@ -65,6 +66,18 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class AbstractIndexInsightTask implements IndexInsightTask {
 
+    protected final MLIndexInsightType taskType;
+    protected final String sourceIndex;
+    protected final Client client;
+    protected final SdkClient sdkClient;
+
+    protected AbstractIndexInsightTask(MLIndexInsightType taskType, String sourceIndex, Client client, SdkClient sdkClient) {
+        this.taskType = taskType;
+        this.sourceIndex = sourceIndex;
+        this.client = client;
+        this.sdkClient = sdkClient;
+    }
+
     /**
      * Execute the index insight task:
      * 1. Check if record exists in storage
@@ -79,8 +92,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             if (getResponse.isExists()) {
                 handleExistingDoc(getResponse.getSourceAsMap(), tenantId, listener);
             } else {
-                SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(getTaskType().name());
-                getSdkClient()
+                SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(taskType.name());
+                sdkClient
                     .searchDataObjectAsync(
                         SearchDataObjectRequest
                             .builder()
@@ -96,7 +109,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                         } else {
                             SearchResponse searchResponse = r.searchResponse();
                             SearchHit[] hits = searchResponse.getHits().getHits();
-                            Map<String, Object> mappedPatternSource = matchPattern(hits, getSourceIndex());
+                            Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
                             if (Objects.isNull(mappedPatternSource)) {
                                 beginGeneration(tenantId, listener);
                             } else {
@@ -159,13 +172,21 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
 
+        // If pattern result is not completed, fall back to normal generation
         if (status != IndexInsightTaskStatus.COMPLETED) {
-            // If pattern source is not completed, fall back to normal generation
             beginGeneration(tenantId, listener);
             return;
         }
 
-        // Handle pattern result
+        // If pattern result is completed but expired, fall back to normal generation
+        Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
+        long currentTime = Instant.now().toEpochMilli();
+        if (lastUpdateTime != null && (currentTime - lastUpdateTime) > INDEX_INSIGHT_UPDATE_INTERVAL) {
+            beginGeneration(tenantId, listener);
+            return;
+        }
+
+        // Pattern result is completed and valid
         handlePatternResult(patternSource, tenantId, listener);
     }
 
@@ -175,9 +196,9 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     protected void beginGeneration(String tenantId, ActionListener<IndexInsight> listener) {
         IndexInsight indexInsight = IndexInsight
             .builder()
-            .index(getSourceIndex())
+            .index(sourceIndex)
             .tenantId(tenantId)
-            .taskType(getTaskType())
+            .taskType(taskType)
             .status(IndexInsightTaskStatus.GENERATING)
             .lastUpdatedTime(Instant.now())
             .build();
@@ -209,8 +230,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     protected void saveResult(String content, String tenantId, ActionListener<IndexInsight> listener) {
         IndexInsight insight = IndexInsight
             .builder()
-            .index(getSourceIndex())
-            .taskType(getTaskType())
+            .index(sourceIndex)
+            .taskType(taskType)
             .content(content)
             .status(IndexInsightTaskStatus.COMPLETED)
             .lastUpdatedTime(Instant.now())
@@ -226,8 +247,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         IndexInsight indexInsight = IndexInsight
             .builder()
             .tenantId(tenantId)
-            .index(getSourceIndex())
-            .taskType(getTaskType())
+            .index(sourceIndex)
+            .taskType(taskType)
             .status(IndexInsightTaskStatus.FAILED)
             .build();
         writeIndexInsight(
@@ -241,14 +262,14 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
      * Generate document ID for current task
      */
     protected String generateDocId() {
-        return generateDocId(getTaskType());
+        return generateDocId(taskType);
     }
 
     /**
      * Generate document ID for specific task type
      */
     protected String generateDocId(MLIndexInsightType taskType) {
-        String combined = getSourceIndex() + "_" + taskType.toString();
+        String combined = sourceIndex + "_" + taskType.toString();
         return Hashing.sha256().hashString(combined, StandardCharsets.UTF_8).toString();
     }
 
@@ -278,8 +299,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
         IndexInsight insight = IndexInsight
             .builder()
-            .index(getSourceIndex())
-            .taskType(getTaskType())
+            .index(sourceIndex)
+            .taskType(taskType)
             .content((String) patternSource.get(IndexInsight.CONTENT_FIELD))
             .status(IndexInsightTaskStatus.COMPLETED)
             .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
@@ -289,8 +310,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     }
 
     private void getIndexInsight(String docId, String tenantId, ActionListener<GetResponse> listener) {
-        try (ThreadContext.StoredContext context = getClient().threadPool().getThreadContext().stashContext()) {
-            getSdkClient()
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
                 .getDataObjectAsync(
                     GetDataObjectRequest.builder().tenantId(tenantId).index(ML_INDEX_INSIGHT_STORAGE_INDEX).id(docId).build()
                 )
@@ -298,6 +319,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                     context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to get index insight document", cause);
                         listener.onFailure(cause);
                     } else {
                         try {
@@ -316,8 +338,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
 
     private void writeIndexInsight(IndexInsight indexInsight, String tenantId, ActionListener<Boolean> listener) {
         String docId = generateDocId();
-        try (ThreadContext.StoredContext context = getClient().threadPool().getThreadContext().stashContext()) {
-            getSdkClient()
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
                 .putDataObjectAsync(
                     PutDataObjectRequest
                         .builder()
@@ -331,6 +353,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                     context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to write index insight document", cause);
                         listener.onFailure(cause);
                     } else {
                         try {
@@ -464,7 +487,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                 String result = mt.getResult();
                 String response;
                 // response_filter is not configured in the LLM connector
-                if (result.startsWith("{") || result.startsWith("[")) {
+                if (result.startsWith("{")) {
                     Map<String, Object> data = gson.fromJson(result, Map.class);
                     response = extractModelResponse(data);
                 } else {
@@ -483,7 +506,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     }
 
     protected void handleError(String message, Exception e, String tenantId, ActionListener<IndexInsight> listener, boolean shouldStore) {
-        log.error(message, getSourceIndex(), e);
+        log.error(message, sourceIndex, e);
         if (shouldStore) {
             saveFailedStatus(tenantId, e, listener);
         } else {

@@ -39,14 +39,9 @@ import lombok.extern.log4j.Log4j2;
 public class FieldDescriptionTask extends AbstractIndexInsightTask {
 
     private static final int BATCH_SIZE = 50; // Hard-coded value for now
-    private final String sourceIndex;
-    private final Client client;
-    private final SdkClient sdkClient;
 
     public FieldDescriptionTask(String sourceIndex, Client client, SdkClient sdkClient) {
-        this.sourceIndex = sourceIndex;
-        this.client = client;
-        this.sdkClient = sdkClient;
+        super(MLIndexInsightType.FIELD_DESCRIPTION, sourceIndex, client, sdkClient);
     }
 
     @Override
@@ -88,16 +83,6 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
     }
 
     @Override
-    public MLIndexInsightType getTaskType() {
-        return MLIndexInsightType.FIELD_DESCRIPTION;
-    }
-
-    @Override
-    public String getSourceIndex() {
-        return sourceIndex;
-    }
-
-    @Override
     protected void handlePatternResult(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
         try {
             String patternContent = (String) patternSource.get(IndexInsight.CONTENT_FIELD);
@@ -106,7 +91,7 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
             // Get current index mapping
             GetMappingsRequest getMappingsRequest = new GetMappingsRequest().indices(sourceIndex);
 
-            getClient().admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
+            client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
                 try {
                     Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
                     if (mappings.isEmpty()) {
@@ -131,8 +116,8 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                     Long lastUpdateTime = (Long) patternSource.get(IndexInsight.LAST_UPDATE_FIELD);
                     IndexInsight insight = IndexInsight
                         .builder()
-                        .index(getSourceIndex())
-                        .taskType(getTaskType())
+                        .index(sourceIndex)
+                        .taskType(taskType)
                         .content(gson.toJson(filteredDescriptions))
                         .status(IndexInsightTaskStatus.COMPLETED)
                         .lastUpdatedTime(Instant.ofEpochMilli(lastUpdateTime))
@@ -152,16 +137,6 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
             log.error("Failed to filter field descriptions for index {}", sourceIndex, e);
             listener.onFailure(e);
         }
-    }
-
-    @Override
-    public Client getClient() {
-        return client;
-    }
-
-    @Override
-    public SdkClient getSdkClient() {
-        return sdkClient;
     }
 
     @Override
@@ -225,7 +200,7 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                 handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
             }
         } catch (InterruptedException e) {
-            log.error("Batch processing interrupted for index: {}", getSourceIndex());
+            log.error("Batch processing interrupted for index: {}", sourceIndex);
             handleError("Batch processing interrupted for index {}", e, tenantId, listener);
         }
     }
