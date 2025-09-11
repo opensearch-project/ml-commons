@@ -1222,7 +1222,7 @@ public class MLModelManager {
                 }
 
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-                setupMLGuard(modelId, mlModel.getGuardrails());
+                setupMLGuard(modelId, tenantId, mlModel.getGuardrails());
                 setupModelInterface(modelId, mlModel.getModelInterface());
                 deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
@@ -1373,7 +1373,7 @@ public class MLModelManager {
                 }
 
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-                setupMLGuard(modelId, mlModel.getGuardrails());
+                setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
                 setupModelInterface(modelId, mlModel.getModelInterface());
                 deployControllerWithDeployingModel(mlModel, eligibleNodeCount);
                 // check circuit breaker before deploying custom model chunks
@@ -1438,7 +1438,7 @@ public class MLModelManager {
     private void deployRemoteOrBuiltInModel(MLModel mlModel, Integer eligibleNodeCount, ActionListener<String> wrappedListener) {
         String modelId = mlModel.getModelId();
         setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-        setupMLGuard(modelId, mlModel.getGuardrails());
+        setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
         setupModelInterface(modelId, mlModel.getModelInterface());
         if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
             setupParamsAndPredictable(modelId, mlModel);
@@ -1461,12 +1461,12 @@ public class MLModelManager {
     }
 
     private void setupParamsAndPredictable(String modelId, MLModel mlModel) {
-        Map<String, Object> params = setUpParameterMap(modelId);
+        Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
         Predictable predictable = mlEngine.deploy(mlModel, params);
         modelCacheHelper.setPredictor(modelId, predictable);
     }
 
-    private Map<String, Object> setUpParameterMap(String modelId) {
+    private Map<String, Object> setUpParameterMap(String modelId, String tenantId) {
         TokenBucket rateLimiter = getRateLimiter(modelId);
         Map<String, TokenBucket> userRateLimiterMap = getUserRateLimiterMap(modelId);
         MLGuard mlGuard = getMLGuard(modelId);
@@ -1519,7 +1519,7 @@ public class MLModelManager {
                 int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
                 modelCacheHelper.setIsModelEnabled(modelId, mlModel.getIsEnabled());
                 setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
-                setupMLGuard(modelId, mlModel.getGuardrails());
+                setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
                 setupModelInterface(modelId, mlModel.getModelInterface());
                 if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
                     if (mlModel.getConnector() != null) {
@@ -1852,23 +1852,29 @@ public class MLModelManager {
      * @param guardrails guardrail for the model
      */
 
-    private void setupMLGuard(String modelId, Guardrails guardrails) {
+    private void setupMLGuard(String modelId, String tenantId, Guardrails guardrails) {
         if (guardrails != null) {
-            modelCacheHelper.setMLGuard(modelId, createMLGuard(guardrails, xContentRegistry, client));
+            modelCacheHelper.setMLGuard(modelId, createMLGuard(guardrails, xContentRegistry, client, sdkClient, tenantId));
         } else {
             modelCacheHelper.removeMLGuard(modelId);
         }
     }
 
-    private MLGuard createMLGuard(Guardrails guardrails, NamedXContentRegistry xContentRegistry, Client client) {
-
-        return new MLGuard(guardrails, xContentRegistry, client);
+    private MLGuard createMLGuard(
+        Guardrails guardrails,
+        NamedXContentRegistry xContentRegistry,
+        Client client,
+        SdkClient sdkClient,
+        String tenantId
+    ) {
+        return new MLGuard(guardrails, xContentRegistry, client, sdkClient, tenantId);
     }
 
     /**
      * Get ML guard with model id.
      *
      * @param modelId model id
+     *
      * @return a ML guard
      */
     public MLGuard getMLGuard(String modelId) {
