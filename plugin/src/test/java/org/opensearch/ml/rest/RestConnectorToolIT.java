@@ -6,18 +6,14 @@
 package org.opensearch.ml.rest;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2;
-import static org.opensearch.ml.rest.RestMLRemoteInferenceIT.createConnector;
 import static org.opensearch.ml.rest.RestMLRemoteInferenceIT.disableClusterConnectorAccessControl;
 
 import java.io.IOException;
-import java.util.Map;
 
 import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
-import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 
 public class RestConnectorToolIT extends RestBaseAgentToolsIT {
@@ -36,10 +32,7 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
         super.setUp();
         disableClusterConnectorAccessControl();
         Thread.sleep(20000);
-        Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2);
-        Map responseMap = parseResponseToMap(response);
         this.bedrockClaudeConnectorId = createBedrockClaudeConnector("execute");
-        // ;
         this.bedrockClaudeConnectorIdForPredict = createBedrockClaudeConnector("predict");
     }
 
