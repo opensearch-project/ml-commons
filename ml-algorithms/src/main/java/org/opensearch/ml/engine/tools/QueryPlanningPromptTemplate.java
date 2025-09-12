@@ -155,6 +155,7 @@ public class QueryPlanningPromptTemplate {
         + "Query Fields: ${parameters.query_fields:-}\n\n"
         + "==== OUTPUT ====\n"
         + "GIVE THE OUTPUT PART ONLY IN YOUR RESPONSE (a single JSON object)\n"
+        + "Use this template provided by the user as reference to generate the query: ${parameters.template}\n\n"
         + "Output:";
 
     public static final String DEFAULT_USER_PROMPT = PROMPT_PREFIX
@@ -164,4 +165,105 @@ public class QueryPlanningPromptTemplate {
         + EXAMPLES
         + "\n\n"
         + PROMPT_SUFFIX;
+
+    // Template selection prompt
+
+    public static final String TEMPLATE_SELECTION_SYSTEM_PROMPT = "==== PURPOSE ====\n"
+        + "You are an OpenSearch Search Template selector. Given a natural language question, a list of search template IDs and search template descriptions, choose the search template ID which is most related to the given question.\n\n";
+
+    public static final String TEMPLATE_SELECTION_GOAL = "Given:\n"
+        + "1) A natural-language question from the user.\n"
+        + "2) A catalog of OpenSearch templates, each with:\n"
+        + "    - id (string, case-sensitive)\n"
+        + "    - description (1–3 sentences)\n"
+        + "Return: the SINGLE id of the best-matching template.";
+
+    public static final String TEMPLATE_SELECTION_OUTPUT_RULES = "- Output ONLY the template id.\n"
+        + "- No quotes, no backticks, no punctuation, no prefix/suffix, no extra words.\n"
+        + "- No spaces or newlines before/after. Output must be exactly one of the provided ids.\n"
+        + "- Do not ask questions or explain.\n"
+        + "- Think internally; do NOT reveal your reasoning.";
+
+    public static final String TEMPLATE_SELECTION_CRITERIA = "(apply in order)\n"
+        + "1) INTENT MATCH: Identify the user’s primary intent (e.g., product search/browse, analytical reporting, trend/sales analysis, inventory, support lookup). Prefer templates whose descriptions explicitly support that intent.\n"
+        + "2) SIGNAL ALIGNMENT: Count strong lexical/semantic matches between the question and each template’s description/placeholders.\n"
+        + "   - Attribute filters (brand, category, size, color, price, rating, etc.) → favor product/item search templates.\n"
+        + "   - Metrics (sales value, revenue, units sold, conversion, time windows) → favor analytics/aggregation templates.\n"
+        + "   - Temporal phrases (“last week”, “by month”, “trending”, “top sellers”) → favor templates with date/time and aggregations.\n"
+        + "   - Opinion/quality words (“highly rated”, “best”, “top reviewed”) → favor templates with rating/review placeholders.\n"
+        + "3) SPECIFICITY: If multiple templates match, prefer the one whose description/placeholders are the most specific to the question’s entities and constraints.\n"
+        + "4) TIE-BREAK:\n"
+        + "   - Prefer templates intended for the user’s domain (e.g., “products” vs “sales analytics”).\n"
+        + "   - Prefer general-purpose search over analytics if the question asks to “find/search/browse” items; prefer analytics if it asks for “most sold/revenue/total/average”.";
+
+    public static final String TEMPLATE_SELECTION_VALIDATION =
+        "- Your output MUST be exactly one of the provided template ids (regex: ^[A-Za-z0-9_-]+$).\n"
+            + "- If no perfect match exists, pick the closest by the criteria above. Never output “none” or invent an id.";
+
+    public static final String TEMPLATE_SELECTION_INPUTS = "question: ${parameters.query_text}\n"
+        + "templates: ${parameters.search_templates}";
+
+    public static final String TEMPLATE_SELECTION_EXAMPLES = "Example A: \n"
+        + "question: 'what shoes are highly rated'\n"
+        + "templates:\n"
+        + "[\n"
+        + "{'id':'product-search-template','description':'Searches products in an e-commerce store.'},\n"
+        + "{'id':'sales-value-analysis-template','description':'Aggregates sales value for top-selling products.'}\n"
+        + "]\n"
+        + "Example output : 'product-search-template'";
+
+    public static final String TEMPLATE_SELECTION_USER_PROMPT = "==== GOAL ====\n"
+        + TEMPLATE_SELECTION_GOAL
+        + "\n"
+        + "==== OUTPUT RULES ====\n"
+        + TEMPLATE_SELECTION_OUTPUT_RULES
+        + "\n"
+        + "==== SELECTION CRITERIA ====\n"
+        + TEMPLATE_SELECTION_CRITERIA
+        + "\n"
+        + "==== VALIDATION ====\n"
+        + TEMPLATE_SELECTION_VALIDATION
+        + "\n"
+        + "==== EXAMPLES ====\n"
+        + TEMPLATE_SELECTION_EXAMPLES
+        + "\n"
+        + "==== INPUTS ====\n"
+        + TEMPLATE_SELECTION_INPUTS;
+
+    public static final String DEFAULT_SEARCH_TEMPLATE = "{"
+        + "\"from\": {{from}}{{^from}}0{{/from}},"
+        + "\"size\": {{size}}{{^size}}10{{/size}},"
+        + "\n"
+        + "\"query\": {"
+        + "  \"bool\": {"
+        + "    \"should\": ["
+        + "      {"
+        + "        \"multi_match\": {"
+        + "          \"query\": \"{{lex_query}}\","
+        + "          \"fields\": {{#lex_fields}}{{{lex_fields}}}{{/lex_fields}}{{^lex_fields}}[\"*^1.0\"]{{/lex_fields}},"
+        + "          \"type\": \"{{#lex_type}}{{lex_type}}{{/lex_type}}{{^lex_type}}best_fields{{/lex_type}}\","
+        + "          \"operator\": \"{{#lex_operator}}{{lex_operator}}{{/lex_operator}}{{^lex_operator}}or{{/lex_operator}}\","
+        + "          \"boost\": {{#lex_boost}}{{lex_boost}}{{/lex_boost}}{{^lex_boost}}1.0{{/lex_boost}}"
+        + "        }"
+        + "      }{{#sem_enabled}},"
+        + "      {"
+        + "        \"neural\": {"
+        + "          \"{{sem_field}}\": {"
+        + "            \"query_text\": \"{{sem_query_text}}\","
+        + "            \"model_id\": \"{{sem_model_id}}\","
+        + "            \"k\": {{#sem_k}}{{sem_k}}{{/sem_k}}{{^sem_k}}150{{/sem_k}},"
+        + "            \"boost\": {{#sem_boost}}{{sem_boost}}{{/sem_boost}}{{^sem_boost}}1.5{{/sem_boost}}"
+        + "          }"
+        + "        }"
+        + "      }{{/sem_enabled}}"
+        + "    ],"
+        + "    \"filter\": {{#filters}}{{{filters}}}{{/filters}}{{^filters}}[]{{/filters}},"
+        + "    \"minimum_should_match\": 1"
+        + "  }"
+        + "},"
+        + "\n"
+        + "\"sort\": {{#sort}}{{{sort}}}{{/sort}}{{^sort}}[{ \"_score\": { \"order\": \"desc\" } }]{{/sort}},"
+        + "\n"
+        + "\"track_total_hits\": {{#track_total_hits}}{{track_total_hits}}{{/track_total_hits}}{{^track_total_hits}}false{{/track_total_hits}}"
+        + "}";
 }
