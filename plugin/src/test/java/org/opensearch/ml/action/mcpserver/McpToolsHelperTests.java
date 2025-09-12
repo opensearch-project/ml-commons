@@ -67,7 +67,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     private ToolFactoryWrapper toolFactoryWrapper;
     @SuppressWarnings("rawtypes")
     private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("ListIndexTool", ListIndexTool.Factory.getInstance());
-    private McpToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpToolsHelper;
 
     @Before
     public void setUp() throws Exception {
@@ -83,7 +83,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
             .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
-        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
+        mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
 
         // Default mock behavior for search operations
         doAnswer(invocationOnMock -> {
@@ -106,7 +106,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     @Test
     public void test_searchAllToolsWithVersion_success() {
         ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllToolsWithVersion(actionListener);
+        mcpToolsHelper.searchAllToolsWithVersion(actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Tuple<McpToolRegisterInput, Long>>> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -116,7 +116,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     @Test
     public void test_searchAllTools_success() {
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        mcpToolsHelper.searchAllTools(actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -126,7 +126,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     @Test
     public void test_searchToolsWithVersion_success() {
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
+        mcpToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -147,7 +147,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
 
         ActionListener<SearchResponse> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchToolsWithPrimaryTermAndSeqNo(Arrays.asList("ListIndexTool"), actionListener);
+        mcpToolsHelper.searchToolsWithPrimaryTermAndSeqNo(Arrays.asList("ListIndexTool"), actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -165,7 +165,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
 
         ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllToolsWithVersion(actionListener);
+        mcpToolsHelper.searchAllToolsWithVersion(actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -176,7 +176,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void test_searchAllToolsWithVersion_clientException() {
         when(client.threadPool()).thenThrow(new RuntimeException("unexpected error"));
         ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllToolsWithVersion(actionListener);
+        mcpToolsHelper.searchAllToolsWithVersion(actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -187,7 +187,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void test_searchAllToolsWithVersion_parseIOException() throws IOException {
         setupMalformedJsonResponse();
         ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllToolsWithVersion(actionListener);
+        mcpToolsHelper.searchAllToolsWithVersion(actionListener);
         verifyIOException(actionListener);
     }
 
@@ -200,7 +200,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
 
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        mcpToolsHelper.searchAllTools(actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -211,7 +211,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void test_searchAllTools_clientException() {
         when(client.threadPool()).thenThrow(new RuntimeException("Client error"));
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        mcpToolsHelper.searchAllTools(actionListener);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -222,7 +222,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void test_searchAllTools_parseIOException() throws IOException {
         setupMalformedJsonResponse();
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        mcpToolsHelper.searchAllTools(actionListener);
         verifyIOException(actionListener);
     }
 
@@ -230,7 +230,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     public void test_searchToolsWithVersion_parseIOException() throws IOException {
         setupMalformedJsonResponse();
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
+        mcpToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
         verifyIOException(actionListener);
     }
 
@@ -239,7 +239,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     @Test
     public void test_createToolSpecification_success() {
         McpToolBaseInput tool = new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "Test tool", Map.of(), Map.of(), null, null);
-        var result = mcpStatelessToolsHelper.createToolSpecification(tool);
+        var result = mcpToolsHelper.createToolSpecification(tool);
         assertNotNull(result);
     }
 
@@ -248,14 +248,14 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         Map<String, Object> attributes = Map
             .of("input_schema", Map.of("type", "object", "properties", Map.of("test", Map.of("type", "string"))));
         McpToolBaseInput tool = new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "Test tool", Map.of(), attributes, null, null);
-        var result = mcpStatelessToolsHelper.createToolSpecification(tool);
+        var result = mcpToolsHelper.createToolSpecification(tool);
         assertNotNull(result);
     }
 
     @Test
     public void test_createToolSpecification_factoryNotFound() {
         McpToolBaseInput tool = new McpToolRegisterInput("NonExistentTool", "NonExistentTool", "Test tool", Map.of(), Map.of(), null, null);
-        assertThrows(RuntimeException.class, () -> mcpStatelessToolsHelper.createToolSpecification(tool));
+        assertThrows(RuntimeException.class, () -> mcpToolsHelper.createToolSpecification(tool));
     }
 
     // ==================== HELPER METHODS ====================

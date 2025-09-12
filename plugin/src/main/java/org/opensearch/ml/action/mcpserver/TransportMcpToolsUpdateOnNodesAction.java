@@ -45,7 +45,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
     Client client;
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
-    McpToolsHelper mcpStatelessToolsHelper;
+    McpToolsHelper mcpToolsHelper;
     McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
@@ -57,7 +57,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         ToolFactoryWrapper toolFactoryWrapper,
-        McpToolsHelper mcpStatelessToolsHelper,
+        McpToolsHelper mcpToolsHelper,
         McpStatelessServerHolder mcpStatelessServerHolder
     ) {
         super(
@@ -77,7 +77,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
-        this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
+        this.mcpToolsHelper = mcpToolsHelper;
         this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
@@ -123,7 +123,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
                 .subscribe();
             return mcpStatelessServerHolder
                 .getMcpStatelessAsyncServerInstance()
-                .addTool(mcpStatelessToolsHelper.createToolSpecification(tool))
+                .addTool(mcpToolsHelper.createToolSpecification(tool))
                 .doOnSuccess(x -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
         }).doOnError(e -> {
             log

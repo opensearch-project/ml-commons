@@ -29,7 +29,7 @@ import reactor.core.publisher.Mono;
 @Log4j2
 public class McpStatelessServerHolder {
 
-    private final McpToolsHelper mcpStatelessToolsHelper;
+    private final McpToolsHelper mcpToolsHelper;
     private final Client client;
     private final ThreadPool threadPool;
     private static final int SYNC_MCP_TOOLS_JOB_INTERVAL = 10;
@@ -38,8 +38,8 @@ public class McpStatelessServerHolder {
     private static volatile OpenSearchMcpStatelessServerTransportProvider mcpStatelessServerTransportProvider;
     private static Boolean initialized = false;
 
-    public McpStatelessServerHolder(McpToolsHelper mcpStatelessToolsHelper, Client client, ThreadPool threadPool) {
-        this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
+    public McpStatelessServerHolder(McpToolsHelper mcpToolsHelper, Client client, ThreadPool threadPool) {
+        this.mcpToolsHelper = mcpToolsHelper;
         this.client = client;
         this.threadPool = threadPool;
     }
@@ -115,7 +115,7 @@ public class McpStatelessServerHolder {
                 r.forEach((key, value) -> {
                     if (!IN_MEMORY_MCP_TOOLS.containsKey(key)) {
                         getMcpStatelessAsyncServerInstance()
-                            .addTool(mcpStatelessToolsHelper.createToolSpecification(value.v1()))
+                            .addTool(mcpToolsHelper.createToolSpecification(value.v1()))
                             .doOnSuccess(y -> IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
                             .doOnError(x -> log.error("Failed to auto load tool: {}", value.v1().getName(), x))
                             .subscribe();
@@ -125,7 +125,7 @@ public class McpStatelessServerHolder {
                             log.warn("Failed to remove old tool version: {}", key, e);
                             return Mono.empty();
                         })
-                            .then(getMcpStatelessAsyncServerInstance().addTool(mcpStatelessToolsHelper.createToolSpecification(value.v1())))
+                            .then(getMcpStatelessAsyncServerInstance().addTool(mcpToolsHelper.createToolSpecification(value.v1())))
                             .doOnSuccess(x -> {
                                 IN_MEMORY_MCP_TOOLS.put(key, value.v2());
                                 log.info("Successfully updated tool: {} to version: {}", key, value.v2());
@@ -140,7 +140,7 @@ public class McpStatelessServerHolder {
                 log.error("Failed to auto load all MCP tools to MCP server", e);
                 restoreListener.onFailure(e);
             });
-            mcpStatelessToolsHelper.searchAllToolsWithVersion(searchListener);
+            mcpToolsHelper.searchAllToolsWithVersion(searchListener);
         } catch (Exception e) {
             log.error("Failed to auto load all MCP tools to MCP server", e);
             listener.onFailure(e);

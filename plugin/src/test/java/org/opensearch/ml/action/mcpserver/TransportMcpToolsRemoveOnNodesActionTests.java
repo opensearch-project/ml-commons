@@ -76,8 +76,6 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
 
     private TransportMcpToolsRemoveOnNodesAction action;
 
-    private McpToolsHelper mcpStatelessToolsHelper;
-
     @Mock
     private McpStatelessServerHolder mcpStatelessServerHolder;
 
@@ -108,9 +106,6 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
             xContentRegistry,
             mcpStatelessServerHolder
         );
-        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
-
-        // Note: McpStatelessServerHolder is now instance-based, no static init needed
     }
 
     @Test

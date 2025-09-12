@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common.transport.mcpserver.requests.server;
 
 import java.io.ByteArrayInputStream;
@@ -43,7 +48,7 @@ public class MLMcpServerRequest extends ActionRequest {
                 return new MLMcpServerRequest(in);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLUpdateModelRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLMcpServerRequest", e);
         }
     }
 
