@@ -5,9 +5,12 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
+import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_SERVER_NOT_READY_ERROR;
+import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 
 import java.util.HashMap;
@@ -65,9 +68,9 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             if (transportProvider == null) {
                 log.error("MCP transport provider not ready - server may not be properly initialized");
                 Map<String, Object> errorMessage = new HashMap<>();
-                errorMessage.put("message", "MCP handler not ready - server initialization failed");
-                errorMessage.put("id", null);
-                errorMessage.put("errorCode", JSON_RPC_SERVER_NOT_READY_ERROR);
+                errorMessage.put(MESSAGE_FIELD, "MCP handler not ready - server initialization failed");
+                errorMessage.put(ID_FIELD, null);
+                errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_SERVER_NOT_READY_ERROR);
                 listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
                 return;
             }
@@ -78,9 +81,9 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             } catch (Exception e) {
                 log.error("Invalid JSON-RPC message: {}", e.getMessage());
                 Map<String, Object> errorMessage = new HashMap<>();
-                errorMessage.put("message", "Parse error: " + e.getMessage());
-                errorMessage.put("id", null);
-                errorMessage.put("errorCode", JSON_RPC_PARSE_ERROR);
+                errorMessage.put(MESSAGE_FIELD, "Parse error: " + e.getMessage());
+                errorMessage.put(ID_FIELD, null);
+                errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_PARSE_ERROR);
                 listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
                 return;
             }
@@ -100,26 +103,25 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
                 } catch (Exception e) {
                     log.error("Failed to serialize/send response", e);
                     Map<String, Object> errorMessage = new HashMap<>();
-                    errorMessage.put("message", "Response serialization failed: " + e.getMessage());
-                    errorMessage.put("id", id);
-                    errorMessage.put("errorCode", JSON_RPC_INTERNAL_ERROR);
+                    errorMessage.put(MESSAGE_FIELD, "Response serialization failed: " + e.getMessage());
+                    errorMessage.put(ID_FIELD, id);
+                    errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_INTERNAL_ERROR);
                     listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
                 }
             }, error -> {
                 log.error("Failed to handle MCP request", error);
                 Map<String, Object> errorMessage = new HashMap<>();
-                errorMessage.put("message", "Internal server error: " + error.getMessage());
-                errorMessage.put("id", id);
-                errorMessage.put("errorCode", JSON_RPC_INTERNAL_ERROR);
+                errorMessage.put(MESSAGE_FIELD, "Internal server error: " + error.getMessage());
+                errorMessage.put(ID_FIELD, id);
+                errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_INTERNAL_ERROR);
                 listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
-                return;
             });
         } catch (Exception e) {
             log.error("Failed to handle stateless MCP request", e);
             Map<String, Object> errorMessage = new HashMap<>();
-            errorMessage.put("message", "Internal server error: " + e.getMessage());
-            errorMessage.put("id", null);
-            errorMessage.put("errorCode", JSON_RPC_INTERNAL_ERROR);
+            errorMessage.put(MESSAGE_FIELD, "Internal server error: " + e.getMessage());
+            errorMessage.put(ID_FIELD, null);
+            errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_INTERNAL_ERROR);
             listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
         }
     }
