@@ -68,7 +68,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
     @Mock
     private DiscoveryNodeHelper nodeFilter;
     @Mock
-    private McpToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpToolsHelper;
     @Mock
     private Task task;
     @Mock
@@ -117,7 +117,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpStatelessToolsHelper,
+            mcpToolsHelper,
             mlFeatureEnabledSetting
         );
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
@@ -147,7 +147,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-                mcpStatelessToolsHelper,
+                mcpToolsHelper,
                 mlFeatureEnabledSetting
         );
         action.doExecute(task, mock(MLMcpToolsUpdateNodesRequest.class), listener);
@@ -310,7 +310,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
                 listener.onFailure(new OpenSearchException("Network issue"));
             }
             return null;
-        }).when(mcpStatelessToolsHelper).searchToolsWithPrimaryTermAndSeqNo(any(), any());
+        }).when(mcpToolsHelper).searchToolsWithPrimaryTermAndSeqNo(any(), any());
     }
 
     private McpToolRegisterInput getRegisterMcpTool() {

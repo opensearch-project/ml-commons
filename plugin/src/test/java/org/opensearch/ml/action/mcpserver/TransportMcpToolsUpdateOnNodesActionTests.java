@@ -72,7 +72,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("SearchIndexTool", SearchIndexTool.Factory.getInstance());
 
-    private McpToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpToolsHelper;
 
     @Mock
     private McpStatelessServerHolder mcpStatelessServerHolder;
@@ -91,7 +91,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
         MockitoAnnotations.openMocks(this);
 
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.clear();
-        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
+        mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("test-cluster"));
         when(clusterService.localNode().getId()).thenReturn("local-node");
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
@@ -108,7 +108,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
             client,
             xContentRegistry,
             toolFactoryWrapper,
-            mcpStatelessToolsHelper,
+            mcpToolsHelper,
             mcpStatelessServerHolder
         );
 

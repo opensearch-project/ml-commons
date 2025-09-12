@@ -70,7 +70,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private McpToolsHelper mcpStatelessToolsHelper = spy(new McpToolsHelper(client, toolFactoryWrapper));
+    private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, toolFactoryWrapper));
 
     private TransportMcpToolsListAction transportMcpToolsListAction;
 
@@ -87,14 +87,14 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
             ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(0);
             actionListener.onResponse(getRegisterMcpTools());
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllTools(isA(ActionListener.class));
+        }).when(mcpToolsHelper).searchAllTools(isA(ActionListener.class));
         transportMcpToolsListAction = new TransportMcpToolsListAction(
             transportService,
             clusterService,
             actionFilters,
             xContentRegistry,
             nodeFilter,
-            mcpStatelessToolsHelper,
+            mcpToolsHelper,
             mlFeatureEnabledSetting
         );
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
@@ -116,7 +116,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
             actionFilters,
             xContentRegistry,
             nodeFilter,
-            mcpStatelessToolsHelper,
+            mcpToolsHelper,
             mlFeatureEnabledSetting
         );
         ActionRequest nodesRequest = mock(ActionRequest.class);
@@ -134,7 +134,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
             ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(0);
             actionListener.onFailure(new RuntimeException("Network issue"));
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllTools(isA(ActionListener.class));
+        }).when(mcpToolsHelper).searchAllTools(isA(ActionListener.class));
         ActionRequest nodesRequest = mock(ActionRequest.class);
         transportMcpToolsListAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

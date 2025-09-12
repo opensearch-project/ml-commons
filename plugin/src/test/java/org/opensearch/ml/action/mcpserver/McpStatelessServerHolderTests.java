@@ -59,7 +59,7 @@ import reactor.core.publisher.Mono;
 public class McpStatelessServerHolderTests extends OpenSearchTestCase {
 
     @Mock
-    private McpToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpToolsHelper;
     @Mock
     private Client client;
     @Mock
@@ -82,7 +82,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
         TestHelper.mockClientStashContext(client, settings);
         when(threadPool.schedule(any(Runnable.class), any(TimeValue.class), anyString())).thenReturn(null);
 
-        holder = new McpStatelessServerHolder(mcpStatelessToolsHelper, client, threadPool);
+        holder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
     }
 
     @After
@@ -135,7 +135,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onResponse(true);
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         holder.startSyncMcpToolsJob();
 
@@ -148,7 +148,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onResponse(true);
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         CountDownLatch latch = new CountDownLatch(5);
         AtomicReference<OpenSearchMcpStatelessServerTransportProvider> providerRef = new AtomicReference<>();
@@ -179,7 +179,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onResponse(true);
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         OpenSearchMcpStatelessServerTransportProvider provider1 = holder.getMcpStatelessServerTransportProvider();
         OpenSearchMcpStatelessServerTransportProvider provider2 = holder.getMcpStatelessServerTransportProvider();
@@ -204,7 +204,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
         holder.initialize();
 
         // Should not call searchAllToolsWithVersion when already initialized
-        verify(mcpStatelessToolsHelper, times(0)).searchAllToolsWithVersion(any());
+        verify(mcpToolsHelper, times(0)).searchAllToolsWithVersion(any());
     }
 
     @Test
@@ -281,7 +281,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> listener = invocationOnMock.getArgument(0);
             listener.onResponse(new java.util.HashMap<>());
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         ActionListener<Boolean> listener = mock(ActionListener.class);
         holder.autoLoadAllMcpTools(listener);
@@ -294,7 +294,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> listener = invocationOnMock.getArgument(0);
             listener.onFailure(new OpenSearchException("Network issue"));
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         ActionListener<Boolean> listener = mock(ActionListener.class);
         holder.autoLoadAllMcpTools(listener);
@@ -339,7 +339,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             toolsWithVersion.put(tool.getName(), Tuple.tuple(tool, 1L));
             listener.onResponse(toolsWithVersion);
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         // Clear the in-memory tools to simulate new tools
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.clear();
@@ -375,7 +375,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
             toolsWithVersion.put(tool.getName(), Tuple.tuple(tool, 2L)); // Newer version
             listener.onResponse(toolsWithVersion);
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         // Pre-populate with older version
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
@@ -428,7 +428,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
 
             listener.onResponse(toolsWithVersion);
             return null;
-        }).when(mcpStatelessToolsHelper).searchAllToolsWithVersion(any());
+        }).when(mcpToolsHelper).searchAllToolsWithVersion(any());
 
         // Pre-populate with some tools
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L); // Will be updated

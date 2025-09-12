@@ -1,7 +1,13 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.mcpserver;
 
-import static org.opensearch.ml.common.CommonValue.*;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
+import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
+import static org.opensearch.ml.common.CommonValue.JSON_RPC_SERVER_NOT_READY_ERROR;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 
 import java.util.HashMap;

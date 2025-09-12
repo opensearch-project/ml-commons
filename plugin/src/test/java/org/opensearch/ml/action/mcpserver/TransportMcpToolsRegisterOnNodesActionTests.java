@@ -72,7 +72,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     private Map<String, Tool.Factory> toolFactories = ImmutableMap
         .of("ListIndexTool", ListIndexTool.Factory.getInstance(), "AgentTool", AgentTool.Factory.getInstance());
 
-    private McpToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpToolsHelper;
 
     @Mock
     private McpStatelessServerHolder mcpStatelessServerHolder;
@@ -83,7 +83,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
+        mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("clusterName"));
         when(clusterService.localNode().getId()).thenReturn("localNodeId");
@@ -95,7 +95,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             client,
             xContentRegistry,
             toolFactoryWrapper,
-            mcpStatelessToolsHelper,
+            mcpToolsHelper,
             mcpStatelessServerHolder
         );
 
@@ -168,7 +168,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             .of(
                 new McpToolRegisterInput("AgentTool", "AgentTool", "test agent tool", Map.of("agent_id", "test_agent_id"), null, null, null)
             );
-        McpStatelessServerFeatures.AsyncToolSpecification specification = mcpStatelessToolsHelper.createToolSpecification(mcpTools.get(0));
+        McpStatelessServerFeatures.AsyncToolSpecification specification = mcpToolsHelper.createToolSpecification(mcpTools.get(0));
 
         // Create a new mock server for this test
         McpStatelessAsyncServer testServer = mock(McpStatelessAsyncServer.class);
