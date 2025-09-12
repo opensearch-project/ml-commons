@@ -7,7 +7,6 @@ package org.opensearch.ml.action.mcpserver;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,7 +22,6 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.collect.Tuple;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
@@ -40,7 +38,6 @@ import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolReg
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -54,17 +51,13 @@ import reactor.core.publisher.Mono;
  * Helper for creating stateless MCP tool specifications.
  */
 @Log4j2
-public class McpStatelessToolsHelper {
+public class McpToolsHelper {
     public static final int MAX_TOOL_NUMBER = 1000;
-    private static final int SYNC_MCP_TOOLS_JOB_INTERVAL = 10;
-
     private final Client client;
-    private final ThreadPool threadPool;
     private final ToolFactoryWrapper toolFactoryWrapper;
 
-    public McpStatelessToolsHelper(Client client, ThreadPool threadPool, ToolFactoryWrapper toolFactoryWrapper) {
+    public McpToolsHelper(Client client, ToolFactoryWrapper toolFactoryWrapper) {
         this.client = client;
-        this.threadPool = threadPool;
         this.toolFactoryWrapper = toolFactoryWrapper;
     }
 
@@ -186,63 +179,6 @@ public class McpStatelessToolsHelper {
         SearchRequest searchRequest = buildSearchRequest(toolNames);
         searchRequest.source().seqNoAndPrimaryTerm(true);
         client.search(searchRequest, listener);
-    }
-
-    /**
-     * Start the sync job for auto-reloading MCP tools
-     */
-    public void startSyncMcpToolsJob() {
-        ActionListener<Boolean> listener = ActionListener
-            .wrap(r -> { log.debug("Auto reload mcp tools schedule job run successfully!"); }, e -> {
-                log.error(e.getMessage(), e);
-            });
-        threadPool
-            .schedule(() -> autoLoadAllMcpTools(listener), TimeValue.timeValueSeconds(SYNC_MCP_TOOLS_JOB_INTERVAL), GENERAL_THREAD_POOL);
-    }
-
-    /**
-     * Auto-load all MCP tools from the index
-     */
-    public void autoLoadAllMcpTools(ActionListener<Boolean> listener) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<Boolean> restoreListener = ActionListener.runBefore(listener, context::restore);
-            ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> searchListener = ActionListener.wrap(r -> {
-                r.forEach((key, value) -> {
-                    if (!McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(key)) {
-                        McpStatelessServerHolder
-                            .getMcpStatelessAsyncServerInstance()
-                            .addTool(createToolSpecification(value.v1()))
-                            .doOnSuccess(y -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
-                            .doOnError(x -> log.error("Failed to auto load tool: {}", value.v1().getName(), x))
-                            .subscribe();
-                    } else if (McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.get(key) < value.v2()) {
-                        // Chain the operations to avoid race conditions
-                        McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().removeTool(key).onErrorResume(e -> {
-                            log.warn("Failed to remove old tool version: {}", key, e);
-                            return Mono.empty();
-                        })
-                            .then(
-                                McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().addTool(createToolSpecification(value.v1()))
-                            )
-                            .doOnSuccess(x -> {
-                                McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2());
-                                log.info("Successfully updated tool: {} to version: {}", key, value.v2());
-                            })
-                            .doOnError(x -> log.error("Failed to update tool: {} to version: {}", value.v1().getName(), value.v2(), x))
-                            .subscribe();
-                    }
-                });
-                startSyncMcpToolsJob();
-                restoreListener.onResponse(true);
-            }, e -> {
-                log.error("Failed to auto load all MCP tools to MCP server", e);
-                restoreListener.onFailure(e);
-            });
-            searchAllToolsWithVersion(searchListener);
-        } catch (Exception e) {
-            log.error("Failed to auto load all MCP tools to MCP server", e);
-            listener.onFailure(e);
-        }
     }
 
     public void searchAllToolsWithVersion(ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> listener) {

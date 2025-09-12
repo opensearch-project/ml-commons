@@ -625,6 +625,60 @@ public class TestHelper {
         when(client.threadPool()).thenReturn(threadPool);
     }
 
+    /**
+     * Resets McpStatelessServerHolder singleton state between tests.
+     * Uses reflection to clear static fields, ensuring clean test isolation.
+     * This method should be called in both @Before and @After methods of test classes
+     * that test McpStatelessServerHolder functionality.
+     * 
+     * This method is designed to be safe to call multiple times and will not throw exceptions,
+     * ensuring test cleanup is always possible even if the class structure changes.
+     */
+    public static void resetMcpStatelessServerHolder() {
+        try {
+            Class<?> holderClass = Class.forName("org.opensearch.ml.action.mcpserver.McpStatelessServerHolder");
+
+            // Reset initialized flag
+            try {
+                java.lang.reflect.Field initializedField = holderClass.getDeclaredField("initialized");
+                initializedField.setAccessible(true);
+                initializedField.set(null, false);
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue with other fields
+            }
+
+            // Reset server instance
+            try {
+                java.lang.reflect.Field serverField = holderClass.getDeclaredField("mcpStatelessAsyncServer");
+                serverField.setAccessible(true);
+                serverField.set(null, null);
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue with other fields
+            }
+
+            // Reset transport provider
+            try {
+                java.lang.reflect.Field providerField = holderClass.getDeclaredField("mcpStatelessServerTransportProvider");
+                providerField.setAccessible(true);
+                providerField.set(null, null);
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue with other fields
+            }
+
+            // Reset in-memory tools map
+            try {
+                java.lang.reflect.Field toolsField = holderClass.getDeclaredField("IN_MEMORY_MCP_TOOLS");
+                toolsField.setAccessible(true);
+                toolsField.set(null, new java.util.concurrent.ConcurrentHashMap<>());
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue
+            }
+        } catch (Exception e) {
+            // Class might not exist or be accessible - this is expected in some test environments
+            // Continue silently to ensure tests don't fail due to reflection issues
+        }
+    }
+
     public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {
         if (size == 0) {
             return new SearchResponse(

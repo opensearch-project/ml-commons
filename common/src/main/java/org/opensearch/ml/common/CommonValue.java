@@ -111,4 +111,9 @@ public class CommonValue {
 
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
+
+    // JSON-RPC Error Codes
+    public static final int JSON_RPC_PARSE_ERROR = -32700;
+    public static final int JSON_RPC_INTERNAL_ERROR = -32603;
+    public static final int JSON_RPC_SERVER_NOT_READY_ERROR = -32000;
 }

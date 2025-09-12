@@ -45,6 +45,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
     ThreadPool threadPool;
     Client client;
     NamedXContentRegistry xContentRegistry;
+    McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
     public TransportMcpToolsRemoveOnNodesAction(
@@ -53,7 +54,8 @@ public class TransportMcpToolsRemoveOnNodesAction extends
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        McpStatelessServerHolder mcpStatelessServerHolder
     ) {
         super(
             MLMcpToolsRemoveOnNodesAction.NAME,
@@ -71,6 +73,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
         this.threadPool = threadPool;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
     @Override
@@ -102,7 +105,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
         errors.set(new HashSet<>());
         Flux.fromStream(tools.stream()).flatMap(toolName -> {
             if (McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(toolName)) {
-                McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().removeTool(toolName).onErrorResume(e -> {
+                mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance().removeTool(toolName).onErrorResume(e -> {
                     log
                         .error(
                             "Failed to remove mcp tool on node: {} with error: {}",

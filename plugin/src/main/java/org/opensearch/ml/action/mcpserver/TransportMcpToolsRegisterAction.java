@@ -63,7 +63,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
     DiscoveryNodeHelper nodeFilter;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MLIndicesHandler mlIndicesHandler;
-    private final McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private final McpToolsHelper mcpStatelessToolsHelper;
 
     @Inject
     public TransportMcpToolsRegisterAction(
@@ -75,7 +75,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLIndicesHandler mlIndicesHandler,
-        McpStatelessToolsHelper mcpStatelessToolsHelper,
+        McpToolsHelper mcpStatelessToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsRegisterAction.NAME, transportService, actionFilters, MLMcpToolsRegisterNodesRequest::new);

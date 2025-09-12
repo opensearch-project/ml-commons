@@ -68,7 +68,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
     @Mock
     private DiscoveryNodeHelper nodeFilter;
     @Mock
-    private McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpStatelessToolsHelper;
     @Mock
     private Task task;
     @Mock

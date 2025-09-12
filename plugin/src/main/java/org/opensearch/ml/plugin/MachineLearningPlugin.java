@@ -178,13 +178,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
+import org.opensearch.ml.common.transport.mcpserver.action.*;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
@@ -466,7 +460,8 @@ public class MachineLearningPlugin extends Plugin
     private Map<String, Tool.Factory> toolFactories;
     private ScriptService scriptService;
     private Encryptor encryptor;
-    private McpStatelessToolsHelper statelessToolsHelper;
+    private McpToolsHelper statelessToolsHelper;
+    private McpStatelessServerHolder statelessServerHolder;
 
     public MachineLearningPlugin() {}
 
@@ -550,7 +545,8 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLMcpToolsRemoveOnNodesAction.INSTANCE, TransportMcpToolsRemoveOnNodesAction.class),
                 new ActionHandler<>(MLMcpToolsListAction.INSTANCE, TransportMcpToolsListAction.class),
                 new ActionHandler<>(MLMcpToolsUpdateAction.INSTANCE, TransportMcpToolsUpdateAction.class),
-                new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class)
+                new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class),
+                new ActionHandler<>(MLMcpServerAction.INSTANCE, TransportMcpServerAction.class)
             );
     }
 
@@ -831,8 +827,8 @@ public class MachineLearningPlugin extends Plugin
             MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
         }
 
-        statelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
-        McpStatelessServerHolder.init(statelessToolsHelper);
+        statelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
+        statelessServerHolder = new McpStatelessServerHolder(statelessToolsHelper, client, threadPool);
 
         return ImmutableList
             .of(
@@ -864,7 +860,8 @@ public class MachineLearningPlugin extends Plugin
                 cmHandler,
                 sdkClient,
                 toolFactoryWrapper,
-                statelessToolsHelper
+                statelessToolsHelper,
+                statelessServerHolder
             );
     }
 
@@ -953,7 +950,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
         RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
-        RestMcpStatelessStreamingAction restMcpStatelessStreamingAction = new RestMcpStatelessStreamingAction(mlFeatureEnabledSetting);
+        RestMcpServerAction restMcpServerAction = new RestMcpServerAction(mlFeatureEnabledSetting);
         RestMLMcpToolsRegisterAction restMLRegisterMcpToolsAction = new RestMLMcpToolsRegisterAction(
             toolFactories,
             clusterService,
@@ -1025,7 +1022,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLGetToolAction,
                 restMLGetConfigAction,
                 restMLCancelBatchJobAction,
-                restMcpStatelessStreamingAction,
+                restMcpServerAction,
                 restMLRegisterMcpToolsAction,
                 restMLRemoveMcpToolsAction,
                 restMLListMcpToolsAction,
