@@ -44,16 +44,12 @@ public class OpenSearchMcpStatelessServerTransportProvider implements McpStatele
     /**
      * Simple request handler - let the MCP framework do all the work
      */
-    public Mono<McpSchema.JSONRPCMessage> handleRequest(String requestBody) {
+    public Mono<McpSchema.JSONRPCMessage> handleRequest(McpSchema.JSONRPCMessage message) {
         try {
             if (mcpHandler == null) {
                 log.error("MCP handler is null - server may not be properly initialized");
                 return Mono.error(new RuntimeException("MCP handler not initialized"));
             }
-
-            // Parse the message
-            McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(objectMapper, requestBody);
-
             // Let MCP framework handle everything else!
             if (message instanceof McpSchema.JSONRPCRequest request) {
                 log.debug("Handling JSON-RPC request: {}", request.method());
@@ -67,10 +63,5 @@ public class OpenSearchMcpStatelessServerTransportProvider implements McpStatele
             log.error("Failed to handle MCP request: {}", e.getMessage(), e);
             return Mono.error(e);
         }
-    }
-
-    public boolean isHandlerReady() {
-        boolean ready = mcpHandler != null;
-        return ready;
     }
 }

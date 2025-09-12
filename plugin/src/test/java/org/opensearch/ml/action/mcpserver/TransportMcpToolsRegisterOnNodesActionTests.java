@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
@@ -45,7 +46,9 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import io.modelcontextprotocol.server.McpStatelessAsyncServer;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
+import reactor.core.publisher.Mono;
 
 public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestCase {
     @Mock
@@ -69,7 +72,10 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     private Map<String, Tool.Factory> toolFactories = ImmutableMap
         .of("ListIndexTool", ListIndexTool.Factory.getInstance(), "AgentTool", AgentTool.Factory.getInstance());
 
-    private McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpStatelessToolsHelper;
+
+    @Mock
+    private McpStatelessServerHolder mcpStatelessServerHolder;
 
     private TransportMcpToolsRegisterOnNodesAction action;
 
@@ -77,7 +83,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        mcpStatelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
+        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("clusterName"));
         when(clusterService.localNode().getId()).thenReturn("localNodeId");
@@ -89,11 +95,11 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             client,
             xContentRegistry,
             toolFactoryWrapper,
-            mcpStatelessToolsHelper
+            mcpStatelessToolsHelper,
+            mcpStatelessServerHolder
         );
 
-        // Initialize the McpStatelessServerHolder for testing
-        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
+        // Note: McpStatelessServerHolder is now instance-based, no static init needed
     }
 
     @Test
@@ -143,7 +149,14 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     @Test
     public void testNodeOperation() {
         List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
-        McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().removeTool("ListIndexTool").subscribe();
+
+        // Create a new mock server for this test
+        McpStatelessAsyncServer testServer = mock(McpStatelessAsyncServer.class);
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(testServer);
+
+        // Mock the addTool method to return a Mono that completes successfully
+        when(testServer.addTool(any())).thenReturn(Mono.empty());
+
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
         MLMcpToolsRegisterNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getCreated());
@@ -156,7 +169,14 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
                 new McpToolRegisterInput("AgentTool", "AgentTool", "test agent tool", Map.of("agent_id", "test_agent_id"), null, null, null)
             );
         McpStatelessServerFeatures.AsyncToolSpecification specification = mcpStatelessToolsHelper.createToolSpecification(mcpTools.get(0));
-        McpStatelessServerHolder.getMcpStatelessAsyncServerInstance().addTool(specification).subscribe();
+
+        // Create a new mock server for this test
+        McpStatelessAsyncServer testServer = mock(McpStatelessAsyncServer.class);
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(testServer);
+
+        // Mock the addTool method to return a Mono that errors
+        when(testServer.addTool(any())).thenReturn(Mono.error(new RuntimeException("Failed to add tool")));
+
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
 
         action.nodeOperation(request);

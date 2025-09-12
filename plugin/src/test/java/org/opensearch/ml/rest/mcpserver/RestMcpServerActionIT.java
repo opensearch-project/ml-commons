@@ -21,7 +21,7 @@ import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
 
-public class RestMcpStatelessStreamingActionIT extends MLCommonsRestTestCase {
+public class RestMcpServerActionIT extends MLCommonsRestTestCase {
 
     @Before
     public void setup() throws IOException {
@@ -38,33 +38,16 @@ public class RestMcpStatelessStreamingActionIT extends MLCommonsRestTestCase {
         assertEquals(200, response.getStatusLine().getStatusCode());
 
         // Register ListIndexTool
-        String toolRegistrationBody =
-            """
-                {
-                    "tools": [
-                        {
-                            "name": "ListIndexTool",
-                            "type": "ListIndexTool",
-                            "description": "A tool for listing OpenSearch indices",
-                            "attributes": {
-                                "input_schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "indices": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            },
-                                            "description": "OpenSearch index name list, separated by comma. for example: [\\"index1\\", \\"index2\\"], use empty array [] to list all indices in the cluster"
-                                        }
-                                    },
-                                    "additionalProperties": false
-                                }
-                            }
-                        }
-                    ]
-                }
-                """;
+        String toolRegistrationBody = """
+            {
+                "tools": [
+                    {
+                        "name": "ListIndexTool",
+                        "type": "ListIndexTool"
+                       }
+                ]
+            }
+            """;
 
         Response registerResponse = TestHelper
             .makeRequest(
@@ -127,7 +110,7 @@ public class RestMcpStatelessStreamingActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                "/_plugins/_ml/mcp/stream",
+                "/_plugins/_ml/mcp",
                 null,
                 initializeRequest,
                 ImmutableList.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
@@ -155,7 +138,7 @@ public class RestMcpStatelessStreamingActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                "/_plugins/_ml/mcp/stream",
+                "/_plugins/_ml/mcp",
                 null,
                 initializedNotification,
                 ImmutableList.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
@@ -179,7 +162,7 @@ public class RestMcpStatelessStreamingActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                "/_plugins/_ml/mcp/stream",
+                "/_plugins/_ml/mcp",
                 null,
                 toolsListRequest,
                 ImmutableList.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
@@ -214,7 +197,7 @@ public class RestMcpStatelessStreamingActionIT extends MLCommonsRestTestCase {
             .makeRequest(
                 client(),
                 "POST",
-                "/_plugins/_ml/mcp/stream",
+                "/_plugins/_ml/mcp",
                 null,
                 toolCallRequest,
                 ImmutableList.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))

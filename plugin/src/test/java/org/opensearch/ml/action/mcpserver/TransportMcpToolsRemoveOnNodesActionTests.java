@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
@@ -46,6 +48,7 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import io.modelcontextprotocol.server.McpStatelessAsyncServer;
 import reactor.core.publisher.Mono;
 
 public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCase {
@@ -73,7 +76,13 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
 
     private TransportMcpToolsRemoveOnNodesAction action;
 
-    private McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpStatelessToolsHelper;
+
+    @Mock
+    private McpStatelessServerHolder mcpStatelessServerHolder;
+
+    @Mock
+    private McpStatelessAsyncServer mcpStatelessAsyncServer;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -85,18 +94,23 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("clusterName"));
         when(clusterService.localNode().getId()).thenReturn("localNodeId");
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(mcpStatelessAsyncServer);
+
+        // Mock McpStatelessAsyncServer methods
+        when(mcpStatelessAsyncServer.removeTool(anyString())).thenReturn(Mono.empty());
+        when(mcpStatelessAsyncServer.addTool(any())).thenReturn(Mono.empty());
         action = new TransportMcpToolsRemoveOnNodesAction(
             transportService,
             mock(ActionFilters.class),
             clusterService,
             threadPool,
             client,
-            xContentRegistry
+            xContentRegistry,
+            mcpStatelessServerHolder
         );
-        mcpStatelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
+        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
 
-        // Initialize the McpStatelessServerHolder for testing
-        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
+        // Note: McpStatelessServerHolder is now instance-based, no static init needed
     }
 
     @Test
@@ -143,13 +157,9 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
     public void testNodeOperation() {
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
-        McpStatelessServerHolder
-            .getMcpStatelessAsyncServerInstance()
-            .addTool(mcpStatelessToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexTool")))
-            .onErrorResume(e -> {
-                return Mono.empty();
-            })
-            .subscribe();
+        // Mock the server instance call
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance())
+            .thenReturn(mock(io.modelcontextprotocol.server.McpStatelessAsyncServer.class));
         MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getDeleted());
     }
@@ -170,12 +180,12 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
 
-        // Add the tool first
-        McpStatelessServerHolder
-            .getMcpStatelessAsyncServerInstance()
-            .addTool(mcpStatelessToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexTool")))
-            .onErrorResume(e -> Mono.empty())
-            .subscribe();
+        // Create a new mock server for this test
+        McpStatelessAsyncServer testServer = mock(McpStatelessAsyncServer.class);
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(testServer);
+
+        // Mock the removeTool method to return a Mono that completes successfully
+        when(testServer.removeTool(anyString())).thenReturn(Mono.empty());
 
         // Wait a bit for the tool to be added
         try {
@@ -199,6 +209,13 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         List<String> errorTools = List.of("NonExistentTool");
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(errorTools);
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("NonExistentTool", 1L);
+
+        // Create a new mock server for this test
+        McpStatelessAsyncServer testServer = mock(McpStatelessAsyncServer.class);
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(testServer);
+
+        // Mock the removeTool method to return a Mono that errors
+        when(testServer.removeTool(anyString())).thenReturn(Mono.error(new RuntimeException("Tool not found")));
 
         // This should trigger the onErrorResume block since the tool doesn't exist in the server
         // and eventually throw FailedNodeException

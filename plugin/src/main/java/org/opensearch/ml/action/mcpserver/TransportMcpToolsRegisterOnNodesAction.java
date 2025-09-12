@@ -44,7 +44,8 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     Client client;
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
-    McpStatelessToolsHelper mcpstatelessToolsHelper;
+    McpToolsHelper mcpstatelessToolsHelper;
+    McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
     public TransportMcpToolsRegisterOnNodesAction(
@@ -55,7 +56,8 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         ToolFactoryWrapper toolFactoryWrapper,
-        McpStatelessToolsHelper mcpstatelessToolsHelper
+        McpToolsHelper mcpstatelessToolsHelper,
+        McpStatelessServerHolder mcpStatelessServerHolder
     ) {
         super(
             MLMcpToolsRegisterOnNodesAction.NAME,
@@ -75,6 +77,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
         this.mcpstatelessToolsHelper = mcpstatelessToolsHelper;
+        this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
     @Override
@@ -112,7 +115,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
             if (!McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(tool.getName())) {
-                return McpStatelessServerHolder
+                return mcpStatelessServerHolder
                     .getMcpStatelessAsyncServerInstance()
                     .addTool(mcpstatelessToolsHelper.createToolSpecification(tool))
                     .doOnSuccess(x -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));

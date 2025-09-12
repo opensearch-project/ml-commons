@@ -45,7 +45,8 @@ public class TransportMcpToolsUpdateOnNodesAction extends
     Client client;
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
-    McpStatelessToolsHelper mcpStatelessToolsHelper;
+    McpToolsHelper mcpStatelessToolsHelper;
+    McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
     public TransportMcpToolsUpdateOnNodesAction(
@@ -56,7 +57,8 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         ToolFactoryWrapper toolFactoryWrapper,
-        McpStatelessToolsHelper mcpStatelessToolsHelper
+        McpToolsHelper mcpStatelessToolsHelper,
+        McpStatelessServerHolder mcpStatelessServerHolder
     ) {
         super(
             MLMcpToolsUpdateOnNodesAction.NAME,
@@ -76,6 +78,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
         this.mcpStatelessToolsHelper = mcpStatelessToolsHelper;
+        this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
     @Override
@@ -113,12 +116,12 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
             McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
-            McpStatelessServerHolder
+            mcpStatelessServerHolder
                 .getMcpStatelessAsyncServerInstance()
                 .removeTool(tool.getName())
                 .onErrorResume(e -> Mono.empty())
                 .subscribe();
-            return McpStatelessServerHolder
+            return mcpStatelessServerHolder
                 .getMcpStatelessAsyncServerInstance()
                 .addTool(mcpStatelessToolsHelper.createToolSpecification(tool))
                 .doOnSuccess(x -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));

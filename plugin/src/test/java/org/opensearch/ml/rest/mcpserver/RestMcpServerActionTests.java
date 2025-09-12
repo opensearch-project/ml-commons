@@ -6,12 +6,16 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.After;
 import org.junit.Before;
@@ -25,9 +29,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.action.mcpserver.McpStatelessServerHolder;
-import org.opensearch.ml.action.mcpserver.McpStatelessToolsHelper;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
+import org.opensearch.ml.common.transport.mcpserver.responses.server.MLMcpServerResponse;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -37,17 +41,14 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
 
-public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
+public class RestMcpServerActionTests extends OpenSearchTestCase {
 
-    private RestMcpStatelessStreamingAction restMCPStatelessStreamingAction;
+    private RestMcpServerAction restMCPStatelessStreamingAction;
     private ThreadPool threadPool;
     private NodeClient client;
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
-    @Mock
-    private McpStatelessToolsHelper mcpStatelessToolsHelper;
 
     @Mock
     private RestChannel channel;
@@ -57,19 +58,10 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
         super.setUp();
         MockitoAnnotations.openMocks(this);
 
-        resetSingletonState();
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mcpStatelessToolsHelper).autoLoadAllMcpTools(any());
-
-        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
-
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restMCPStatelessStreamingAction = new RestMcpStatelessStreamingAction(mlFeatureEnabledSetting);
+
+        restMCPStatelessStreamingAction = new RestMcpServerAction(mlFeatureEnabledSetting);
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
@@ -80,26 +72,6 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
         client.close();
     }
 
-    private void resetSingletonState() {
-        try {
-            java.lang.reflect.Field statelessToolsHelperField = McpStatelessServerHolder.class.getDeclaredField("statelessToolsHelper");
-            statelessToolsHelperField.setAccessible(true);
-            statelessToolsHelperField.set(null, null);
-
-            java.lang.reflect.Field mcpStatelessAsyncServerField = McpStatelessServerHolder.class
-                .getDeclaredField("mcpStatelessAsyncServer");
-            mcpStatelessAsyncServerField.setAccessible(true);
-            mcpStatelessAsyncServerField.set(null, null);
-
-            java.lang.reflect.Field mcpStatelessServerTransportProviderField = McpStatelessServerHolder.class
-                .getDeclaredField("mcpStatelessServerTransportProvider");
-            mcpStatelessServerTransportProviderField.setAccessible(true);
-            mcpStatelessServerTransportProviderField.set(null, null);
-        } catch (Exception e) {
-            // Continue if reflection fails
-        }
-    }
-
     @Test
     public void test_routes() {
         assertTrue(restMCPStatelessStreamingAction.routes().stream().anyMatch(route -> route.getMethod() == RestRequest.Method.POST));
@@ -108,21 +80,21 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_getName() {
-        assertEquals("ml_stateless_mcp_action", restMCPStatelessStreamingAction.getName());
+        assertEquals("ml_mcp_server_action", restMCPStatelessStreamingAction.getName());
     }
 
     @Test
     public void test_statelessEndpoint() {
-        assertEquals("/_plugins/_ml/mcp/stream", RestMcpStatelessStreamingAction.STATELESS_ENDPOINT);
+        assertEquals("/_plugins/_ml/mcp", RestMcpServerAction.MCP_SERVER_ENDPOINT);
     }
 
     @Test
     public void test_prepareRequest_featureFlagDisabled() throws Exception {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
-        RestMcpStatelessStreamingAction messageStreamingAction = new RestMcpStatelessStreamingAction(mlFeatureEnabledSetting);
+        RestMcpServerAction messageStreamingAction = new RestMcpServerAction(mlFeatureEnabledSetting);
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .build();
         
         try {
@@ -137,7 +109,7 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
     public void test_prepareRequest_emptyBody() throws Exception {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(new BytesArray(""), null)
             .build();
 
@@ -149,7 +121,7 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
     public void test_prepareRequest_nullContent() throws Exception {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(null, null)
             .build();
 
@@ -159,36 +131,62 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_prepareRequest_invalidJson() throws Exception {
+        // Mock the transport action to return an error response
+        doAnswer(invocation -> {
+            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
+            Map<String, Object> errorMap = new HashMap<>();
+            errorMap.put("id", null);
+            errorMap.put("errorCode", -32700);
+            errorMap.put("message", "Parse error: invalid json");
+            listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
+            return null;
+        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(new BytesArray("invalid json"), null)
             .build();
 
         executeRestChannelConsumer(request);
-        verifyErrorResponse("Parse error");
+        verifyErrorResponse("Parse error: invalid json");
     }
 
     @Test
     public void test_prepareRequest_malformedJsonRpc() throws Exception {
+        // Mock the transport action to return an error response
+        doAnswer(invocation -> {
+            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
+            Map<String, Object> errorMap = new HashMap<>();
+            errorMap.put("id", 1);
+            errorMap.put("errorCode", -32700);
+            errorMap.put("message", "Parse error: malformed JSON-RPC");
+            listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
+            return null;
+        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(new BytesArray("{\"jsonrpc\":\"1.0\",\"id\":1}"), null)
             .build();
 
-        try {
-            executeRestChannelConsumer(request);
-        } catch (Exception e) {
-            assertTrue(e.getMessage().contains("MCP handler not ready") || e.getMessage().contains("server initialization failed"));
-        }
+        executeRestChannelConsumer(request);
+        verifyErrorResponse("Parse error: malformed JSON-RPC");
     }
 
     @Test
     public void test_prepareRequest_notificationMessage() throws Exception {
+        // Mock the transport action to return a success response for notification
+        doAnswer(invocation -> {
+            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
+            listener.onResponse(new MLMcpServerResponse(true, null, null));
+            return null;
+        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"method\":\"test\",\"params\":{}}"), null)
             .build();
 
@@ -202,26 +200,72 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_prepareRequest_validRequest() throws Exception {
+        // Mock the transport action to return a success response
+        doAnswer(invocation -> {
+            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
+            listener.onResponse(new MLMcpServerResponse(true, "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"success\"}", null));
+            return null;
+        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
             .build();
 
-        try {
-            executeRestChannelConsumer(request);
-        } catch (Exception e) {
-            assertTrue(
-                e.getMessage().contains("MCP handler not ready")
-                    || e.getMessage().contains("server initialization failed")
-                    || e.getMessage().contains("Missing handler")
-            );
-        }
+        executeRestChannelConsumer(request);
+        ArgumentCaptor<BytesRestResponse> responseCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
+        verify(channel).sendResponse(responseCaptor.capture());
+        BytesRestResponse response = responseCaptor.getValue();
+        assertEquals(RestStatus.OK, response.status());
+        assertTrue(response.content().utf8ToString().contains("success"));
+    }
+
+    @Test
+    public void test_prepareRequest_transportProviderNotReady() throws Exception {
+        // Mock the transport action to return an error response for transport provider not ready
+        doAnswer(invocation -> {
+            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
+            Map<String, Object> errorMap = new HashMap<>();
+            errorMap.put("id", 1);
+            errorMap.put("errorCode", -32000);
+            errorMap.put("message", "MCP handler not ready - server initialization failed");
+            listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
+            return null;
+        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
+            .build();
+
+        executeRestChannelConsumer(request);
+        verifyErrorResponse("MCP handler not ready - server initialization failed");
+    }
+
+    @Test
+    public void test_prepareRequest_transportActionFailure() throws Exception {
+        // Mock the transport action to throw an exception
+        doAnswer(invocation -> {
+            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Transport action failed"));
+            return null;
+        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
+            .build();
+
+        executeRestChannelConsumer(request);
+        verifyErrorResponse("Internal server error: Transport action failed");
     }
 
     @Test
     public void test_sendErrorResponse() throws Exception {
-        java.lang.reflect.Method sendErrorResponseMethod = RestMcpStatelessStreamingAction.class
+        java.lang.reflect.Method sendErrorResponseMethod = RestMcpServerAction.class
             .getDeclaredMethod("sendErrorResponse", RestChannel.class, Object.class, int.class, String.class);
         sendErrorResponseMethod.setAccessible(true);
 
@@ -236,7 +280,7 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_sendErrorResponse_withNullId() throws Exception {
-        java.lang.reflect.Method sendErrorResponseMethod = RestMcpStatelessStreamingAction.class
+        java.lang.reflect.Method sendErrorResponseMethod = RestMcpServerAction.class
             .getDeclaredMethod("sendErrorResponse", RestChannel.class, Object.class, int.class, String.class);
         sendErrorResponseMethod.setAccessible(true);
 
@@ -250,24 +294,10 @@ public class RestMcpStatelessStreamingActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_prepareRequest_transportProviderNotReady() throws Exception {
-        resetSingletonState();
-
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withMethod(RestRequest.Method.POST)
-            .withPath(RestMcpStatelessStreamingAction.STATELESS_ENDPOINT)
-            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
-            .build();
-
-        executeRestChannelConsumer(request);
-        verifyErrorResponse("Internal server error");
-    }
-
-    @Test
     public void test_sendErrorResponse_exceptionHandling() throws Exception {
         doThrow(new RuntimeException("Channel error")).when(channel).sendResponse(any());
 
-        java.lang.reflect.Method sendErrorResponseMethod = RestMcpStatelessStreamingAction.class
+        java.lang.reflect.Method sendErrorResponseMethod = RestMcpServerAction.class
             .getDeclaredMethod("sendErrorResponse", RestChannel.class, Object.class, int.class, String.class);
         sendErrorResponseMethod.setAccessible(true);
 

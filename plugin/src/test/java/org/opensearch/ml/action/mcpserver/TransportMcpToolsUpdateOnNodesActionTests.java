@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
@@ -45,6 +47,9 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import io.modelcontextprotocol.server.McpStatelessAsyncServer;
+import reactor.core.publisher.Mono;
+
 public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCase {
 
     @Mock
@@ -67,7 +72,13 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("SearchIndexTool", SearchIndexTool.Factory.getInstance());
 
-    private McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpStatelessToolsHelper;
+
+    @Mock
+    private McpStatelessServerHolder mcpStatelessServerHolder;
+
+    @Mock
+    private McpStatelessAsyncServer mcpStatelessAsyncServer;
 
     private TransportMcpToolsUpdateOnNodesAction action;
 
@@ -80,10 +91,15 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
         MockitoAnnotations.openMocks(this);
 
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.clear();
-        mcpStatelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
+        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("test-cluster"));
         when(clusterService.localNode().getId()).thenReturn("local-node");
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
+        when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(mcpStatelessAsyncServer);
+
+        // Mock McpStatelessAsyncServer methods
+        when(mcpStatelessAsyncServer.removeTool(anyString())).thenReturn(Mono.empty());
+        when(mcpStatelessAsyncServer.addTool(any())).thenReturn(Mono.empty());
         action = new TransportMcpToolsUpdateOnNodesAction(
             transportService,
             mock(ActionFilters.class),
@@ -92,11 +108,11 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
             client,
             xContentRegistry,
             toolFactoryWrapper,
-            mcpStatelessToolsHelper
+            mcpStatelessToolsHelper,
+            mcpStatelessServerHolder
         );
 
-        // Initialize the McpStatelessServerHolder for testing
-        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
+        // Note: McpStatelessServerHolder is now instance-based, no static init needed
     }
 
     @Test

@@ -71,7 +71,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    private final McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private final McpToolsHelper mcpStatelessToolsHelper;
 
     @Inject
     public TransportMcpToolsUpdateAction(
@@ -82,7 +82,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
         Client client,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
-        McpStatelessToolsHelper mcpStatelessToolsHelper,
+        McpToolsHelper mcpStatelessToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsUpdateAction.NAME, transportService, actionFilters, MLMcpToolsUpdateNodesRequest::new);

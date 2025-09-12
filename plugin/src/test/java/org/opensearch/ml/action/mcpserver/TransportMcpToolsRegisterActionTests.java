@@ -88,7 +88,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private McpStatelessToolsHelper mcpStatelessToolsHelper = spy(new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper));
+    private McpToolsHelper mcpStatelessToolsHelper = spy(new McpToolsHelper(client, toolFactoryWrapper));
 
     private TransportMcpToolsRegisterAction transportMcpToolsRegisterAction;
 

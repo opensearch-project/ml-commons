@@ -35,6 +35,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -52,24 +53,21 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
-public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
+public class McpToolsHelperTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
-    @Mock
-    private ThreadPool threadPool;
     @Mock
     private ClusterService clusterService;
     @Mock
     private ToolFactoryWrapper toolFactoryWrapper;
     @SuppressWarnings("rawtypes")
     private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("ListIndexTool", ListIndexTool.Factory.getInstance());
-    private McpStatelessToolsHelper mcpStatelessToolsHelper;
+    private McpToolsHelper mcpStatelessToolsHelper;
 
     @Before
     public void setUp() throws Exception {
@@ -77,7 +75,7 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
 
         // Reset the singleton state before each test to ensure test isolation
-        resetSingletonState();
+        TestHelper.resetMcpStatelessServerHolder();
 
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
@@ -85,10 +83,7 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
             .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
-        mcpStatelessToolsHelper = new McpStatelessToolsHelper(client, threadPool, toolFactoryWrapper);
-
-        // Initialize McpStatelessServerHolder for testing
-        McpStatelessServerHolder.init(mcpStatelessToolsHelper);
+        mcpStatelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
 
         // Default mock behavior for search operations
         doAnswer(invocationOnMock -> {
@@ -101,36 +96,9 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
 
     @After
     public void tearDown() throws Exception {
-        // Clean up the in-memory tools map
-        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.clear();
+        // Reset all static fields to ensure clean test isolation
+        TestHelper.resetMcpStatelessServerHolder();
         super.tearDown();
-    }
-
-    /**
-     * Resets McpStatelessServerHolder singleton state between tests.
-     * Uses reflection to clear static fields, ensuring clean test isolation.
-     */
-    private void resetSingletonState() {
-        try {
-            // Reset statelessToolsHelper static field to null
-            java.lang.reflect.Field statelessToolsHelperField = McpStatelessServerHolder.class.getDeclaredField("statelessToolsHelper");
-            statelessToolsHelperField.setAccessible(true);
-            statelessToolsHelperField.set(null, null);
-
-            // Reset mcpStatelessAsyncServer static field to null
-            java.lang.reflect.Field mcpStatelessAsyncServerField = McpStatelessServerHolder.class
-                .getDeclaredField("mcpStatelessAsyncServer");
-            mcpStatelessAsyncServerField.setAccessible(true);
-            mcpStatelessAsyncServerField.set(null, null);
-
-            // Reset mcpStatelessServerTransportProvider static field to null
-            java.lang.reflect.Field mcpStatelessServerTransportProviderField = McpStatelessServerHolder.class
-                .getDeclaredField("mcpStatelessServerTransportProvider");
-            mcpStatelessServerTransportProviderField.setAccessible(true);
-            mcpStatelessServerTransportProviderField.set(null, null);
-        } catch (Exception e) {
-            // If reflection fails, continue anyway - tests will still work but may have state pollution
-        }
     }
 
     // ==================== SEARCH TESTS ====================
@@ -215,6 +183,57 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
         assertEquals("unexpected error", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
+    public void test_searchAllToolsWithVersion_parseIOException() throws IOException {
+        setupMalformedJsonResponse();
+        ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
+        mcpStatelessToolsHelper.searchAllToolsWithVersion(actionListener);
+        verifyIOException(actionListener);
+    }
+
+    @Test
+    public void test_searchAllTools_searchException() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
+            listener.onFailure(new OpenSearchException("Search failed"));
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to search mcp tools index with error: Search failed", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_searchAllTools_clientException() {
+        when(client.threadPool()).thenThrow(new RuntimeException("Client error"));
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Client error", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_searchAllTools_parseIOException() throws IOException {
+        setupMalformedJsonResponse();
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpStatelessToolsHelper.searchAllTools(actionListener);
+        verifyIOException(actionListener);
+    }
+
+    @Test
+    public void test_searchToolsWithVersion_parseIOException() throws IOException {
+        setupMalformedJsonResponse();
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
+        mcpStatelessToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
+        verifyIOException(actionListener);
+    }
+
     // ==================== TOOL SPECIFICATION TESTS ====================
 
     @Test
@@ -237,120 +256,6 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
     public void test_createToolSpecification_factoryNotFound() {
         McpToolBaseInput tool = new McpToolRegisterInput("NonExistentTool", "NonExistentTool", "Test tool", Map.of(), Map.of(), null, null);
         assertThrows(RuntimeException.class, () -> mcpStatelessToolsHelper.createToolSpecification(tool));
-    }
-
-    // ==================== AUTO LOAD TESTS ====================
-
-    @Test
-    public void test_autoLoadAllMcpTools_success() {
-        // Mock the search to return empty results to avoid server creation
-        doAnswer(invocationOnMock -> {
-            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
-            SearchResponse searchResponse = mock(SearchResponse.class);
-            when(searchResponse.getHits()).thenReturn(SearchHits.empty());
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.autoLoadAllMcpTools(listener);
-        verify(listener).onResponse(true);
-    }
-
-    @Test
-    public void test_autoLoadAllMcpTools_searchException() {
-        doAnswer(invocationOnMock -> {
-            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
-            listener.onFailure(new OpenSearchException("Network issue"));
-            return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.autoLoadAllMcpTools(listener);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to search mcp tools index with error: Network issue", argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void test_autoLoadAllMcpTools_clientException() {
-        when(client.threadPool()).thenThrow(new RuntimeException("unexpected error"));
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.autoLoadAllMcpTools(listener);
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("unexpected error", argumentCaptor.getValue().getMessage());
-    }
-
-    // ==================== TOOL LOADING SCENARIOS ====================
-
-    @Test
-    public void test_autoLoadAllMcpTools_withNewTools() {
-        // Mock the search to return tools that are not in memory
-        doAnswer(invocationOnMock -> {
-            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
-            SearchResponse searchResponse = createSearchResultResponse();
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-
-        // Clear the in-memory tools to simulate new tools
-        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.clear();
-
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.autoLoadAllMcpTools(listener);
-        verify(listener).onResponse(true);
-    }
-
-    @Test
-    public void test_autoLoadAllMcpTools_withToolVersionUpdate() {
-        // Mock the search to return tools with newer versions
-        doAnswer(invocationOnMock -> {
-            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
-            SearchResponse searchResponse = createSearchResultResponseWithVersion(2L);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-
-        // Pre-populate with older version
-        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
-
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.autoLoadAllMcpTools(listener);
-        verify(listener).onResponse(true);
-    }
-
-    @Test
-    public void test_autoLoadAllMcpTools_withMixedToolStates() {
-        // Mock the search to return multiple tools with different states
-        doAnswer(invocationOnMock -> {
-            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
-            SearchResponse searchResponse = createSearchResultResponseWithMultipleTools();
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-
-        // Pre-populate with some tools
-        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L); // Will be updated
-
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-        mcpStatelessToolsHelper.autoLoadAllMcpTools(listener);
-        verify(listener).onResponse(true);
-    }
-
-    // ==================== UTILITY TESTS ====================
-
-    @Test
-    public void test_startSyncMcpToolsJob() {
-        // This method schedules a job, so we just verify it doesn't throw an exception
-        try {
-            mcpStatelessToolsHelper.startSyncMcpToolsJob();
-            // If we get here, no exception was thrown
-        } catch (Exception e) {
-            fail("startSyncMcpToolsJob should not throw an exception: " + e.getMessage());
-        }
     }
 
     // ==================== HELPER METHODS ====================
@@ -407,34 +312,16 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
         );
     }
 
-    private SearchResponse createSearchResultResponseWithMultipleTools() throws IOException {
-        SearchHit[] hits = new SearchHit[2];
+    private void setupMalformedJsonResponse() throws IOException {
+        String malformedJson =
+            "{\"name\":\"test\",\"type\":\"test\",\"description\":\"test\",\"parameters\":{},\"attributes\":{},\"version\":1,\"malformed\":}";
+        SearchHit[] hits = new SearchHit[1];
+        hits[0] = new SearchHit(0, "ListIndexTool", null, null).sourceRef(new BytesArray(malformedJson.getBytes()));
+        hits[0].version(1L);
 
-        // Tool 1: ListIndexTool with version 2 (will be updated)
-        XContentBuilder builder1 = XContentBuilder.builder(XContentType.JSON.xContent());
-        hits[0] = new SearchHit(0, "ListIndexTool", null, null)
-            .sourceRef(BytesReference.bytes(getRegisterMcpTool().toXContent(builder1, ToXContent.EMPTY_PARAMS)));
-        hits[0].version(2L);
-
-        // Tool 2: Another ListIndexTool with different name (new tool)
-        McpToolRegisterInput anotherTool = new McpToolRegisterInput(
-            "AnotherListIndexTool",
-            "ListIndexTool", // Use the same type that has a factory
-            "Another list tool description",
-            Map.of(),
-            Map.of(),
-            null,
-            null
-        );
-        anotherTool.setVersion(1L);
-        XContentBuilder builder2 = XContentBuilder.builder(XContentType.JSON.xContent());
-        hits[1] = new SearchHit(1, "AnotherListIndexTool", null, null)
-            .sourceRef(BytesReference.bytes(anotherTool.toXContent(builder2, ToXContent.EMPTY_PARAMS)));
-        hits[1].version(1L);
-
-        return new SearchResponse(
+        SearchResponse searchResponse = new SearchResponse(
             new InternalSearchResponse(
-                new SearchHits(hits, new TotalHits(2, TotalHits.Relation.EQUAL_TO), 1.0f),
+                new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
                 InternalAggregations.EMPTY,
                 new Suggest(Collections.emptyList()),
                 new SearchProfileShardResults(Collections.emptyMap()),
@@ -450,5 +337,19 @@ public class McpStatelessToolsHelperTests extends OpenSearchTestCase {
             ShardSearchFailure.EMPTY_ARRAY,
             SearchResponse.Clusters.EMPTY
         );
+
+        doAnswer(invocationOnMock -> {
+            ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
     }
+
+    private void verifyIOException(ActionListener<?> actionListener) {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof IOException);
+    }
+
 }
