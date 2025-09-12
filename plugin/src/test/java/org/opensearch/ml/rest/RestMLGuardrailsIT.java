@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -155,9 +156,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelFailed() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         Response response = createConnector(completionModelConnectorEntity);
@@ -180,9 +179,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelFailedNonType() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         Response response = createConnector(completionModelConnectorEntity);
@@ -205,9 +202,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
     @Ignore
     public void testPredictRemoteModelSuccessWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         // Create guardrails model.
         Response response = createConnector(completionModelConnectorEntityWithGuardrail);
         Map responseMap = parseResponseToMap(response);
@@ -279,9 +274,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelFailedWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            return;
-        }
+        Assume.assumeNotNull(OPENAI_KEY);
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         // Create guardrails model.
