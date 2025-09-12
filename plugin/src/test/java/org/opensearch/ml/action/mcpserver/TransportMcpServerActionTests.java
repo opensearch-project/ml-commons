@@ -9,9 +9,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
+import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_SERVER_NOT_READY_ERROR;
+import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -87,8 +90,8 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
-        assertEquals(JSON_RPC_SERVER_NOT_READY_ERROR, response.getError().get("errorCode"));
-        assertEquals("MCP handler not ready - server initialization failed", response.getError().get("message"));
+        assertEquals(JSON_RPC_SERVER_NOT_READY_ERROR, response.getError().get(ERROR_CODE_FIELD));
+        assertEquals("MCP handler not ready - server initialization failed", response.getError().get(MESSAGE_FIELD));
     }
 
     public void test_doExecute_invalidJsonRpcMessage() {
@@ -105,8 +108,8 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
-        assertEquals(JSON_RPC_PARSE_ERROR, response.getError().get("errorCode"));
-        assertTrue(response.getError().get("message").toString().contains("Parse error"));
+        assertEquals(JSON_RPC_PARSE_ERROR, response.getError().get(ERROR_CODE_FIELD));
+        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Parse error"));
     }
 
     public void test_doExecute_jsonRpcNotification() {
@@ -164,7 +167,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
 
         Map<String, Object> circularData = new HashMap<>();
         circularData.put("jsonrpc", "2.0");
-        circularData.put("id", 1);
+        circularData.put(ID_FIELD, 1);
         circularData.put("result", circularData); // Circular reference
         McpSchema.JSONRPCResponse jsonRpcResponse = new McpSchema.JSONRPCResponse("2.0", "1", circularData, null);
         
@@ -180,9 +183,9 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
-        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get("errorCode"));
-        assertEquals(1, response.getError().get("id"));
-        assertTrue(response.getError().get("message").toString().contains("Response serialization failed"));
+        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
+        assertEquals(1, response.getError().get(ID_FIELD));
+        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Response serialization failed"));
     }
 
     public void test_doExecute_transportError() {
@@ -205,9 +208,9 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
-        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get("errorCode"));
-        assertEquals(1, response.getError().get("id"));
-        assertTrue(response.getError().get("message").toString().contains("Internal server error"));
+        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
+        assertEquals(1, response.getError().get(ID_FIELD));
+        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Internal server error"));
     }
 
     public void test_doExecute_generalException() {
@@ -227,7 +230,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertFalse(response.getAcknowledgedResponse());
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
-        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get("errorCode"));
-        assertTrue(response.getError().get("message").toString().contains("Internal server error"));
+        assertEquals(JSON_RPC_INTERNAL_ERROR, response.getError().get(ERROR_CODE_FIELD));
+        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Internal server error"));
     }
 }

@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.rest.mcpserver;
 
+import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
+import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
+import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 import static org.opensearch.rest.RestRequest.Method.POST;
 
@@ -84,9 +87,9 @@ public class RestMcpServerAction extends BaseRestHandler {
                             if (response.getError() != null) {
                                 // Handle error response
                                 Map<String, Object> errorMap = response.getError();
-                                Object id = errorMap.get("id");
-                                int code = (Integer) errorMap.get("errorCode");
-                                String message = (String) errorMap.get("message");
+                                Object id = errorMap.get(ID_FIELD);
+                                int code = (Integer) errorMap.get(ERROR_CODE_FIELD);
+                                String message = (String) errorMap.get(MESSAGE_FIELD);
                                 sendErrorResponse(channel, id, code, message);
                             } else if (response.getMcpResponse() != null) {
                                 channel.sendResponse(new BytesRestResponse(RestStatus.OK, "application/json", response.getMcpResponse()));

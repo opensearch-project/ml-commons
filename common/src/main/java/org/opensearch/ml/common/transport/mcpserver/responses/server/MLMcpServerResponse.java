@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.common.transport.mcpserver.responses.server;
 
+import static org.opensearch.ml.common.CommonValue.ACKNOWLEDGE_FIELD;
+import static org.opensearch.ml.common.CommonValue.ERROR_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_RESPONSE_FIELD;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -55,13 +59,13 @@ public class MLMcpServerResponse extends ActionResponse implements ToXContentObj
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         if (acknowledgedResponse != null) {
-            builder.field("acknowledged", acknowledgedResponse);
+            builder.field(ACKNOWLEDGE_FIELD, acknowledgedResponse);
         }
         if (mcpResponse != null) {
-            builder.field("mcpResponse", mcpResponse);
+            builder.field(MCP_RESPONSE_FIELD, mcpResponse);
         }
         if (error != null) {
-            builder.field("error", error);
+            builder.field(ERROR_FIELD, error);
         }
         builder.endObject();
         return builder;

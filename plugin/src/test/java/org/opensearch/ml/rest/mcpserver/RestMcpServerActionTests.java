@@ -13,6 +13,9 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
+import static org.opensearch.ml.common.CommonValue.ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -135,9 +138,9 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
             Map<String, Object> errorMap = new HashMap<>();
-            errorMap.put("id", null);
-            errorMap.put("errorCode", -32700);
-            errorMap.put("message", "Parse error: invalid json");
+            errorMap.put(ID_FIELD, null);
+            errorMap.put(ERROR_CODE_FIELD, -32700);
+            errorMap.put(MESSAGE_FIELD, "Parse error: invalid json");
             listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
             return null;
         }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
@@ -158,9 +161,9 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
             Map<String, Object> errorMap = new HashMap<>();
-            errorMap.put("id", 1);
-            errorMap.put("errorCode", -32700);
-            errorMap.put("message", "Parse error: malformed JSON-RPC");
+            errorMap.put(ID_FIELD, 1);
+            errorMap.put(ERROR_CODE_FIELD, -32700);
+            errorMap.put(MESSAGE_FIELD, "Parse error: malformed JSON-RPC");
             listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
             return null;
         }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
@@ -227,9 +230,9 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
             Map<String, Object> errorMap = new HashMap<>();
-            errorMap.put("id", 1);
-            errorMap.put("errorCode", -32000);
-            errorMap.put("message", "MCP handler not ready - server initialization failed");
+            errorMap.put(ID_FIELD, 1);
+            errorMap.put(ERROR_CODE_FIELD, -32000);
+            errorMap.put(MESSAGE_FIELD, "MCP handler not ready - server initialization failed");
             listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
             return null;
         }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
