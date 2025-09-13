@@ -70,6 +70,7 @@ public class MemoryProcessingService {
             StringBuilder userMessages = new StringBuilder();
             for (MessageInput message : messages) {
                 userMessages.append(message.getContent());
+                userMessages.append(System.lineSeparator());
             }
             String messagesJson = userMessages.toString();
             stringParameters.put("messages", escapeJson(messagesJson));

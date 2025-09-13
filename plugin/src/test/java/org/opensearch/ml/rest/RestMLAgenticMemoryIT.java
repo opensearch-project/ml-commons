@@ -104,6 +104,9 @@ public class RestMLAgenticMemoryIT extends MLCommonsRestTestCase {
 
     @Test
     public void testCreateMemoryContainerAndAddMemories_openAI() throws IOException, InterruptedException {
+        if (OPENAI_KEY == null) {
+            return;
+        }
         // Create OpenAI model and memory container
         String openaiModelId = registerLLMModel();
         String memoryContainerId = createMemoryContainerWithModel(
@@ -172,6 +175,9 @@ public class RestMLAgenticMemoryIT extends MLCommonsRestTestCase {
 
     @Test
     public void testUpdateMemoriesWithContradictoryInformation_openAI() throws IOException, InterruptedException {
+        if (OPENAI_KEY == null) {
+            return;
+        }
         // Create OpenAI model and memory container
         String openaiModelId = registerLLMModel();
         String memoryContainerId = createMemoryContainerWithModel(
