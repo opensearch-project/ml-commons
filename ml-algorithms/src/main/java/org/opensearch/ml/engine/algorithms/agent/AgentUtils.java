@@ -73,15 +73,18 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -747,15 +750,27 @@ public class AgentUtils {
     ) {
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
-                if (!(connector instanceof McpConnector)) {
-                    log.error("Connector with ID " + connectorId + " is not of type McpConnector");
+                if (!(connector instanceof McpConnector) && !(connector instanceof McpStreamableHttpConnector)) {
+                    log.error("Connector with ID " + connectorId + " is not of type McpConnector or McpStreamableHttpConnector");
                     toolListener.onResponse(Collections.emptyList());
                     return;
                 }
                 connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
-                McpConnectorExecutor connectorExecutor = MLEngineClassLoader
-                    .initInstance(connector.getProtocol(), connector, Connector.class);
-                List<MLToolSpec> mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                
+                List<MLToolSpec> mcpToolSpecs;
+                if (connector instanceof McpConnector) {
+                    McpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                        .initInstance(connector.getProtocol(), connector, Connector.class);
+                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                } else if (connector instanceof McpStreamableHttpConnector) {
+                    McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                        .initInstance(connector.getProtocol(), connector, Connector.class);
+                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                } else {
+                    log.error("Unsupported connector type for connector: " + connectorId);
+                    mcpToolSpecs = Collections.emptyList();
+                }
+                
                 toolListener.onResponse(mcpToolSpecs);
             } catch (Exception e) {
                 log.error("Failed to get tools from connector: " + connectorId, e);
@@ -917,6 +932,9 @@ public class AgentUtils {
             if (tool instanceof McpSseTool) {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
+            } else if (tool instanceof McpStreamableHttpTool) {
+                // TODO: make this more general, avoid checking specific tool type
+                ((McpStreamableHttpTool) tool).getMcpSyncClient().closeGracefully();
             }
         }
     }
