@@ -95,7 +95,7 @@ public class MLMcpServerResponseTest {
         String jsonStr = builder.toString();
 
         assertTrue(jsonStr.contains("\"acknowledged\":true"));
-        assertTrue(jsonStr.contains("\"mcpResponse\":"));
+        assertTrue(jsonStr.contains("\"mcp_response\":"));
         assertTrue(jsonStr.contains("\"error\":"));
         assertTrue(jsonStr.contains("\"code\":-32601"));
         assertTrue(jsonStr.contains("\"message\":\"Method not found\""));

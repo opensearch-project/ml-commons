@@ -111,8 +111,6 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
             mcpToolsHelper,
             mcpStatelessServerHolder
         );
-
-        // Note: McpStatelessServerHolder is now instance-based, no static init needed
     }
 
     @Test

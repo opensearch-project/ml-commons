@@ -199,6 +199,14 @@ import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAc
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.mcpserver.action.*;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
@@ -366,7 +374,12 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
-import org.opensearch.ml.rest.mcpserver.*;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
+import org.opensearch.ml.rest.mcpserver.RestMcpServerAction;
+import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -488,7 +501,7 @@ public class MachineLearningPlugin extends Plugin
     private Map<String, Tool.Factory> toolFactories;
     private ScriptService scriptService;
     private Encryptor encryptor;
-    private McpToolsHelper statelessToolsHelper;
+    private McpToolsHelper mcpToolsHelper;
     private McpStatelessServerHolder statelessServerHolder;
 
     public MachineLearningPlugin() {}
@@ -869,8 +882,8 @@ public class MachineLearningPlugin extends Plugin
             MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
         }
 
-        statelessToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
-        statelessServerHolder = new McpStatelessServerHolder(statelessToolsHelper, client, threadPool);
+        mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
+        statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
 
         return ImmutableList
             .of(
@@ -902,7 +915,7 @@ public class MachineLearningPlugin extends Plugin
                 cmHandler,
                 sdkClient,
                 toolFactoryWrapper,
-                statelessToolsHelper,
+                mcpToolsHelper,
                 statelessServerHolder
             );
     }

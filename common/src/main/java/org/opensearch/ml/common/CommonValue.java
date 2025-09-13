@@ -132,7 +132,7 @@ public class CommonValue {
     public static final int JSON_RPC_SERVER_NOT_READY_ERROR = -32000;
 
     // MCP Server response fields
-    public static final String ACKNOWLEDGE_FIELD = "acknowledge";
+    public static final String ACKNOWLEDGE_FIELD = "acknowledged";
     public static final String MCP_RESPONSE_FIELD = "mcp_response";
     public static final String ERROR_FIELD = "error";
     public static final String MESSAGE_FIELD = "message";
