@@ -86,7 +86,7 @@ dependencies {
     implementation('net.minidev:json-smart:2.5.2')
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.30.18"
-    api('io.modelcontextprotocol.sdk:mcp:0.9.0')
+    api('io.modelcontextprotocol.sdk:mcp:0.12.1')
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'

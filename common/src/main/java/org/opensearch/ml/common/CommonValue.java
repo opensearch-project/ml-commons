@@ -113,6 +113,8 @@ public class CommonValue {
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
     public static final String MCP_DEFAULT_SSE_ENDPOINT = "/sse";
     public static final String SSE_ENDPOINT_FILED = "sse_endpoint";
+    public static final String MCP_DEFAULT_ENDPOINT = "/mcp/";
+    public static final String ENDPOINT_FILED = "endpoint";
 
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
