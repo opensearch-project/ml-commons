@@ -84,7 +84,7 @@ public class McpStreamableHttpConnectorTest {
                 TEST_CONNECTOR_JSON_STRING
             );
         parser.nextToken();
-        
+
         McpStreamableHttpConnector connector = new McpStreamableHttpConnector("mcp_streamable_http", parser);
         Assert.assertEquals("test_mcp_streamable_http_connector_name", connector.getName());
         Assert.assertEquals("mcp_streamable_http", connector.getProtocol());
@@ -127,7 +127,8 @@ public class McpStreamableHttpConnectorTest {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
         Map<String, String> updatedCredential = new HashMap<>();
         updatedCredential.put("new_key", "new_value");
-        MLCreateConnectorInput updateInput = MLCreateConnectorInput.builder()
+        MLCreateConnectorInput updateInput = MLCreateConnectorInput
+            .builder()
             .name("updated_name")
             .description("updated_description")
             .version("2")
@@ -166,7 +167,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.getActions();
@@ -175,7 +176,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations_AddAction() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.addAction(null);
@@ -184,7 +185,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations_GetActionEndpoint() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.getActionEndpoint("test", Collections.emptyMap());
@@ -193,7 +194,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations_GetActionHttpMethod() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.getActionHttpMethod("test");
@@ -202,7 +203,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations_CreatePayload() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.createPayload("test", Collections.emptyMap());
@@ -211,7 +212,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations_FindAction() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.findAction("test");
@@ -220,7 +221,7 @@ public class McpStreamableHttpConnectorTest {
     @Test
     public void testMcpStreamableHttpConnector_UnsupportedOperations_ParseResponse() throws IOException {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        
+
         exceptionRule.expect(UnsupportedOperationException.class);
         exceptionRule.expectMessage("Not implemented.");
         connector.parseResponse(null, Collections.emptyList(), false);
@@ -232,7 +233,8 @@ public class McpStreamableHttpConnectorTest {
 
         List<String> backendRoles = Arrays.asList("role1", "role2");
 
-        ConnectorClientConfig clientConfig = ConnectorClientConfig.builder()
+        ConnectorClientConfig clientConfig = ConnectorClientConfig
+            .builder()
             .maxConnections(30)
             .connectionTimeout(30000)
             .readTimeout(30000)

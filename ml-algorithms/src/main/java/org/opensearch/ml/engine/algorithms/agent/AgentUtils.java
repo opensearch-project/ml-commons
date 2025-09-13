@@ -756,7 +756,7 @@ public class AgentUtils {
                     return;
                 }
                 connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
-                
+
                 List<MLToolSpec> mcpToolSpecs;
                 if (connector instanceof McpConnector) {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
@@ -770,7 +770,7 @@ public class AgentUtils {
                     log.error("Unsupported connector type for connector: " + connectorId);
                     mcpToolSpecs = Collections.emptyList();
                 }
-                
+
                 toolListener.onResponse(mcpToolSpecs);
             } catch (Exception e) {
                 log.error("Failed to get tools from connector: " + connectorId, e);

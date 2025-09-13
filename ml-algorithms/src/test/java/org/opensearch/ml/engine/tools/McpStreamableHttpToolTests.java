@@ -51,7 +51,7 @@ public class McpStreamableHttpToolTests {
     public void testRun_Success() {
         // Mock the MCP client response
         McpSchema.CallToolResult mockResult = new McpSchema.CallToolResult("test response", false);
-        
+
         when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(mockResult);
 
         // Execute the tool
@@ -150,7 +150,7 @@ public class McpStreamableHttpToolTests {
     public void testFactory_Create() {
         McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
         Tool createdTool = factory.create(Map.of(MCP_SYNC_CLIENT, mcpSyncClient));
-        
+
         assertTrue(createdTool instanceof McpStreamableHttpTool);
         assertEquals("McpStreamableHttpTool", createdTool.getType());
     }
