@@ -56,7 +56,7 @@ public class OpenSearchMcpStatelessServerTransportProviderTests extends OpenSear
     @Test
     public void test_handleRequest_invalidJson() throws Exception {
         String requestBody = """
-            {,
+            {
               "jsonrpc": "2.0",
               "method": "tools/list"
             }

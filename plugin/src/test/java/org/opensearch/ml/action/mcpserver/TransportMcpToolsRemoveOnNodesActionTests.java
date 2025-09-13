@@ -34,7 +34,6 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodeResponse;
@@ -161,17 +160,20 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
 
     @Test
     public void testNodeOperation_OnError() {
-        // This test expects the operation to succeed even if tools are not in memory
-        // The current implementation doesn't throw an exception for missing tools
+        exceptionRule.expect(FailedNodeException.class);
+        exceptionRule.expectMessage("[ListIndexTool] not found on node: localNodeId");
+
+        // override the default success stub for this test
+        when(mcpStatelessAsyncServer.removeTool(anyString())).thenReturn(Mono.error(new RuntimeException("not found")));
+
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
-        // Don't add the tool to IN_MEMORY_MCP_TOOLS
-        MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
-        assertEquals(true, response.getDeleted());
+        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
+
+        action.nodeOperation(request);
     }
 
     @Test
-    public void testNodeOperation_RemoveToolError() {
-        // Test error handling when removeTool fails
+    public void testNodeOperation_Success_RemovesFromMap() {
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
         McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
 
@@ -179,7 +181,6 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         McpStatelessAsyncServer testServer = mock(McpStatelessAsyncServer.class);
         when(mcpStatelessServerHolder.getMcpStatelessAsyncServerInstance()).thenReturn(testServer);
 
-        // Mock the removeTool method to return a Mono that completes successfully
         when(testServer.removeTool(anyString())).thenReturn(Mono.empty());
 
         // Wait a bit for the tool to be added
@@ -216,27 +217,5 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         // and eventually throw FailedNodeException
         exceptionRule.expect(FailedNodeException.class);
         action.nodeOperation(request);
-    }
-
-    private McpToolRegisterInput getRegisterMcpTool(String toolName) {
-        McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
-            toolName,
-            "ListIndexTool",
-            "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
-            Map.of(),
-            Map
-                .of(
-                    "type",
-                    "object",
-                    "properties",
-                    Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
-                    "additionalProperties",
-                    false
-                ),
-            null,
-            null
-        );
-        registerMcpTool.setVersion(1L);
-        return registerMcpTool;
     }
 }

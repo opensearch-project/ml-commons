@@ -80,7 +80,7 @@ public class RestMcpServerActionIT extends MLCommonsRestTestCase {
 
     @Test
     public void testMcpStatelessStreamingFlow() throws IOException {
-        // Test case makes 4 API calls to http://localhost:9200/_plugins/_ml/mcp/stream
+        // Test case makes 4 API calls to http://localhost:9200/_plugins/_ml/mcp
 
         // 1. Initialize Connection
         // Method: initialize
