@@ -56,15 +56,19 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
         when(mcpClient.listTools()).thenReturn(mockResult);
 
         // Mock the transport builder
-        try (MockedStatic<io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport> transportMock = 
-             mockStatic(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class)) {
-            
-            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder transportBuilder = 
-                org.mockito.Mockito.mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder.class);
-            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport transport = 
-                org.mockito.Mockito.mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class);
-            
-            transportMock.when(() -> io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.builder(any()))
+        try (
+            MockedStatic<io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport> transportMock = mockStatic(
+                io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class
+            )
+        ) {
+
+            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder transportBuilder = org.mockito.Mockito
+                .mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder.class);
+            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport transport = org.mockito.Mockito
+                .mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class);
+
+            transportMock
+                .when(() -> io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.builder(any()))
                 .thenReturn(transportBuilder);
             when(transportBuilder.endpoint(any())).thenReturn(transportBuilder);
             when(transportBuilder.customizeClient(any())).thenReturn(transportBuilder);
@@ -135,8 +139,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
 
         assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
         assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
-        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(
-            "test", null, null, null, null, null));
+        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService("test", null, null, null, null, null));
     }
 
     @Test
@@ -146,10 +149,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
     }
 
     private McpSchema.ListToolsResult createMockListToolsResult() {
-        McpSchema.Tool tool = McpSchema.Tool.builder()
-            .name("test_tool")
-            .description("A test tool")
-            .build();
+        McpSchema.Tool tool = McpSchema.Tool.builder().name("test_tool").description("A test tool").build();
 
         return new McpSchema.ListToolsResult(List.of(tool), null);
     }

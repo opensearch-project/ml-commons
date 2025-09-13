@@ -16,6 +16,7 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import io.modelcontextprotocol.client.McpSyncClient;
