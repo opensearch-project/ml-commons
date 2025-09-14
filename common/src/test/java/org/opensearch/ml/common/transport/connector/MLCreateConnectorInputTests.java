@@ -10,6 +10,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -205,6 +207,94 @@ public class MLCreateConnectorInputTests {
                 .build();
         });
         assertEquals("Connector credential is null or empty list", exception.getMessage());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithNullCredential_ShouldNotThrow() {
+        // MCP SSE connectors should be allowed to have null credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_SSE)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_SSE, connector.getProtocol());
+        assertNull(connector.getCredential());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithEmptyCredential_ShouldNotThrow() {
+        // MCP SSE connectors should be allowed to have empty credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_SSE)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_SSE, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithNullCredential_ShouldNotThrow() {
+        // MCP Streamable HTTP connectors should be allowed to have null credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol());
+        assertNull(connector.getCredential());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithEmptyCredential_ShouldNotThrow() {
+        // MCP Streamable HTTP connectors should be allowed to have empty credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
     }
 
     @Test

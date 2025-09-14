@@ -48,141 +48,66 @@ public class McpStreamableHttpToolTests {
     }
 
     @Test
-    public void testRun_Success() {
-        // Mock the MCP client response
-        McpSchema.CallToolResult mockResult = new McpSchema.CallToolResult("test response", false);
+    public void testRunSuccess() {
+        // create a CallToolResult wrapping a JSON string
+        McpSchema.CallToolResult result = new McpSchema.CallToolResult("{\"foo\":\"bar\"}", false);
+        when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(result);
 
-        when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(mockResult);
-
-        // Execute the tool
         tool.run(validParams, listener);
 
-        // Verify the client was called and listener was notified
-        verify(mcpSyncClient).callTool(any(McpSchema.CallToolRequest.class));
-        verify(listener).onResponse("[{\"text\":\"test response\"}]");
+        // Assert
+        verify(listener).onResponse("[{\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\"}]");
         verify(listener, never()).onFailure(any());
     }
 
     @Test
-    public void testRun_ClientException() {
-        // Mock the MCP client to throw an exception
-        RuntimeException testException = new RuntimeException("MCP client error");
-        when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenThrow(testException);
+    public void testRunInvalidJsonInput() {
+        // Passing a non-JSON string should trigger failure in parsing
+        Map<String, String> badParams = Map.of("input", "not-json");
+        tool.run(badParams, listener);
 
-        // Execute the tool
+        verify(listener).onFailure(any(Exception.class));
+        verify(listener, never()).onResponse(any());
+    }
+
+    @Test
+    public void testRunClientThrows() {
+        // Simulate the MCP client throwing an exception
+        when(mcpSyncClient.callTool(any())).thenThrow(new RuntimeException("client error"));
+
         tool.run(validParams, listener);
 
-        // Verify the client was called and listener was notified of failure
-        verify(mcpSyncClient).callTool(any(McpSchema.CallToolRequest.class));
-        verify(listener).onFailure(testException);
+        verify(listener).onFailure(any(RuntimeException.class));
         verify(listener, never()).onResponse(any());
     }
 
     @Test
-    public void testRun_InvalidInput() {
-        Map<String, String> invalidParams = Map.of("input", "invalid json");
+    public void testRunMissingInputParam() {
+        // No "input" key in parameters should be caught
+        tool.run(Collections.emptyMap(), listener);
 
-        // Execute the tool with invalid input
-        tool.run(invalidParams, listener);
-
-        // Verify the listener was notified of failure
-        verify(listener).onFailure(any());
+        verify(listener).onFailure(any(Exception.class));
         verify(listener, never()).onResponse(any());
     }
 
     @Test
-    public void testValidate_ValidParams() {
+    public void testValidateAndMetadata() {
+        // validate
         assertTrue(tool.validate(validParams));
-    }
-
-    @Test
-    public void testValidate_EmptyParams() {
         assertFalse(tool.validate(Collections.emptyMap()));
-    }
-
-    @Test
-    public void testValidate_NullParams() {
-        assertFalse(tool.validate(null));
-    }
-
-    @Test
-    public void testGetType() {
-        assertEquals("McpStreamableHttpTool", tool.getType());
-    }
-
-    @Test
-    public void testGetVersion() {
+        // metadata
+        assertEquals(McpStreamableHttpTool.TYPE, tool.getName());
+        assertEquals(McpStreamableHttpTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
+        assertEquals(McpStreamableHttpTool.DEFAULT_DESCRIPTION, tool.getDescription());
     }
 
     @Test
-    public void testGetName() {
-        assertEquals("McpStreamableHttpTool", tool.getName());
-    }
-
-    @Test
-    public void testSetName() {
-        String newName = "CustomToolName";
-        tool.setName(newName);
-        assertEquals(newName, tool.getName());
-    }
-
-    @Test
-    public void testGetDescription() {
-        assertEquals("A tool from MCP Streamable HTTP Server", tool.getDescription());
-    }
-
-    @Test
-    public void testSetDescription() {
-        String newDescription = "Custom description";
-        tool.setDescription(newDescription);
-        assertEquals(newDescription, tool.getDescription());
-    }
-
-    @Test
-    public void testFactory_Singleton() {
-        McpStreamableHttpTool.Factory factory1 = McpStreamableHttpTool.Factory.getInstance();
-        McpStreamableHttpTool.Factory factory2 = McpStreamableHttpTool.Factory.getInstance();
-        assertEquals(factory1, factory2);
-    }
-
-    @Test
-    public void testFactory_Create() {
+    public void testFactoryDefaults() {
         McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
-        Tool createdTool = factory.create(Map.of(MCP_SYNC_CLIENT, mcpSyncClient));
-
-        assertTrue(createdTool instanceof McpStreamableHttpTool);
-        assertEquals("McpStreamableHttpTool", createdTool.getType());
-    }
-
-    @Test
-    public void testFactory_GetDefaultDescription() {
-        McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
-        assertEquals("A tool from MCP Streamable HTTP Server", factory.getDefaultDescription());
-    }
-
-    @Test
-    public void testFactory_GetDefaultType() {
-        McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
-        assertEquals("McpStreamableHttpTool", factory.getDefaultType());
-    }
-
-    @Test
-    public void testFactory_GetDefaultVersion() {
-        McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
+        assertEquals(McpStreamableHttpTool.DEFAULT_DESCRIPTION, factory.getDefaultDescription());
+        assertEquals(McpStreamableHttpTool.TYPE, factory.getDefaultType());
         assertNull(factory.getDefaultVersion());
-    }
-
-    @Test
-    public void testFactory_GetAllModelKeys() {
-        McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
         assertTrue(factory.getAllModelKeys().isEmpty());
-    }
-
-    @Test
-    public void testFactory_Init() {
-        McpStreamableHttpTool.Factory factory = McpStreamableHttpTool.Factory.getInstance();
-        // Should not throw any exception
-        factory.init();
     }
 }

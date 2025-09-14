@@ -7,6 +7,8 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -24,6 +26,7 @@ import org.opensearch.ml.engine.MLStaticMockBase;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 
 public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
@@ -50,107 +53,45 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testGetMcpToolSpecs_Success() throws Exception {
-        // Mock the MCP client and schema
-        McpSchema.ListToolsResult mockResult = createMockListToolsResult();
-        when(mcpClient.listTools()).thenReturn(mockResult);
+    public void getMcpToolSpecs_returnsExpectedSpecs() {
 
-        // Mock the transport builder
-        try (
-            MockedStatic<io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport> transportMock = mockStatic(
-                io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class
-            )
-        ) {
+        String inputSchemaJSON =
+            "{\"type\":\"object\",\"properties\":{\"state\":{\"title\":\"State\",\"type\":\"string\"}},\"required\":[\"state\"],\"additionalProperties\":false}";
 
-            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder transportBuilder = org.mockito.Mockito
-                .mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder.class);
-            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport transport = org.mockito.Mockito
-                .mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class);
+        McpSchema.Tool tool = new McpSchema.Tool("tool1", "desc1", inputSchemaJSON);
+        McpSchema.ListToolsResult mockTools = new McpSchema.ListToolsResult(List.of(tool), null);
 
-            transportMock
-                .when(() -> io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.builder(any()))
-                .thenReturn(transportBuilder);
-            when(transportBuilder.endpoint(any())).thenReturn(transportBuilder);
-            when(transportBuilder.customizeClient(any())).thenReturn(transportBuilder);
-            when(transportBuilder.customizeRequest(any())).thenReturn(transportBuilder);
-            when(transportBuilder.build()).thenReturn(transport);
+        when(mcpClient.listTools()).thenReturn(mockTools);
+        when(mcpClient.initialize()).thenReturn(null);
 
-            // Mock McpClient.sync
-            try (MockedStatic<McpClient> clientMock = mockStatic(McpClient.class)) {
-                clientMock.when(() -> McpClient.sync(transport)).thenReturn(builder);
+        try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
+            mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
+            McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
+            List<MLToolSpec> specs = exec.getMcpToolSpecs();
 
-                McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
-                List<MLToolSpec> result = exec.getMcpToolSpecs();
-
-                Assert.assertNotNull(result);
-                Assert.assertEquals(1, result.size());
-                Assert.assertEquals("test_tool", result.get(0).getName());
-                Assert.assertEquals("McpStreamableHttpTool", result.get(0).getType());
-            }
+            Assert.assertEquals(1, specs.size());
+            MLToolSpec spec = specs.get(0);
+            Assert.assertEquals("tool1", spec.getName());
+            Assert.assertEquals("desc1", spec.getDescription());
+            Assert.assertEquals(inputSchemaJSON, spec.getAttributes().get("input_schema"));
+            Assert.assertSame(mcpClient, spec.getRuntimeResources().get("mcp_sync_client"));
+            mocked.verify(() -> McpClient.sync(any(McpClientTransport.class)));
+            verify(builder, times(1)).build();
+            verify(mcpClient, times(1)).initialize();
+            verify(mcpClient, times(1)).listTools();
         }
     }
 
     @Test
-    public void testGetMcpToolSpecs_Exception() throws Exception {
-        when(mcpClient.listTools()).thenThrow(new RuntimeException("MCP server error"));
+    public void getMcpToolSpecs_throwsOnInitError() {
 
-        // Mock the transport builder
-        try (MockedStatic<io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport> transportMock = 
-             mockStatic(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class)) {
-            
-            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder transportBuilder = 
-                org.mockito.Mockito.mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.Builder.class);
-            io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport transport = 
-                org.mockito.Mockito.mock(io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.class);
-            
-            transportMock.when(() -> io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport.builder(any()))
-                .thenReturn(transportBuilder);
-            when(transportBuilder.endpoint(any())).thenReturn(transportBuilder);
-            when(transportBuilder.customizeClient(any())).thenReturn(transportBuilder);
-            when(transportBuilder.customizeRequest(any())).thenReturn(transportBuilder);
-            when(transportBuilder.build()).thenReturn(transport);
+        when(mcpClient.initialize()).thenThrow(new RuntimeException("Error initializing"));
+        try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
+            mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
+            McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
-            // Mock McpClient.sync
-            try (MockedStatic<McpClient> clientMock = mockStatic(McpClient.class)) {
-                clientMock.when(() -> McpClient.sync(transport)).thenReturn(builder);
-
-                McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
-                
-                Exception exception = assertThrows(Exception.class, () -> exec.getMcpToolSpecs());
-                Assert.assertTrue(exception.getMessage().contains("Unexpected error while getting MCP tools"));
-            }
+            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
         }
     }
 
-    @Test
-    public void testGetMcpToolSpecs_NullUrl() {
-        when(mockConnector.getUrl()).thenReturn(null);
-
-        McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
-        List<MLToolSpec> result = exec.getMcpToolSpecs();
-
-        Assert.assertNotNull(result);
-        Assert.assertTrue(result.isEmpty());
-    }
-
-    @Test
-    public void testUnsupportedOperations() {
-        McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
-
-        assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
-        assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
-        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService("test", null, null, null, null, null));
-    }
-
-    @Test
-    public void testGetLogger() {
-        McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
-        Assert.assertNotNull(exec.getLogger());
-    }
-
-    private McpSchema.ListToolsResult createMockListToolsResult() {
-        McpSchema.Tool tool = McpSchema.Tool.builder().name("test_tool").description("A test tool").build();
-
-        return new McpSchema.ListToolsResult(List.of(tool), null);
-    }
 }

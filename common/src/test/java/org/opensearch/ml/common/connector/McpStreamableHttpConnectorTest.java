@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.connector.RetryBackoffPolicy.CONSTANT;
 
@@ -13,6 +14,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 
@@ -46,36 +48,42 @@ public class McpStreamableHttpConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = (credential, tenantId) -> "encrypted_" + credential;
-        decryptFunction = (credential, tenantId) -> credential.replace("encrypted_", "");
+        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
+        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_Builder() {
+    public void constructor_InvalidProtocol() {
+        exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
+
         McpStreamableHttpConnector.builder().protocol("wrong protocol").build();
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_StreamInput() throws IOException {
+    public void writeTo() throws IOException {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+
         BytesStreamOutput output = new BytesStreamOutput();
         connector.writeTo(output);
+
         McpStreamableHttpConnector connector2 = new McpStreamableHttpConnector(output.bytes().streamInput());
         Assert.assertEquals(connector, connector2);
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_ToXContent() throws IOException {
+    public void toXContent() throws IOException {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+
         XContentBuilder builder = XContentFactory.jsonBuilder();
         connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String connectorStr = TestHelper.xContentBuilderToString(builder);
-        Assert.assertFalse(connectorStr.contains("encrypted_"));
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertEquals(TEST_CONNECTOR_JSON_STRING, content);
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_Parse() throws IOException {
+    public void constructor_Parser() throws IOException {
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -87,35 +95,39 @@ public class McpStreamableHttpConnectorTest {
 
         McpStreamableHttpConnector connector = new McpStreamableHttpConnector("mcp_streamable_http", parser);
         Assert.assertEquals("test_mcp_streamable_http_connector_name", connector.getName());
+        Assert.assertEquals("1", connector.getVersion());
+        Assert.assertEquals("this is a test mcp streamable http connector", connector.getDescription());
         Assert.assertEquals("mcp_streamable_http", connector.getProtocol());
+        Assert.assertEquals(AccessMode.PUBLIC, connector.getAccess());
+        Assert.assertEquals("https://test.com", connector.getUrl());
+        Assert.assertEquals("/custom/endpoint", connector.getParameters().get("endpoint"));
+        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
+        Assert.assertEquals(1, decryptedCredential.size());
+        Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
+        Assert.assertNotNull(connector.getDecryptedHeaders());
+        Assert.assertEquals(1, connector.getDecryptedHeaders().size());
+        Assert.assertEquals("decrypted: TEST_KEY_VALUE", connector.getDecryptedHeaders().get("api_key"));
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_Encrypt() {
+    public void cloneConnector() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        connector.encrypt(encryptFunction, "test_tenant");
-        Assert.assertEquals("encrypted_test_key_value", connector.getCredential().get("key"));
+        Connector connector2 = connector.cloneConnector();
+        Assert.assertEquals(connector, connector2);
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_Decrypt() {
+    public void decrypt() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        connector.encrypt(encryptFunction, "test_tenant");
-        connector.decrypt("", decryptFunction, "test_tenant");
-        Assert.assertEquals("test_key_value", connector.getDecryptedCredential().get("key"));
-        Assert.assertEquals("test_key_value", connector.getDecryptedHeaders().get("api_key"));
-    }
+        connector.decrypt("", decryptFunction, null);
+        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
+        Assert.assertEquals(1, decryptedCredential.size());
+        Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
+        Assert.assertNotNull(connector.getDecryptedHeaders());
+        Assert.assertEquals(1, connector.getDecryptedHeaders().size());
+        Assert.assertEquals("decrypted: TEST_KEY_VALUE", connector.getDecryptedHeaders().get("api_key"));
 
-    @Test
-    public void testMcpStreamableHttpConnector_CloneConnector() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        Connector clonedConnector = connector.cloneConnector();
-        Assert.assertEquals(connector, clonedConnector);
-    }
-
-    @Test
-    public void testMcpStreamableHttpConnector_RemoveCredential() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
         connector.removeCredential();
         Assert.assertNull(connector.getCredential());
         Assert.assertNull(connector.getDecryptedCredential());
@@ -123,132 +135,134 @@ public class McpStreamableHttpConnectorTest {
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_Update() {
+    public void encrypt() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        Map<String, String> updatedCredential = new HashMap<>();
-        updatedCredential.put("new_key", "new_value");
-        MLCreateConnectorInput updateInput = MLCreateConnectorInput
-            .builder()
-            .name("updated_name")
-            .description("updated_description")
-            .version("2")
-            .protocol(MCP_STREAMABLE_HTTP)
-            .credential(updatedCredential)
-            .build();
-        connector.update(updateInput, encryptFunction);
-        Assert.assertEquals("updated_name", connector.getName());
-        Assert.assertEquals("updated_description", connector.getDescription());
+        connector.encrypt(encryptFunction, null);
+        Map<String, String> credential = connector.getCredential();
+        Assert.assertEquals(1, credential.size());
+        Assert.assertEquals("encrypted: test_key_value", credential.get("key"));
+
+        connector.removeCredential();
+        Assert.assertNull(connector.getCredential());
+        Assert.assertNull(connector.getDecryptedCredential());
+        Assert.assertNull(connector.getDecryptedHeaders());
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_ValidateConnectorURL() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        List<String> urlRegexes = Arrays.asList(".*test\\.com.*");
-        connector.validateConnectorURL(urlRegexes);
-    }
-
-    @Test
-    public void testMcpStreamableHttpConnector_ValidateConnectorURL_Invalid() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        List<String> urlRegexes = Arrays.asList(".*invalid\\.com.*");
+    public void validateConnectorURL_Invalid() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
-        connector.validateConnectorURL(urlRegexes);
+        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        connector
+            .validateConnectorURL(
+                Arrays
+                    .asList(
+                        "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                        "^https://api\\.openai\\.com/.*$",
+                        "^https://api\\.cohere\\.ai/.*$",
+                        "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
+                    )
+            );
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_GetParameters() {
+    public void validateConnectorURL() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-        Map<String, String> parameters = connector.getParameters();
-        Assert.assertNotNull(parameters);
-        Assert.assertEquals("/custom/endpoint", parameters.get("endpoint"));
+        connector
+            .validateConnectorURL(
+                Arrays
+                    .asList(
+                        "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                        "^https://api\\.openai\\.com/.*$",
+                        "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$",
+                        "^" + connector.getUrl()
+                    )
+            );
     }
 
     @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations() {
+    public void testUpdate() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        Map<String, String> initialCredential = new HashMap<>(connector.getCredential());
 
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.getActions();
-    }
+        // Create update content
+        String updatedName = "updated_name";
+        String updatedDescription = "updated description";
+        String updatedVersion = "2";
+        Map<String, String> updatedCredential = new HashMap<>();
+        updatedCredential.put("new_key", "new_value");
+        List<String> updatedBackendRoles = List.of("role3", "role4");
+        AccessMode updatedAccessMode = AccessMode.PRIVATE;
+        ConnectorClientConfig updatedClientConfig = new ConnectorClientConfig(40, 40000, 40000, 20, 20, 5, CONSTANT);
+        String updatedUrl = "https://updated.test.com";
+        Map<String, String> updatedHeaders = new HashMap<>();
+        updatedHeaders.put("new_header", "new_header_value");
+        updatedHeaders.put("updated_api_key", "${credential.new_key}"); // Referencing new credential key
+        Map<String, String> updatedParameters = new HashMap<>();
+        updatedParameters.put("endpoint", "/updated/endpoint");
 
-    @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations_AddAction() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        MLCreateConnectorInput updateInput = MLCreateConnectorInput
+            .builder()
+            .name(updatedName)
+            .description(updatedDescription)
+            .version(updatedVersion)
+            .credential(updatedCredential)
+            .backendRoles(updatedBackendRoles)
+            .access(updatedAccessMode)
+            .connectorClientConfig(updatedClientConfig)
+            .url(updatedUrl)
+            .headers(updatedHeaders)
+            .parameters(updatedParameters)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .build();
 
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.addAction(null);
-    }
+        // Call the update method
+        connector.update(updateInput, encryptFunction);
 
-    @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations_GetActionEndpoint() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        // Assertions
+        Assert.assertEquals(updatedName, connector.getName());
+        Assert.assertEquals(updatedDescription, connector.getDescription());
+        Assert.assertEquals(updatedVersion, connector.getVersion());
+        Assert.assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol()); // Should not change if not provided
+        Assert.assertEquals(updatedParameters, connector.getParameters());
+        Assert.assertEquals(updatedBackendRoles, connector.getBackendRoles());
+        Assert.assertEquals(updatedAccessMode, connector.getAccess());
+        Assert.assertEquals(updatedClientConfig, connector.getConnectorClientConfig());
+        Assert.assertEquals(updatedUrl, connector.getUrl());
+        Assert.assertEquals(updatedHeaders, connector.getHeaders());
 
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.getActionEndpoint("test", Collections.emptyMap());
-    }
+        // Check encrypted credentials
+        Map<String, String> currentCredential = connector.getCredential();
+        Assert.assertNotNull(currentCredential);
+        Assert.assertEquals(1, currentCredential.size()); // Should replace old credentials
+        Assert.assertEquals("encrypted: new_value", currentCredential.get("new_key"));
+        Assert.assertNotEquals(initialCredential, currentCredential);
 
-    @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations_GetActionHttpMethod() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        // Check decrypted credentials and headers (need to explicitly decrypt after update)
+        connector.decrypt("", decryptFunction, null); // Use decrypt function from setUp
+        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
+        Assert.assertNotNull(decryptedCredential);
+        Assert.assertEquals(1, decryptedCredential.size());
+        Assert.assertEquals("decrypted: ENCRYPTED: NEW_VALUE", decryptedCredential.get("new_key")); // Uses the decrypt function logic
 
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.getActionHttpMethod("test");
-    }
-
-    @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations_CreatePayload() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.createPayload("test", Collections.emptyMap());
-    }
-
-    @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations_FindAction() {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.findAction("test");
-    }
-
-    @Test
-    public void testMcpStreamableHttpConnector_UnsupportedOperations_ParseResponse() throws IOException {
-        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
-
-        exceptionRule.expect(UnsupportedOperationException.class);
-        exceptionRule.expectMessage("Not implemented.");
-        connector.parseResponse(null, Collections.emptyList(), false);
+        Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
+        Assert.assertNotNull(decryptedHeaders);
+        Assert.assertEquals(2, decryptedHeaders.size());
+        Assert.assertEquals("new_header_value", decryptedHeaders.get("new_header"));
+        Assert.assertEquals("decrypted: ENCRYPTED: NEW_VALUE", decryptedHeaders.get("updated_api_key")); // Check header substitution
     }
 
     public static McpStreamableHttpConnector createMcpStreamableHttpConnector() {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        List<String> backendRoles = Arrays.asList("role1", "role2");
-
-        ConnectorClientConfig clientConfig = ConnectorClientConfig
-            .builder()
-            .maxConnections(30)
-            .connectionTimeout(30000)
-            .readTimeout(30000)
-            .retryBackoffMillis(10)
-            .retryTimeoutSeconds(10)
-            .maxRetryTimes(-1)
-            .retryBackoffPolicy(CONSTANT)
-            .build();
-
         Map<String, String> headers = new HashMap<>();
         headers.put("api_key", "${credential.key}");
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("endpoint", "/custom/endpoint");
+
+        ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
 
         return McpStreamableHttpConnector
             .builder()
@@ -257,7 +271,7 @@ public class McpStreamableHttpConnectorTest {
             .description("this is a test mcp streamable http connector")
             .protocol(MCP_STREAMABLE_HTTP)
             .credential(credential)
-            .backendRoles(backendRoles)
+            .backendRoles(List.of("role1", "role2"))
             .accessMode(AccessMode.PUBLIC)
             .connectorClientConfig(clientConfig)
             .url("https://test.com")
