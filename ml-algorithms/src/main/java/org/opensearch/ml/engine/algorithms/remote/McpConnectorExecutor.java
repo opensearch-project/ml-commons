@@ -11,7 +11,7 @@ import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOL_DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOL_NAME_FIELD;
-import static org.opensearch.ml.common.CommonValue.SSE_ENDPOINT_FILED;
+import static org.opensearch.ml.common.CommonValue.SSE_ENDPOINT_FIELD;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 
@@ -75,8 +75,8 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     public List<MLToolSpec> getMcpToolSpecs() {
         String mcpServerUrl = connector.getUrl();
-        String sseEndpoint = connector.getParameters() != null && connector.getParameters().containsKey(SSE_ENDPOINT_FILED)
-            ? connector.getParameters().get(SSE_ENDPOINT_FILED)
+        String sseEndpoint = connector.getParameters() != null && connector.getParameters().containsKey(SSE_ENDPOINT_FIELD)
+            ? connector.getParameters().get(SSE_ENDPOINT_FIELD)
             : MCP_DEFAULT_SSE_ENDPOINT;
         if (mcpServerUrl == null) {
             return Collections.emptyList();
@@ -87,8 +87,10 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
             Consumer<HttpRequest.Builder> headerConfig = builder -> {
-                for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
-                    builder.header(entry.getKey(), entry.getValue());
+                if (connector.getDecryptedHeaders() != null) {
+                    for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
+                        builder.header(entry.getKey(), entry.getValue());
+                    }
                 }
             };
 
