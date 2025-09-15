@@ -15,7 +15,7 @@ import java.io.IOException;
 import org.junit.Test;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
 public class MemorySearchQueryBuilderTests {
 
@@ -66,7 +66,7 @@ public class MemorySearchQueryBuilderTests {
     @Test
     public void testBuildQueryByStorageTypeWithTextEmbedding() throws IOException {
         String queryText = "AI research topics";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
@@ -85,7 +85,7 @@ public class MemorySearchQueryBuilderTests {
     @Test
     public void testBuildQueryByStorageTypeWithSparseEncoding() throws IOException {
         String queryText = "computer vision";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -103,7 +103,7 @@ public class MemorySearchQueryBuilderTests {
     @Test
     public void testBuildQueryByStorageTypeWithNonSemanticStorage() throws IOException {
         String queryText = "reinforcement learning";
-        MemoryStorageConfig config = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
+        MemoryConfiguration config = MemoryConfiguration.builder().semanticStorageEnabled(false).build();
 
         XContentBuilder builder = MemorySearchQueryBuilder.buildQueryByStorageType(queryText, config);
         String jsonString = builder.toString();
@@ -130,7 +130,7 @@ public class MemorySearchQueryBuilderTests {
         // Create a config with unsupported type - will fail during build
         assertThrows(
             IllegalArgumentException.class,
-            () -> MemoryStorageConfig
+            () -> MemoryConfiguration
                 .builder()
                 .semanticStorageEnabled(true)
                 .embeddingModelType(FunctionName.KMEANS) // Unsupported type - will throw during build
@@ -143,7 +143,7 @@ public class MemorySearchQueryBuilderTests {
     public void testBuildFactSearchQueryWithTextEmbedding() throws IOException {
         String fact = "User's name is John";
         String sessionId = "session-123";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
@@ -173,7 +173,7 @@ public class MemorySearchQueryBuilderTests {
     public void testBuildFactSearchQueryWithSparseEncoding() throws IOException {
         String fact = "Works at TechCorp";
         String sessionId = "session-456";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -197,7 +197,7 @@ public class MemorySearchQueryBuilderTests {
     public void testBuildFactSearchQueryWithNonSemanticStorage() throws IOException {
         String fact = "Lives in San Francisco";
         String sessionId = "session-789";
-        MemoryStorageConfig config = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
+        MemoryConfiguration config = MemoryConfiguration.builder().semanticStorageEnabled(false).build();
 
         XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
         String jsonString = builder.toString();
@@ -236,7 +236,7 @@ public class MemorySearchQueryBuilderTests {
         // Create a config with unsupported type - will fail during build
         assertThrows(
             IllegalArgumentException.class,
-            () -> MemoryStorageConfig
+            () -> MemoryConfiguration
                 .builder()
                 .semanticStorageEnabled(true)
                 .embeddingModelType(FunctionName.LINEAR_REGRESSION) // Unsupported type - will throw during build
@@ -270,7 +270,7 @@ public class MemorySearchQueryBuilderTests {
         // Test the exact structure of the fact search query
         String fact = "Simple fact";
         String sessionId = "sess-123";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)

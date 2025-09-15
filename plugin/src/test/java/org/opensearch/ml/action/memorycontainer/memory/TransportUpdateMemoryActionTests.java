@@ -38,7 +38,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
@@ -121,10 +121,10 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
             .builder()
             .name("test-container")
             .description("Test container")
-            .memoryStorageConfig(
-                MemoryStorageConfig
+            .configuration(
+                MemoryConfiguration
                     .builder()
-                    .memoryIndexName("test-memory-index")
+                    .indexPrefix("test-memory-index")
                     .semanticStorageEnabled(true)
                     .embeddingModelType(FunctionName.TEXT_EMBEDDING)
                     .embeddingModelId("embedding-model-123")
@@ -385,7 +385,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
             .builder()
             .name("test-container")
-            .memoryStorageConfig(MemoryStorageConfig.builder().memoryIndexName("test-memory-index").semanticStorageEnabled(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").semanticStorageEnabled(false).build())
             .build();
 
         UpdateResponse mockUpdateResponse = mock(UpdateResponse.class);
@@ -559,7 +559,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
             .builder()
             .name("test-container")
-            .memoryStorageConfig(MemoryStorageConfig.builder().memoryIndexName("test-memory-index").semanticStorageEnabled(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").semanticStorageEnabled(false).build())
             .build();
 
         // Mock getMemoryContainer

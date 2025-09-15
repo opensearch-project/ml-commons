@@ -32,7 +32,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
@@ -101,9 +101,9 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         actionRequest = mock(ActionRequest.class);
 
         // Setup test memory container
-        MemoryStorageConfig storageConfig = MemoryStorageConfig
+        MemoryConfiguration storageConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName(MEMORY_INDEX_NAME)
+            .indexPrefix(MEMORY_INDEX_NAME)
             .semanticStorageEnabled(false)
             .build();
 
@@ -115,7 +115,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             .tenantId("test-tenant")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
-            .memoryStorageConfig(storageConfig)
+            .configuration(storageConfig)
             .build();
 
         // Setup test memory

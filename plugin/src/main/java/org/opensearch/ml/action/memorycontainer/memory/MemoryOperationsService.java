@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 
 import java.time.Instant;
@@ -25,14 +24,13 @@ import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
-import org.opensearch.ml.helper.MemoryEmbeddingHelper;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -41,26 +39,29 @@ import lombok.extern.log4j.Log4j2;
 public class MemoryOperationsService {
 
     private final Client client;
-    private final MemoryEmbeddingHelper memoryEmbeddingHelper;
 
-    public MemoryOperationsService(Client client, MemoryEmbeddingHelper memoryEmbeddingHelper) {
+    public MemoryOperationsService(Client client) {
         this.client = client;
-        this.memoryEmbeddingHelper = memoryEmbeddingHelper;
     }
 
     public void executeMemoryOperations(
         List<MemoryDecision> decisions,
-        String indexName,
-        String sessionId,
+        MemoryConfiguration memoryConfig,
+        Map<String, String> namespace,
         User user,
         MLAddMemoriesInput input,
-        MemoryStorageConfig storageConfig,
+        MemoryConfiguration configuration,
         ActionListener<List<MemoryResult>> listener
     ) {
+        String longTermMemoryIndex = memoryConfig.getLongMemoryIndexName();
+        String longTermMemoryHistoryIndex = memoryConfig.getLongMemoryHistoryIndexName();
+
         List<MemoryResult> results = new ArrayList<>();
         List<IndexRequest> addRequests = new ArrayList<>();
         List<UpdateRequest> updateRequests = new ArrayList<>();
         List<DeleteRequest> deleteRequests = new ArrayList<>();
+
+        List<IndexRequest> historyAddRequests = new ArrayList<>();
 
         Instant now = Instant.now();
 
@@ -69,23 +70,20 @@ public class MemoryOperationsService {
                 case ADD:
                     MLMemory newMemory = MLMemory
                         .builder()
-                        .sessionId(sessionId)
                         .memory(decision.getText())
-                        .memoryType(MemoryType.FACT)
-                        .userId(user != null ? user.getName() : null)
-                        .agentId(input.getAgentId())
+                        .memoryType(MemoryType.SEMANTIC)
+                        .namespace(namespace)
                         .tags(input.getTags())
                         .createdTime(now)
                         .lastUpdatedTime(now)
                         .build();
 
-                    IndexRequest addRequest = new IndexRequest(indexName).source(newMemory.toIndexMap());
+                    IndexRequest addRequest = new IndexRequest(longTermMemoryIndex).source(newMemory.toIndexMap());
                     addRequests.add(addRequest);
 
-                    results
-                        .add(
-                            MemoryResult.builder().memoryId(null).memory(decision.getText()).event(MemoryEvent.ADD).oldMemory(null).build()
-                        );
+                    MemoryResult memoryResult = MemoryResult.builder().memoryId(null).memory(decision.getText()).event(MemoryEvent.ADD).oldMemory(null).build();
+                    results.add(memoryResult);
+                    historyAddRequests.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
                     break;
 
                 case UPDATE:
@@ -93,35 +91,20 @@ public class MemoryOperationsService {
                     updateDoc.put(MEMORY_FIELD, decision.getText());
                     updateDoc.put(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
 
-                    UpdateRequest updateRequest = new UpdateRequest(indexName, decision.getId()).doc(updateDoc);
+                    UpdateRequest updateRequest = new UpdateRequest(longTermMemoryIndex, decision.getId()).doc(updateDoc);
                     updateRequests.add(updateRequest);
-
-                    results
-                        .add(
-                            MemoryResult
-                                .builder()
-                                .memoryId(decision.getId())
-                                .memory(decision.getText())
-                                .event(MemoryEvent.UPDATE)
-                                .oldMemory(decision.getOldMemory())
-                                .build()
-                        );
+                    memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.UPDATE).oldMemory(decision.getOldMemory()).build();
+                    results.add(memoryResult);
+                    historyAddRequests.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
                     break;
 
                 case DELETE:
-                    DeleteRequest deleteRequest = new DeleteRequest(indexName, decision.getId());
+                    DeleteRequest deleteRequest = new DeleteRequest(longTermMemoryIndex, decision.getId());
                     deleteRequests.add(deleteRequest);
 
-                    results
-                        .add(
-                            MemoryResult
-                                .builder()
-                                .memoryId(decision.getId())
-                                .memory(decision.getText())
-                                .event(MemoryEvent.DELETE)
-                                .oldMemory(null)
-                                .build()
-                        );
+                    memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.DELETE).oldMemory(null).build();
+                    results.add(memoryResult);
+                    historyAddRequests.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
                     break;
 
                 case NONE:
@@ -184,15 +167,37 @@ public class MemoryOperationsService {
                 }
             }
 
-            if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
-                updateEmbeddingsForOperations(results, indexName, storageConfig, listener);
-            } else {
-                listener.onResponse(results);
+            BulkRequest bulkHistoryRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            for (IndexRequest request : historyAddRequests) {
+                bulkHistoryRequest.add(request);
             }
+            client.bulk(bulkHistoryRequest, ActionListener.wrap(bulkHistoryResponse -> {
+                if (bulkHistoryResponse.hasFailures()) {
+                    log.error("Bulk memory history operations had failures: {}", bulkHistoryResponse.buildFailureMessage());
+                }
+                listener.onResponse(results);
+            }, e -> {
+                log.error("Failed to execute memory history operations", e);
+                listener.onFailure(e);
+            }));
         }, e -> {
             log.error("Failed to execute memory operations", e);
             listener.onFailure(e);
         }));
+    }
+
+    private Map<String, Object> createMemoryHistory(MemoryResult memoryResult) {
+        Map<String, Object> history = new HashMap<>();
+        history.put("memory_id", memoryResult.getMemoryId());
+        history.put("action", memoryResult.getEvent().getValue());
+        if (memoryResult.getOldMemory() != null) {
+            history.put("before", Map.of("memory", memoryResult.getOldMemory()));//TODO: support other fields like namespace
+        }
+        if (memoryResult.getMemory() != null) {
+            history.put("after", Map.of("memory", memoryResult.getMemory()));//TODO: support other fields like namespace
+        }
+        history.put("created_time", Instant.now());//TODO: support other fields like namespace
+        return history;
     }
 
     public void bulkIndexMemoriesWithResults(
@@ -213,23 +218,20 @@ public class MemoryOperationsService {
 
     public void createFactMemoriesFromList(
         List<String> facts,
-        MLAddMemoriesInput input,
         String indexName,
-        String sessionId,
+        MLAddMemoriesInput input,
+        Map<String, String> strategyNameSpace,
         User user,
-        Instant now,
         List<IndexRequest> indexRequests,
         List<MemoryInfo> memoryInfos
     ) {
+        Instant now = Instant.now();
         for (String fact : facts) {
             MLMemory factMemory = MLMemory
                 .builder()
-                .sessionId(sessionId)
                 .memory(fact)
-                .memoryType(MemoryType.FACT)
-                .userId(user != null ? user.getName() : null)
-                .agentId(input.getAgentId())
-                .role("assistant")
+                .memoryType(MemoryType.SEMANTIC)
+                .namespace(strategyNameSpace)
                 .tags(input.getTags())
                 .createdTime(now)
                 .lastUpdatedTime(now)
@@ -282,59 +284,5 @@ public class MemoryOperationsService {
                 actionListener
             );
         }, actionListener::onFailure));
-    }
-
-    private void updateEmbeddingsForOperations(
-        List<MemoryResult> results,
-        String indexName,
-        MemoryStorageConfig storageConfig,
-        ActionListener<List<MemoryResult>> listener
-    ) {
-        List<String> textsToEmbed = new ArrayList<>();
-        List<String> memoryIdsToUpdate = new ArrayList<>();
-
-        for (MemoryResult result : results) {
-            if ((result.getEvent() == MemoryEvent.ADD || result.getEvent() == MemoryEvent.UPDATE) && result.getMemoryId() != null) {
-                textsToEmbed.add(result.getMemory());
-                memoryIdsToUpdate.add(result.getMemoryId());
-            }
-        }
-
-        if (!textsToEmbed.isEmpty()) {
-            memoryEmbeddingHelper.generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
-                List<UpdateRequest> embeddingUpdates = new ArrayList<>();
-                for (int i = 0; i < memoryIdsToUpdate.size() && i < embeddings.size(); i++) {
-                    Map<String, Object> embeddingUpdate = new HashMap<>();
-                    embeddingUpdate.put(MEMORY_EMBEDDING_FIELD, embeddings.get(i));
-
-                    UpdateRequest updateRequest = new UpdateRequest(indexName, memoryIdsToUpdate.get(i)).doc(embeddingUpdate);
-                    embeddingUpdates.add(updateRequest);
-                }
-
-                if (!embeddingUpdates.isEmpty()) {
-                    BulkRequest embeddingBulk = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                    for (UpdateRequest request : embeddingUpdates) {
-                        embeddingBulk.add(request);
-                    }
-
-                    client.bulk(embeddingBulk, ActionListener.wrap(embeddingResponse -> {
-                        if (embeddingResponse.hasFailures()) {
-                            log.error("Failed to update embeddings: {}", embeddingResponse.buildFailureMessage());
-                        }
-                        listener.onResponse(results);
-                    }, e -> {
-                        log.error("Failed to update embeddings", e);
-                        listener.onResponse(results);
-                    }));
-                } else {
-                    listener.onResponse(results);
-                }
-            }, e -> {
-                log.error("Failed to generate embeddings for memory operations", e);
-                listener.onResponse(results);
-            }));
-        } else {
-            listener.onResponse(results);
-        }
     }
 }

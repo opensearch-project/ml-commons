@@ -27,7 +27,8 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryDecisionRequest;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -50,17 +51,25 @@ public class MemoryProcessingService {
         this.xContentRegistry = xContentRegistry;
     }
 
+    public void runMemoryStrategy(MemoryStrategy strategy, List<MessageInput> messages, MemoryConfiguration memoryConfig, ActionListener<List<String>> listener) {
+        if ("semantic".equalsIgnoreCase(strategy.getType())) {//TODO: change to enum
+            extractFactsFromConversation(messages, memoryConfig, listener);
+        } else {
+            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
+        }
+    }
+
     public void extractFactsFromConversation(
         List<MessageInput> messages,
-        MemoryStorageConfig storageConfig,
+        MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
-        if (storageConfig == null || storageConfig.getLlmModelId() == null) {
+        if (memoryConfig == null || memoryConfig.getLlmId() == null) {
             listener.onResponse(new ArrayList<>());
             return;
         }
 
-        String llmModelId = storageConfig.getLlmModelId();
+        String llmModelId = memoryConfig.getLlmId();
         Map<String, String> stringParameters = new HashMap<>();
         stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
 
@@ -75,6 +84,18 @@ public class MemoryProcessingService {
                 messagesBuilder.startObject();
                 messagesBuilder.field("type", "text");
                 messagesBuilder.field("text", message.getContent());
+                messagesBuilder.endObject();
+                messagesBuilder.endArray();
+                messagesBuilder.endObject();
+            }
+            int size = messages.size();
+            if (size > 1 && messages.get(size - 1).getRole().equalsIgnoreCase("assistant")) {
+                messagesBuilder.startObject();
+                messagesBuilder.field("role", "user");
+                messagesBuilder.startArray("content");
+                messagesBuilder.startObject();
+                messagesBuilder.field("type", "text");
+                messagesBuilder.field("text", "Please extract information from our conversation so far");
                 messagesBuilder.endObject();
                 messagesBuilder.endArray();
                 messagesBuilder.endObject();
@@ -119,15 +140,15 @@ public class MemoryProcessingService {
     public void makeMemoryDecisions(
         List<String> extractedFacts,
         List<FactSearchResult> allSearchResults,
-        MemoryStorageConfig storageConfig,
+        MemoryConfiguration storageConfig,
         ActionListener<List<MemoryDecision>> listener
     ) {
-        if (storageConfig == null || storageConfig.getLlmModelId() == null) {
+        if (storageConfig == null || storageConfig.getLlmId() == null) {
             listener.onFailure(new IllegalStateException("LLM model is required for memory decisions"));
             return;
         }
 
-        String llmModelId = storageConfig.getLlmModelId();
+        String llmModelId = storageConfig.getLlmId();
 
         List<MemoryDecisionRequest.OldMemory> oldMemories = new ArrayList<>();
         for (FactSearchResult result : allSearchResults) {
