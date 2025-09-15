@@ -262,7 +262,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     private Map<String, String> getStrategyNameSpace(MemoryStrategy strategy, Map<String, String> namespace) {
         Map<String, String> strategyNamespace = new HashMap<>();
         for (String key : strategy.getNamespace()) {
-            strategyNamespace.put(key, namespace.get(key));
+            if (namespace.containsKey(key)) {
+                strategyNamespace.put(key, namespace.get(key));
+            }
         }
         return strategyNamespace;
     }
