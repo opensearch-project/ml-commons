@@ -34,7 +34,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -267,34 +267,34 @@ public class MemoryContainerHelperTests {
 
     @Test
     public void testGetMemoryIndexNameWithConfig() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName("custom-memory-index").build();
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("custom-memory-index").build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         assertEquals("custom-memory-index", helper.getMemoryIndexName(container));
     }
 
     @Test
     public void testGetMemoryIndexNameWithoutConfig() {
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(null).build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
         assertNull(helper.getMemoryIndexName(container));
     }
 
     @Test
     public void testGetMemoryIndexNameWithEmptyConfig() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName(null).build();
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix(null).build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         assertNull(helper.getMemoryIndexName(container));
     }
 
     @Test
     public void testValidateMemoryIndexExistsSuccess() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName("valid-index").build();
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("valid-index").build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
         boolean result = helper.validateMemoryIndexExists(container, "test-action", mockListener);
@@ -305,7 +305,7 @@ public class MemoryContainerHelperTests {
 
     @Test
     public void testValidateMemoryIndexExistsFailureNoIndex() {
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(null).build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
         boolean result = helper.validateMemoryIndexExists(container, "test-action", mockListener);
@@ -321,9 +321,9 @@ public class MemoryContainerHelperTests {
 
     @Test
     public void testValidateMemoryIndexExistsFailureEmptyIndex() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName("").build();
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("").build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
         boolean result = helper.validateMemoryIndexExists(container, "another-action", mockListener);

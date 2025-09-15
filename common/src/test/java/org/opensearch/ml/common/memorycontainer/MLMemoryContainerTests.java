@@ -30,7 +30,7 @@ public class MLMemoryContainerTests {
 
     private MLMemoryContainer mlMemoryContainer;
     private User testUser;
-    private MemoryStorageConfig testMemoryStorageConfig;
+    private MemoryConfiguration testMemoryStorageConfig;
     private Instant testCreatedTime;
     private Instant testLastUpdatedTime;
 
@@ -41,9 +41,9 @@ public class MLMemoryContainerTests {
         testCreatedTime = Instant.ofEpochMilli(System.currentTimeMillis());
         testLastUpdatedTime = Instant.ofEpochMilli(System.currentTimeMillis() + 3600000);
 
-        testMemoryStorageConfig = MemoryStorageConfig
+        testMemoryStorageConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-memory-index")
+            .indexPrefix("test-memory-index")
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
@@ -59,7 +59,7 @@ public class MLMemoryContainerTests {
             .tenantId("test-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .build();
     }
 
@@ -72,7 +72,7 @@ public class MLMemoryContainerTests {
         assertEquals("test-tenant", mlMemoryContainer.getTenantId());
         assertEquals(testCreatedTime, mlMemoryContainer.getCreatedTime());
         assertEquals(testLastUpdatedTime, mlMemoryContainer.getLastUpdatedTime());
-        assertEquals(testMemoryStorageConfig, mlMemoryContainer.getMemoryStorageConfig());
+        assertEquals(testMemoryStorageConfig, mlMemoryContainer.getConfiguration());
     }
 
     @Test
@@ -93,7 +93,7 @@ public class MLMemoryContainerTests {
         assertEquals("test-tenant", container.getTenantId());
         assertEquals(testCreatedTime, container.getCreatedTime());
         assertEquals(testLastUpdatedTime, container.getLastUpdatedTime());
-        assertEquals(testMemoryStorageConfig, container.getMemoryStorageConfig());
+        assertEquals(testMemoryStorageConfig, container.getConfiguration());
     }
 
     @Test
@@ -106,7 +106,7 @@ public class MLMemoryContainerTests {
             .tenantId(null)
             .createdTime(null)
             .lastUpdatedTime(null)
-            .memoryStorageConfig(null)
+            .configuration(null)
             .build();
 
         assertNull(container.getName());
@@ -115,7 +115,7 @@ public class MLMemoryContainerTests {
         assertNull(container.getTenantId());
         assertNull(container.getCreatedTime());
         assertNull(container.getLastUpdatedTime());
-        assertNull(container.getMemoryStorageConfig());
+        assertNull(container.getConfiguration());
     }
 
     @Test
@@ -132,7 +132,7 @@ public class MLMemoryContainerTests {
         assertEquals(mlMemoryContainer.getTenantId(), parsedContainer.getTenantId());
         assertEquals(mlMemoryContainer.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(mlMemoryContainer.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertEquals(mlMemoryContainer.getMemoryStorageConfig(), parsedContainer.getMemoryStorageConfig());
+        assertEquals(mlMemoryContainer.getConfiguration(), parsedContainer.getConfiguration());
     }
 
     @Test
@@ -145,7 +145,7 @@ public class MLMemoryContainerTests {
             .tenantId("test-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(null)
+            .configuration(null)
             .build();
 
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
@@ -160,7 +160,7 @@ public class MLMemoryContainerTests {
         assertEquals(containerWithNulls.getTenantId(), parsedContainer.getTenantId());
         assertEquals(containerWithNulls.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(containerWithNulls.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertNull(parsedContainer.getMemoryStorageConfig());
+        assertNull(parsedContainer.getConfiguration());
     }
 
     @Test
@@ -189,7 +189,7 @@ public class MLMemoryContainerTests {
             .tenantId(null)
             .createdTime(null)
             .lastUpdatedTime(null)
-            .memoryStorageConfig(null)
+            .configuration(null)
             .build();
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -223,7 +223,7 @@ public class MLMemoryContainerTests {
         assertNull(parsedContainer.getTenantId());
         assertNull(parsedContainer.getCreatedTime());
         assertNull(parsedContainer.getLastUpdatedTime());
-        assertNull(parsedContainer.getMemoryStorageConfig());
+        assertNull(parsedContainer.getConfiguration());
     }
 
     @Test
@@ -265,7 +265,7 @@ public class MLMemoryContainerTests {
         assertEquals(testCreatedTime, parsedContainer.getCreatedTime());
         assertEquals(testLastUpdatedTime, parsedContainer.getLastUpdatedTime());
         assertNull(parsedContainer.getOwner());
-        assertNull(parsedContainer.getMemoryStorageConfig());
+        assertNull(parsedContainer.getConfiguration());
     }
 
     @Test
@@ -288,13 +288,13 @@ public class MLMemoryContainerTests {
         MLMemoryContainer parsedContainer = MLMemoryContainer.parse(parser);
 
         assertEquals("config-test-container", parsedContainer.getName());
-        assertNotNull(parsedContainer.getMemoryStorageConfig());
-        assertEquals("test-index", parsedContainer.getMemoryStorageConfig().getMemoryIndexName());
-        assertEquals(true, parsedContainer.getMemoryStorageConfig().isSemanticStorageEnabled());
-        assertEquals(FunctionName.TEXT_EMBEDDING, parsedContainer.getMemoryStorageConfig().getEmbeddingModelType());
-        assertEquals("test-model", parsedContainer.getMemoryStorageConfig().getEmbeddingModelId());
-        assertEquals(Integer.valueOf(512), parsedContainer.getMemoryStorageConfig().getDimension());
-        assertNull(parsedContainer.getMemoryStorageConfig().getMaxInferSize()); // No llmModelId, so maxInferSize is null
+        assertNotNull(parsedContainer.getConfiguration());
+        assertEquals("test-index", parsedContainer.getConfiguration().getIndexPrefix());
+        assertEquals(true, parsedContainer.getConfiguration().isSemanticStorageEnabled());
+        assertEquals(FunctionName.TEXT_EMBEDDING, parsedContainer.getConfiguration().getEmbeddingModelType());
+        assertEquals("test-model", parsedContainer.getConfiguration().getEmbeddingModelId());
+        assertEquals(Integer.valueOf(512), parsedContainer.getConfiguration().getDimension());
+        assertNull(parsedContainer.getConfiguration().getMaxInferSize()); // No llmModelId, so maxInferSize is null
     }
 
     @Test
@@ -309,7 +309,7 @@ public class MLMemoryContainerTests {
             .tenantId("roundtrip-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .build();
 
         // Convert to JSON
@@ -330,7 +330,7 @@ public class MLMemoryContainerTests {
         assertEquals(originalContainer.getTenantId(), parsedContainer.getTenantId());
         assertEquals(originalContainer.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(originalContainer.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertEquals(originalContainer.getMemoryStorageConfig(), parsedContainer.getMemoryStorageConfig());
+        assertEquals(originalContainer.getConfiguration(), parsedContainer.getConfiguration());
     }
 
     @Test
@@ -372,7 +372,7 @@ public class MLMemoryContainerTests {
             .tenantId("test-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .build();
 
         MLMemoryContainer container2 = MLMemoryContainer
@@ -383,7 +383,7 @@ public class MLMemoryContainerTests {
             .tenantId("test-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .build();
 
         MLMemoryContainer container3 = MLMemoryContainer
@@ -394,7 +394,7 @@ public class MLMemoryContainerTests {
             .tenantId("test-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .build();
 
         assertEquals(container1, container2);
@@ -413,7 +413,7 @@ public class MLMemoryContainerTests {
         container.setTenantId("new-tenant");
         container.setCreatedTime(testCreatedTime);
         container.setLastUpdatedTime(testLastUpdatedTime);
-        container.setMemoryStorageConfig(testMemoryStorageConfig);
+        container.setConfiguration(testMemoryStorageConfig);
 
         assertEquals("new-name", container.getName());
         assertEquals("new-description", container.getDescription());
@@ -421,6 +421,6 @@ public class MLMemoryContainerTests {
         assertEquals("new-tenant", container.getTenantId());
         assertEquals(testCreatedTime, container.getCreatedTime());
         assertEquals(testLastUpdatedTime, container.getLastUpdatedTime());
-        assertEquals(testMemoryStorageConfig, container.getMemoryStorageConfig());
+        assertEquals(testMemoryStorageConfig, container.getConfiguration());
     }
 }
