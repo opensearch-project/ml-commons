@@ -73,7 +73,7 @@ public class MLMemoryTest {
             .builder()
             .sessionId("session-minimal")
             .memory("Minimal memory")
-            .memoryType(MemoryType.FACT)
+            .memoryType(MemoryType.SEMANTIC)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
             .build();
@@ -99,7 +99,7 @@ public class MLMemoryTest {
         assertNotNull(memoryMinimal);
         assertEquals("session-minimal", memoryMinimal.getSessionId());
         assertEquals("Minimal memory", memoryMinimal.getMemory());
-        assertEquals(MemoryType.FACT, memoryMinimal.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, memoryMinimal.getMemoryType());
         assertNull(memoryMinimal.getUserId());
         assertNull(memoryMinimal.getAgentId());
         assertNull(memoryMinimal.getRole());
@@ -157,7 +157,7 @@ public class MLMemoryTest {
             .builder()
             .sessionId("session-empty-tags")
             .memory("Memory with empty tags")
-            .memoryType(MemoryType.FACT)
+            .memoryType(MemoryType.SEMANTIC)
             .tags(new HashMap<>())
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -268,7 +268,7 @@ public class MLMemoryTest {
 
         assertEquals("session-minimal", parsed.getSessionId());
         assertEquals("Minimal memory", parsed.getMemory());
-        assertEquals(MemoryType.FACT, parsed.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
         assertNull(parsed.getUserId());
         assertNull(parsed.getAgentId());
         assertNull(parsed.getRole());
@@ -301,7 +301,7 @@ public class MLMemoryTest {
 
         assertEquals("session-123", parsed.getSessionId());
         assertEquals("Test memory", parsed.getMemory());
-        assertEquals(MemoryType.FACT, parsed.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
     }
 
     @Test
@@ -344,7 +344,7 @@ public class MLMemoryTest {
             .builder()
             .sessionId("initial-session")
             .memory("initial memory")
-            .memoryType(MemoryType.FACT)
+            .memoryType(MemoryType.SEMANTIC)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
             .build();
@@ -419,7 +419,7 @@ public class MLMemoryTest {
             .builder()
             .sessionId("session-with-special-chars-🚀")
             .memory("Memory with\n\ttabs and\nnewlines and \"quotes\"")
-            .memoryType(MemoryType.FACT)
+            .memoryType(MemoryType.SEMANTIC)
             .role("user/assistant")
             .tags(specialTags)
             .createdTime(testCreatedTime)

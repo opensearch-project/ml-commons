@@ -17,7 +17,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -57,7 +57,7 @@ public class MemoryEmbeddingHelper {
      */
     public void generateEmbeddingsForMultipleTexts(
         List<String> texts,
-        MemoryStorageConfig storageConfig,
+        MemoryConfiguration storageConfig,
         ActionListener<List<Object>> listener
     ) {
         if (texts.isEmpty()) {
@@ -70,7 +70,7 @@ public class MemoryEmbeddingHelper {
     /**
      * Internal method to generate embeddings for multiple texts
      */
-    private void generateEmbeddingsInternal(List<String> texts, MemoryStorageConfig storageConfig, ActionListener<List<Object>> listener) {
+    private void generateEmbeddingsInternal(List<String> texts, MemoryConfiguration storageConfig, ActionListener<List<Object>> listener) {
         String embeddingModelId = storageConfig.getEmbeddingModelId();
         FunctionName embeddingModelType = storageConfig.getEmbeddingModelType();
 
@@ -133,7 +133,7 @@ public class MemoryEmbeddingHelper {
      * @param storageConfig memory storage configuration
      * @param listener action listener for the result
      */
-    public void generateEmbedding(String text, MemoryStorageConfig storageConfig, ActionListener<Object> listener) {
+    public void generateEmbedding(String text, MemoryConfiguration storageConfig, ActionListener<Object> listener) {
         if (storageConfig == null || !storageConfig.isSemanticStorageEnabled()) {
             listener.onResponse(null);
             return;
