@@ -27,9 +27,11 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -49,7 +51,9 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.IndicesAdminClient;
 
 public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -57,6 +61,12 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+
+    @Mock
+    AdminClient adminClient;
+
+    @Mock
+    IndicesAdminClient indicesAdminClient;
 
     @Mock
     SdkClient sdkClient;
@@ -72,6 +82,12 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     ActionFilters actionFilters;
+
+    @Mock
+    GetMappingsResponse getMappingsResponse;
+
+    @Mock
+    MappingMetadata mappingMetadata;
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -105,6 +121,16 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(), any());
+        when(getMappingsResponse.getMappings()).thenReturn(Map.of("demo", mappingMetadata));
+
     }
 
     @Test
