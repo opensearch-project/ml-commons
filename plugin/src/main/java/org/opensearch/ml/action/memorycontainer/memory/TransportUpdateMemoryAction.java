@@ -24,14 +24,12 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
-import org.opensearch.ml.helper.MemoryEmbeddingHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -54,7 +52,6 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
     final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     final MLModelManager mlModelManager;
     final MemoryContainerHelper memoryContainerHelper;
-    final MemoryEmbeddingHelper memoryEmbeddingHelper;
 
     @Inject
     public TransportUpdateMemoryAction(
@@ -66,8 +63,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLModelManager mlModelManager,
-        MemoryContainerHelper memoryContainerHelper,
-        MemoryEmbeddingHelper memoryEmbeddingHelper
+        MemoryContainerHelper memoryContainerHelper
     ) {
         super(MLUpdateMemoryAction.NAME, transportService, actionFilters, MLUpdateMemoryRequest::new);
         this.client = client;
@@ -77,7 +73,6 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlModelManager = mlModelManager;
         this.memoryContainerHelper = memoryContainerHelper;
-        this.memoryEmbeddingHelper = memoryEmbeddingHelper;
     }
 
     @Override
@@ -129,25 +124,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 updateFields.put(MEMORY_FIELD, newText);
                 updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
 
-                // Check if we need to regenerate embedding
-                MemoryStorageConfig storageConfig = container.getMemoryStorageConfig();
-                if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
-                    // Generate embedding for the new text
-                    memoryEmbeddingHelper.generateEmbedding(newText, storageConfig, ActionListener.wrap(embedding -> {
-                        if (embedding != null) {
-                            updateFields.put(MEMORY_EMBEDDING_FIELD, embedding);
-                        }
-                        // Perform the update with embedding
-                        performUpdate(memoryIndexName, memoryId, updateFields, actionListener);
-                    }, error -> {
-                        log.error("Failed to generate embedding for memory update, proceeding without embedding", error);
-                        // Update without embedding if generation fails
-                        performUpdate(memoryIndexName, memoryId, updateFields, actionListener);
-                    }));
-                } else {
-                    // No semantic storage, just update the text and timestamp
-                    performUpdate(memoryIndexName, memoryId, updateFields, actionListener);
-                }
+                performUpdate(memoryIndexName, memoryId, updateFields, actionListener);
             }, actionListener::onFailure));
 
         }, actionListener::onFailure));
