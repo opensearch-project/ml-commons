@@ -1,0 +1,378 @@
+# Topic
+
+This tutorial introduces how to use agentic memory.
+
+# Steps
+
+## 1. Enable agentic memory feature
+```
+PUT _cluster/settings
+{
+  "persistent": {
+    "plugins.ml_commons.agentic_memory_enabled": true
+  }
+}
+```
+
+## 2. Prepare model
+
+### 2.1 Embedding model
+
+```
+POST _plugins/_ml/models/_register
+{
+  "name": "Bedrock embedding model",
+  "function_name": "remote",
+  "description": "Embedding model for memory",
+  "connector": {
+    "name": "embedding",
+    "description": "The connector to bedrock Titan embedding model",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "{{aws_region}}",
+      "service_name": "bedrock",
+      "model": "amazon.titan-embed-text-v2:0",
+      "dimensions": 1024,
+      "normalize": true,
+      "embeddingTypes": [
+        "float"
+      ]
+    },
+    "credential": {
+      "access_key": "{{access_key}}",
+      "secret_key": "{{secret_key}}",
+      "session_token": "{{session_token}}"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions}, \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  }
+}
+```
+
+### 2.1 LLM
+```
+POST _plugins/_ml/models/_register
+{
+  "name": "Bedrock infer model",
+  "function_name": "remote",
+  "description": "LLM model for memory processing",
+  "connector": {
+    "name": "Amazon Bedrock Connector: LLM",
+    "description": "The connector to bedrock Claude 3.7 sonnet model",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "us-west-2",
+      "service_name": "bedrock",
+      "max_tokens": 8000,
+      "temperature": 1,
+      "anthropic_version": "bedrock-2023-05-31",
+      "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    },
+    "credential": {
+      "access_key": "{{access_key}}",
+      "secret_key": "{{secret_key}}",
+      "session_token": "{{session_token}}"
+    },
+    "actions": [{
+      "action_type": "predict",
+      "method": "POST",
+      "headers": {"content-type": "application/json"},
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
+      "request_body": "{ \"system\": \"${parameters.system_prompt}\", \"anthropic_version\": \"${parameters.anthropic_version}\", \"max_tokens\": ${parameters.max_tokens}, \"temperature\": ${parameters.temperature}, \"messages\": ${parameters.messages} }"
+    }]
+  }
+}
+```
+
+## 3. Create memory container
+```
+POST _plugins/_ml/memory_containers/_create
+{
+  "name": "agentic memory test",
+  "description": "Store conversations with semantic search and summarization",
+  "configuration": {
+    "index_prefix": "test1",
+    "embedding_model_type": "TEXT_EMBEDDING",
+    "embedding_model_id": "{{embed_model}}",
+    "embedding_dimension": 1024,
+    "llm_id": "{{llm}}",
+    "strategies": [
+      {
+        "enabled": true,
+        "type": "SEMANTIC",
+        "namespace": [
+          "user_id"
+        ],
+        "configuration": {
+          "test": "value"
+        }
+      }
+    ]
+  }
+}
+```
+This will create following indexes:
+
+- `test1-session`: store the conversation session data
+- `test1-short-term-memory`: store the short term memory: conversation messages (`conversation` type), or non-conversation message (`data` type)
+- `test1-long-term-memory`: store the extracted facts from shor-term memories, only extract facts from  conversation messages (`conversation` type)
+- `test1-long-term-memory-history`: stores the long term memory events: add/update/delete memory
+
+## 3. Create short-term memory only
+```
+POST /_plugins/_ml/memory_containers/{{mem_container_id}}/memories
+{
+  "structured_data": {
+    "time_range": {
+      "start": "2025-09-11",
+      "end": "2025-09-15"
+    }
+  },
+  "namespace": {
+    "agent_id": "testAgent1"
+  },
+  "tags": {
+    "topic": "agent_state"
+  },
+  "infer": false,
+  "memory_type": "data"
+}
+```
+Sample response
+```
+{
+  "short_term_memory_id": "Z8xeTpkBvwXRq366l0iA"
+}
+```
+Search `test1-long-term-memory` and `test1-long-term-memory-history`, see no long term memory added.
+
+Search `test1-short-term-memory`, can see such sample response
+```
+{
+    "_index": "test1-short-term-memory",
+    "_id": "Z8xeTpkBvwXRq366l0iA",
+    "_score": 1.0,
+    "_source": {
+      "memory_container_id": "C01hR5kBZYZ7d7266n2z",
+      "memory_type": "data",
+      "structured_data": {
+        "time_range": {
+          "start": "2025-09-11",
+          "end": "2025-09-15"
+        }
+      },
+      "namespace": {
+        "agent_id": "testAgent1"
+      },
+      "infer": false,
+      "tags": {
+        "topic": "agent_state"
+      },
+      "created_time": "2025-09-15T17:14:06.07736704Z",
+      "last_updated_time": "2025-09-15T17:14:06.07736704Z"
+    }
+}
+```
+
+## 4. Create conversation short-term memory
+
+```
+POST _plugins/_ml/memory_containers/{{mem_container_id}}/memories
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "I'm Bob, I really like swimming."
+    },
+    {
+      "role": "assistant",
+      "content": "Cool, nice. Hope you enjoy your life."
+    }
+  ],
+  "namespace": {
+    "user_id": "bob"
+  },
+  "tags": {
+    "topic": "personal info"
+  },
+  "infer": true,
+  "memory_type": "conversation"
+}
+```
+Sample response
+```
+{
+  "session_id": "CcxjTpkBvwXRq366A1aE",
+  "short_term_memory_id": "CsxjTpkBvwXRq366A1aJ"
+}
+```
+Search `test1-short-term-memory`, can see a new doc
+```
+{
+    "_index": "test1-short-term-memory",
+    "_id": "CsxjTpkBvwXRq366A1aJ",
+    "_score": 1.0,
+    "_source": {
+      "memory_container_id": "C01hR5kBZYZ7d7266n2z",
+      "memory_type": "conversation",
+      "messages": [
+        {
+          "role": "user",
+          "content_text": "I'm Bob, I really like swimming."
+        },
+        {
+          "role": "assistant",
+          "content_text": "Cool, nice. Hope you enjoy your life."
+        }
+      ],
+      "namespace": {
+        "user_id": "bob",
+        "session_id": "CcxjTpkBvwXRq366A1aE"
+      },
+      "infer": true,
+      "tags": {
+        "topic": "personal info"
+      },
+      "created_time": "2025-09-15T17:18:55.881276939Z",
+      "last_updated_time": "2025-09-15T17:18:55.881276939Z"
+    }
+}
+```
+Search `test1-long-term-memory`, can see new docs
+```
+{
+    "_index": "test1-long-term-memory",
+    "_id": "DcxjTpkBvwXRq366C1Zz",
+    "_score": 1.0,
+    "_source": {
+      "created_time": 1757956737699,
+      "memory": "User's name is Bob",
+      "last_updated_time": 1757956737699,
+      "namespace_size": 1,
+      "namespace": {
+        "user_id": "bob"
+      },
+      "memory_type": "SEMANTIC",
+      "tags": {
+        "topic": "personal info"
+      }
+    }
+},
+{
+    "_index": "test1-long-term-memory",
+    "_id": "DsxjTpkBvwXRq366C1Zz",
+    "_score": 1.0,
+    "_source": {
+      "created_time": 1757956737699,
+      "memory": "Bob really likes swimming",
+      "last_updated_time": 1757956737699,
+      "namespace_size": 1,
+      "namespace": {
+        "user_id": "bob"
+      },
+      "memory_type": "SEMANTIC",
+      "tags": {
+        "topic": "personal info"
+      }
+    }
+}
+```
+Search `test1-long-term-memory-history`, can see new docs
+```
+{
+    "_index": "test1-long-term-memory-history",
+    "_id": "D8xjTpkBvwXRq366C1bC",
+    "_score": 1.0,
+    "_source": {
+      "created_time": "2025-09-15T17:18:57.702183535Z",
+      "memory_id": null,
+      "action": "ADD",
+      "after": {
+        "memory": "User's name is Bob"
+      }
+    }
+},
+{
+    "_index": "test1-long-term-memory-history",
+    "_id": "EMxjTpkBvwXRq366C1bC",
+    "_score": 1.0,
+    "_source": {
+      "created_time": "2025-09-15T17:18:57.702461301Z",
+      "memory_id": null,
+      "action": "ADD",
+      "after": {
+        "memory": "Bob really likes swimming"
+      }
+    }
+}
+```
+
+## 4. Update memory
+
+```
+POST /_plugins/_ml/memory_containers/{{mem_container_id}}/memories
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "I don't like swimming now."
+    }
+  ],
+  "namespace": {
+    "user_id": "bob"
+  },
+  "tags": {
+    "topic": "personal info"
+  },
+  "infer": true,
+  "memory_type": "conversation"
+}
+```
+Can see a new record added to shor-term memory index. 
+
+Since the `namespace` is on user level, it will search old memories for `bob` and update.
+
+Can see new events in `test1-long-term-memory-history`
+
+```
+{
+    "_index": "test1-long-term-memory-history",
+    "_id": "eMxnTpkBvwXRq366hmAU",
+    "_score": 1.0,
+    "_source": {
+      "created_time": "2025-09-15T17:23:51.302920078Z",
+      "memory_id": "DsxjTpkBvwXRq366C1Zz",
+      "action": "DELETE",
+      "after": {
+        "memory": "Bob really likes swimming"
+      }
+    }
+},
+{
+    "_index": "test1-long-term-memory-history",
+    "_id": "ecxnTpkBvwXRq366hmAU",
+    "_score": 1.0,
+    "_source": {
+      "created_time": "2025-09-15T17:23:51.303097838Z",
+      "memory_id": null,
+      "action": "ADD",
+      "after": {
+        "memory": "User doesn't like swimming currently"
+      }
+    }
+}
+```
