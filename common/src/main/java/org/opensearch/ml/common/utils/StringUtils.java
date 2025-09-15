@@ -88,7 +88,7 @@ public class StringUtils {
 
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    public static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static boolean isValidJsonString(String json) {
         if (json == null || json.isBlank()) {

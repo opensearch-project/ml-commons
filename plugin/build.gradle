@@ -13,7 +13,6 @@ plugins {
     id "io.freefair.lombok"
     id 'jacoco'
     id 'java-library'
-    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 ext {
@@ -334,8 +333,6 @@ jacocoTestReport {
 
 List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
-        'org.opensearch.ml.profile.MLPredictRequestStats',
-        'org.opensearch.ml.action.deploy.TransportDeployModelAction',
         'org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction',
         'org.opensearch.ml.action.undeploy.TransportUndeployModelsAction',
         'org.opensearch.ml.action.prediction.TransportPredictionTaskAction',
@@ -481,15 +478,6 @@ afterEvaluate {
 
     task buildPackages(type: GradleBuild) {
         tasks = ['build', 'buildRpm', 'buildDeb']
-    }
-}
-
-spotless {
-    java {
-        removeUnusedImports()
-        importOrder 'java', 'javax', 'org', 'com'
-
-        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
     }
 }
 

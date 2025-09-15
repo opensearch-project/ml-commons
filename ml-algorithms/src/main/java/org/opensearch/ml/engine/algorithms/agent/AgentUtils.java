@@ -361,9 +361,11 @@ public class AgentUtils {
                     if (functionCalling != null) {
                         toolCalls = functionCalling.handle(tmpModelTensorOutput, parameters);
                         // TODO: support multiple tool calls here
-                        toolName = toolCalls.getFirst().get("tool_name");
-                        toolInput = toolCalls.getFirst().get("tool_input");
-                        toolCallId = toolCalls.getFirst().get("tool_call_id");
+                        if (!toolCalls.isEmpty()) {
+                            toolName = toolCalls.getFirst().get("tool_name");
+                            toolInput = toolCalls.getFirst().get("tool_input");
+                            toolCallId = toolCalls.getFirst().get("tool_call_id");
+                        }
                     } else {
                         String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
                         if (toolCallsPath.startsWith("_llm_response.")) {
@@ -372,9 +374,11 @@ public class AgentUtils {
                         } else {
                             toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
                         }
-                        toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
-                        toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
-                        toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
+                        if (!toolCalls.isEmpty()) {
+                            toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
+                            toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
+                            toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
+                        }
                     }
                     String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
                     String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
