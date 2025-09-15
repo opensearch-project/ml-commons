@@ -35,7 +35,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
-import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.rest.RestChannel;
@@ -130,8 +129,8 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("test-memory-container", input.getName());
         assertEquals("Test memory container description", input.getDescription());
-        assertNotNull(input.getMemoryStorageConfig());
-        assertEquals("test-memory-index", input.getMemoryStorageConfig().getMemoryIndexName());
+        assertNotNull(input.getConfiguration());
+        assertEquals("test-memory-index", input.getConfiguration().getMemoryIndexName());
         assertNull(input.getTenantId()); // Multi-tenancy disabled
     }
 
@@ -146,7 +145,7 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("minimal-container", input.getName());
         assertNull(input.getDescription());
-        assertNull(input.getMemoryStorageConfig());
+        assertNull(input.getConfiguration());
         assertNull(input.getTenantId());
     }
 
@@ -233,11 +232,11 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("complex-container", input.getName());
         assertEquals("Complex container with full config", input.getDescription());
-        assertNotNull(input.getMemoryStorageConfig());
-        assertEquals("complex-memory-index", input.getMemoryStorageConfig().getMemoryIndexName());
-        assertEquals("sparse-model", input.getMemoryStorageConfig().getEmbeddingModelId());
-        assertEquals("complex-llm-model", input.getMemoryStorageConfig().getLlmModelId());
-        assertEquals(Integer.valueOf(10), input.getMemoryStorageConfig().getMaxInferSize());
+        assertNotNull(input.getConfiguration());
+        assertEquals("complex-memory-index", input.getConfiguration().getMemoryIndexName());
+        assertEquals("sparse-model", input.getConfiguration().getEmbeddingModelId());
+        assertEquals("complex-llm-model", input.getConfiguration().getLlmModelId());
+        assertEquals(Integer.valueOf(10), input.getConfiguration().getMaxInferSize());
     }
 
     public void testPrepareRequestWithInvalidContent() throws Exception {

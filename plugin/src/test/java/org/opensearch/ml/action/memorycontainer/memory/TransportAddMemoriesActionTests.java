@@ -34,7 +34,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
@@ -234,7 +234,7 @@ public class TransportAddMemoriesActionTests {
         when(request.getMlAddMemoryInput()).thenReturn(input);
         
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getMemoryStorageConfig()).thenReturn(null);
+        when(container.getConfiguration()).thenReturn(null);
         
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
@@ -266,7 +266,7 @@ public class TransportAddMemoriesActionTests {
         when(request.getMlAddMemoryInput()).thenReturn(input);
         
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getMemoryStorageConfig()).thenReturn(null);
+        when(container.getConfiguration()).thenReturn(null);
         
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
@@ -303,7 +303,7 @@ public class TransportAddMemoriesActionTests {
         when(request.getMlAddMemoryInput()).thenReturn(input);
         
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getMemoryStorageConfig()).thenReturn(null);
+        when(container.getConfiguration()).thenReturn(null);
         
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
@@ -340,11 +340,11 @@ public class TransportAddMemoriesActionTests {
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
         
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
         
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getMemoryStorageConfig()).thenReturn(storageConfig);
+        when(container.getConfiguration()).thenReturn(storageConfig);
         
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
@@ -402,11 +402,11 @@ public class TransportAddMemoriesActionTests {
         tags.put("key1", "value1");
         when(input.getTags()).thenReturn(tags);
         
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
         
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getMemoryStorageConfig()).thenReturn(storageConfig);
+        when(container.getConfiguration()).thenReturn(storageConfig);
         
         // Mock the search service to return similar facts
         List<FactSearchResult> searchResults = Arrays.asList(
@@ -447,7 +447,7 @@ public class TransportAddMemoriesActionTests {
                 "storeMessagesAndFacts", 
                 MLAddMemoriesInput.class, MLMemoryContainer.class, String.class, 
                 List.class, String.class, boolean.class, User.class, List.class, 
-                MemoryStorageConfig.class, ActionListener.class
+                MemoryConfiguration.class, ActionListener.class
             );
             method.setAccessible(true);
             
@@ -470,7 +470,7 @@ public class TransportAddMemoriesActionTests {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("Hello world").role("user").build());
         List<String> facts = Arrays.asList("User said hello");
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
 
         List<IndexRequest> indexRequests = new ArrayList<>();
@@ -479,7 +479,7 @@ public class TransportAddMemoriesActionTests {
         List<MemoryInfo> memoryInfos = Arrays
             .asList(
                 new MemoryInfo(null, "Hello world", MemoryType.RAW_MESSAGE, false),
-                new MemoryInfo(null, "User said hello", MemoryType.FACT, true)
+                new MemoryInfo(null, "User said hello", MemoryType.SEMANTIC, true)
             );
 
         // Mock embedding generation
@@ -517,7 +517,7 @@ public class TransportAddMemoriesActionTests {
                     "processEmbeddingsAndIndex",
                     List.class,
                     List.class,
-                    MemoryStorageConfig.class,
+                    MemoryConfiguration.class,
                     List.class,
                     List.class,
                     String.class,
@@ -563,7 +563,7 @@ public class TransportAddMemoriesActionTests {
         Map<String, String> tags = new HashMap<>();
         when(input.getTags()).thenReturn(tags);
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
@@ -599,7 +599,7 @@ public class TransportAddMemoriesActionTests {
                     String.class,
                     String.class,
                     User.class,
-                    MemoryStorageConfig.class,
+                    MemoryConfiguration.class,
                     ActionListener.class
                 );
             method.setAccessible(true);
@@ -630,7 +630,7 @@ public class TransportAddMemoriesActionTests {
         Map<String, String> tags = new HashMap<>();
         when(input.getTags()).thenReturn(tags);
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
@@ -664,7 +664,7 @@ public class TransportAddMemoriesActionTests {
                     String.class,
                     String.class,
                     User.class,
-                    MemoryStorageConfig.class,
+                    MemoryConfiguration.class,
                     ActionListener.class
                 );
             method.setAccessible(true);

@@ -22,7 +22,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
 public class MLCreateMemoryContainerRequestTests {
 
@@ -30,17 +30,17 @@ public class MLCreateMemoryContainerRequestTests {
     private MLCreateMemoryContainerRequest requestMinimal;
     private MLCreateMemoryContainerInput testInput;
     private MLCreateMemoryContainerInput minimalInput;
-    private MemoryStorageConfig testMemoryStorageConfig;
+    private MemoryConfiguration testMemoryStorageConfig;
 
     @Before
     public void setUp() {
         // Create test memory storage config
-        testMemoryStorageConfig = MemoryStorageConfig
+        testMemoryStorageConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-memory-index")
+            .indexPrefix("test-memory-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(8)
             .build();
@@ -50,7 +50,7 @@ public class MLCreateMemoryContainerRequestTests {
             .builder()
             .name("test-memory-container")
             .description("Test memory container description")
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .tenantId("test-tenant")
             .build();
 
@@ -98,7 +98,7 @@ public class MLCreateMemoryContainerRequestTests {
         assertEquals(originalInput.getName(), parsedInput.getName());
         assertEquals(originalInput.getDescription(), parsedInput.getDescription());
         assertEquals(originalInput.getTenantId(), parsedInput.getTenantId());
-        assertEquals(originalInput.getMemoryStorageConfig(), parsedInput.getMemoryStorageConfig());
+        assertEquals(originalInput.getConfiguration(), parsedInput.getConfiguration());
     }
 
     @Test
@@ -116,7 +116,7 @@ public class MLCreateMemoryContainerRequestTests {
         assertEquals("minimal-container", parsedInput.getName());
         assertNull(parsedInput.getDescription());
         assertNull(parsedInput.getTenantId());
-        assertNull(parsedInput.getMemoryStorageConfig());
+        assertNull(parsedInput.getConfiguration());
     }
 
     @Test
@@ -255,14 +255,14 @@ public class MLCreateMemoryContainerRequestTests {
         assertEquals(originalInput.getTenantId(), deserializedInput.getTenantId());
 
         // Verify nested MemoryStorageConfig
-        MemoryStorageConfig originalConfig = originalInput.getMemoryStorageConfig();
-        MemoryStorageConfig deserializedConfig = deserializedInput.getMemoryStorageConfig();
+        MemoryConfiguration originalConfig = originalInput.getConfiguration();
+        MemoryConfiguration deserializedConfig = deserializedInput.getConfiguration();
 
-        assertEquals(originalConfig.getMemoryIndexName(), deserializedConfig.getMemoryIndexName());
+        assertEquals(originalConfig.getIndexPrefix(), deserializedConfig.getIndexPrefix());
         assertEquals(originalConfig.isSemanticStorageEnabled(), deserializedConfig.isSemanticStorageEnabled());
         assertEquals(originalConfig.getEmbeddingModelType(), deserializedConfig.getEmbeddingModelType());
         assertEquals(originalConfig.getEmbeddingModelId(), deserializedConfig.getEmbeddingModelId());
-        assertEquals(originalConfig.getLlmModelId(), deserializedConfig.getLlmModelId());
+        assertEquals(originalConfig.getLlmId(), deserializedConfig.getLlmId());
         assertEquals(originalConfig.getDimension(), deserializedConfig.getDimension());
         assertEquals(originalConfig.getMaxInferSize(), deserializedConfig.getMaxInferSize());
     }

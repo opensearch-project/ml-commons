@@ -17,7 +17,7 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.transport.client.Client;
 
 public class MemorySearchServiceAdditionalTests {
@@ -41,7 +41,7 @@ public class MemorySearchServiceAdditionalTests {
         List<String> facts = Arrays.asList();
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
 

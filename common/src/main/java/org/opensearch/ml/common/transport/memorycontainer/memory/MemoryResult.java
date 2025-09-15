@@ -27,10 +27,10 @@ import lombok.ToString;
 @Builder
 public class MemoryResult implements ToXContentObject, Writeable {
 
-    private final String memoryId;
-    private final String memory;
-    private final MemoryEvent event;
-    private final String oldMemory;
+    private String memoryId;
+    private String memory;
+    private MemoryEvent event;
+    private String oldMemory;
 
     public MemoryResult(String memoryId, String memory, MemoryEvent event, String oldMemory) {
         this.memoryId = memoryId;
@@ -41,16 +41,23 @@ public class MemoryResult implements ToXContentObject, Writeable {
 
     public MemoryResult(StreamInput in) throws IOException {
         this.memoryId = in.readString();
-        this.memory = in.readString();
-        this.event = MemoryEvent.fromString(in.readString());
+        this.memory = in.readOptionalString();
+        if (in.readBoolean()) {
+            this.event = MemoryEvent.fromString(in.readString());
+        }
         this.oldMemory = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(memoryId);
-        out.writeString(memory);
-        out.writeString(event.getValue());
+        out.writeOptionalString(memory);
+        if (event != null) {
+            out.writeBoolean(true);
+            out.writeString(event.getValue());
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalString(oldMemory);
     }
 
@@ -58,8 +65,12 @@ public class MemoryResult implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field("id", memoryId);
-        builder.field("text", memory);
-        builder.field("event", event.getValue());
+        if (memory != null) {
+            builder.field("text", memory);
+        }
+        if (event != null) {
+            builder.field("event", event.getValue());
+        }
         if (oldMemory != null) {
             builder.field("old_memory", oldMemory);
         }

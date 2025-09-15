@@ -36,7 +36,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -78,7 +78,7 @@ public class MemoryEmbeddingHelperTests {
     private MLModel mlModel;
 
     private MemoryEmbeddingHelper helper;
-    private MemoryStorageConfig storageConfig;
+    private MemoryConfiguration storageConfig;
 
     @Before
     public void setUp() {
@@ -93,7 +93,7 @@ public class MemoryEmbeddingHelperTests {
 
         helper = new MemoryEmbeddingHelper(client, mlModelManager);
 
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("model-123")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
@@ -141,7 +141,7 @@ public class MemoryEmbeddingHelperTests {
         sparseData.put("token1", 0.5f);
         sparseData.put("token2", 0.8f);
 
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model-123")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -172,7 +172,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithSemanticStorageDisabled() {
-        storageConfig = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
+        storageConfig = MemoryConfiguration.builder().semanticStorageEnabled(false).build();
 
         helper.generateEmbedding("test text", storageConfig, objectListener);
         verify(objectListener).onResponse(null);
@@ -181,7 +181,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithMissingModelConfig() {
-        storageConfig = MemoryStorageConfig.builder().semanticStorageEnabled(true).embeddingModelId(null).embeddingModelType(null).build();
+        storageConfig = MemoryConfiguration.builder().semanticStorageEnabled(true).embeddingModelId(null).embeddingModelType(null).build();
 
         helper.generateEmbedding("test text", storageConfig, objectListener);
         verify(objectListener).onResponse(null);
@@ -394,7 +394,7 @@ public class MemoryEmbeddingHelperTests {
         sparseData.put("word1", 1.5f);
         sparseData.put("word2", 2.5f);
 
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -457,7 +457,7 @@ public class MemoryEmbeddingHelperTests {
     @Test
     public void testGenerateEmbeddingsForMultipleTextsWithSemanticStorageDisabled() {
         // When semantic storage is disabled, embedding config should be null
-        storageConfig = MemoryStorageConfig.builder().semanticStorageEnabled(false).embeddingModelId(null).embeddingModelType(null).build();
+        storageConfig = MemoryConfiguration.builder().semanticStorageEnabled(false).embeddingModelId(null).embeddingModelType(null).build();
 
         // When embeddingModelId is null but method tries to validate model, it passes null to validateEmbeddingModelState
         // which should handle the null case gracefully
@@ -512,7 +512,7 @@ public class MemoryEmbeddingHelperTests {
         Map<String, Float> sparseData2 = new HashMap<>();
         sparseData2.put("token2", 0.8f);
 
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -633,7 +633,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithSparseEncodingEmptyDataMap() {
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -669,7 +669,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithSparseEncodingInvalidNestedResponse() {
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -707,7 +707,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithSparseEncodingEmptyResponseList() {
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -745,7 +745,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithSparseEncodingInvalidListItem() {
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -785,7 +785,7 @@ public class MemoryEmbeddingHelperTests {
     public void testGenerateEmbeddingsWithUnsupportedModelType() {
         // Test case where generateEmbeddingsForMultipleTexts is called with an unsupported embedding type
         // First create a valid storage config with TEXT_EMBEDDING to pass validation
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("test-model")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
@@ -960,7 +960,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithEmptyResponseList() {
         // Test when response list exists but is empty
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -998,7 +998,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithNonMapResponseListElement() {
         // Test when response list contains non-Map elements
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1036,7 +1036,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithNonListResponseValue() {
         // Test when response value is not a List
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1076,7 +1076,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithMultipleTensorsFirstNull() {
         // Test multiple tensors where first has null dataMap
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1120,7 +1120,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingAllTensorsHaveNullDataMap() {
         // Test when all tensors have null dataMap
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1158,7 +1158,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithValidNestedResponse() {
         // Test successful nested response extraction
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1200,7 +1200,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithMultipleElementsInResponseList() {
         // Test when response list has multiple elements - should return first
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1246,7 +1246,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithNullFirstElementInResponseList() {
         // Test when first element in response list is null
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1286,7 +1286,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithMixedTypeResponseList() {
         // Test when response list has mixed types (Map and non-Map)
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
@@ -1331,7 +1331,7 @@ public class MemoryEmbeddingHelperTests {
     public void testSparseEmbeddingWithSingletonListContainingMap() {
         // Test edge case of single-element list with Map
         String text = "test text";
-        storageConfig = MemoryStorageConfig
+        storageConfig = MemoryConfiguration
             .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)

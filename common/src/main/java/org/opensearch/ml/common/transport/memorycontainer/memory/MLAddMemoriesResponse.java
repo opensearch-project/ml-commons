@@ -27,41 +27,53 @@ public class MLAddMemoriesResponse extends ActionResponse implements ToXContentO
 
     private List<MemoryResult> results;
     private String sessionId;
+    private String shorTermMemoryId;
 
     @Builder
-    public MLAddMemoriesResponse(List<MemoryResult> results, String sessionId) {
+    public MLAddMemoriesResponse(List<MemoryResult> results, String sessionId, String shorTermMemoryId) {
         this.results = results != null ? results : new ArrayList<>();
         this.sessionId = sessionId;
+        this.shorTermMemoryId = shorTermMemoryId;
     }
 
     public MLAddMemoriesResponse(StreamInput in) throws IOException {
         super(in);
+        this.shorTermMemoryId = in.readOptionalString();
         int size = in.readVInt();
         this.results = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             this.results.add(new MemoryResult(in));
         }
-        this.sessionId = in.readString();
+        this.sessionId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        out.writeOptionalString(shorTermMemoryId);
         out.writeVInt(results.size());
         for (MemoryResult result : results) {
             result.writeTo(out);
         }
-        out.writeString(sessionId);
+        out.writeOptionalString(sessionId);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.startArray("results");
-        for (MemoryResult result : results) {
-            result.toXContent(builder, params);
+        if (sessionId != null) {
+            builder.field(SESSION_ID_FIELD, sessionId);
         }
-        builder.endArray();
-        builder.field(SESSION_ID_FIELD, sessionId);
+        if (shorTermMemoryId != null) {
+            builder.field(SHORT_TERM_MEMORY_ID_FIELD, shorTermMemoryId);
+        }
+        if (results != null && results.size() > 0) {
+            builder.startArray("long_term_memories"); //TODO: add constant
+            for (MemoryResult result : results) {
+                result.toXContent(builder, params);
+            }
+            builder.endArray();
+        }
+
         builder.endObject();
         return builder;
     }

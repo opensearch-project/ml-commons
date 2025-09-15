@@ -41,7 +41,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
@@ -127,10 +127,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .name("test-container")
             .description("Test container")
-            .memoryStorageConfig(
-                MemoryStorageConfig
+            .configuration(
+                MemoryConfiguration
                     .builder()
-                    .memoryIndexName("test-memory-index")
+                    .indexPrefix("test-memory-index")
                     .semanticStorageEnabled(true)
                     .embeddingModelType(FunctionName.TEXT_EMBEDDING)
                     .embeddingModelId("embedding-model-123")
@@ -243,7 +243,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
             .builder()
             .name("test-container")
-            .memoryStorageConfig(MemoryStorageConfig.builder().memoryIndexName("test-memory-index").semanticStorageEnabled(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").semanticStorageEnabled(false).build())
             .build();
 
         // Mock search response
@@ -415,10 +415,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         MLMemoryContainer sparseContainer = MLMemoryContainer
             .builder()
             .name("test-container")
-            .memoryStorageConfig(
-                MemoryStorageConfig
+            .configuration(
+                MemoryConfiguration
                     .builder()
-                    .memoryIndexName("test-memory-index")
+                    .indexPrefix("test-memory-index")
                     .semanticStorageEnabled(true)
                     .embeddingModelType(FunctionName.SPARSE_ENCODING)
                     .embeddingModelId("sparse-model-123")
@@ -556,7 +556,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         assertEquals("memory-2", result2.getMemoryId());
         assertEquals("Second memory", result2.getMemory());
         assertEquals(0.8f, result2.getScore(), 0.001);
-        assertEquals(MemoryType.FACT, result2.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, result2.getMemoryType());
     }
 
     @Test

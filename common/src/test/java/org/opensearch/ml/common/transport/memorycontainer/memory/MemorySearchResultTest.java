@@ -124,7 +124,7 @@ public class MemorySearchResultTest {
             "session-1",
             "agent-1",
             "user-1",
-            MemoryType.FACT,
+            MemoryType.SEMANTIC,
             "assistant",
             tags,
             now,
@@ -137,7 +137,7 @@ public class MemorySearchResultTest {
         assertEquals("session-1", result.getSessionId());
         assertEquals("agent-1", result.getAgentId());
         assertEquals("user-1", result.getUserId());
-        assertEquals(MemoryType.FACT, result.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, result.getMemoryType());
         assertEquals("assistant", result.getRole());
         assertEquals(tags, result.getTags());
         assertEquals(now, result.getCreatedTime());
@@ -278,7 +278,7 @@ public class MemorySearchResultTest {
             .memoryId("fact-123")
             .memory("User's name is John")
             .score(0.9f)
-            .memoryType(MemoryType.FACT)
+            .memoryType(MemoryType.SEMANTIC)
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
@@ -286,7 +286,7 @@ public class MemorySearchResultTest {
         StreamInput in = out.bytes().streamInput();
         MemorySearchResult deserialized = new MemorySearchResult(in);
 
-        assertEquals(MemoryType.FACT, deserialized.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, deserialized.getMemoryType());
 
         // Test XContent
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);

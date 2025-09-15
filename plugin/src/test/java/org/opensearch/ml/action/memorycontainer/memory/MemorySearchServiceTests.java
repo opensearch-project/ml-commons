@@ -26,7 +26,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.transport.client.Client;
 
 public class MemorySearchServiceTests {
@@ -50,7 +50,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList();
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
 
@@ -62,7 +62,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = null;
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
 
@@ -74,7 +74,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(5);
 
         Exception searchException = new RuntimeException("Search failed");
@@ -95,7 +95,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(5);
 
         // Mock search response with empty results
@@ -119,7 +119,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = null;
+        MemoryConfiguration storageConfig = null;
 
         // Mock search response with empty results
         SearchResponse searchResponse = mock(SearchResponse.class);
@@ -142,7 +142,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John", "User age is 25", "User city is Seattle");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(2);
 
         // Mock search response with empty results
@@ -167,7 +167,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("Fact1", "Fact2", "Fact3", "Fact4", "Fact5");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(3);
 
         SearchResponse searchResponse = mock(SearchResponse.class);
@@ -190,7 +190,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(null); // Test default value
 
         SearchResponse searchResponse = mock(SearchResponse.class);
@@ -213,7 +213,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("Test fact");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(5);
 
         // Mock client to throw exception
@@ -234,7 +234,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("Test fact");
         String sessionId = null;
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
 
@@ -246,7 +246,7 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getMaxInferSize()).thenReturn(5);
 
         // Mock search response with actual hits

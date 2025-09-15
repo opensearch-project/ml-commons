@@ -28,46 +28,46 @@ import org.opensearch.ml.common.TestHelper;
 
 public class MemoryStorageConfigTests {
 
-    private MemoryStorageConfig textEmbeddingConfig;
-    private MemoryStorageConfig sparseEncodingConfig;
-    private MemoryStorageConfig minimalConfig;
+    private MemoryConfiguration textEmbeddingConfig;
+    private MemoryConfiguration sparseEncodingConfig;
+    private MemoryConfiguration minimalConfig;
 
     @Before
     public void setUp() {
         // Text embedding configuration (semantic storage enabled)
-        textEmbeddingConfig = MemoryStorageConfig
+        textEmbeddingConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-text-embedding-index")
+            .indexPrefix("test-text-embedding-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("text-embedding-model")
-            .llmModelId("llm-model")
+            .llmId("llm-model")
             .dimension(768)
             .maxInferSize(8)
             .build();
 
         // Sparse encoding configuration (semantic storage enabled)
-        sparseEncodingConfig = MemoryStorageConfig
+        sparseEncodingConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-sparse-encoding-index")
+            .indexPrefix("test-sparse-encoding-index")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-encoding-model")
-            .llmModelId("llm-model")
+            .llmId("llm-model")
             .dimension(null) // Not allowed for sparse encoding
             .maxInferSize(5)
             .build();
 
         // Minimal configuration (semantic storage disabled)
-        minimalConfig = MemoryStorageConfig.builder().memoryIndexName("test-minimal-index").llmModelId("llm-model-only").build();
+        minimalConfig = MemoryConfiguration.builder().indexPrefix("test-minimal-index").llmId("llm-model-only").build();
     }
 
     @Test
     public void testConstructorWithBuilderTextEmbedding() {
         assertNotNull(textEmbeddingConfig);
-        assertEquals("test-text-embedding-index", textEmbeddingConfig.getMemoryIndexName());
+        assertEquals("test-text-embedding-index", textEmbeddingConfig.getIndexPrefix());
         assertTrue(textEmbeddingConfig.isSemanticStorageEnabled()); // Auto-determined
         assertEquals(FunctionName.TEXT_EMBEDDING, textEmbeddingConfig.getEmbeddingModelType());
         assertEquals("text-embedding-model", textEmbeddingConfig.getEmbeddingModelId());
-        assertEquals("llm-model", textEmbeddingConfig.getLlmModelId());
+        assertEquals("llm-model", textEmbeddingConfig.getLlmId());
         assertEquals(Integer.valueOf(768), textEmbeddingConfig.getDimension());
         assertEquals(Integer.valueOf(8), textEmbeddingConfig.getMaxInferSize());
     }
@@ -75,11 +75,11 @@ public class MemoryStorageConfigTests {
     @Test
     public void testConstructorWithBuilderSparseEncoding() {
         assertNotNull(sparseEncodingConfig);
-        assertEquals("test-sparse-encoding-index", sparseEncodingConfig.getMemoryIndexName());
+        assertEquals("test-sparse-encoding-index", sparseEncodingConfig.getIndexPrefix());
         assertTrue(sparseEncodingConfig.isSemanticStorageEnabled()); // Auto-determined
         assertEquals(FunctionName.SPARSE_ENCODING, sparseEncodingConfig.getEmbeddingModelType());
         assertEquals("sparse-encoding-model", sparseEncodingConfig.getEmbeddingModelId());
-        assertEquals("llm-model", sparseEncodingConfig.getLlmModelId());
+        assertEquals("llm-model", sparseEncodingConfig.getLlmId());
         assertNull(sparseEncodingConfig.getDimension()); // Not allowed for sparse encoding
         assertEquals(Integer.valueOf(5), sparseEncodingConfig.getMaxInferSize());
     }
@@ -87,18 +87,18 @@ public class MemoryStorageConfigTests {
     @Test
     public void testConstructorWithBuilderMinimal() {
         assertNotNull(minimalConfig);
-        assertEquals("test-minimal-index", minimalConfig.getMemoryIndexName());
+        assertEquals("test-minimal-index", minimalConfig.getIndexPrefix());
         assertFalse(minimalConfig.isSemanticStorageEnabled()); // Auto-determined as false
         assertNull(minimalConfig.getEmbeddingModelType());
         assertNull(minimalConfig.getEmbeddingModelId());
-        assertEquals("llm-model-only", minimalConfig.getLlmModelId());
+        assertEquals("llm-model-only", minimalConfig.getLlmId());
         assertNull(minimalConfig.getDimension());
         assertEquals(Integer.valueOf(5), minimalConfig.getMaxInferSize()); // Default value when llmModelId is present
     }
 
     @Test
     public void testConstructorWithAllParameters() {
-        MemoryStorageConfig config = new MemoryStorageConfig(
+        MemoryConfiguration config = new MemoryConfiguration(
             "test-index",
             false, // This will be overridden by auto-determination
             FunctionName.TEXT_EMBEDDING,
@@ -108,11 +108,11 @@ public class MemoryStorageConfigTests {
             7
         );
 
-        assertEquals("test-index", config.getMemoryIndexName());
+        assertEquals("test-index", config.getIndexPrefix());
         assertTrue(config.isSemanticStorageEnabled()); // Auto-determined as true
         assertEquals(FunctionName.TEXT_EMBEDDING, config.getEmbeddingModelType());
         assertEquals("embedding-model", config.getEmbeddingModelId());
-        assertEquals("llm-model", config.getLlmModelId());
+        assertEquals("llm-model", config.getLlmId());
         assertEquals(Integer.valueOf(512), config.getDimension());
         assertEquals(Integer.valueOf(7), config.getMaxInferSize());
     }
@@ -120,12 +120,12 @@ public class MemoryStorageConfigTests {
     @Test
     public void testDefaultMaxInferSize() {
         // Test with llmModelId present - should get default value
-        MemoryStorageConfig configWithLlm = MemoryStorageConfig
+        MemoryConfiguration configWithLlm = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
-            .llmModelId("llm-model")
+            .llmId("llm-model")
             .dimension(768)
             // maxInferSize not set, should use default
             .build();
@@ -133,9 +133,9 @@ public class MemoryStorageConfigTests {
         assertEquals(Integer.valueOf(MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE), configWithLlm.getMaxInferSize());
 
         // Test without llmModelId - should be null
-        MemoryStorageConfig configWithoutLlm = MemoryStorageConfig
+        MemoryConfiguration configWithoutLlm = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
             .dimension(768)
@@ -150,13 +150,13 @@ public class MemoryStorageConfigTests {
         textEmbeddingConfig.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        MemoryStorageConfig parsedConfig = new MemoryStorageConfig(streamInput);
+        MemoryConfiguration parsedConfig = new MemoryConfiguration(streamInput);
 
-        assertEquals(textEmbeddingConfig.getMemoryIndexName(), parsedConfig.getMemoryIndexName());
+        assertEquals(textEmbeddingConfig.getIndexPrefix(), parsedConfig.getIndexPrefix());
         assertEquals(textEmbeddingConfig.isSemanticStorageEnabled(), parsedConfig.isSemanticStorageEnabled());
         assertEquals(textEmbeddingConfig.getEmbeddingModelType(), parsedConfig.getEmbeddingModelType());
         assertEquals(textEmbeddingConfig.getEmbeddingModelId(), parsedConfig.getEmbeddingModelId());
-        assertEquals(textEmbeddingConfig.getLlmModelId(), parsedConfig.getLlmModelId());
+        assertEquals(textEmbeddingConfig.getLlmId(), parsedConfig.getLlmId());
         assertEquals(textEmbeddingConfig.getDimension(), parsedConfig.getDimension());
         assertEquals(textEmbeddingConfig.getMaxInferSize(), parsedConfig.getMaxInferSize());
     }
@@ -167,13 +167,13 @@ public class MemoryStorageConfigTests {
         minimalConfig.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        MemoryStorageConfig parsedConfig = new MemoryStorageConfig(streamInput);
+        MemoryConfiguration parsedConfig = new MemoryConfiguration(streamInput);
 
-        assertEquals(minimalConfig.getMemoryIndexName(), parsedConfig.getMemoryIndexName());
+        assertEquals(minimalConfig.getIndexPrefix(), parsedConfig.getIndexPrefix());
         assertEquals(minimalConfig.isSemanticStorageEnabled(), parsedConfig.isSemanticStorageEnabled());
         assertNull(parsedConfig.getEmbeddingModelType());
         assertNull(parsedConfig.getEmbeddingModelId());
-        assertEquals(minimalConfig.getLlmModelId(), parsedConfig.getLlmModelId());
+        assertEquals(minimalConfig.getLlmId(), parsedConfig.getLlmId());
         assertNull(parsedConfig.getDimension());
         assertEquals(Integer.valueOf(5), parsedConfig.getMaxInferSize()); // Default value when llmModelId is present
     }
@@ -228,13 +228,13 @@ public class MemoryStorageConfigTests {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
         parser.nextToken();
-        MemoryStorageConfig parsedConfig = MemoryStorageConfig.parse(parser);
+        MemoryConfiguration parsedConfig = MemoryConfiguration.parse(parser);
 
-        assertEquals("parsed-index", parsedConfig.getMemoryIndexName());
+        assertEquals("parsed-index", parsedConfig.getIndexPrefix());
         assertTrue(parsedConfig.isSemanticStorageEnabled()); // Auto-determined
         assertEquals(FunctionName.TEXT_EMBEDDING, parsedConfig.getEmbeddingModelType());
         assertEquals("parsed-embedding-model", parsedConfig.getEmbeddingModelId());
-        assertEquals("parsed-llm-model", parsedConfig.getLlmModelId());
+        assertEquals("parsed-llm-model", parsedConfig.getLlmId());
         assertEquals(Integer.valueOf(1024), parsedConfig.getDimension());
         assertEquals(Integer.valueOf(9), parsedConfig.getMaxInferSize());
     }
@@ -247,13 +247,13 @@ public class MemoryStorageConfigTests {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
         parser.nextToken();
-        MemoryStorageConfig parsedConfig = MemoryStorageConfig.parse(parser);
+        MemoryConfiguration parsedConfig = MemoryConfiguration.parse(parser);
 
-        assertEquals("partial-index", parsedConfig.getMemoryIndexName());
+        assertEquals("partial-index", parsedConfig.getIndexPrefix());
         assertFalse(parsedConfig.isSemanticStorageEnabled()); // Auto-determined as false
         assertNull(parsedConfig.getEmbeddingModelType());
         assertNull(parsedConfig.getEmbeddingModelId());
-        assertEquals("partial-llm-model", parsedConfig.getLlmModelId());
+        assertEquals("partial-llm-model", parsedConfig.getLlmId());
         assertNull(parsedConfig.getDimension());
         assertEquals(Integer.valueOf(5), parsedConfig.getMaxInferSize()); // Default value when llmModelId is present
     }
@@ -271,10 +271,10 @@ public class MemoryStorageConfigTests {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
         parser.nextToken();
-        MemoryStorageConfig parsedConfig = MemoryStorageConfig.parse(parser);
+        MemoryConfiguration parsedConfig = MemoryConfiguration.parse(parser);
 
-        assertEquals("unknown-test-index", parsedConfig.getMemoryIndexName());
-        assertEquals("test-llm", parsedConfig.getLlmModelId());
+        assertEquals("unknown-test-index", parsedConfig.getIndexPrefix());
+        assertEquals("test-llm", parsedConfig.getLlmId());
         // Unknown fields should be ignored
         assertFalse(parsedConfig.isSemanticStorageEnabled());
     }
@@ -290,45 +290,45 @@ public class MemoryStorageConfigTests {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
         parser.nextToken();
-        MemoryStorageConfig parsedConfig = MemoryStorageConfig.parse(parser);
+        MemoryConfiguration parsedConfig = MemoryConfiguration.parse(parser);
 
-        assertEquals(textEmbeddingConfig.getMemoryIndexName(), parsedConfig.getMemoryIndexName());
+        assertEquals(textEmbeddingConfig.getIndexPrefix(), parsedConfig.getIndexPrefix());
         assertEquals(textEmbeddingConfig.isSemanticStorageEnabled(), parsedConfig.isSemanticStorageEnabled());
         assertEquals(textEmbeddingConfig.getEmbeddingModelType(), parsedConfig.getEmbeddingModelType());
         assertEquals(textEmbeddingConfig.getEmbeddingModelId(), parsedConfig.getEmbeddingModelId());
-        assertEquals(textEmbeddingConfig.getLlmModelId(), parsedConfig.getLlmModelId());
+        assertEquals(textEmbeddingConfig.getLlmId(), parsedConfig.getLlmId());
         assertEquals(textEmbeddingConfig.getDimension(), parsedConfig.getDimension());
         assertEquals(textEmbeddingConfig.getMaxInferSize(), parsedConfig.getMaxInferSize());
     }
 
     @Test
     public void testEqualsAndHashCode() {
-        MemoryStorageConfig config1 = MemoryStorageConfig
+        MemoryConfiguration config1 = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
-            .llmModelId("llm-model")
+            .llmId("llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build();
 
-        MemoryStorageConfig config2 = MemoryStorageConfig
+        MemoryConfiguration config2 = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
-            .llmModelId("llm-model")
+            .llmId("llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build();
 
-        MemoryStorageConfig config3 = MemoryStorageConfig
+        MemoryConfiguration config3 = MemoryConfiguration
             .builder()
-            .memoryIndexName("different-index")
+            .indexPrefix("different-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
-            .llmModelId("llm-model")
+            .llmId("llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build();
@@ -341,21 +341,21 @@ public class MemoryStorageConfigTests {
 
     @Test
     public void testSettersAndGetters() {
-        MemoryStorageConfig config = new MemoryStorageConfig(null, false, null, null, null, null, null);
+        MemoryConfiguration config = new MemoryConfiguration(null, false, null, null, null, null, null);
 
-        config.setMemoryIndexName("new-index");
+        config.setIndexPrefix("new-index");
         config.setSemanticStorageEnabled(true);
         config.setEmbeddingModelType(FunctionName.SPARSE_ENCODING);
         config.setEmbeddingModelId("new-embedding-model");
-        config.setLlmModelId("new-llm-model");
+        config.setLlmId("new-llm-model");
         config.setDimension(1024);
         config.setMaxInferSize(10);
 
-        assertEquals("new-index", config.getMemoryIndexName());
+        assertEquals("new-index", config.getIndexPrefix());
         assertTrue(config.isSemanticStorageEnabled());
         assertEquals(FunctionName.SPARSE_ENCODING, config.getEmbeddingModelType());
         assertEquals("new-embedding-model", config.getEmbeddingModelId());
-        assertEquals("new-llm-model", config.getLlmModelId());
+        assertEquals("new-llm-model", config.getLlmId());
         assertEquals(Integer.valueOf(1024), config.getDimension());
         assertEquals(Integer.valueOf(10), config.getMaxInferSize());
     }
@@ -364,27 +364,27 @@ public class MemoryStorageConfigTests {
 
     @Test(expected = IllegalArgumentException.class)
     public void testValidationEmbeddingModelIdWithoutType() {
-        MemoryStorageConfig
+        MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelId("embedding-model") // Missing embeddingModelType
             .build();
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testValidationEmbeddingModelTypeWithoutId() {
-        MemoryStorageConfig
+        MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING) // Missing embeddingModelId
             .build();
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testValidationTextEmbeddingWithoutDimension() {
-        MemoryStorageConfig
+        MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
             // Missing dimension for TEXT_EMBEDDING
@@ -393,9 +393,9 @@ public class MemoryStorageConfigTests {
 
     @Test(expected = IllegalArgumentException.class)
     public void testValidationSparseEncodingWithDimension() {
-        MemoryStorageConfig
+        MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("embedding-model")
             .dimension(768) // Not allowed for SPARSE_ENCODING
@@ -404,9 +404,9 @@ public class MemoryStorageConfigTests {
 
     @Test(expected = IllegalArgumentException.class)
     public void testValidationMaxInferSizeExceedsLimit() {
-        MemoryStorageConfig
+        MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("embedding-model")
             .dimension(768)
@@ -416,9 +416,9 @@ public class MemoryStorageConfigTests {
 
     @Test(expected = IllegalArgumentException.class)
     public void testValidationInvalidEmbeddingModelType() {
-        MemoryStorageConfig
+        MemoryConfiguration
             .builder()
-            .memoryIndexName("test-index")
+            .indexPrefix("test-index")
             .embeddingModelType(FunctionName.KMEANS) // Invalid embedding model type
             .embeddingModelId("embedding-model")
             .dimension(768)

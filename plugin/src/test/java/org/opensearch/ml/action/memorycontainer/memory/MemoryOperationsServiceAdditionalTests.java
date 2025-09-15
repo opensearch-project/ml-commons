@@ -26,7 +26,7 @@ import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
@@ -66,7 +66,7 @@ public class MemoryOperationsServiceAdditionalTests {
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);

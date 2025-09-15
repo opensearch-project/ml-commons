@@ -1,0 +1,86 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "memory_container_id": {
+      "type": "keyword"
+    },
+    "memory_type": {
+      "type": "keyword"
+    },
+    "messages": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "keyword"
+        },
+        "content_text": {
+          "type": "text"
+        },
+        "content": {
+          "type": "nested",
+          "properties": {
+            "type": {
+              "type": "keyword"
+            },
+            "text": {
+              "type": "text"
+            },
+            "image": {
+              "type": "object",
+              "properties": {
+                "format": {
+                  "type": "keyword"
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "bytes": {
+                      "type": "binary"
+                    }
+                  }
+                }
+              }
+            },
+            "image_url": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "keyword"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "binary_data": {
+      "type": "binary"
+    },
+    "structured_data": {
+      "type": "flat_object"
+    },
+    "namespace": {
+      "type": "flat_object"
+    },
+    "metadata": {
+      "type": "flat_object"
+    },
+    "tags": {
+      "type": "flat_object"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

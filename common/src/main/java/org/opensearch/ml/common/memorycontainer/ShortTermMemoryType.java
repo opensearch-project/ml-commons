@@ -8,12 +8,13 @@ package org.opensearch.ml.common.memorycontainer;
 /**
  * Enum representing the type of memory entry
  */
-public enum MemoryType {
-    SEMANTIC("SEMANTIC");
+public enum ShortTermMemoryType {
+    CONVERSATION("conversation"),
+    DATA("data");
 
     private final String value;
 
-    MemoryType(String value) {
+    ShortTermMemoryType(String value) {
         this.value = value;
     }
 
@@ -27,18 +28,18 @@ public enum MemoryType {
      * @return corresponding MemoryType enum
      * @throws IllegalArgumentException if value is invalid
      */
-    public static MemoryType fromString(String value) {
+    public static ShortTermMemoryType fromString(String value) {
         if (value == null) {
             return null;
         }
 
-        for (MemoryType type : MemoryType.values()) {
+        for (ShortTermMemoryType type : ShortTermMemoryType.values()) {
             if (type.value.equalsIgnoreCase(value)) {
                 return type;
             }
         }
 
-        throw new IllegalArgumentException("Invalid memory type: " + value + ". Must be either RAW_MESSAGE or FACT");
+        throw new IllegalArgumentException("Invalid short memory type: " + value + ". Must be one of: CONVERSATION, DATA");
     }
 
     @Override

@@ -33,10 +33,9 @@ public class MLGetMemoryResponseTest {
     public void setUp() {
         testMemory = MLMemory
             .builder()
-            .sessionId("test-session")
             .memory("Test memory content")
             .memoryType(MemoryType.RAW_MESSAGE)
-            .userId("test-user")
+            .role("user")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
@@ -48,10 +47,9 @@ public class MLGetMemoryResponseTest {
     public void testBuilderNormal() {
         assertNotNull(responseNormal);
         assertNotNull(responseNormal.getMlMemory());
-        assertEquals("test-session", responseNormal.getMlMemory().getSessionId());
         assertEquals("Test memory content", responseNormal.getMlMemory().getMemory());
         assertEquals(MemoryType.RAW_MESSAGE, responseNormal.getMlMemory().getMemoryType());
-        assertEquals("test-user", responseNormal.getMlMemory().getUserId());
+        assertEquals("user", responseNormal.getMlMemory().getRole());
     }
 
     @Test
@@ -62,10 +60,9 @@ public class MLGetMemoryResponseTest {
         MLGetMemoryResponse deserialized = new MLGetMemoryResponse(in);
 
         assertNotNull(deserialized.getMlMemory());
-        assertEquals(responseNormal.getMlMemory().getSessionId(), deserialized.getMlMemory().getSessionId());
         assertEquals(responseNormal.getMlMemory().getMemory(), deserialized.getMlMemory().getMemory());
         assertEquals(responseNormal.getMlMemory().getMemoryType(), deserialized.getMlMemory().getMemoryType());
-        assertEquals(responseNormal.getMlMemory().getUserId(), deserialized.getMlMemory().getUserId());
+        assertEquals(responseNormal.getMlMemory().getRole(), deserialized.getMlMemory().getRole());
     }
 
     @Test
@@ -87,10 +84,9 @@ public class MLGetMemoryResponseTest {
         MLGetMemoryResponse result = MLGetMemoryResponse.fromActionResponse(mockResponse);
         assertNotNull(result);
         assertNotNull(result.getMlMemory());
-        assertEquals("test-session", result.getMlMemory().getSessionId());
         assertEquals("Test memory content", result.getMlMemory().getMemory());
         assertEquals(MemoryType.RAW_MESSAGE, result.getMlMemory().getMemoryType());
-        assertEquals("test-user", result.getMlMemory().getUserId());
+        assertEquals("user", result.getMlMemory().getRole());
     }
 
     @Test(expected = UncheckedIOException.class)
@@ -113,9 +109,8 @@ public class MLGetMemoryResponseTest {
         String jsonString = builder.toString();
 
         assertNotNull(jsonString);
-        assertTrue(jsonString.contains("test-session"));
         assertTrue(jsonString.contains("Test memory content"));
         assertTrue(jsonString.contains("RAW_MESSAGE"));
-        assertTrue(jsonString.contains("test-user"));
+        assertTrue(jsonString.contains("user"));
     }
 }

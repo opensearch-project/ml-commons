@@ -43,9 +43,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -107,7 +106,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     private MLCreateMemoryContainerRequest request;
     private MLCreateMemoryContainerInput input;
-    private MemoryStorageConfig memoryStorageConfig;
+    private MemoryConfiguration memoryStorageConfig;
     private User testUser;
     private ThreadContext threadContext;
     private IndexResponse indexResponse;
@@ -131,12 +130,12 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(adminClient.indices()).thenReturn(indicesAdminClient);
 
         // Setup memory storage config
-        memoryStorageConfig = MemoryStorageConfig
+        memoryStorageConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-memory-index")
+            .indexPrefix("test-memory-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build();
@@ -408,12 +407,12 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithSparseEncodingConfig() throws InterruptedException {
         // Create sparse encoding config
-        MemoryStorageConfig sparseConfig = MemoryStorageConfig
+        MemoryConfiguration sparseConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("sparse-memory-index")
+            .indexPrefix("sparse-memory-index")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .maxInferSize(5)
             .build();
 
@@ -867,9 +866,9 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithOnlyEmbeddingModelValidation() throws InterruptedException {
         // Create config with only embedding model (no LLM model)
-        MemoryStorageConfig embeddingOnlyConfig = MemoryStorageConfig
+        MemoryConfiguration embeddingOnlyConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("embedding-only-index")
+            .indexPrefix("embedding-only-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
             .dimension(768)
@@ -925,9 +924,9 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithSemanticStorageDisabled() throws InterruptedException {
         // Create config with semantic storage disabled
-        MemoryStorageConfig nonSemanticConfig = MemoryStorageConfig
+        MemoryConfiguration nonSemanticConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("non-semantic-index")
+            .indexPrefix("non-semantic-index")
             .semanticStorageEnabled(false)
             .maxInferSize(5)
             .build();
@@ -975,12 +974,12 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithRemoteEmbeddingModel() throws InterruptedException {
         // Create config with remote embedding model
-        MemoryStorageConfig remoteConfig = MemoryStorageConfig
+        MemoryConfiguration remoteConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("remote-memory-index")
+            .indexPrefix("remote-memory-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("remote-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build();
@@ -1110,11 +1109,11 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithDefaultIndexNameGeneration() throws InterruptedException {
         // Create config without specifying memory index name to test default generation
-        MemoryStorageConfig configWithoutIndexName = MemoryStorageConfig
+        MemoryConfiguration configWithoutIndexName = MemoryConfiguration
             .builder()
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build(); // No memoryIndexName specified
@@ -1162,11 +1161,11 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithSparseEncodingDefaultIndexName() throws InterruptedException {
         // Create sparse encoding config without specifying memory index name
-        MemoryStorageConfig sparseConfigWithoutIndexName = MemoryStorageConfig
+        MemoryConfiguration sparseConfigWithoutIndexName = MemoryConfiguration
             .builder()
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .maxInferSize(5)
             .build(); // No memoryIndexName specified
 
@@ -1227,7 +1226,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithStaticMemoryDefaultIndexName() throws InterruptedException {
         // Create config with semantic storage disabled to test static memory index generation
-        MemoryStorageConfig staticConfigWithoutIndexName = MemoryStorageConfig
+        MemoryConfiguration staticConfigWithoutIndexName = MemoryConfiguration
             .builder()
             .semanticStorageEnabled(false)
             .maxInferSize(5)
@@ -1277,13 +1276,13 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     public void testDoExecuteWithSemanticStorageEnabledButNoEmbeddingModel() throws InterruptedException {
         // Create config with semantic storage enabled but no embedding model ID or type
         // Note: The constructor will auto-determine semanticStorageEnabled = false when embeddingModelId is null
-        MemoryStorageConfig configWithoutEmbeddingModel = MemoryStorageConfig
+        MemoryConfiguration configWithoutEmbeddingModel = MemoryConfiguration
             .builder()
-            .memoryIndexName("semantic-no-embedding-index")
+            .indexPrefix("semantic-no-embedding-index")
             .semanticStorageEnabled(true) // This will be overridden to false by constructor
             .embeddingModelId(null) // No embedding model ID
             .embeddingModelType(null) // No embedding model type
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(5)
             .build();
@@ -1342,11 +1341,11 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     public void testDoExecuteWithSemanticStorageEnabledButNullEmbeddingModelId() throws InterruptedException {
         // Create a config that simulates deserialization scenario where semanticStorageEnabled=true
         // but embeddingModelId=null (this can happen with StreamInput constructor)
-        MemoryStorageConfig mockConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration mockConfig = mock(MemoryConfiguration.class);
         when(mockConfig.isSemanticStorageEnabled()).thenReturn(true);
-        when(mockConfig.getLlmModelId()).thenReturn(null); // No LLM model
+        when(mockConfig.getLlmId()).thenReturn(null); // No LLM model
         when(mockConfig.getEmbeddingModelId()).thenReturn(null); // No embedding model ID
-        when(mockConfig.getMemoryIndexName()).thenReturn("test-semantic-index");
+        when(mockConfig.getIndexPrefix()).thenReturn("test-semantic-index");
 
         MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
             .builder()
@@ -1408,13 +1407,13 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithSemanticStorageEnabledButNoLlmModel() throws InterruptedException {
         // Create config with semantic storage enabled but no LLM model ID
-        MemoryStorageConfig configWithoutLlmModel = MemoryStorageConfig
+        MemoryConfiguration configWithoutLlmModel = MemoryConfiguration
             .builder()
-            .memoryIndexName("semantic-no-llm-index")
+            .indexPrefix("semantic-no-llm-index")
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
-            .llmModelId(null) // No LLM model ID
+            .llmId(null) // No LLM model ID
             .dimension(768)
             .maxInferSize(5)
             .build();

@@ -46,7 +46,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
     private String tenantId;
     private Instant createdTime;
     private Instant lastUpdatedTime;
-    private MemoryStorageConfig memoryStorageConfig;
+    private MemoryConfiguration configuration;
 
     public MLMemoryContainer(
         String name,
@@ -55,7 +55,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         String tenantId,
         Instant createdTime,
         Instant lastUpdatedTime,
-        MemoryStorageConfig memoryStorageConfig
+        MemoryConfiguration memoryStorageConfig
     ) {
         this.name = name;
         this.description = description;
@@ -63,7 +63,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         this.tenantId = tenantId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
-        this.memoryStorageConfig = memoryStorageConfig;
+        this.configuration = memoryStorageConfig;
     }
 
     public MLMemoryContainer(StreamInput input) throws IOException {
@@ -76,7 +76,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         this.createdTime = input.readOptionalInstant();
         this.lastUpdatedTime = input.readOptionalInstant();
         if (input.readBoolean()) {
-            this.memoryStorageConfig = new MemoryStorageConfig(input);
+            this.configuration = new MemoryConfiguration(input);
         }
     }
 
@@ -93,9 +93,9 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         out.writeOptionalString(tenantId);
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdatedTime);
-        if (memoryStorageConfig != null) {
+        if (configuration != null) {
             out.writeBoolean(true);
-            memoryStorageConfig.writeTo(out);
+            configuration.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -122,8 +122,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         if (lastUpdatedTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
-        if (memoryStorageConfig != null) {
-            builder.field(MEMORY_STORAGE_CONFIG_FIELD, memoryStorageConfig);
+        if (configuration != null) {
+            builder.field(MEMORY_STORAGE_CONFIG_FIELD, configuration);
         }
         builder.endObject();
         return builder;
@@ -136,7 +136,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         String tenantId = null;
         Instant createdTime = null;
         Instant lastUpdatedTime = null;
-        MemoryStorageConfig memoryStorageConfig = null;
+        MemoryConfiguration memoryStorageConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -163,7 +163,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case MEMORY_STORAGE_CONFIG_FIELD:
-                    memoryStorageConfig = MemoryStorageConfig.parse(parser);
+                    memoryStorageConfig = MemoryConfiguration.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -179,7 +179,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
             .tenantId(tenantId)
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdatedTime)
-            .memoryStorageConfig(memoryStorageConfig)
+            .configuration(memoryStorageConfig)
             .build();
     }
 }

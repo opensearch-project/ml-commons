@@ -28,7 +28,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
 public class MLMemoryContainerGetResponseTests {
 
@@ -36,7 +36,7 @@ public class MLMemoryContainerGetResponseTests {
     private MLMemoryContainerGetResponse responseMinimal;
     private MLMemoryContainer testMemoryContainer;
     private MLMemoryContainer minimalMemoryContainer;
-    private MemoryStorageConfig testMemoryStorageConfig;
+    private MemoryConfiguration testMemoryStorageConfig;
     private User testUser;
     private Instant testCreatedTime;
     private Instant testLastUpdatedTime;
@@ -49,12 +49,12 @@ public class MLMemoryContainerGetResponseTests {
         testLastUpdatedTime = Instant.ofEpochMilli(System.currentTimeMillis() + 3600000);
 
         // Create test memory storage config
-        testMemoryStorageConfig = MemoryStorageConfig
+        testMemoryStorageConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-memory-index")
+            .indexPrefix("test-memory-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(8)
             .build();
@@ -68,7 +68,7 @@ public class MLMemoryContainerGetResponseTests {
             .tenantId("test-tenant")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .build();
 
         // Create minimal memory container
@@ -117,7 +117,7 @@ public class MLMemoryContainerGetResponseTests {
         assertEquals(originalContainer.getTenantId(), parsedContainer.getTenantId());
         assertEquals(originalContainer.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(originalContainer.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertEquals(originalContainer.getMemoryStorageConfig(), parsedContainer.getMemoryStorageConfig());
+        assertEquals(originalContainer.getConfiguration(), parsedContainer.getConfiguration());
     }
 
     @Test
@@ -137,7 +137,7 @@ public class MLMemoryContainerGetResponseTests {
         assertNull(parsedContainer.getTenantId());
         assertNull(parsedContainer.getCreatedTime());
         assertNull(parsedContainer.getLastUpdatedTime());
-        assertNull(parsedContainer.getMemoryStorageConfig());
+        assertNull(parsedContainer.getConfiguration());
     }
 
     @Test
@@ -273,14 +273,14 @@ public class MLMemoryContainerGetResponseTests {
         assertEquals(originalContainer.getLastUpdatedTime(), deserializedContainer.getLastUpdatedTime());
 
         // Verify nested MemoryStorageConfig
-        MemoryStorageConfig originalConfig = originalContainer.getMemoryStorageConfig();
-        MemoryStorageConfig deserializedConfig = deserializedContainer.getMemoryStorageConfig();
+        MemoryConfiguration originalConfig = originalContainer.getConfiguration();
+        MemoryConfiguration deserializedConfig = deserializedContainer.getConfiguration();
 
-        assertEquals(originalConfig.getMemoryIndexName(), deserializedConfig.getMemoryIndexName());
+        assertEquals(originalConfig.getIndexPrefix(), deserializedConfig.getIndexPrefix());
         assertEquals(originalConfig.isSemanticStorageEnabled(), deserializedConfig.isSemanticStorageEnabled());
         assertEquals(originalConfig.getEmbeddingModelType(), deserializedConfig.getEmbeddingModelType());
         assertEquals(originalConfig.getEmbeddingModelId(), deserializedConfig.getEmbeddingModelId());
-        assertEquals(originalConfig.getLlmModelId(), deserializedConfig.getLlmModelId());
+        assertEquals(originalConfig.getLlmId(), deserializedConfig.getLlmId());
         assertEquals(originalConfig.getDimension(), deserializedConfig.getDimension());
         assertEquals(originalConfig.getMaxInferSize(), deserializedConfig.getMaxInferSize());
     }
@@ -382,12 +382,12 @@ public class MLMemoryContainerGetResponseTests {
     @Test
     public void testSerializationWithComplexMemoryContainer() throws IOException {
         // Create a memory container with complex nested structure
-        MemoryStorageConfig complexConfig = MemoryStorageConfig
+        MemoryConfiguration complexConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("complex-memory-index-with-long-name")
+            .indexPrefix("complex-memory-index-with-long-name")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("complex-sparse-encoding-model-id")
-            .llmModelId("complex-llm-model-id")
+            .llmId("complex-llm-model-id")
             .maxInferSize(10)
             .build();
 
@@ -399,7 +399,7 @@ public class MLMemoryContainerGetResponseTests {
             .tenantId("complex-tenant-id-with-special-chars")
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testLastUpdatedTime)
-            .memoryStorageConfig(complexConfig)
+            .configuration(complexConfig)
             .build();
 
         MLMemoryContainerGetResponse complexResponse = MLMemoryContainerGetResponse.builder().mlMemoryContainer(complexContainer).build();
@@ -416,7 +416,7 @@ public class MLMemoryContainerGetResponseTests {
         assertEquals(complexContainer.getName(), parsedContainer.getName());
         assertEquals(complexContainer.getDescription(), parsedContainer.getDescription());
         assertEquals(complexContainer.getTenantId(), parsedContainer.getTenantId());
-        assertEquals(complexContainer.getMemoryStorageConfig(), parsedContainer.getMemoryStorageConfig());
+        assertEquals(complexContainer.getConfiguration(), parsedContainer.getConfiguration());
     }
 
     @Test

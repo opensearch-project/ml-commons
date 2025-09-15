@@ -62,7 +62,7 @@ public class MLSearchMemoriesResponseTest {
                     .memory("Deep learning uses neural networks")
                     .score(0.87f)
                     .sessionId("session-123")
-                    .memoryType(MemoryType.FACT)
+                    .memoryType(MemoryType.SEMANTIC)
                     .build(),
                 MemorySearchResult.builder().memoryId("mem-3").memory("Neural networks have multiple layers").score(0.75f).build()
             );

@@ -16,7 +16,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
 import lombok.Builder;
 import lombok.Data;
@@ -26,21 +26,21 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
 
     public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
-    public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
+    public static final String MEMORY_CONFIG_FIELD = "configuration";
 
     private String name;
     private String description;
-    private MemoryStorageConfig memoryStorageConfig;
+    private MemoryConfiguration configuration;
     private String tenantId;
 
     @Builder(toBuilder = true)
-    public MLCreateMemoryContainerInput(String name, String description, MemoryStorageConfig memoryStorageConfig, String tenantId) {
+    public MLCreateMemoryContainerInput(String name, String description, MemoryConfiguration configuration, String tenantId) {
         if (name == null) {
             throw new IllegalArgumentException("name is null");
         }
         this.name = name;
         this.description = description;
-        this.memoryStorageConfig = memoryStorageConfig;
+        this.configuration = configuration;
         this.tenantId = tenantId;
     }
 
@@ -48,9 +48,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         this.name = in.readString();
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
-            this.memoryStorageConfig = new MemoryStorageConfig(in);
+            this.configuration = new MemoryConfiguration(in);
         } else {
-            this.memoryStorageConfig = null;
+            this.configuration = null;
         }
         this.tenantId = in.readOptionalString();
     }
@@ -59,9 +59,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(name);
         out.writeOptionalString(description);
-        if (memoryStorageConfig != null) {
+        if (configuration != null) {
             out.writeBoolean(true);
-            memoryStorageConfig.writeTo(out);
+            configuration.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -75,8 +75,8 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (memoryStorageConfig != null) {
-            builder.field(MEMORY_STORAGE_CONFIG_FIELD, memoryStorageConfig);
+        if (configuration != null) {
+            builder.field(MEMORY_CONFIG_FIELD, configuration);
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
@@ -88,7 +88,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     public static MLCreateMemoryContainerInput parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
-        MemoryStorageConfig memoryStorageConfig = null;
+        MemoryConfiguration configuration = null;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -103,8 +103,8 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
-                case MEMORY_STORAGE_CONFIG_FIELD:
-                    memoryStorageConfig = MemoryStorageConfig.parse(parser);
+                case MEMORY_CONFIG_FIELD:
+                    configuration = MemoryConfiguration.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
@@ -119,7 +119,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             .builder()
             .name(name)
             .description(description)
-            .memoryStorageConfig(memoryStorageConfig)
+            .configuration(configuration)
             .tenantId(tenantId)
             .build();
     }

@@ -33,7 +33,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -108,7 +108,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
             .builder()
             .name("test-container")
             .description("Test container")
-            .memoryStorageConfig(MemoryStorageConfig.builder().memoryIndexName("test-memory-index").build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").build())
             .build();
 
         // Setup mock user

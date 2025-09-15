@@ -32,7 +32,7 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
@@ -69,7 +69,7 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null; // User is final, use null instead of mock
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
 
@@ -93,7 +93,7 @@ public class MemoryOperationsServiceTests {
         tags.put("key1", "value1");
         when(input.getTags()).thenReturn(tags);
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
 
         // Mock bulk response
@@ -190,7 +190,7 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null;
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
@@ -221,7 +221,7 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null;
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
@@ -252,7 +252,7 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null;
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
 
@@ -293,7 +293,7 @@ public class MemoryOperationsServiceTests {
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(false);
@@ -338,7 +338,7 @@ public class MemoryOperationsServiceTests {
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         Exception bulkException = new RuntimeException("Bulk operation failed");
 
@@ -368,7 +368,7 @@ public class MemoryOperationsServiceTests {
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);

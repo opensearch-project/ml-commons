@@ -13,35 +13,39 @@ public class MemoryContainerConstants {
     // Field names for MemoryContainer
     public static final String MEMORY_CONTAINER_ID_FIELD = "memory_container_id";
     public static final String NAME_FIELD = "name";
+    public static final String SUMMARY_FIELD = "summary";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String OWNER_FIELD = "owner";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
+    public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
 
     // Field names for MemoryStorageConfig
-    public static final String MEMORY_INDEX_NAME_FIELD = "memory_index_name";
-    public static final String SEMANTIC_STORAGE_ENABLED_FIELD = "semantic_storage_enabled";
+    public static final String MEMORY_INDEX_PREFIX_FIELD = "index_prefix";
     public static final String EMBEDDING_MODEL_TYPE_FIELD = "embedding_model_type";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
-    public static final String LLM_MODEL_ID_FIELD = "llm_model_id";
-    public static final String DIMENSION_FIELD = "dimension";
+    public static final String DIMENSION_FIELD = "embedding_dimension";
+    public static final String LLM_ID_FIELD = "llm_id";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
+    public static final String STRATEGIES_FIELD = "strategies";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
 
     // Memory index type prefixes
-    public static final String STATIC_MEMORY_INDEX_PREFIX = "ml-static-memory-";
-    public static final String KNN_MEMORY_INDEX_PREFIX = "ml-knn-memory-";
-    public static final String SPARSE_MEMORY_INDEX_PREFIX = "ml-sparse-memory-";
 
     // Memory data index field names
     public static final String USER_ID_FIELD = "user_id";
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String SESSION_ID_FIELD = "session_id";
+    public static final String SHORT_TERM_MEMORY_ID_FIELD = "short_term_memory_id";
+    public static final String NAMESPACE_FIELD = "namespace";
+    public static final String BINARY_DATA_FIELD = "binary_data";
+    public static final String STRUCTURED_DATA_FIELD = "structured_data";
+    public static final String NAMESPACE_SIZE_FIELD = "namespace_size";
     public static final String MEMORY_FIELD = "memory";
     public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";
+    public static final String METADATA_FIELD = "metadata";
     public static final String TAGS_FIELD = "tags";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String MEMORY_TYPE_FIELD = "memory_type";
@@ -50,6 +54,7 @@ public class MemoryContainerConstants {
     // Request body field names (different from storage field names)
     public static final String MESSAGE_FIELD = "message";
     public static final String MESSAGES_FIELD = "messages";
+    public static final String CONTENT_TEXT_FIELD = "content_text";
     public static final String CONTENT_FIELD = "content";
     public static final String INFER_FIELD = "infer";
     public static final String QUERY_FIELD = "query";

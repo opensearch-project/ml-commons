@@ -29,7 +29,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
@@ -128,13 +128,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
         ActionListener<MLSearchMemoriesResponse> actionListener
     ) {
         try {
-            MemoryStorageConfig storageConfig = container.getMemoryStorageConfig();
-            String indexName = storageConfig != null
-                ? storageConfig.getMemoryIndexName()
-                : STATIC_MEMORY_INDEX_PREFIX + container.getName().toLowerCase() + "-" + RestActionUtils.getUserContext(client).getName();
-
+            MemoryConfiguration memoryConfig = container.getConfiguration();
+            String indexName = memoryConfig.getLongMemoryIndexName();
             // Build search request based on storage configuration
-            SearchRequest searchRequest = buildSearchRequest(input.getQuery(), storageConfig, indexName);
+            SearchRequest searchRequest = buildSearchRequest(input.getQuery(), memoryConfig, indexName);
 
             // Execute search
             client.search(searchRequest, ActionListener.wrap(response -> {
@@ -156,7 +153,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
         }
     }
 
-    private SearchRequest buildSearchRequest(String query, MemoryStorageConfig storageConfig, String indexName) throws IOException {
+    private SearchRequest buildSearchRequest(String query, MemoryConfiguration storageConfig, String indexName) throws IOException {
         // Note: Size limit removed - search will return all matching results
         // int maxResults = storageConfig != null ? storageConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
 

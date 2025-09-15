@@ -6,22 +6,26 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_NAME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_PREFIX_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_ENABLED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGIES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -44,25 +48,29 @@ import lombok.Setter;
 @Setter
 @Builder
 @EqualsAndHashCode
-public class MemoryStorageConfig implements ToXContentObject, Writeable {
+public class MemoryConfiguration implements ToXContentObject, Writeable {
 
-    private String memoryIndexName;
+    private String indexPrefix;
     private boolean semanticStorageEnabled;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
-    private String llmModelId;
+    private String llmId;
     private Integer dimension;
     @Builder.Default
     private Integer maxInferSize = MAX_INFER_SIZE_DEFAULT_VALUE;
+    private List<MemoryStrategy> strategies;
+    private String tenantId;
 
-    public MemoryStorageConfig(
-        String memoryIndexName,
+    public MemoryConfiguration(
+        String indexPrefix,
         boolean semanticStorageEnabled,
         FunctionName embeddingModelType,
         String embeddingModelId,
-        String llmModelId,
+        String llmId,
         Integer dimension,
-        Integer maxInferSize
+        Integer maxInferSize,
+        List<MemoryStrategy> strategies,
+        String tenantId
     ) {
         // Validate first
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
@@ -71,35 +79,44 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         boolean determinedSemanticStorage = (embeddingModelId != null && embeddingModelType != null);
 
         // Assign values after validation
-        this.memoryIndexName = memoryIndexName;
+        this.indexPrefix = indexPrefix == null ? "memory-" + UUID.randomUUID() : indexPrefix;
         this.semanticStorageEnabled = determinedSemanticStorage;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
-        this.llmModelId = llmModelId;
+        this.llmId = llmId;
         this.dimension = dimension;
-        this.maxInferSize = (llmModelId != null) ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE) : null;
+        this.maxInferSize = (llmId != null) ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE) : null;
+        this.strategies = new ArrayList<>();
+        if (strategies != null && !strategies.isEmpty()) {
+            this.strategies.addAll(strategies);
+        }
+        this.tenantId = tenantId;
     }
 
-    public MemoryStorageConfig(StreamInput input) throws IOException {
-        this.memoryIndexName = input.readOptionalString();
+    public MemoryConfiguration(StreamInput input) throws IOException {
+        this.indexPrefix = input.readOptionalString();
         this.semanticStorageEnabled = input.readBoolean();
         String embeddingModelTypeStr = input.readOptionalString();
         this.embeddingModelType = embeddingModelTypeStr != null ? FunctionName.from(embeddingModelTypeStr) : null;
         this.embeddingModelId = input.readOptionalString();
-        this.llmModelId = input.readOptionalString();
+        this.llmId = input.readOptionalString();
         this.dimension = input.readOptionalInt();
         this.maxInferSize = input.readOptionalInt();
+        this.strategies = input.readList(MemoryStrategy::new);
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeOptionalString(memoryIndexName);
+        out.writeOptionalString(indexPrefix);
         out.writeBoolean(semanticStorageEnabled);
         out.writeOptionalString(embeddingModelType != null ? embeddingModelType.name() : null);
         out.writeOptionalString(embeddingModelId);
-        out.writeOptionalString(llmModelId);
+        out.writeOptionalString(llmId);
         out.writeOptionalInt(dimension);
         out.writeOptionalInt(maxInferSize);
+        out.writeList(strategies);
+        out.writeOptionalString(tenantId);
     }
 
     @Override
@@ -107,14 +124,14 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         builder.startObject();
 
         // Always output these fields
-        if (memoryIndexName != null) {
-            builder.field(MEMORY_INDEX_NAME_FIELD, memoryIndexName);
+        if (indexPrefix != null) {
+            builder.field(MEMORY_INDEX_PREFIX_FIELD, indexPrefix);
         }
-        builder.field(SEMANTIC_STORAGE_ENABLED_FIELD, semanticStorageEnabled);
+//        builder.field(SEMANTIC_STORAGE_ENABLED_FIELD, semanticStorageEnabled);
 
         // Always output LLM model if present (decoupled from semantic storage)
-        if (llmModelId != null) {
-            builder.field(LLM_MODEL_ID_FIELD, llmModelId);
+        if (llmId != null) {
+            builder.field(LLM_ID_FIELD, llmId);
         }
 
         // When semantic storage is enabled, output embedding-related fields
@@ -131,21 +148,29 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         }
 
         // Output maxInferSize when LLM model is configured
-        if (llmModelId != null && maxInferSize != null) {
+        if (llmId != null && maxInferSize != null) {
             builder.field(MAX_INFER_SIZE_FIELD, maxInferSize);
         }
 
+        if (strategies != null && !strategies.isEmpty()) {
+            builder.field("strategies", strategies);
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
 
-    public static MemoryStorageConfig parse(XContentParser parser) throws IOException {
-        String memoryIndexName = null;
+    public static MemoryConfiguration parse(XContentParser parser) throws IOException {
+        String indexPrefix = null;
         FunctionName embeddingModelType = null;
         String embeddingModelId = null;
-        String llmModelId = null;
+        String llmId = null;
         Integer dimension = null;
         Integer maxInferSize = null;
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -153,12 +178,8 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case MEMORY_INDEX_NAME_FIELD:
-                    memoryIndexName = parser.text();
-                    break;
-                case SEMANTIC_STORAGE_ENABLED_FIELD:
-                    // Skip this field - it's now auto-determined
-                    parser.skipChildren();
+                case MEMORY_INDEX_PREFIX_FIELD:
+                    indexPrefix = parser.text();
                     break;
                 case EMBEDDING_MODEL_TYPE_FIELD:
                     embeddingModelType = FunctionName.from(parser.text());
@@ -166,14 +187,23 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
                 case EMBEDDING_MODEL_ID_FIELD:
                     embeddingModelId = parser.text();
                     break;
-                case LLM_MODEL_ID_FIELD:
-                    llmModelId = parser.text();
+                case LLM_ID_FIELD:
+                    llmId = parser.text();
                     break;
                 case DIMENSION_FIELD:
                     dimension = parser.intValue();
                     break;
                 case MAX_INFER_SIZE_FIELD:
                     maxInferSize = parser.intValue();
+                    break;
+                case STRATEGIES_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        strategies.add(MemoryStrategy.parse(parser));
+                    }
+                    break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.text();
                     break;
                 default:
                     parser.skipChildren();
@@ -182,15 +212,32 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         }
 
         // Note: validation is already called in the constructor
-        return MemoryStorageConfig
+        return MemoryConfiguration
             .builder()
-            .memoryIndexName(memoryIndexName)
+            .indexPrefix(indexPrefix)
             .embeddingModelType(embeddingModelType)
             .embeddingModelId(embeddingModelId)
-            .llmModelId(llmModelId)
+            .llmId(llmId)
             .dimension(dimension)
             .maxInferSize(maxInferSize)
+            .strategies(strategies)
+            .tenantId(tenantId)
             .build();
+    }
+
+    public String getSessionIndexName() {
+        return indexPrefix + "-session";
+    }
+
+    public String getShortTermMemoryIndexName() {
+        return indexPrefix + "-short-term-memory";
+    }
+
+    public String getLongMemoryIndexName() {
+        return indexPrefix + "-long-term-memory";
+    }
+    public String getLongMemoryHistoryIndexName() {
+        return indexPrefix + "-long-term-memory-history";
     }
 
     /**
