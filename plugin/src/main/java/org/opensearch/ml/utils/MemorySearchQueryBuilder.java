@@ -126,6 +126,9 @@ public class MemorySearchQueryBuilder {
 
         // Add filter conditions
         for (String key : strategy.getNamespace()) {
+            if (!namespace.containsKey(key)) {
+                throw new IllegalArgumentException("Namespace does not contain key: " + key);
+            }
             boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_FIELD + "." + key, namespace.get(key)));
         }
         boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_SIZE_FIELD, strategy.getNamespace().size()));
