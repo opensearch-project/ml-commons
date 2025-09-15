@@ -453,6 +453,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
+    public static final String AGENTIC_MEMORY_THREAD_POOL = "opensearch_ml_agentic_memory";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     public static final String ML_COMMONS_JOBS_TYPE = "opensearch_ml_commons_jobs";
@@ -1170,6 +1171,15 @@ public class MachineLearningPlugin extends Plugin
             false
         );
 
+        FixedExecutorBuilder agenticMemoryThreadPool = new FixedExecutorBuilder(
+                settings,
+                AGENTIC_MEMORY_THREAD_POOL,
+                OpenSearchExecutors.allocatedProcessors(settings) * 4,
+                10000,
+                ML_THREAD_POOL_PREFIX + AGENTIC_MEMORY_THREAD_POOL,
+                false
+        );
+
         return ImmutableList
             .of(
                 generalThreadPool,
@@ -1180,7 +1190,8 @@ public class MachineLearningPlugin extends Plugin
                 predictThreadPool,
                 remotePredictThreadPool,
                 batchIngestThreadPool,
-                sdkClientThreadPool
+                sdkClientThreadPool,
+                agenticMemoryThreadPool
             );
     }
 

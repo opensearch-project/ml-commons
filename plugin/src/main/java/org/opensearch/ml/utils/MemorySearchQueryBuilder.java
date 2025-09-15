@@ -9,17 +9,26 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 
 import java.io.IOException;
+import java.util.Map;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.MatchQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ml.common.utils.StringUtils;
 
 /**
  * Utility class for building memory search queries
@@ -89,7 +98,7 @@ public class MemorySearchQueryBuilder {
      * @return XContentBuilder with the appropriate query
      * @throws IOException if building query fails
      */
-    public static XContentBuilder buildQueryByStorageType(String queryText, MemoryStorageConfig storageConfig) throws IOException {
+    public static XContentBuilder buildQueryByStorageType(String queryText, MemoryConfiguration storageConfig) throws IOException {
         if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
             if (storageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
                 return buildNeuralQuery(queryText, storageConfig.getEmbeddingModelId());
@@ -106,79 +115,50 @@ public class MemorySearchQueryBuilder {
     /**
      * Builds a bool query with filters for searching facts in a session
      *
+     * @param strategy The memory strategy containing namespace information
      * @param fact The fact to search for
-     * @param sessionId The session ID to filter by
+     * @param namespace The namespace map for filtering
      * @param storageConfig The memory storage configuration
-     * @return XContentBuilder with the bool query (without query wrapper)
-     * @throws IOException if building query fails
+     * @return QueryBuilder with the bool query
      */
-    public static XContentBuilder buildFactSearchQuery(String fact, String sessionId, MemoryStorageConfig storageConfig)
-        throws IOException {
-        // Build the bool query with filters (no "query" wrapper)
-        XContentBuilder boolQuery = jsonXContent.contentBuilder();
-        boolQuery.startObject();
-        boolQuery.startObject("bool");
+    public static QueryBuilder buildFactSearchQuery(MemoryStrategy strategy, String fact, Map<String, String> namespace, MemoryConfiguration storageConfig) {
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 
         // Add filter conditions
-        boolQuery.startObject("filter");
-        boolQuery.startObject("bool");
-        boolQuery.startArray("must");
+        for (String key : strategy.getNamespace()) {
+            boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_FIELD + "." + key, namespace.get(key)));
+        }
+        boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_SIZE_FIELD, strategy.getNamespace().size()));
+        boolQuery.filter(QueryBuilders.termQuery(MEMORY_TYPE_FIELD, MemoryType.SEMANTIC.getValue()));
 
-        // Filter by session ID
-        boolQuery.startObject();
-        boolQuery.startObject("term");
-        boolQuery.field(SESSION_ID_FIELD, sessionId);
-        boolQuery.endObject();
-        boolQuery.endObject();
-
-        // Filter by memory type FACT
-        boolQuery.startObject();
-        boolQuery.startObject("term");
-        boolQuery.field(MEMORY_TYPE_FIELD, MemoryType.FACT.getValue());
-        boolQuery.endObject();
-        boolQuery.endObject();
-
-        boolQuery.endArray(); // end must
-        boolQuery.endObject(); // end inner bool
-        boolQuery.endObject(); // end filter
-
-        // Add the search query to must
-        boolQuery.startArray("must");
-
-        // Inline the appropriate query based on storage type
-        boolQuery.startObject();
+        // Add the search query
         if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
             if (storageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
-                // Build neural query inline
-                boolQuery.startObject("neural");
-                boolQuery.startObject(MEMORY_EMBEDDING_FIELD);
-                boolQuery.field("query_text", fact);
-                boolQuery.field("model_id", storageConfig.getEmbeddingModelId());
-                boolQuery.endObject();
-                boolQuery.endObject();
+                StringBuilder neuralSearchQuery = new StringBuilder()
+                        .append("{\"neural\":{\"")
+                        .append(MEMORY_EMBEDDING_FIELD)
+                        .append("\":{\"query_text\":\"")
+                        .append(StringEscapeUtils.escapeJson(fact))
+                        .append("\",\"model_id\":\"")
+                        .append(storageConfig.getEmbeddingModelId())
+                        .append("\"}}}");
+                boolQuery.must(QueryBuilders.wrapperQuery(neuralSearchQuery.toString()));
             } else if (storageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                // Build neural_sparse query inline
-                boolQuery.startObject("neural_sparse");
-                boolQuery.startObject(MEMORY_EMBEDDING_FIELD);
-                boolQuery.field("query_text", fact);
-                boolQuery.field("model_id", storageConfig.getEmbeddingModelId());
-                boolQuery.endObject();
-                boolQuery.endObject();
+                StringBuilder neuralSparseQuery = new StringBuilder()
+                        .append("{\"neural_sparse\":{\"")
+                        .append(MEMORY_EMBEDDING_FIELD)
+                        .append("\":{\"query_text\":\"")
+                        .append(StringEscapeUtils.escapeJson(fact))
+                        .append("\",\"model_id\":\"")
+                        .append(storageConfig.getEmbeddingModelId())
+                        .append("\"}}}");
+                boolQuery.must(QueryBuilders.wrapperQuery(neuralSparseQuery.toString()));
             } else {
                 throw new IllegalStateException("Unsupported embedding model type: " + storageConfig.getEmbeddingModelType());
             }
         } else {
-            // Build match query inline
-            boolQuery.startObject("match");
-            boolQuery.field(MEMORY_FIELD, fact);
-            boolQuery.endObject();
+            boolQuery.must(QueryBuilders.matchQuery(MEMORY_FIELD, fact));
         }
-        boolQuery.endObject();
-
-        boolQuery.endArray(); // end must
-
-        boolQuery.endObject(); // end bool
-        boolQuery.endObject(); // end root
 
         return boolQuery;
     }

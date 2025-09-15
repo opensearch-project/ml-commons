@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "summary": {
+      "type": "text"
+    },
+    "create_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "additional_info": {
+      "type": "flat_object"
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

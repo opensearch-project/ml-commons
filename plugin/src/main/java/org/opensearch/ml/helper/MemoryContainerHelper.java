@@ -22,7 +22,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -154,9 +154,9 @@ public class MemoryContainerHelper {
      * @return the memory index name or null if not configured
      */
     public String getMemoryIndexName(MLMemoryContainer container) {
-        MemoryStorageConfig config = container.getMemoryStorageConfig();
-        if (config != null && config.getMemoryIndexName() != null) {
-            return config.getMemoryIndexName();
+        MemoryConfiguration config = container.getConfiguration();
+        if (config != null && config.getIndexPrefix() != null) {
+            return config.getIndexPrefix();
         }
         return null;
     }
