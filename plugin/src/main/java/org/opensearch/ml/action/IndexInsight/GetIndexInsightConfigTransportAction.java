@@ -66,6 +66,10 @@ public class GetIndexInsightConfigTransportAction extends HandledTransportAction
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightConfigGetRequest.getTenantId(), listener)) {
             return;
         }
+        if (!this.mlFeatureEnabledSetting.isIndexInsightEnabled()) {
+            listener.onFailure(new RuntimeException("Index insight feature is not enabled yet."));
+            return;
+        }
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             String docId = Optional.ofNullable(mlIndexInsightConfigGetRequest.getTenantId()).orElse(DEFAULT_TENANT_ID);

@@ -81,7 +81,7 @@ public class GetIndexInsightConfigTransportActionTests {
         );
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-
+        when(mlFeatureEnabledSetting.isIndexInsightEnabled()).thenReturn(true);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);

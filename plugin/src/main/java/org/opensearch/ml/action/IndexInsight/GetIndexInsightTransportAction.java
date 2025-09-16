@@ -80,6 +80,10 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlIndexInsightGetRequest.getTenantId(), actionListener)) {
             return;
         }
+        if (!this.mlFeatureEnabledSetting.isIndexInsightEnabled()) {
+            actionListener.onFailure(new RuntimeException("Index insight feature is not enabled yet."));
+            return;
+        }
         String indexName = mlIndexInsightGetRequest.getIndexName();
         String docId = Optional.ofNullable(mlIndexInsightGetRequest.getTenantId()).orElse(DEFAULT_TENANT_ID);
         ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
