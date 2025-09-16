@@ -132,7 +132,19 @@ This will create following indexes:
 - `test1-long-term-memory`: store the extracted facts from shor-term memories, only extract facts from  conversation messages (`conversation` type)
 - `test1-long-term-memory-history`: stores the long term memory events: add/update/delete memory
 
-## 3. Create short-term memory only
+TODOs: 
+1. Add `"enable_history": false,` to control enable/disable tracking memory event history
+2. Add `"enable_session_tracking": true,` to control enable/disable tracking session meta data.
+
+## 3. Create data short-term memory
+
+`data` short-term memory is to provide option to store non-conversational data in short-term memory.
+
+It could be used for such use cases:
+1. Remember key information in one Agent running. For example user ask error analysis for last week, we can store the time range for the whole session.
+2. Build checkpoint for Agent run. Deep research agent may run for a long time with dozens of steps. If agent fails, for example exceeding some throttle limit, user doesn't need to rerun from the beginning.
+3. Could be storage layer for Agent's ScratchPad. For example, user could store some SOP doc and use that to initialize ScratchPad.
+
 ```
 POST /_plugins/_ml/memory_containers/{{mem_container_id}}/memories
 {
@@ -189,6 +201,18 @@ Search `test1-short-term-memory`, can see such sample response
 ```
 
 ## 4. Create conversation short-term memory
+
+When add `conversation` memory, and set `"infer": true,`, the workflow will be:
+
+1. Check if `session_id` exists in `namespace`. If no, create a new session and store in session index.
+2. Save the conversation messages in shor term memory.
+3. Run all strategies configured in container. For each strategy, will follow these steps
+   1. Check if the strategy's namespace can match the input `namepsace`. For example strategy's namespace is `["user_id", "session_id"]`, then the input `namespace` must have `user_id` and `session_id`, it's ok for having other namespace keys like `agent_id`, but other keys will be ignored.
+   2. If strategy's namespace can't match input `namespace`, skip running this strategy. Otherwise, go next step.
+   3. Invoke LLM to extract long term memories.
+   4. Search old memories with the same namespace as filter. 
+   5. Compare old memory and new long term memories to decide the memory action: add/update/delete.
+   6. Execute long term memory event to persist long term memory changes.
 
 ```
 POST _plugins/_ml/memory_containers/{{mem_container_id}}/memories
