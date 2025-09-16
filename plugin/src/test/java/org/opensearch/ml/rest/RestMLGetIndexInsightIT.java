@@ -27,6 +27,7 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
     }
 
     public void testGetIndexInsight_Success() throws IOException, ParseException, InterruptedException {
+        enableSettings();
         String registerAgentRequestBody = """
             {
                 "is_enable": true
@@ -71,6 +72,7 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
     }
 
     public void testGetIndexInsightWithPattern_Success() throws IOException, ParseException, InterruptedException {
+        enableSettings();
         String registerAgentRequestBody = """
             {
                 "is_enable": true
@@ -180,6 +182,19 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
 
         Thread.sleep(3000);
         Response response = TestHelper.makeRequest(client(), "GET", "/target_index*/_search", null, TestHelper.toHttpEntity("{}"), null);
+        assertNotNull(response);
+    }
+
+    public static void enableSettings() throws IOException {
+        String enableSettingBody = """
+                {
+                   "persistent" : {
+                     "plugins.ml_commons.index_insight_feature_enabled" : true
+                   }
+                 }
+            """;
+        Response response = TestHelper
+            .makeRequest(client(), "PUT", "/_cluster/settings/", null, TestHelper.toHttpEntity(enableSettingBody), null);
         assertNotNull(response);
     }
 

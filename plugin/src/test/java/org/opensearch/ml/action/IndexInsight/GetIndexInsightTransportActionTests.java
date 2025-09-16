@@ -129,6 +129,7 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(getMappingsResponse);
             return null;
         }).when(indicesAdminClient).getMappings(any(), any());
+        when(mlFeatureEnabledSetting.isIndexInsightEnabled()).thenReturn(Boolean.TRUE);
         when(getMappingsResponse.getMappings()).thenReturn(Map.of("demo", mappingMetadata));
 
     }

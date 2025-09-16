@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.rest.RestMLGetIndexInsightIT.enableSettings;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -28,6 +30,7 @@ public class RestMLPutIndexInsightConfigIT extends RestBaseAgentToolsIT {
     }
 
     public void testPutIndexInsightContainer_successful() throws IOException, ParseException {
+        enableSettings();
         String putIndexInsightConfigBody = """
             {
                 "is_enable": true

@@ -73,6 +73,11 @@ public class PutIndexInsightConfigTransportAction extends HandledTransportAction
             return;
         }
 
+        if (!this.mlFeatureEnabledSetting.isIndexInsightEnabled()) {
+            listener.onFailure(new RuntimeException("Index insight feature is not enabled yet."));
+            return;
+        }
+
         User user = RestActionUtils.getUserContext(client);
         // Two scenario we can put config
         // 1. user is null: security is not enabled/super admin
