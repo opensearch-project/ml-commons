@@ -332,7 +332,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "\"\n"
         + "    },\n"
         + "    \"parameters\": {\n"
-        + "        \"model\": \"command\"\n"
+        + "        \"model\": \"command-a-03-2025\"\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
