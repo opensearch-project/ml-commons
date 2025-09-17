@@ -107,15 +107,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
     @Override
     protected void handlePatternMatchedDoc(Map<String, Object> patternSource, String tenantId, ActionListener<IndexInsight> listener) {
-        String currentStatus = (String) patternSource.get(IndexInsight.STATUS_FIELD);
-        IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
-
-        if (status != IndexInsightTaskStatus.COMPLETED) {
-            // If pattern source is not completed, fall back to normal generation
-            runTask(tenantId, listener, true);
-            return;
-        }
-
         // For StatisticalDataTask, run without storing when pattern matched
         runTask(tenantId, listener, false);
     }
