@@ -186,7 +186,7 @@ public class MLCreateConnectorInputTests {
                 .addAllBackendRoles(false)
                 .build();
         });
-        assertEquals("Connector credential is null or empty list", exception.getMessage());
+        assertEquals("MCP Connector credential is null or empty list", exception.getMessage());
     }
 
     @Test
@@ -206,7 +206,7 @@ public class MLCreateConnectorInputTests {
                 .addAllBackendRoles(false)
                 .build();
         });
-        assertEquals("Connector credential is null or empty list", exception.getMessage());
+        assertEquals("MCP Connector credential is null or empty list", exception.getMessage());
     }
 
     @Test
@@ -224,6 +224,7 @@ public class MLCreateConnectorInputTests {
             .access(AccessMode.PUBLIC)
             .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
             .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
             .build();
 
         assertNotNull(connector);
@@ -246,6 +247,7 @@ public class MLCreateConnectorInputTests {
             .access(AccessMode.PUBLIC)
             .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
             .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
             .build();
 
         assertNotNull(connector);
@@ -268,6 +270,7 @@ public class MLCreateConnectorInputTests {
             .access(AccessMode.PUBLIC)
             .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
             .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
             .build();
 
         assertNotNull(connector);
@@ -290,6 +293,7 @@ public class MLCreateConnectorInputTests {
             .access(AccessMode.PUBLIC)
             .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
             .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
             .build();
 
         assertNotNull(connector);
@@ -463,6 +467,65 @@ public class MLCreateConnectorInputTests {
         // No exception for missing mandatory fields when dryRun is true
         assertTrue(input.isDryRun());
         assertNull(input.getName()); // Name is not set, but no exception due to dryRun
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithNullUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_SSE, null);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithBlankUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_SSE, "   ");
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithNullUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_STREAMABLE_HTTP, null);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithBlankUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_STREAMABLE_HTTP, "   ");
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithValidUrl_ShouldNotThrowException() {
+        testMcpValidUrl(MCP_SSE);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithValidUrl_ShouldNotThrowException() {
+        testMcpValidUrl(MCP_STREAMABLE_HTTP);
+    }
+
+    private void testMcpUrlValidation(String protocol, String url) {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(protocol)
+                .credential(null) // MCP connectors allow null credential
+                .url(url)
+                .build();
+        });
+        assertEquals("MCP Connector url is null or blank", exception.getMessage());
+    }
+
+    private void testMcpValidUrl(String protocol) {
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(protocol)
+            .credential(null)
+            .url("https://test.com")
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(protocol, connector.getProtocol());
+        assertEquals("https://test.com", connector.getUrl());
     }
 
     // Helper method to create XContentParser from a JSON string

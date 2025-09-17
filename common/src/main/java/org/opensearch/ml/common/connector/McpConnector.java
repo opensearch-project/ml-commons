@@ -358,6 +358,9 @@ public class McpConnector implements Connector {
         if (updateContent.getConnectorClientConfig() != null) {
             this.connectorClientConfig = updateContent.getConnectorClientConfig();
         }
+        if (updateContent.getUrl() != null && updateContent.getUrl().isBlank()) {
+            throw new IllegalArgumentException("MCP Connector url is blank");
+        }
         if (updateContent.getUrl() != null) {
             this.url = updateContent.getUrl();
         }

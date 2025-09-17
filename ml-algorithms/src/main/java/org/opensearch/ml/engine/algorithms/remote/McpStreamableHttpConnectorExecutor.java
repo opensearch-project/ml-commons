@@ -19,7 +19,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,9 +78,6 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
         String endpoint = connector.getParameters() != null && connector.getParameters().containsKey(ENDPOINT_FIELD)
             ? connector.getParameters().get(ENDPOINT_FIELD)
             : MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT;
-        if (mcpServerUrl == null) {
-            return Collections.emptyList();
-        }
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());

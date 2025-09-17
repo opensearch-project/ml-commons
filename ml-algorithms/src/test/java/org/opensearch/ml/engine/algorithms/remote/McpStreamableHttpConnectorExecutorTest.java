@@ -94,4 +94,32 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
         }
     }
 
+    @Test
+    public void getMcpToolSpecs_throwsOnListToolsError() {
+
+        when(mcpClient.initialize()).thenReturn(null);
+        when(mcpClient.listTools()).thenThrow(new RuntimeException("Error listing tools"));
+        try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
+            mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
+            McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
+
+            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+        }
+    }
+
+    @Test
+    public void testUnimplementedMethods_ThrowUnsupportedOperationException() {
+        McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
+
+        // Test invokeRemoteService throws UnsupportedOperationException
+        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(null, null, null, null, null, null));
+
+        // Test getScriptService throws UnsupportedOperationException
+        assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
+
+        // Test getClient throws UnsupportedOperationException
+        assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
+
+    }
+
 }

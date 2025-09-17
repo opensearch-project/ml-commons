@@ -109,12 +109,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 throw new IllegalArgumentException("Connector protocol is null");
             }
             if ((!protocol.equals(MCP_SSE) && !protocol.equals(MCP_STREAMABLE_HTTP)) && (credential == null || credential.isEmpty())) {
-                throw new IllegalArgumentException("Connector credential is null or empty list");
+                throw new IllegalArgumentException("MCP Connector credential is null or empty list");
             }
             if (actions != null) {
                 for (ConnectorAction action : actions) {
                     action.validatePrePostProcessFunctions(parameters);
                 }
+            }
+            if ((protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP)) && (url == null || url.isBlank())) {
+                throw new IllegalArgumentException("MCP Connector url is null or blank");
             }
         }
         this.name = name;
