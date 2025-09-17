@@ -3,18 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.httpclient;
+package org.opensearch.ml.common.httpclient;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.opensearch.common.util.concurrent.ThreadContextAccess;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -24,19 +23,15 @@ import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
-        try {
-            return AccessController
-                .doPrivileged(
-                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient
-                        .builder()
-                        .connectionTimeout(connectionTimeout)
-                        .readTimeout(readTimeout)
-                        .maxConcurrency(maxConnections)
-                        .build()
-                );
-        } catch (PrivilegedActionException e) {
-            return null;
-        }
+        return ThreadContextAccess
+            .doPrivileged(
+                () -> NettyNioAsyncHttpClient
+                    .builder()
+                    .connectionTimeout(connectionTimeout)
+                    .readTimeout(readTimeout)
+                    .maxConcurrency(maxConnections)
+                    .build()
+            );
     }
 
     /**

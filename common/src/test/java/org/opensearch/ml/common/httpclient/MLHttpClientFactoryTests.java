@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.httpclient;
+package org.opensearch.ml.common.httpclient;
 
 import static org.junit.Assert.assertNotNull;
 

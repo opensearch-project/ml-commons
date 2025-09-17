@@ -43,6 +43,10 @@ dependencies {
     compileOnly group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     // Multi-tenant SDK Client
     compileOnly "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
+    compileOnly (group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.30.18") {
+        exclude(group: 'org.reactivestreams', module: 'reactive-streams')
+        exclude(group: 'org.slf4j', module: 'slf4j-api')
+    }
 }
 
 lombok {
