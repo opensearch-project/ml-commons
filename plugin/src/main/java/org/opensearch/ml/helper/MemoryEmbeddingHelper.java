@@ -134,11 +134,6 @@ public class MemoryEmbeddingHelper {
      * @param listener action listener for the result
      */
     public void generateEmbedding(String text, MemoryConfiguration storageConfig, ActionListener<Object> listener) {
-        if (storageConfig == null || !storageConfig.isSemanticStorageEnabled()) {
-            listener.onResponse(null);
-            return;
-        }
-
         String embeddingModelId = storageConfig.getEmbeddingModelId();
         FunctionName embeddingModelType = storageConfig.getEmbeddingModelType();
 

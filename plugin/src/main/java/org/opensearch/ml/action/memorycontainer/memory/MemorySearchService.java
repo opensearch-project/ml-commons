@@ -60,7 +60,7 @@ public class MemorySearchService {
         MLAddMemoriesInput input,
         List<String> facts,
         int currentIndex,
-        MemoryConfiguration storageConfig,
+        MemoryConfiguration memoryConfig,
         int maxInferSize,
         List<FactSearchResult> allResults,
         ActionListener<List<FactSearchResult>> listener
@@ -73,7 +73,7 @@ public class MemorySearchService {
         String fact = facts.get(currentIndex);
 
         try {
-            QueryBuilder queryBuilder = MemorySearchQueryBuilder.buildFactSearchQuery(strategy, fact, input.getNamespace(), storageConfig);
+            QueryBuilder queryBuilder = MemorySearchQueryBuilder.buildFactSearchQuery(strategy, fact, input.getNamespace(), memoryConfig);
 
             log.debug("Searching for similar facts with query: {}", queryBuilder.toString());
 
@@ -82,7 +82,7 @@ public class MemorySearchService {
             searchSourceBuilder.size(maxInferSize);
             searchSourceBuilder.fetchSource(new String[] { MEMORY_FIELD }, null);
 
-            String indexName = storageConfig.getLongMemoryIndexName();
+            String indexName = memoryConfig.getLongMemoryIndexName();
             SearchRequest searchRequest = new SearchRequest().indices(indexName).source(searchSourceBuilder);
 
             client.search(searchRequest, ActionListener.wrap(response -> {
@@ -96,14 +96,14 @@ public class MemorySearchService {
 
                 log.debug("Found {} similar facts for: {}", response.getHits().getHits().length, fact);
 
-                searchFactsSequentially(strategy, input, facts, currentIndex + 1, storageConfig, maxInferSize, allResults, listener);
+                searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             }, e -> {
                 log.error("Failed to search for similar facts for: {}", fact, e);
-                searchFactsSequentially(strategy, input, facts, currentIndex + 1, storageConfig, maxInferSize, allResults, listener);
+                searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             }));
         } catch (Exception e) {
             log.error("Failed to build search query for fact: {}", fact, e);
-            searchFactsSequentially(strategy, input, facts, currentIndex + 1, storageConfig, maxInferSize, allResults, listener);
+            searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
         }
     }
 }
