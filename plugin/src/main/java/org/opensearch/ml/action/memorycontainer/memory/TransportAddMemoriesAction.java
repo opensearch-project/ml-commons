@@ -176,8 +176,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             List<MessageInput> messages = input.getMessages();
 
             boolean infer = input.isInfer();
-            MemoryConfiguration storageConfig = container.getConfiguration();
-            boolean hasLlmModel = storageConfig != null && storageConfig.getLlmId() != null;
+            MemoryConfiguration memoryConfig = container.getConfiguration();
+            boolean hasLlmModel = memoryConfig != null && memoryConfig.getLlmId() != null;
 
             if (infer && !hasLlmModel) {
                 actionListener.onFailure(new IllegalArgumentException(INFER_REQUIRES_LLM_MODEL_ERROR));
@@ -279,7 +279,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         MemoryConfiguration memoryConfig,
         ActionListener<MLAddMemoriesResponse> actionListener
     ) {
-        Instant now = Instant.now();
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 

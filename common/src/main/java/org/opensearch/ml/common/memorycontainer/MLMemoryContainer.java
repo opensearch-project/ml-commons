@@ -55,7 +55,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         String tenantId,
         Instant createdTime,
         Instant lastUpdatedTime,
-        MemoryConfiguration memoryStorageConfig
+        MemoryConfiguration configuration
     ) {
         this.name = name;
         this.description = description;
@@ -63,7 +63,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         this.tenantId = tenantId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
-        this.configuration = memoryStorageConfig;
+        this.configuration = configuration;
     }
 
     public MLMemoryContainer(StreamInput input) throws IOException {
@@ -136,7 +136,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         String tenantId = null;
         Instant createdTime = null;
         Instant lastUpdatedTime = null;
-        MemoryConfiguration memoryStorageConfig = null;
+        MemoryConfiguration configuration = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -163,7 +163,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case MEMORY_STORAGE_CONFIG_FIELD:
-                    memoryStorageConfig = MemoryConfiguration.parse(parser);
+                    configuration = MemoryConfiguration.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -179,7 +179,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
             .tenantId(tenantId)
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdatedTime)
-            .configuration(memoryStorageConfig)
+            .configuration(configuration)
             .build();
     }
 }

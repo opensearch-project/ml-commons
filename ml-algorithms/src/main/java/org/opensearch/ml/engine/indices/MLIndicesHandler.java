@@ -18,11 +18,15 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_HISTORY_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SHORT_TERM_MEMORY_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 import static org.opensearch.ml.common.utils.IndexUtils.ALL_NODES_REPLICA_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
@@ -169,15 +173,24 @@ public class MLIndicesHandler {
         }
     }
 
-    public void createSessionMemoryDataIndex(String indexName, ActionListener<Boolean> listener) {
-        this.initIndexWithMappingFileIfAbsent(indexName, ML_MEMORY_SESSION_INDEX_MAPPING_PATH, 1, listener);
-    }
-    public void createShortTermMemoryDataIndex(String indexName, ActionListener<Boolean> listener) {
-        this.initIndexWithMappingFileIfAbsent(indexName, ML_SHORT_MEMORY_INDEX_MAPPING_PATH, 1, listener);
+    public void createSessionMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_MEMORY_SESSION_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SESSION_INDEX);
+        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
-    public void createLongTermMemoryHistoryIndex(String indexName, ActionListener<Boolean> listener) {
-        this.initIndexWithMappingFileIfAbsent(indexName, ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH, 1, listener);
+
+
+    public void createShortTermMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_SHORT_MEMORY_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SHORT_TERM_MEMORY_INDEX);
+        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+    }
+
+    public void createLongTermMemoryHistoryIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX);
+        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
     public void createLongTermMemoryIndex(String pipelineName, String indexName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener) {
@@ -222,6 +235,10 @@ public class MLIndicesHandler {
             }
             if (pipelineName != null) {
                 indexSettings.put("default_pipeline", pipelineName);
+            }
+            if (!memoryConfig.getIndexSettings().isEmpty() && memoryConfig.getIndexSettings().containsKey(LONG_TERM_MEMORY_INDEX)) {
+                Map<String, Object> configuredIndexSettings = memoryConfig.getMemoryIndexMapping(LONG_TERM_MEMORY_INDEX);
+                indexSettings.putAll(configuredIndexSettings);
             }
 
             indexMappings.put("properties", properties);

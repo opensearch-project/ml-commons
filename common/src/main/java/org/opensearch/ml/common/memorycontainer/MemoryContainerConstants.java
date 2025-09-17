@@ -20,7 +20,7 @@ public class MemoryContainerConstants {
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
 
-    // Field names for MemoryStorageConfig
+    // Field names for MemoryConfiguration
     public static final String MEMORY_INDEX_PREFIX_FIELD = "index_prefix";
     public static final String EMBEDDING_MODEL_TYPE_FIELD = "embedding_model_type";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
@@ -28,11 +28,17 @@ public class MemoryContainerConstants {
     public static final String LLM_ID_FIELD = "llm_id";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
     public static final String STRATEGIES_FIELD = "strategies";
+    public static final String INDEX_SETTINGS_FIELD = "index_settings";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
 
-    // Memory index type prefixes
+    // Memory index setting key
+    public static final String SESSION_INDEX = "session_index";
+    public static final String SHORT_TERM_MEMORY_INDEX = "short_term_memory_index";
+    public static final String LONG_TERM_MEMORY_INDEX = "long_term_memory_index";
+    public static final String LONG_TERM_MEMORY_HISTORY_INDEX = "long_term_memory_history_index";
+
 
     // Memory data index field names
     public static final String USER_ID_FIELD = "user_id";

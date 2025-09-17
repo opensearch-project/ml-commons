@@ -99,6 +99,47 @@ POST _plugins/_ml/models/_register
 ```
 
 ## 3. Create memory container
+
+This API will create following resources:
+
+- Memory indexes:
+    - `test1-session`: store the conversation session data
+    - `test1-short-term-memory`: store the short term memory: conversation messages (`conversation` type), or non-conversation message (`data` type)
+    - `test1-long-term-memory`: store the extracted facts from shor-term memories, only extract facts from  conversation messages (`conversation` type)
+    - `test1-long-term-memory-history`: stores the long term memory events: add/update/delete memory
+- Ingest pipeline:
+    - `test1-long-term-memory-embedding`: this pipeline will use embedding model to convert text into embedding. This pipeline will be configured as default pipeline of `test1-long-term-memory`.
+
+You can set optional index settings for these 4 memory index. Add `index_settings` to `configuration` when create memory container.
+For example:
+```
+POST _plugins/_ml/memory_containers/_create
+{
+  "name": "short term memory",
+  "description": "Store conversation history",
+  "configuration": {
+    "index_prefix": "test0",
+    "index_settings": {
+      "short_term_memory_index" : { // use one of these values: session_index, short_term_memory_index, long_term_memory_index, long_term_memory_history_index
+        "index": {
+          "number_of_shards": "2",
+          "number_of_replicas": "2"
+        }
+      }
+    }
+  }
+}
+```
+
+TODOs:
+1. Add `"enable_history": false,` to control enable/disable tracking memory event history
+2. Add `"enable_session_tracking": true,` to control enable/disable tracking session meta data.
+
+User can have multiple options to provision memory container for the long term memory index.
+
+- Option 1: create memory container with text embedding model
+
+Long term memory index will be KNN index.
 ```
 POST _plugins/_ml/memory_containers/_create
 {
@@ -125,16 +166,62 @@ POST _plugins/_ml/memory_containers/_create
   }
 }
 ```
-This will create following indexes:
 
-- `test1-session`: store the conversation session data
-- `test1-short-term-memory`: store the short term memory: conversation messages (`conversation` type), or non-conversation message (`data` type)
-- `test1-long-term-memory`: store the extracted facts from shor-term memories, only extract facts from  conversation messages (`conversation` type)
-- `test1-long-term-memory-history`: stores the long term memory events: add/update/delete memory
+- Option 2: create memory container with sparse encoding model
 
-TODOs: 
-1. Add `"enable_history": false,` to control enable/disable tracking memory event history
-2. Add `"enable_session_tracking": true,` to control enable/disable tracking session meta data.
+Long term memory index will be neural sparse index.
+```
+POST _plugins/_ml/memory_containers/_create
+{
+  "name": "agentic memory test",
+  "description": "Store conversations with semantic search and summarization",
+  "configuration": {
+    "index_prefix": "test1",
+    "embedding_model_type": "SPARSE_ENCODING",
+    "embedding_model_id": "{{sparse_encoding_model}}",
+    "llm_id": "{{llm}}",
+    "strategies": [
+      {
+        "enabled": true,
+        "type": "SEMANTIC",
+        "namespace": [
+          "user_id"
+        ],
+        "configuration": {
+          "test": "value"
+        }
+      }
+    ]
+  }
+}
+```
+
+- Option 3: create memory container without embedding model
+
+Long term memory index will be a vanilla OpenSearch index. 
+```
+POST _plugins/_ml/memory_containers/_create
+{
+  "name": "agentic memory test",
+  "description": "Store conversations with semantic search and summarization",
+  "configuration": {
+    "index_prefix": "test1",
+    "llm_id": "{{llm}}",
+    "strategies": [
+      {
+        "enabled": true,
+        "type": "SEMANTIC",
+        "namespace": [
+          "user_id"
+        ],
+        "configuration": {
+          "test": "value"
+        }
+      }
+    ]
+  }
+}
+```
 
 ## 3. Create data short-term memory
 
@@ -493,7 +580,14 @@ GET /{{memory_index_prefix}}-short-term-memory/_search
     "term": {
       "namespace.session_id": "123"
     }
-  }
+  },
+  "sort": [
+    {
+      "created_time": {
+        "order": "desc"
+      }
+    }
+  ]
 }
 ```
 
@@ -505,7 +599,14 @@ GET /{{memory_index_prefix}}-short-term-memory/_search
     "term": {
       "tags.parent_memory_id": "o4-WWJkBFT7urc7Ed9hM"
     }
-  }
+  },
+  "sort": [
+    {
+      "created_time": {
+        "order": "desc"
+      }
+    }
+  ]
 }
 ```
 
@@ -530,6 +631,13 @@ GET /{{memory_index_prefix}}-short-term-memory/_search
         }
       ]
     }
-  }
+  },
+  "sort": [
+    {
+      "created_time": {
+        "order": "desc"
+      }
+    }
+  ]
 }
 ```
