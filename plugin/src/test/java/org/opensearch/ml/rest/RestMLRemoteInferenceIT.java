@@ -681,7 +681,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         }
     }
 
-    @Ignore // The Generate API is slated for deprecation on Aug 26, 2025. See https://docs.cohere.com/v1/docs/migrating-from-cogenerate-to-cochat
+    @Ignore // The Generate API is slated for deprecation on Aug 26, 2025. See
+            // https://docs.cohere.com/v1/docs/migrating-from-cogenerate-to-cochat
     public void testCohereGenerateTextModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (COHERE_KEY == null) {
