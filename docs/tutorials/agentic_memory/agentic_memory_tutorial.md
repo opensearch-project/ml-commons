@@ -400,3 +400,136 @@ Can see new events in `test1-long-term-memory-history`
     }
 }
 ```
+
+## 5. Trace data 
+
+### 5.1 Add trace data
+
+`structured_data` is `flat_object` type, so it's flexible for agent to decide how to store trace data. For example store all trace data in one memory or store separately.
+- option1: store all tool invocations in one short term memory
+```
+POST _plugins/_ml/memory_containers/{{mem_container_id}}/memories
+{
+  "structured_data": {
+    "tool_invocations": [
+      {
+        "tool_name": "ListIndexTool",
+        "tool_input": {
+          "filter": "*,-.plugins*"
+        },
+        "tool_output": "green  open security-auditlog-2025.09.17   Kcc5QhHKQMuqGoepKta1_w 1 0   86 0 220.9kb 220.9kb\nyellow open test1-long-term-memory         HQbJLJPNR-yQPgpwIJ3Obg 1 1    0 0    208b    208b\nyellow open ss4o_logs-otel-2025.09.17      Rmlzz0FeRTyQM8osgleoYQ 1 1 4027 0   3.7mb   3.7mb\ngreen  open test1-short-term-memory        9NU9SW_0QQ63NpINuzfScQ 1 0    5 0  52.5kb  52.5kb\ngreen  open top_queries-2025.09.17-00414   HUxssrhFQFauoxg5YQ7KOg 1 0   19 0  55.7kb  55.7kb\ngreen  open test1-long-term-memory-history b7zqHp-eQleiPn-VMR93HQ 1 0    0 0    208b    208b\ngreen  open .opendistro_security           Rk5gENmgTPWfJ6fXgDfmyw 1 0    9 0  80.8kb  80.8kb\nyellow open jaeger-span-2025-09-17         UdAPt-ZcTuaapekonCHEWA 1 1 8150 0   7.5mb   7.5mb\ngreen  open test1-session                  IiL9VbeKQYqWNlImJuNKhA 1 0    2 0   5.2kb   5.2kb"
+      },
+      {
+        "tool_name": "SearchIndexTool",
+        "tool_input": {
+          "index": "test_index",
+          "query": {
+            "_source": {
+              "exclude": [
+                "memory_embedding"
+              ]
+            }
+          }
+        },
+        "tool_output": "sample output"
+      }
+    ]
+  },
+  "namespace": {
+    "user_id": "bob",
+    "agent_id": "testAgent1",
+    "session_id": "123"
+  },
+  "tags": {
+    "topic": "personal info",
+    "parent_memory_id": "o4-WWJkBFT7urc7Ed9hM",
+    "data_type": "trace"
+  },
+  "infer": false,
+  "memory_type": "conversation"
+}
+```
+Response
+```
+{
+  "session_id": "123",
+  "short_term_memory_id": "HL64WJkBE_hFTtoVFWp2"
+}
+```
+- option2: store each tool invocation in one short term memory
+```
+POST _plugins/_ml/memory_containers/{{mem_container_id}}/memories
+{
+  "structured_data": {
+    "tool_invocation": {
+        "tool_name": "ListIndexTool",
+        "tool_input": {
+          "filter": "*,-.plugins*"
+        },
+        "tool_output": "green  open security-auditlog-2025.09.17   Kcc5QhHKQMuqGoepKta1_w 1 0   86 0 220.9kb 220.9kb\nyellow open test1-long-term-memory         HQbJLJPNR-yQPgpwIJ3Obg 1 1    0 0    208b    208b\nyellow open ss4o_logs-otel-2025.09.17      Rmlzz0FeRTyQM8osgleoYQ 1 1 4027 0   3.7mb   3.7mb\ngreen  open test1-short-term-memory        9NU9SW_0QQ63NpINuzfScQ 1 0    5 0  52.5kb  52.5kb\ngreen  open top_queries-2025.09.17-00414   HUxssrhFQFauoxg5YQ7KOg 1 0   19 0  55.7kb  55.7kb\ngreen  open test1-long-term-memory-history b7zqHp-eQleiPn-VMR93HQ 1 0    0 0    208b    208b\ngreen  open .opendistro_security           Rk5gENmgTPWfJ6fXgDfmyw 1 0    9 0  80.8kb  80.8kb\nyellow open jaeger-span-2025-09-17         UdAPt-ZcTuaapekonCHEWA 1 1 8150 0   7.5mb   7.5mb\ngreen  open test1-session                  IiL9VbeKQYqWNlImJuNKhA 1 0    2 0   5.2kb   5.2kb"
+    }
+  },
+  "namespace": {
+    "user_id": "bob",
+    "agent_id": "testAgent1",
+    "session_id": "123"
+  },
+  "tags": {
+    "topic": "personal info",
+    "parent_memory_id": "o4-WWJkBFT7urc7Ed9hM",
+    "data_type": "trace"
+  },
+  "infer": false,
+  "memory_type": "conversation"
+}
+```
+### 5.2 Search trace data
+
+- Search all trace data for a conversation
+```
+GET /{{memory_index_prefix}}-short-term-memory/_search
+{
+  "query": {
+    "term": {
+      "namespace.session_id": "123"
+    }
+  }
+}
+```
+
+- Search trace data for a specific conversation message
+```
+GET /{{memory_index_prefix}}-short-term-memory/_search
+{
+  "query": {
+    "term": {
+      "tags.parent_memory_id": "o4-WWJkBFT7urc7Ed9hM"
+    }
+  }
+}
+```
+
+- Search conversation message only, without trace data
+```
+GET /{{memory_index_prefix}}-short-term-memory/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "namespace.session_id": "123"
+          }
+        }
+      ],
+      "must_not": [
+        {
+          "exists": {
+            "field": "tags.parent_memory_id"
+          }
+        }
+      ]
+    }
+  }
+}
+```
