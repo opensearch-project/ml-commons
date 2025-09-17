@@ -18,7 +18,6 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import java.net.http.HttpRequest;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,9 +77,6 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
         String sseEndpoint = connector.getParameters() != null && connector.getParameters().containsKey(SSE_ENDPOINT_FIELD)
             ? connector.getParameters().get(SSE_ENDPOINT_FIELD)
             : MCP_DEFAULT_SSE_ENDPOINT;
-        if (mcpServerUrl == null) {
-            return Collections.emptyList();
-        }
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());

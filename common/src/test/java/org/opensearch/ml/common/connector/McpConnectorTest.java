@@ -118,56 +118,37 @@ public class McpConnectorTest {
     }
 
     @Test
-    public void decrypt() {
-        McpConnector connector = createMcpConnector();
-        connector.decrypt("", decryptFunction, null);
-        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
-        Assert.assertEquals(1, decryptedCredential.size());
-        Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
-        Assert.assertNotNull(connector.getDecryptedHeaders());
-        Assert.assertEquals(1, connector.getDecryptedHeaders().size());
-        Assert.assertEquals("decrypted: TEST_KEY_VALUE", connector.getDecryptedHeaders().get("api_key"));
-
-        connector.removeCredential();
-        Assert.assertNull(connector.getCredential());
-        Assert.assertNull(connector.getDecryptedCredential());
-        Assert.assertNull(connector.getDecryptedHeaders());
-    }
-
-    @Test
-    public void encrypt() {
-        McpConnector connector = createMcpConnector();
-        connector.encrypt(encryptFunction, null);
-        Map<String, String> credential = connector.getCredential();
+    public void testEncryptDecryptAndRemoveCredential() {
+        // Test encrypt
+        McpConnector encryptConnector = createMcpConnector();
+        encryptConnector.encrypt(encryptFunction, null);
+        Map<String, String> credential = encryptConnector.getCredential();
         Assert.assertEquals(1, credential.size());
         Assert.assertEquals("encrypted: test_key_value", credential.get("key"));
 
-        connector.removeCredential();
-        Assert.assertNull(connector.getCredential());
-        Assert.assertNull(connector.getDecryptedCredential());
-        Assert.assertNull(connector.getDecryptedHeaders());
+        // Test decrypt
+        McpConnector decryptConnector = createMcpConnector();
+        decryptConnector.decrypt("", decryptFunction, null);
+        Map<String, String> decryptedCredential = decryptConnector.getDecryptedCredential();
+        Assert.assertEquals(1, decryptedCredential.size());
+        Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
+        Assert.assertNotNull(decryptConnector.getDecryptedHeaders());
+        Assert.assertEquals(1, decryptConnector.getDecryptedHeaders().size());
+        Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptConnector.getDecryptedHeaders().get("api_key"));
+
+        // Test removeCredential
+        McpConnector removeConnector = createMcpConnector();
+        removeConnector.removeCredential();
+        Assert.assertNull(removeConnector.getCredential());
+        Assert.assertNull(removeConnector.getDecryptedCredential());
+        Assert.assertNull(removeConnector.getDecryptedHeaders());
     }
 
     @Test
-    public void validateConnectorURL_Invalid() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
+    public void testValidateConnectorURL() {
         McpConnector connector = createMcpConnector();
-        connector
-            .validateConnectorURL(
-                Arrays
-                    .asList(
-                        "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                        "^https://api\\.openai\\.com/.*$",
-                        "^https://api\\.cohere\\.ai/.*$",
-                        "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
-                    )
-            );
-    }
 
-    @Test
-    public void validateConnectorURL() {
-        McpConnector connector = createMcpConnector();
+        // Test valid URL
         connector
             .validateConnectorURL(
                 Arrays
@@ -176,6 +157,20 @@ public class McpConnectorTest {
                         "^https://api\\.openai\\.com/.*$",
                         "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$",
                         "^" + connector.getUrl()
+                    )
+            );
+
+        // Test invalid URL
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector URL is not matching the trusted connector endpoint regex");
+        connector
+            .validateConnectorURL(
+                Arrays
+                    .asList(
+                        "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                        "^https://api\\.openai\\.com/.*$",
+                        "^https://api\\.cohere\\.ai/.*$",
+                        "^https://bedrock-agent-runtime\\\\..*[a-z0-9-]\\\\.amazonaws\\\\.com/.*$"
                     )
             );
     }
@@ -278,5 +273,123 @@ public class McpConnectorTest {
             .headers(headers)
             .parameters(parameters)
             .build();
+    }
+
+    @Test
+    public void testUpdate_BlankUrl() {
+        McpConnector connector = createMcpConnector();
+
+        MLCreateConnectorInput updateInput = MLCreateConnectorInput
+            .builder()
+            .name("test_name")
+            .version("1.0")
+            .protocol(MCP_SSE)
+            .url("   ")
+            .updateConnector(true)
+            .build();
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("MCP Connector url is blank");
+        connector.update(updateInput, encryptFunction);
+    }
+
+    @Test
+    public void testParse_WithAllFields() throws IOException {
+        long timestamp = System.currentTimeMillis();
+        String json = String.format("""
+            {
+                "name": "test_connector",
+                "version": "1",
+                "protocol": "mcp_sse",
+                "owner": {
+                    "name": "test_user",
+                    "backend_roles": ["role1", "role2"]
+                },
+                "access": "private",
+                "created_time": %d,
+                "last_updated_time": %d,
+                "client_config": {
+                    "max_connection": 10,
+                    "connection_timeout": 30000,
+                    "read_timeout": 30000,
+                    "max_retry_times": 3,
+                    "retry_delay_ms": 1000,
+                    "retry_timeout": 60000,
+                    "retry_backoff_multiplier": "CONSTANT"
+                },
+                "tenant_id": "tenant123"
+            }
+            """, timestamp, timestamp);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                json
+            );
+        parser.nextToken();
+
+        McpStreamableHttpConnector connector = new McpStreamableHttpConnector("MCP_STREAMABLE_HTTP", parser);
+
+        // Test all parsed fields
+        Assert.assertNotNull(connector.getOwner());
+        Assert.assertEquals("test_user", connector.getOwner().getName());
+        Assert.assertEquals(AccessMode.PRIVATE, connector.getAccess());
+        Assert.assertNotNull(connector.getCreatedTime());
+        Assert.assertEquals(timestamp, connector.getCreatedTime().toEpochMilli());
+        Assert.assertNotNull(connector.getLastUpdateTime());
+        Assert.assertEquals(timestamp, connector.getLastUpdateTime().toEpochMilli());
+        Assert.assertNotNull(connector.getConnectorClientConfig());
+        Assert.assertEquals(Integer.valueOf(10), connector.getConnectorClientConfig().getMaxConnections());
+        Assert.assertEquals("tenant123", connector.getTenantId());
+    }
+
+    @Test
+    public void testUnimplementedMethods_ThrowUnsupportedOperationException() {
+        McpConnector connector = createMcpConnector();
+
+        // Test all unimplemented methods throw UnsupportedOperationException
+        try {
+            connector.getActions();
+            Assert.fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            Assert.assertEquals("Not implemented.", e.getMessage());
+        }
+
+        try {
+            connector.addAction(null);
+            Assert.fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            Assert.assertEquals("Not implemented.", e.getMessage());
+        }
+
+        try {
+            connector.getActionEndpoint("test_action", Map.of());
+            Assert.fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            Assert.assertEquals("Not implemented.", e.getMessage());
+        }
+
+        try {
+            connector.getActionHttpMethod("test_action");
+            Assert.fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            Assert.assertEquals("Not implemented.", e.getMessage());
+        }
+
+        try {
+            connector.createPayload("test_action", Map.of());
+            Assert.fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            Assert.assertEquals("Not implemented.", e.getMessage());
+        }
+
+        try {
+            connector.findAction("test_action");
+            Assert.fail("Expected UnsupportedOperationException");
+        } catch (UnsupportedOperationException e) {
+            Assert.assertEquals("Not implemented.", e.getMessage());
+        }
     }
 }

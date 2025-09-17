@@ -633,6 +633,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .version("1")
             .protocol(ConnectorProtocols.MCP_SSE)
             .credential(credential)
+            .url("test")
             .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
         action.doExecute(task, request, actionListener);
