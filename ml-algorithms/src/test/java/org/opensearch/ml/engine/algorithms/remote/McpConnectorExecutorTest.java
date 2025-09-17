@@ -109,14 +109,12 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
     public void testUnimplementedMethods_ThrowUnsupportedOperationException() {
         McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
 
-        // Test invokeRemoteService throws UnsupportedOperationException
         assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(null, null, null, null, null, null));
-
-        // Test getScriptService throws UnsupportedOperationException
         assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
-
-        // Test getClient throws UnsupportedOperationException
         assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getRateLimiter());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getMlGuard());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getUserRateLimiterMap());
 
     }
 

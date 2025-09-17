@@ -48,7 +48,6 @@ import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -57,15 +56,6 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private McpConnector connector;
-    @Setter
-    @Getter
-    private TokenBucket rateLimiter;
-    @Setter
-    @Getter
-    private Map<String, TokenBucket> userRateLimiterMap;
-    @Setter
-    @Getter
-    private MLGuard mlGuard;
 
     public McpConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -144,6 +134,21 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     @Override
     public ScriptService getScriptService() {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public TokenBucket getRateLimiter() {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public Map<String, TokenBucket> getUserRateLimiterMap() {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public MLGuard getMlGuard() {
         throw new UnsupportedOperationException("Not implemented.");
     }
 
