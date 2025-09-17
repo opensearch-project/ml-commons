@@ -72,7 +72,7 @@ public class ConnectorToolTests {
             IllegalArgumentException.class,
             () -> ConnectorTool.Factory.getInstance().create(Map.of("test1", "value1"))
         );
-        MatcherAssert.assertThat(exception.getMessage(), containsString("connector_id can't be null"));
+        MatcherAssert.assertThat(exception.getMessage(), containsString("Connector ID can't be null or empty"));
     }
 
     @Test

@@ -170,7 +170,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private void response() {
         String body = responseBody.toString();
-
+        log.debug("Received response from remote service: {}", body);
         if (exceptionHolder.get() != null) {
             log.error("Remote server returned exception with status code: {} and body: {}", statusCode, body);
             actionListener.onFailure(exceptionHolder.get());

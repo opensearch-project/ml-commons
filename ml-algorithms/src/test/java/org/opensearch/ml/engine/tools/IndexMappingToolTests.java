@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.tools;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -252,6 +253,7 @@ public class IndexMappingToolTests {
         assertTrue(tool.validate(indexParams));
         assertFalse(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
+        assertFalse(tool.validate(null));
     }
 
     @Test
@@ -265,5 +267,16 @@ public class IndexMappingToolTests {
             attributes.get(TOOL_INPUT_SCHEMA_FIELD)
         );
         assertEquals(true, attributes.get(STRICT_FIELD));
+    }
+
+    @Test
+    public void testRunWithGeneralException() {
+        IndexMappingTool tool = new IndexMappingTool(null);
+        final CompletableFuture<Exception> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> {}, future::complete);
+
+        tool.run(indexParams, listener);
+
+        assertNotNull(future.join());
     }
 }

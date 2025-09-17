@@ -30,9 +30,13 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.AccessLevel;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -41,15 +45,33 @@ import lombok.extern.log4j.Log4j2;
 @RequiredArgsConstructor
 @Log4j2
 public class MLIndicesHandler {
-
+    @NonNull
     ClusterService clusterService;
+    @NonNull
     Client client;
+    @NonNull
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
 
     static {
         for (MLIndex mlIndex : MLIndex.values()) {
             indexMappingUpdated.put(mlIndex.getIndexName(), new AtomicBoolean(false));
         }
+    }
+
+    /**
+     * Determines whether an index exists on non-multi tenancy enabled environments. Otherwise,
+     * returns true when multiTenancy is Enabled
+     *
+     * @param clusterService the cluster service
+     * @param isMultiTenancyEnabled whether multi-tenancy is enabled
+     * @param indexName - the index to search
+     * @return boolean indicating the existence of an index. Returns true if multitenancy is enabled.
+     * @implNote This method assumes if your environment enables multi tenancy, then your plugin indices are
+     * pre-populated. If this is incorrect, it will result in unwanted early returns without checking the clusterService.
+     */
+    public static boolean doesMultiTenantIndexExist(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
+        return isMultiTenancyEnabled || clusterService.state().metadata().hasIndex(indexName);
     }
 
     public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
@@ -105,7 +127,7 @@ public class MLIndicesHandler {
         String mapping = index.getMapping();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            if (!clusterService.state().metadata().hasIndex(indexName)) {
+            if (!MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName)) {
                 ActionListener<CreateIndexResponse> actionListener = ActionListener.wrap(r -> {
                     if (r.isAcknowledged()) {
                         log.info("create index:{}", indexName);
@@ -218,6 +240,11 @@ public class MLIndicesHandler {
             }
         }
         listener.onResponse(newVersion > oldVersion);
+    }
+
+    @VisibleForTesting
+    public boolean doesIndexExists(String indexName) {
+        return MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName);
     }
 
 }

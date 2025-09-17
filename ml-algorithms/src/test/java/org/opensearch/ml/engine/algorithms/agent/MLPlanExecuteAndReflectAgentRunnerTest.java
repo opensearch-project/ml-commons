@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
 
 import java.util.Arrays;
@@ -45,6 +47,8 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -233,7 +237,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         ModelTensors firstModelTensors = mlModelOutputs.get(0);
         List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(4, firstModelTensorList.size());
+        assertEquals(2, firstModelTensorList.size());
 
         ModelTensor memoryIdTensor = firstModelTensorList.get(0);
         assertEquals("memory_id", memoryIdTensor.getName());
@@ -306,7 +310,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         ModelTensors firstModelTensors = mlModelOutputs.get(0);
         List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(4, firstModelTensorList.size());
+        assertEquals(2, firstModelTensorList.size());
 
         ModelTensor memoryIdTensor = firstModelTensorList.get(0);
         assertEquals("memory_id", memoryIdTensor.getName());
@@ -323,6 +327,58 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         ModelTensor responseTensor = secondModelTensorList.get(0);
         assertEquals("response", responseTensor.getName());
         assertEquals("final result", responseTensor.getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testMessageHistoryLimits() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor
+                .builder()
+                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
+                .build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put("memory_id", "test_memory_id");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
+        params.put("message_history_limit", "5");
+        params.put("executor_message_history_limit", "3");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(conversationIndexMemory).getMessages(any(), eq(5));
+
+        ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());
+
+        AgentMLInput agentInput = (AgentMLInput) executeCaptor.getValue().getInput();
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+        Map<String, String> executorParams = dataset.getParameters();
+        assertEquals("3", executorParams.get("message_history_limit"));
     }
 
     // ToDo: add test case for when max steps is reached
@@ -374,6 +430,55 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testSetupPromptParametersWithDateInjection() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "true");
+
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+
+        assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
+
+        // Verify planner system prompt contains date/time
+        String plannerSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD);
+        assertTrue(plannerSystemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+        assertTrue(plannerSystemPrompt.contains(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PLANNER_SYSTEM_PROMPT));
+
+        // Verify executor system prompt contains date/time
+        String executorSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_SYSTEM_PROMPT_FIELD);
+        assertTrue(executorSystemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+        assertTrue(executorSystemPrompt.contains(MLPlanExecuteAndReflectAgentRunner.DEFAULT_EXECUTOR_SYSTEM_PROMPT));
+
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));
+        assertEquals(
+            PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT,
+            testParams.get(MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD)
+        );
+    }
+
+    @Test
+    public void testSetupPromptParametersWithoutDateInjection() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "false");
+
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+
+        assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
+
+        // Verify planner system prompt does NOT contain date/time
+        String plannerSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD);
+        assertFalse(plannerSystemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+        assertEquals(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PLANNER_SYSTEM_PROMPT, plannerSystemPrompt);
+
+        // Verify executor system prompt does NOT contain date/time
+        String executorSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_SYSTEM_PROMPT_FIELD);
+        assertFalse(executorSystemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+        assertEquals(MLPlanExecuteAndReflectAgentRunner.DEFAULT_EXECUTOR_SYSTEM_PROMPT, executorSystemPrompt);
+    }
+
+    @Test
     public void testUsePlannerPromptTemplate() {
         Map<String, String> testParams = new HashMap<>();
         mlPlanExecuteAndReflectAgentRunner.usePlannerPromptTemplate(testParams);
@@ -420,9 +525,11 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
 
-        Map<String, String> result = mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput);
+        Map<String, Object> result = mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput);
 
-        assertEquals("step1, step2", result.get(MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD));
+        List<String> expectedSteps = Arrays.asList("step1", "step2");
+        List<String> actualSteps = (List<String>) result.get(MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD);
+        assertEquals(expectedSteps, actualSteps);
         assertEquals("final result", result.get(MLPlanExecuteAndReflectAgentRunner.RESULT_FIELD));
 
         modelTensor = ModelTensor.builder().dataAsMap(Map.of(MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD, "random response")).build();
@@ -470,7 +577,11 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         mlPlanExecuteAndReflectAgentRunner.addToolsToPrompt(tools, testParams);
 
         assertEquals(
-            "In this environment, you have access to the below tools: \n- tool1: description1\n\n",
+            "In this environment, you have access to the tools listed below. Use these tools to create your plan, and do not reference or use any tools not listed here.\n"
+                + "Tool 1 - tool1: description1\n"
+                + "\n"
+                + "No other tools are available. Do not invent tools. Only use tools to create the plan.\n"
+                + "\n",
             testParams.get(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD)
         );
     }
@@ -504,6 +615,15 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
         assertEquals(executorMemoryId, tensors.getMlModelTensors().get(2).getResult());
         assertEquals(executorParentId, tensors.getMlModelTensors().get(3).getResult());
+
+        result = MLPlanExecuteAndReflectAgentRunner.createModelTensors(sessionId, parentInteractionId, "", "");
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        tensors = result.get(0);
+        assertEquals(2, tensors.getMlModelTensors().size());
+        assertEquals(sessionId, tensors.getMlModelTensors().get(0).getResult());
+        assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
     }
 
     @Test

@@ -6,13 +6,16 @@
 package org.opensearch.ml.common.model;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 
 import org.apache.lucene.search.TotalHits;
@@ -20,13 +23,12 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
-import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -36,6 +38,9 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
@@ -52,26 +57,32 @@ public class LocalRegexGuardrailTests {
     Client client;
     @Mock
     ThreadPool threadPool;
+    @Mock
+    SdkClient sdkClient;
     ThreadContext threadContext;
 
     StopWords stopWords;
     String[] regex;
     List<Pattern> regexPatterns;
     LocalRegexGuardrail localRegexGuardrail;
+    final String tenantId = "tenant_id";
+    final String indexName = "test_index";
+    final String testField = "test_field";
 
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        xContentRegistry = new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents());
+        xContentRegistry = spy(new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()));
         Settings settings = Settings.builder().build();
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
 
-        stopWords = new StopWords("test_index", List.of("test_field").toArray(new String[0]));
+        stopWords = new StopWords(indexName, List.of(testField).toArray(new String[0]));
         regex = List.of("(.|\n)*stop words(.|\n)*").toArray(new String[0]);
         regexPatterns = List.of(Pattern.compile("(.|\n)*stop words(.|\n)*"));
         localRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
+        localRegexGuardrail.init(xContentRegistry, client, sdkClient, tenantId);
     }
 
     @Test
@@ -188,36 +199,106 @@ public class LocalRegexGuardrailTests {
     }
 
     @Test
-    public void validateStopWords() throws IOException {
-        Map<String, List<String>> stopWordsIndices = Map.of("test_index", List.of("test_field"));
-        SearchResponse searchResponse = createSearchResponse(1);
-        ActionFuture<SearchResponse> future = createSearchResponseFuture(searchResponse);
-        when(this.client.search(any())).thenReturn(future);
+    public void testValidateStopWordsPass() {
+        Map<String, List<String>> stopWordsIndices = Map.of(indexName, List.of(testField));
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(true).when(spyGuardrail).validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
 
-        Boolean res = localRegexGuardrail.validateStopWords("hello world", stopWordsIndices);
-        Assert.assertTrue(res);
+        Boolean resPass = spyGuardrail.validateStopWords("hello world", stopWordsIndices);
+        Assert.assertTrue(resPass);
     }
 
     @Test
-    public void validateStopWordsNull() {
+    public void testValidateStopWordsFail() {
+        Map<String, List<String>> stopWordsIndices = Map.of(indexName, List.of(testField));
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(false).when(spyGuardrail).validateStopWordsSingleIndex("stop word", indexName, List.of(testField));
+
+        Boolean resFail = spyGuardrail.validateStopWords("stop word", stopWordsIndices);
+        Assert.assertFalse(resFail);
+    }
+
+    @Test
+    public void testValidateStopWordsNull() {
         Boolean res = localRegexGuardrail.validateStopWords("hello world", null);
         Assert.assertTrue(res);
     }
 
     @Test
-    public void validateStopWordsEmpty() {
+    public void testValidateStopWordsEmpty() {
         Boolean res = localRegexGuardrail.validateStopWords("hello world", Map.of());
         Assert.assertTrue(res);
     }
 
     @Test
-    public void validateStopWordsSingleIndex() throws IOException {
-        SearchResponse searchResponse = createSearchResponse(1);
-        ActionFuture<SearchResponse> future = createSearchResponseFuture(searchResponse);
-        when(this.client.search(any())).thenReturn(future);
+    public void testValidateStopWordsSingleIndexWithoutHit() throws Exception {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
 
-        Boolean res = localRegexGuardrail.validateStopWordsSingleIndex("hello world", "test_index", List.of("test_field"));
+        SearchResponse emptySearchResponse = createSearchResponse(0);
+        SearchDataObjectResponse searchDataObjectResponse = new SearchDataObjectResponse(emptySearchResponse);
+        CompletableFuture<SearchDataObjectResponse> completedFuture = CompletableFuture.completedFuture(searchDataObjectResponse);
+
+        // Mock the searchDataObjectAsync to return our future with empty response
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(completedFuture);
+
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
         Assert.assertTrue(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testValidateStopWordsSingleIndexWithStopWordHit() throws Exception {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
+
+        // Mock the sdkClient response - search returns a hit (stop word found)
+        SearchResponse searchResponseWithHit = createSearchResponse(1);
+        SearchDataObjectResponse searchDataObjectResponse = new SearchDataObjectResponse(searchResponseWithHit);
+        // Create a completable future that will immediately execute the callback with a response containing hits
+        CompletableFuture<SearchDataObjectResponse> completedFuture = CompletableFuture.completedFuture(searchDataObjectResponse);
+
+        // Mock the searchDataObjectAsync to return our future that has hits
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(completedFuture);
+
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello bad word", indexName, List.of(testField));
+        Assert.assertFalse(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testValidateStopWordsSingleIndexFailedSearchingIndex() throws IOException {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
+
+        // Create a completable future that throws an exception when get() is called
+        CompletableFuture<SearchDataObjectResponse> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new IOException("Index not found"));
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failedFuture);
+
+        // Covers error "Failed to search stop words index test_index"
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
+        Assert.assertTrue(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testValidateStopWordsSingleIndexFailed() throws IOException {
+        LocalRegexGuardrail spyGuardrail = spy(localRegexGuardrail);
+        doReturn(mock(SearchDataObjectRequest.class)).when(spyGuardrail).buildSearchDataObjectRequest(any(), any());
+
+        when(sdkClient.searchDataObjectAsync(any())).thenThrow(new RuntimeException("test exception"));
+        // Covers error "[validateStopWords] Searching stop words index failed."
+        Boolean res = spyGuardrail.validateStopWordsSingleIndex("hello world", indexName, List.of(testField));
+        Assert.assertTrue(res);
+        Mockito.verify(sdkClient, Mockito.times(1)).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testBuildSearchDataObjectRequest() throws IOException {
+        SearchDataObjectRequest request = localRegexGuardrail.buildSearchDataObjectRequest(indexName, "{}");
+        Assert.assertEquals(indexName, request.indices()[0]);
+        Assert.assertEquals(tenantId, request.tenantId());
     }
 
     private SearchResponse createSearchResponse(int size) throws IOException {
@@ -244,59 +325,5 @@ public class LocalRegexGuardrailTests {
             ShardSearchFailure.EMPTY_ARRAY,
             SearchResponse.Clusters.EMPTY
         );
-    }
-
-    private ActionFuture<SearchResponse> createSearchResponseFuture(SearchResponse searchResponse) {
-        return new ActionFuture<>() {
-            @Override
-            public SearchResponse actionGet() {
-                return searchResponse;
-            }
-
-            @Override
-            public SearchResponse actionGet(String timeout) {
-                return searchResponse;
-            }
-
-            @Override
-            public SearchResponse actionGet(long timeoutMillis) {
-                return searchResponse;
-            }
-
-            @Override
-            public SearchResponse actionGet(long timeout, TimeUnit unit) {
-                return searchResponse;
-            }
-
-            @Override
-            public SearchResponse actionGet(TimeValue timeout) {
-                return searchResponse;
-            }
-
-            @Override
-            public boolean cancel(boolean mayInterruptIfRunning) {
-                return false;
-            }
-
-            @Override
-            public boolean isCancelled() {
-                return false;
-            }
-
-            @Override
-            public boolean isDone() {
-                return false;
-            }
-
-            @Override
-            public SearchResponse get() {
-                return searchResponse;
-            }
-
-            @Override
-            public SearchResponse get(long timeout, TimeUnit unit) {
-                return searchResponse;
-            }
-        };
     }
 }

@@ -1,0 +1,60 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "description": {
+      "type": "text"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "memory_storage_config": {
+      "type": "object",
+      "properties": {
+        "memory_index_name": {
+          "type": "keyword"
+        },
+        "semantic_storage_enabled": {
+          "type": "boolean"
+        },
+        "embedding_model_type": {
+          "type": "keyword"
+        },
+        "embedding_model_id": {
+          "type": "keyword"
+        },
+        "llm_model_id": {
+          "type": "keyword"
+        },
+        "dimension": {
+          "type": "integer"
+        },
+        "max_recent_messages": {
+          "type": "integer"
+        },
+        "max_infer_size": {
+          "type": "integer"
+        }
+      }
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

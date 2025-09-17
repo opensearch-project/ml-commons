@@ -214,7 +214,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void execute(FunctionName name, Input input, ActionListener<MLExecuteTaskResponse> listener) {
         MLExecuteTaskRequest mlExecuteTaskRequest = new MLExecuteTaskRequest(name, input);
-        client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, listener);
+        client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, getMLExecuteResponseActionListener(listener));
     }
 
     @Override
@@ -343,6 +343,10 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLRegisterAgentResponse> listener
     ) {
         return wrapActionListener(listener, MLRegisterAgentResponse::fromActionResponse);
+    }
+
+    private ActionListener<MLExecuteTaskResponse> getMLExecuteResponseActionListener(ActionListener<MLExecuteTaskResponse> listener) {
+        return wrapActionListener(listener, MLExecuteTaskResponse::fromActionResponse);
     }
 
     private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {

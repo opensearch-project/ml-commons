@@ -42,7 +42,7 @@ jobs:
     needs: [Get-Require-Approval, Get-CI-Image-Tag, spotless]
     strategy:
       matrix:
-        java: [21, 23]
+        java: [21, 24]
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
@@ -107,7 +107,7 @@ jobs:
     needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
       matrix:
-        java: [21, 23]
+        java: [21, 24]
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
@@ -203,7 +203,7 @@ jobs:
   Build-ml-windows:
     strategy:
       matrix:
-        java: [21, 23]
+        java: [21, 24]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     needs: [Get-Require-Approval, spotless]

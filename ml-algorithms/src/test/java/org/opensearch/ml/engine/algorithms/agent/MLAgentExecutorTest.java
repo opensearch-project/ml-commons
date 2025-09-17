@@ -10,7 +10,11 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
@@ -36,6 +40,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.Version;
 import org.opensearch.action.get.GetRequest;
@@ -73,6 +78,7 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
@@ -127,6 +133,9 @@ public class MLAgentExecutorTest {
     private MLMemoryManager memoryManager;
     private MLAgentExecutor mlAgentExecutor;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Captor
     private ArgumentCaptor<Output> objectCaptor;
 
@@ -171,11 +180,29 @@ public class MLAgentExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENTIC_SEARCH_ENABLED)));
+
+        // Mock MLFeatureEnabledSetting
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         settings = Settings.builder().build();
         mlAgentExecutor = Mockito
-            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false, null));
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryMap,
+                    mlFeatureEnabledSetting,
+                    null
+                )
+            );
 
     }
 
@@ -772,6 +799,239 @@ public class MLAgentExecutorTest {
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
         Assert.assertNotNull(exceptionCaptor.getValue());
+    }
+
+    @Test
+    public void test_query_planning_agentic_search_disabled() throws IOException {
+        // Create an MLAgent with QueryPlanningTool
+        MLAgent mlAgentWithQueryPlanning = new MLAgent(
+            "test",
+            MLAgentType.FLOW.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            List
+                .of(
+                    new MLToolSpec(
+                        "QueryPlanningTool",
+                        "QueryPlanningTool",
+                        "QueryPlanningTool",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null,
+                        null
+                    )
+                ),
+            Map.of("test", "test"),
+            new MLMemorySpec("memoryType", "123", 0),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null
+        );
+
+        // Create GetResponse with the MLAgent that has QueryPlanningTool
+        XContentBuilder content = mlAgentWithQueryPlanning.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "test-agent-id", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse agentGetResponse = new GetResponse(getResult);
+
+        // Create a new MLAgentExecutor with agentic search disabled
+        MLFeatureEnabledSetting disabledSearchSetting = Mockito.mock(MLFeatureEnabledSetting.class);
+        when(disabledSearchSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(disabledSearchSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(disabledSearchSetting.isAgenticSearchEnabled()).thenReturn(false);
+
+        MLAgentExecutor mlAgentExecutorWithDisabledSearch = Mockito
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryMap,
+                    disabledSearchSetting,
+                    null
+                )
+            );
+
+        // Mock the agent get response
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        // Mock the agent runner
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledSearch).getAgentRunner(Mockito.any());
+
+        // Execute the agent
+        mlAgentExecutorWithDisabledSearch.execute(getAgentMLInput(), agentActionListener);
+
+        // Verify that the execution fails with the correct error message
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof OpenSearchException);
+        Assert.assertEquals(exception.getMessage(), ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE);
+    }
+
+    @Test
+    public void test_mcp_connector_requires_mcp_connector_enabled() throws IOException {
+        // Create an MLAgent with MCP connectors in parameters
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MCP_CONNECTORS_FIELD, "[{\"connector_id\": \"test-connector\"}]");
+
+        MLAgent mlAgentWithMcpConnectors = new MLAgent(
+            "test",
+            MLAgentType.FLOW.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            Collections.emptyList(),
+            parameters,
+            new MLMemorySpec("memoryType", "123", 0),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null
+        );
+
+        // Create GetResponse with the MLAgent that has MCP connectors
+        XContentBuilder content = mlAgentWithMcpConnectors.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "test-agent-id", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse agentGetResponse = new GetResponse(getResult);
+
+        // Create a new MLAgentExecutor with MCP connector disabled
+        MLFeatureEnabledSetting disabledMcpSetting = Mockito.mock(MLFeatureEnabledSetting.class);
+        when(disabledMcpSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(disabledMcpSetting.isMcpConnectorEnabled()).thenReturn(false);
+        when(disabledMcpSetting.isAgenticSearchEnabled()).thenReturn(true);
+
+        MLAgentExecutor mlAgentExecutorWithDisabledMcp = Mockito
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryMap,
+                    disabledMcpSetting,
+                    null
+                )
+            );
+
+        // Mock the agent get response
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        // Mock the agent runner
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledMcp).getAgentRunner(Mockito.any());
+
+        // Execute the agent
+        mlAgentExecutorWithDisabledMcp.execute(getAgentMLInput(), agentActionListener);
+
+        // Verify that the execution fails with the correct error message
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof OpenSearchException);
+        Assert.assertEquals(exception.getMessage(), ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE);
+    }
+
+    @Test
+    public void test_query_planning_agentic_search_enabled() throws IOException {
+        // Create an MLAgent with QueryPlanningTool
+        MLAgent mlAgentWithQueryPlanning = new MLAgent(
+            "test",
+            MLAgentType.FLOW.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            List
+                .of(
+                    new MLToolSpec(
+                        "QueryPlanningTool",
+                        "QueryPlanningTool",
+                        "QueryPlanningTool",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null,
+                        null
+                    )
+                ),
+            Map.of("test", "test"),
+            new MLMemorySpec("memoryType", "123", 0),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null
+        );
+
+        // Create GetResponse with the MLAgent that has QueryPlanningTool
+        XContentBuilder content = mlAgentWithQueryPlanning.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "test-agent-id", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse agentGetResponse = new GetResponse(getResult);
+
+        // Create a new MLAgentExecutor with agentic search enabled
+        MLFeatureEnabledSetting enabledSearchSetting = Mockito.mock(MLFeatureEnabledSetting.class);
+        when(enabledSearchSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(enabledSearchSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(enabledSearchSetting.isAgenticSearchEnabled()).thenReturn(true);
+
+        MLAgentExecutor mlAgentExecutorWithEnabledSearch = Mockito
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryMap,
+                    enabledSearchSetting,
+                    null
+                )
+            );
+
+        // Mock the agent get response
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        // Mock the agent runner
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithEnabledSearch).getAgentRunner(Mockito.any());
+
+        // Mock successful execution
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        // Execute the agent
+        mlAgentExecutorWithEnabledSearch.execute(getAgentMLInput(), agentActionListener);
+
+        // Verify that the execution succeeds
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
+        Assert.assertEquals(1, output.getMlModelOutputs().size());
+        Assert.assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
+        Assert.assertEquals(modelTensor, output.getMlModelOutputs().get(0).getMlModelTensors().get(0));
     }
 
     private AgentMLInput getAgentMLInput() {

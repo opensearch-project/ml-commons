@@ -5,15 +5,17 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.opensearch.ml.common.utils.ToolUtils.buildToolParameters;
+import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
@@ -34,6 +36,9 @@ import java.lang.reflect.Type;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -117,7 +122,6 @@ public class AgentUtils {
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
 
-    public static final String NO_ESCAPE_PARAMS = "no_escape_params";
     public static final String TOOLS = "_tools";
     public static final String TOOL_TEMPLATE = "tool_template";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";
@@ -132,6 +136,10 @@ public class AgentUtils {
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
+
+    public static final String DEFAULT_DATETIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+    public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
+    private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -352,9 +360,11 @@ public class AgentUtils {
                     if (functionCalling != null) {
                         toolCalls = functionCalling.handle(tmpModelTensorOutput, parameters);
                         // TODO: support multiple tool calls here
-                        toolName = toolCalls.getFirst().get("tool_name");
-                        toolInput = toolCalls.getFirst().get("tool_input");
-                        toolCallId = toolCalls.getFirst().get("tool_call_id");
+                        if (!toolCalls.isEmpty()) {
+                            toolName = toolCalls.getFirst().get("tool_name");
+                            toolInput = toolCalls.getFirst().get("tool_input");
+                            toolCallId = toolCalls.getFirst().get("tool_call_id");
+                        }
                     } else {
                         String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
                         if (toolCallsPath.startsWith("_llm_response.")) {
@@ -363,9 +373,11 @@ public class AgentUtils {
                         } else {
                             toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
                         }
-                        toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
-                        toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
-                        toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
+                        if (!toolCalls.isEmpty()) {
+                            toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
+                            toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
+                            toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
+                        }
                     }
                     String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
                     String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
@@ -638,10 +650,6 @@ public class AgentUtils {
         return messageHistoryLimitStr != null ? Integer.parseInt(messageHistoryLimitStr) : LAST_N_INTERACTIONS;
     }
 
-    public static String getToolName(MLToolSpec toolSpec) {
-        return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
-    }
-
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = new ArrayList<>();
@@ -833,7 +841,8 @@ public class AgentUtils {
             return;
         }
         for (MLToolSpec toolSpec : toolSpecs) {
-            Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
+            Map<String, String> toolParams = buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+            Tool tool = createTool(toolFactories, toolParams, toolSpec);
             tools.put(tool.getName(), tool);
             if (toolSpec.getAttributes() != null) {
                 if (tool.getAttributes() == null) {
@@ -848,55 +857,6 @@ public class AgentUtils {
         }
     }
 
-    public static Tool createTool(
-        Map<String, Tool.Factory> toolFactories,
-        Map<String, String> params,
-        MLToolSpec toolSpec,
-        String tenantId
-    ) {
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-        executeParams.put(TENANT_ID_FIELD, tenantId);
-        for (String key : params.keySet()) {
-            String toolNamePrefix = getToolName(toolSpec) + ".";
-            if (key.startsWith(toolNamePrefix)) {
-                executeParams.put(key.replace(toolNamePrefix, ""), params.get(key));
-            }
-        }
-        Map<String, Object> toolParams = new HashMap<>();
-        toolParams.putAll(executeParams);
-        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
-        if (runtimeResources != null) {
-            toolParams.putAll(runtimeResources);
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        String toolName = getToolName(toolSpec);
-        tool.setName(toolName);
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        if (params.containsKey(toolName + ".description")) {
-            tool.setDescription(params.get(toolName + ".description"));
-        }
-
-        return tool;
-    }
-
-    public static List<String> getToolNames(Map<String, Tool> tools) {
-        final List<String> inputTools = new ArrayList<>();
-        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = entry.getValue().getName();
-            inputTools.add(toolName);
-        }
-        return inputTools;
-    }
-
     public static Map<String, String> constructToolParams(
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
@@ -908,8 +868,15 @@ public class AgentUtils {
         Map<String, String> toolParams = new HashMap<>();
         Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
         Map<String, String> toolSpecConfigMap = toolSpecMap.get(action).getConfigMap();
+        MLToolSpec toolSpec = toolSpecMap.get(action);
         if (toolSpecParams != null) {
             toolParams.putAll(toolSpecParams);
+            for (String key : toolSpecParams.keySet()) {
+                String toolNamePrefix = getToolName(toolSpec) + ".";
+                if (key.startsWith(toolNamePrefix)) {
+                    toolParams.put(key.replace(toolNamePrefix, ""), toolSpecParams.get(key));
+                }
+            }
         }
         if (toolSpecConfigMap != null) {
             toolParams.putAll(toolSpecConfigMap);
@@ -932,7 +899,14 @@ public class AgentUtils {
                 toolParams.putAll(params);
             }
         } else {
-            toolParams.put("input", actionInput);
+            if (toolParams.containsKey("input")) {
+                String input = toolParams.get("input");
+                StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${parameters.", "}");
+                input = substitutor.replace(input);
+                toolParams.put("input", input);
+            } else {
+                toolParams.put("input", actionInput);
+            }
         }
         return toolParams;
     }
@@ -945,5 +919,79 @@ public class AgentUtils {
                 ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
             }
         }
+    }
+
+    /**
+     * Generates a formatted current date and time string in UTC timezone.
+     * 
+     * <p>This method returns the current date and time formatted according to the provided pattern.
+     * If no format is provided or the format is invalid, it uses the default format:
+     * "yyyy-MM-dd'T'HH:mm:ss'Z'" (e.g., "2024-01-15T14:30:00Z").
+     * 
+     * <p>The method always returns the time in UTC timezone regardless of the system's local timezone.
+     * 
+     * @param dateFormat The date format pattern to use. Can be null or empty to use the default format.
+     *                   Must be a valid {@link java.time.format.DateTimeFormatter} pattern.
+     *                   Examples:
+     *                   <ul>
+     *                     <li>"yyyy-MM-dd HH:mm:ss" → "2024-01-15 14:30:00"</li>
+     *                     <li>"EEEE, MMMM d, yyyy 'at' h:mm a z" → "Monday, January 15, 2024 at 2:30 PM UTC"</li>
+     *                     <li>"MM/dd/yyyy h:mm a" → "01/15/2024 2:30 PM"</li>
+     *                     <li>"yyyy-MM-dd'T'HH:mm:ss'Z'" → "2024-01-15T14:30:00Z"</li>
+     *                   </ul>
+     * @return A string containing the current date and time prefixed with "Current date and time: ".
+     *         If the provided format is invalid, a warning is logged and the default format is used.
+     * @see java.time.format.DateTimeFormatter
+     * @see java.time.ZoneId
+     */
+    public static String getCurrentDateTime(String dateFormat) {
+        Instant now = Instant.now();
+        DateTimeFormatter formatter;
+
+        if (!isBlank(dateFormat)) {
+            try {
+                formatter = DateTimeFormatter.ofPattern(dateFormat).withZone(UTC_ZONE);
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid date format provided: {}. Using default format.", dateFormat);
+                formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(UTC_ZONE);
+            }
+        } else {
+            formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(UTC_ZONE);
+        }
+
+        return DEFAULT_DATETIME_PREFIX + formatter.format(now);
+    }
+
+    public static List<String> getToolNames(Map<String, Tool> tools) {
+        final List<String> inputTools = new ArrayList<>();
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            String toolName = entry.getValue().getName();
+            inputTools.add(toolName);
+        }
+        return inputTools;
+    }
+
+    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> executeParams, MLToolSpec toolSpec) {
+        if (!toolFactories.containsKey(toolSpec.getType())) {
+            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
+        }
+        Map<String, Object> toolParams = new HashMap<>();
+        toolParams.putAll(executeParams);
+        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
+        if (runtimeResources != null) {
+            toolParams.putAll(runtimeResources);
+        }
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+        String toolName = getToolName(toolSpec);
+        tool.setName(toolName);
+
+        if (toolSpec.getDescription() != null) {
+            tool.setDescription(toolSpec.getDescription());
+        }
+        if (executeParams.containsKey(toolName + ".description")) {
+            tool.setDescription(executeParams.get(toolName + ".description"));
+        }
+
+        return tool;
     }
 }

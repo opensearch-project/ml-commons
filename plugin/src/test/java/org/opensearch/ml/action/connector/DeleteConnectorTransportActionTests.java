@@ -262,6 +262,26 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to delete data object from index .plugins-ml-connector", argumentCaptor.getValue().getMessage());
     }
 
+    public void testDeleteConnector_IndexNotFoundException() throws InterruptedException {
+        SearchResponse searchResponse = getEmptySearchResponse();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException("errorMessage"));
+            return null;
+        }).when(client).delete(any(), any());
+
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
+    }
+
     public void test_ValidationFailedException() throws IOException {
         GetResponse getResponse = prepareMLConnector();
         doAnswer(invocation -> {

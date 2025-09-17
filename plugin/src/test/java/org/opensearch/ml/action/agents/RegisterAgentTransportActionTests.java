@@ -11,13 +11,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,10 +45,12 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -101,7 +108,8 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENTIC_SEARCH_ENABLED)));
         transportRegisterAgentAction = new TransportRegisterAgentAction(
             transportService,
             actionFilters,
@@ -365,5 +373,131 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertEquals("AGENT_ID", response.getAgentId());
 
         verify(client, times(1)).index(any(), any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_QueryPlanningTool_AgenticSearchDisabled() {
+        // Create an MLAgent with QueryPlanningTool
+        MLToolSpec queryPlanningTool = new MLToolSpec(
+            QueryPlanningTool.TYPE,
+            "QueryPlanningTool",
+            "QueryPlanningTool",
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            false,
+            Collections.emptyMap(),
+            null,
+            null
+        );
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .tools(List.of(queryPlanningTool))
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Explicitly disable agentic search feature
+        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(false);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_QueryPlanningTool_AgenticSearchEnabled() {
+        // Create an MLAgent with QueryPlanningTool
+        MLToolSpec queryPlanningTool = new MLToolSpec(
+            QueryPlanningTool.TYPE,
+            "QueryPlanningTool",
+            "QueryPlanningTool",
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            false,
+            Collections.emptyMap(),
+            null,
+            null
+        );
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .tools(List.of(queryPlanningTool))
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Enable agentic search feature
+        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertEquals("AGENT_ID", argumentCaptor.getValue().getAgentId());
+    }
+
+    @Test
+    public void test_execute_registerAgent_MCPConnectorDisabled() {
+        // Create an MLAgent with MCP connectors in parameters
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MCP_CONNECTORS_FIELD, "[{\"connector_id\": \"test-connector\"}]");
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        // Disable MCP connector feature using mlFeatureEnabledSetting
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(false);
+
+        // Recreate the action with disabled MCP connector setting
+        TransportRegisterAgentAction disabledAction = new TransportRegisterAgentAction(
+            transportService,
+            actionFilters,
+            client,
+            sdkClient,
+            mlIndicesHandler,
+            clusterService,
+            mlFeatureEnabledSetting
+        );
+
+        disabledAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
     }
 }

@@ -5,11 +5,10 @@
 
 package org.opensearch.ml.common.spi.tools;
 
-import org.opensearch.core.action.ActionListener;
-
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
+
+import org.opensearch.core.action.ActionListener;
 
 /**
  * General tool interface.
@@ -68,7 +67,9 @@ public interface Tool {
     String getDescription();
 
     Map<String, Object> getAttributes();
+
     void setAttributes(Map<String, Object> attributes);
+
     /**
      * Set tool description.
      * @param description the description to set
@@ -138,7 +139,7 @@ public interface Tool {
          * @return the default attributes
          */
         default Map<String, Object> getDefaultAttributes() {
-            return null;
+            return Collections.emptyMap();
         }
     }
 }

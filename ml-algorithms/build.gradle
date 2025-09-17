@@ -10,7 +10,6 @@ plugins {
     id 'java-library'
     id 'jacoco'
     id "io.freefair.lombok"
-    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 repositories {
@@ -54,6 +53,7 @@ dependencies {
     }
     // Multi-tenant SDK Client
     implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
+    implementation 'commons-beanutils:commons-beanutils:1.11.0'
 
     def os = DefaultNativePlatform.currentOperatingSystem
     //arm/macos doesn't support GPU
@@ -92,7 +92,7 @@ dependencies {
 }
 
 lombok {
-    version = "1.18.30"
+    version = "1.18.38"
 }
 
 configurations.all {
@@ -135,12 +135,3 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 compileJava.dependsOn(':opensearch-ml-common:shadowJar')
-
-spotless {
-    java {
-        removeUnusedImports()
-        importOrder 'java', 'javax', 'org', 'com'
-
-        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
-    }
-}

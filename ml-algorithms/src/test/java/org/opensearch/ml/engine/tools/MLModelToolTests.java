@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -211,7 +212,7 @@ public class MLModelToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = MLModelTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = MLModelTool.Factory.getInstance().create(Map.of("model_id", "test_model_id"));
         assertEquals(MLModelTool.TYPE, tool.getName());
         assertEquals(MLModelTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
@@ -220,5 +221,20 @@ public class MLModelToolTests {
         assertFalse(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
         assertEquals(List.of(MODEL_ID_FIELD), MLModelTool.Factory.getInstance().getAllModelKeys());
+    }
+
+    @Test
+    public void testToolWithFailure() {
+        assertThrows(IllegalArgumentException.class, () -> MLModelTool.Factory.getInstance().create(Collections.emptyMap()));
+    }
+
+    @Test
+    public void testToolWithNullModelId() {
+        assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, null, "response"));
+    }
+
+    @Test
+    public void testToolWithBlankModelId() {
+        assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, "", "response"));
     }
 }
