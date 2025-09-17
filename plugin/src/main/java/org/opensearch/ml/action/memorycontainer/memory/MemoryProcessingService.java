@@ -140,15 +140,15 @@ public class MemoryProcessingService {
     public void makeMemoryDecisions(
         List<String> extractedFacts,
         List<FactSearchResult> allSearchResults,
-        MemoryConfiguration storageConfig,
+        MemoryConfiguration memoryConfig,
         ActionListener<List<MemoryDecision>> listener
     ) {
-        if (storageConfig == null || storageConfig.getLlmId() == null) {
+        if (memoryConfig == null || memoryConfig.getLlmId() == null) {
             listener.onFailure(new IllegalStateException("LLM model is required for memory decisions"));
             return;
         }
 
-        String llmModelId = storageConfig.getLlmId();
+        String llmModelId = memoryConfig.getLlmId();
 
         List<MemoryDecisionRequest.OldMemory> oldMemories = new ArrayList<>();
         for (FactSearchResult result : allSearchResults) {

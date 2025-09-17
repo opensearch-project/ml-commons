@@ -164,18 +164,26 @@ public class TransportCreateMemoryContainerAction extends
         final String longTermMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-long-term-memory";
         final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName();
 
-        mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, ActionListener.wrap(result -> {
-            mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, ActionListener.wrap(success -> {
+        if (configuration.getLlmId() == null || configuration.getStrategies().isEmpty()) {
+            mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
                 // Return the actual index name that was created
                 // Create the memory data index with appropriate mapping
-                createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
+                listener.onResponse(shortTermMemoryIndexName);
+            }, listener::onFailure));
+        } else {
+            mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
+                mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
                     // Return the actual index name that was created
-                    mlIndicesHandler.createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, ActionListener.wrap(success2 -> {
-                        listener.onResponse(longTermMemoryIndexName);
+                    // Create the memory data index with appropriate mapping
+                    createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
+                        // Return the actual index name that was created
+                        mlIndicesHandler.createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
+                            listener.onResponse(longTermMemoryIndexName);
+                        }, listener::onFailure));
                     }, listener::onFailure));
                 }, listener::onFailure));
             }, listener::onFailure));
-        }, listener::onFailure));
+        }
     }
 
     private void createLongTermMemoryIngestPipeline(String indexName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener) {
@@ -270,11 +278,6 @@ public class TransportCreateMemoryContainerAction extends
     }
 
     private void validateModels(MemoryConfiguration config, ActionListener<Boolean> listener) {
-        if (config == null || !config.isSemanticStorageEnabled()) {
-            listener.onResponse(true);
-            return;
-        }
-
         // Validate LLM model first
         if (config.getLlmId() != null) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
