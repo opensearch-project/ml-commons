@@ -153,18 +153,18 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
         }
     }
 
-    private SearchRequest buildSearchRequest(String query, MemoryConfiguration storageConfig, String indexName) throws IOException {
+    private SearchRequest buildSearchRequest(String query, MemoryConfiguration memoryConfig, String indexName) throws IOException {
         // Note: Size limit removed - search will return all matching results
-        // int maxResults = storageConfig != null ? storageConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
+         int maxResults = memoryConfig != null ? memoryConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
 
         // Use utility class to build the appropriate query
-        XContentBuilder queryBuilder = MemorySearchQueryBuilder.buildQueryByStorageType(query, storageConfig);
+        XContentBuilder queryBuilder = MemorySearchQueryBuilder.buildQueryByStorageType(query, memoryConfig);
 
         // Build search source with exclusions
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(QueryBuilders.wrapperQuery(queryBuilder.toString()));
         // Size limit removed - will return all matching results
-        // searchSourceBuilder.size(maxResults);
+        searchSourceBuilder.size(maxResults);
         searchSourceBuilder.fetchSource(null, new String[] { MEMORY_EMBEDDING_FIELD });
 
         return new SearchRequest().indices(indexName).source(searchSourceBuilder);

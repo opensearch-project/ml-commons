@@ -63,6 +63,9 @@
               "type": "flat_object"
             }
           }
+        },
+        "index_settings": {
+          "type": "flat_object"
         }
       }
     },

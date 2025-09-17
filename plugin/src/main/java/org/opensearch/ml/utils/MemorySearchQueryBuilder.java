@@ -94,18 +94,18 @@ public class MemorySearchQueryBuilder {
      * Builds a query based on the storage configuration
      *
      * @param queryText The text to search for
-     * @param storageConfig The memory storage configuration
+     * @param memoryConfig The memory storage configuration
      * @return XContentBuilder with the appropriate query
      * @throws IOException if building query fails
      */
-    public static XContentBuilder buildQueryByStorageType(String queryText, MemoryConfiguration storageConfig) throws IOException {
-        if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
-            if (storageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
-                return buildNeuralQuery(queryText, storageConfig.getEmbeddingModelId());
-            } else if (storageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                return buildNeuralSparseQuery(queryText, storageConfig.getEmbeddingModelId());
+    public static XContentBuilder buildQueryByStorageType(String queryText, MemoryConfiguration memoryConfig) throws IOException {
+        if (memoryConfig != null) {
+            if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+                return buildNeuralQuery(queryText, memoryConfig.getEmbeddingModelId());
+            } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+                return buildNeuralSparseQuery(queryText, memoryConfig.getEmbeddingModelId());
             } else {
-                throw new IllegalStateException("Unsupported embedding model type: " + storageConfig.getEmbeddingModelType());
+                throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
             }
         } else {
             return buildMatchQuery(queryText);
@@ -118,10 +118,10 @@ public class MemorySearchQueryBuilder {
      * @param strategy The memory strategy containing namespace information
      * @param fact The fact to search for
      * @param namespace The namespace map for filtering
-     * @param storageConfig The memory storage configuration
+     * @param memoryConfig The memory storage configuration
      * @return QueryBuilder with the bool query
      */
-    public static QueryBuilder buildFactSearchQuery(MemoryStrategy strategy, String fact, Map<String, String> namespace, MemoryConfiguration storageConfig) {
+    public static QueryBuilder buildFactSearchQuery(MemoryStrategy strategy, String fact, Map<String, String> namespace, MemoryConfiguration memoryConfig) {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 
         // Add filter conditions
@@ -135,29 +135,29 @@ public class MemorySearchQueryBuilder {
         boolQuery.filter(QueryBuilders.termQuery(MEMORY_TYPE_FIELD, MemoryType.SEMANTIC.getValue()));
 
         // Add the search query
-        if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
-            if (storageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+        if (memoryConfig != null) {
+            if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
                 StringBuilder neuralSearchQuery = new StringBuilder()
                         .append("{\"neural\":{\"")
                         .append(MEMORY_EMBEDDING_FIELD)
                         .append("\":{\"query_text\":\"")
                         .append(StringEscapeUtils.escapeJson(fact))
                         .append("\",\"model_id\":\"")
-                        .append(storageConfig.getEmbeddingModelId())
+                        .append(memoryConfig.getEmbeddingModelId())
                         .append("\"}}}");
                 boolQuery.must(QueryBuilders.wrapperQuery(neuralSearchQuery.toString()));
-            } else if (storageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+            } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
                 StringBuilder neuralSparseQuery = new StringBuilder()
                         .append("{\"neural_sparse\":{\"")
                         .append(MEMORY_EMBEDDING_FIELD)
                         .append("\":{\"query_text\":\"")
                         .append(StringEscapeUtils.escapeJson(fact))
                         .append("\",\"model_id\":\"")
-                        .append(storageConfig.getEmbeddingModelId())
+                        .append(memoryConfig.getEmbeddingModelId())
                         .append("\"}}}");
                 boolQuery.must(QueryBuilders.wrapperQuery(neuralSparseQuery.toString()));
             } else {
-                throw new IllegalStateException("Unsupported embedding model type: " + storageConfig.getEmbeddingModelType());
+                throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
             }
         } else {
             boolQuery.must(QueryBuilders.matchQuery(MEMORY_FIELD, fact));
