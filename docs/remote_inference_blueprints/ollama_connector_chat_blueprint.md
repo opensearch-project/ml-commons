@@ -4,14 +4,14 @@ This is an AI connector blueprint for Ollama or any other local/self-hosted LLM 
 
 ## 1. Add connector endpoint to trusted URLs
 
-Adjust the Regex to your local IP.
+Adjust the Regex to your local IP. The following example allows all URLs.
 
 ```json
 PUT /_cluster/settings
 {
     "persistent": {
         "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://127\\.0\\.0/.*$"
+            ".*$"
         ]
     }
 }
@@ -68,7 +68,14 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-## 4. Register the model
+## 4. Register the model and deploy the model
+
+Getting a model to work is a 2-step process. Register and Deploy.
+
+### A: Register and Deploy in two steps
+
+One way to do this is a `_register` call followed by a `_deploy` call.
+First you register:
 
 ```json
 POST /_plugins/_ml/models/_register
@@ -80,9 +87,7 @@ POST /_plugins/_ml/models/_register
 }
 ```
 
-### Sample response
-
-Take note of the `model_id`. It is going to be needed going forward.
+You get a response like this:
 
 ```json
 {
@@ -92,7 +97,9 @@ Take note of the `model_id`. It is going to be needed going forward.
 }
 ```
 
-## 5. Deploy the model
+Take note of the `model_id`, it is needed for the `_deploy` call.
+
+Then you deploy:
 
 Use `model_id` in place of the `<MODEL_ID>` placeholder.
 
@@ -100,16 +107,45 @@ Use `model_id` in place of the `<MODEL_ID>` placeholder.
 POST /_plugins/_ml/models/<MODEL_ID>/_deploy
 ```
 
-### Sample response
+#### Sample response
+
+Once you get a response like this, your model is ready to use.
 
 ```json
-POST /_plugins/_ml/models/WWQI44MBbzI2oUKAvNUt/_deploy
 {
-    "node_ids": ["4PLK7KJWReyX0oWKnBA8nA"]
+  "task_id": "oEdPqZQBQwAL8-GOCJbw",
+  "status": "CREATED",
+  "model_id": "oUdPqZQBQwAL8-GOCZYL"
 }
 ```
 
-### 6. Corresponding Predict request example
+### B: Register and Deploy in a single step
+
+Another way is doing the 2 steps at once with `deploy=true`:
+
+```json
+POST /_plugins/_ml/models/_register?deploy=true
+{
+  "name": "Local LLM Model",
+  "function_name": "remote",
+  "description": "Ollama model",
+  "connector_id": "Keq5FpkB72uHgF272LWj"
+}
+```
+
+#### Sample response
+
+Once you get a response like this, your model is ready to use.
+
+```json
+{
+  "task_id": "oEdPqZQBQwAL8-GOCJbw",
+  "status": "CREATED",
+  "model_id": "oUdPqZQBQwAL8-GOCZYL"
+}
+```
+
+### 5. Corresponding Predict request example
 
 Notice how you have to create the whole message structure, not just the message to send.
 Use `model_id` in place of the `<MODEL_ID>` placeholder.
