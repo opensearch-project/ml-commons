@@ -83,6 +83,7 @@ dependencies {
 	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.13.2'
+    api "com.google.errorprone:error_prone_annotations:${versions.error_prone_annotations}"
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: "${versions.commonslang}"
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
@@ -431,6 +432,7 @@ configurations.all {
     resolutionStrategy.force 'io.projectreactor:reactor-core:3.7.0'
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
     resolutionStrategy.force 'com.google.code.gson:gson:2.13.2'
+    resolutionStrategy.force "com.google.errorprone:error_prone_annotations:${versions.error_prone_annotations}"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
