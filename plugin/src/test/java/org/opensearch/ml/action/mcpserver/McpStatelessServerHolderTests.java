@@ -139,7 +139,7 @@ public class McpStatelessServerHolderTests extends OpenSearchTestCase {
 
         holder.startSyncMcpToolsJob();
 
-        verify(threadPool).schedule(any(Runnable.class), eq(TimeValue.timeValueSeconds(10)), eq("opensearch_ml_general"));
+        verify(threadPool).schedule(any(Runnable.class), eq(TimeValue.timeValueSeconds(10)), eq("opensearch_mcp_tools_sync"));
     }
 
     @Test

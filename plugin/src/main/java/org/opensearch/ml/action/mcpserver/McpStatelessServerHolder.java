@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.MCP_TOOLS_SYNC_THREAD_POOL;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,7 +36,7 @@ public class McpStatelessServerHolder {
     public static Map<String, Long> IN_MEMORY_MCP_TOOLS = new ConcurrentHashMap<>();
     private static volatile McpStatelessAsyncServer mcpStatelessAsyncServer;
     private static volatile OpenSearchMcpStatelessServerTransportProvider mcpStatelessServerTransportProvider;
-    private static Boolean initialized = false;
+    private static volatile Boolean initialized = false;
 
     public McpStatelessServerHolder(McpToolsHelper mcpToolsHelper, Client client, ThreadPool threadPool) {
         this.mcpToolsHelper = mcpToolsHelper;
@@ -156,7 +156,11 @@ public class McpStatelessServerHolder {
                 log.error(e.getMessage(), e);
             });
         threadPool
-            .schedule(() -> autoLoadAllMcpTools(listener), TimeValue.timeValueSeconds(SYNC_MCP_TOOLS_JOB_INTERVAL), GENERAL_THREAD_POOL);
+            .schedule(
+                () -> autoLoadAllMcpTools(listener),
+                TimeValue.timeValueSeconds(SYNC_MCP_TOOLS_JOB_INTERVAL),
+                MCP_TOOLS_SYNC_THREAD_POOL
+            );
     }
 
 }
