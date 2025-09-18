@@ -11,8 +11,8 @@ import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.rest.RestRequest.Method.POST;
 import static org.opensearch.rest.RestRequest.Method.GET;
+import static org.opensearch.rest.RestRequest.Method.POST;
 
 import java.io.IOException;
 import java.util.List;
@@ -66,9 +66,7 @@ public class RestMcpServerAction extends BaseRestHandler {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
         }
         if (request.method() == RestRequest.Method.GET) {
-            return channel -> {
-                channel.sendResponse(new BytesRestResponse(RestStatus.METHOD_NOT_ALLOWED, "", BytesArray.EMPTY));
-            };
+            return channel -> { channel.sendResponse(new BytesRestResponse(RestStatus.METHOD_NOT_ALLOWED, "", BytesArray.EMPTY)); };
         }
 
         return channel -> {
