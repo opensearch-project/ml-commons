@@ -66,12 +66,13 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             OpenSearchMcpStatelessServerTransportProvider transportProvider = mcpStatelessServerHolder
                 .getMcpStatelessServerTransportProvider();
             if (transportProvider == null) {
-                log.error("MCP transport provider not ready - server may not be properly initialized");
-                Map<String, Object> errorMessage = new HashMap<>();
-                errorMessage.put(MESSAGE_FIELD, "MCP handler not ready - server initialization failed");
-                errorMessage.put(ID_FIELD, null);
-                errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_SERVER_NOT_READY_ERROR);
-                listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
+                log.error("MCP handler not ready - server initialization failed");
+                handleError(
+                    null,
+                    JSON_RPC_SERVER_NOT_READY_ERROR,
+                    "MCP transport provider not ready - server may not be properly initialized",
+                    listener
+                );
                 return;
             }
 
@@ -79,12 +80,8 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
             try {
                 message = McpSchema.deserializeJsonRpcMessage(objectMapper, mlMcpServerRequest.getRequestBody());
             } catch (Exception e) {
-                log.error("Invalid JSON-RPC message: {}", e.getMessage());
-                Map<String, Object> errorMessage = new HashMap<>();
-                errorMessage.put(MESSAGE_FIELD, "Parse error: " + e.getMessage());
-                errorMessage.put(ID_FIELD, null);
-                errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_PARSE_ERROR);
-                listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
+                log.error("Parse error: " + e.getMessage(), e);
+                handleError(null, JSON_RPC_PARSE_ERROR, "Parse error: " + e.getMessage(), listener);
                 return;
             }
 
@@ -101,28 +98,27 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
                     String responseJson = objectMapper.writeValueAsString(response);
                     listener.onResponse(new MLMcpServerResponse(true, responseJson, null));
                 } catch (Exception e) {
-                    log.error("Failed to serialize/send response", e);
-                    Map<String, Object> errorMessage = new HashMap<>();
-                    errorMessage.put(MESSAGE_FIELD, "Response serialization failed: " + e.getMessage());
-                    errorMessage.put(ID_FIELD, id);
-                    errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_INTERNAL_ERROR);
-                    listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
+                    log.error("Response serialization failed: " + e.getMessage(), e);
+                    handleError(id, JSON_RPC_INTERNAL_ERROR, "Response serialization failed: " + e.getMessage(), listener);
                 }
             }, error -> {
-                log.error("Failed to handle MCP request", error);
-                Map<String, Object> errorMessage = new HashMap<>();
-                errorMessage.put(MESSAGE_FIELD, "Internal server error: " + error.getMessage());
-                errorMessage.put(ID_FIELD, id);
-                errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_INTERNAL_ERROR);
-                listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
+                log.error("Internal server error: " + error.getMessage(), error);
+                handleError(id, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + error.getMessage(), listener);
             });
         } catch (Exception e) {
             log.error("Failed to handle stateless MCP request", e);
-            Map<String, Object> errorMessage = new HashMap<>();
-            errorMessage.put(MESSAGE_FIELD, "Internal server error: " + e.getMessage());
-            errorMessage.put(ID_FIELD, null);
-            errorMessage.put(ERROR_CODE_FIELD, JSON_RPC_INTERNAL_ERROR);
-            listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
+            handleError(null, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + e.getMessage(), listener);
         }
+    }
+
+    /**
+     * Creates an error response for MCP server errors
+     */
+    private void handleError(Object id, int errorCode, String responseMessage, ActionListener<MLMcpServerResponse> listener) {
+        Map<String, Object> errorMessage = new HashMap<>();
+        errorMessage.put(MESSAGE_FIELD, responseMessage);
+        errorMessage.put(ID_FIELD, id);
+        errorMessage.put(ERROR_CODE_FIELD, errorCode);
+        listener.onResponse(new MLMcpServerResponse(false, null, errorMessage));
     }
 }
