@@ -18,7 +18,7 @@ import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_RE
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDocs;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.NO_ESCAPE_PARAMS;
+import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 
 import java.io.IOException;
