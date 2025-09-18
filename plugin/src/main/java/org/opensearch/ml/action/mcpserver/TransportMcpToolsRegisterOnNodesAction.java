@@ -114,12 +114,17 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     private MLMcpToolsRegisterNodeResponse registerToolsOnNode(List<McpToolRegisterInput> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
-            if (!McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(tool.getName())) {
+            // Use putIfAbsent to make check-and-act atomic
+            Long previousVersion = McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.putIfAbsent(tool.getName(), tool.getVersion());
+            if (previousVersion == null) {
+                // We successfully added the key, now add the tool
                 return mcpStatelessServerHolder
                     .getMcpStatelessAsyncServerInstance()
                     .addTool(mcpToolsHelper.createToolSpecification(tool))
-                    .doOnSuccess(x -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
-
+                    .doOnError(x -> {
+                        // If tool addition fails, remove from memory cache
+                        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
+                    });
             }
             return Mono.empty();
         }).doOnError(e -> {

@@ -78,7 +78,8 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
     @Test
     public void test_routes() {
         assertTrue(restMCPStatelessStreamingAction.routes().stream().anyMatch(route -> route.getMethod() == RestRequest.Method.POST));
-        assertEquals(1, restMCPStatelessStreamingAction.routes().size());
+        assertTrue(restMCPStatelessStreamingAction.routes().stream().anyMatch(route -> route.getMethod() == RestRequest.Method.GET));
+        assertEquals(2, restMCPStatelessStreamingAction.routes().size());
     }
 
     @Test
@@ -92,11 +93,44 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_prepareRequest_featureFlagDisabled() throws Exception {
+    public void test_prepareRequest_getMethod() throws Exception {
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.GET)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
+            .build();
+
+        executeRestChannelConsumer(request);
+        
+        ArgumentCaptor<BytesRestResponse> responseCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
+        verify(channel).sendResponse(responseCaptor.capture());
+        BytesRestResponse response = responseCaptor.getValue();
+        assertEquals(RestStatus.METHOD_NOT_ALLOWED, response.status());
+        assertEquals(0, response.content().length());
+    }
+
+    @Test
+    public void test_prepareRequest_featureFlagDisabled_post() throws Exception {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
         RestMcpServerAction messageStreamingAction = new RestMcpServerAction(mlFeatureEnabledSetting);
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
+            .build();
+        
+        try {
+            messageStreamingAction.prepareRequest(request, client);
+            fail("Expected OpenSearchException to be thrown");
+        } catch (OpenSearchException e) {
+            assertTrue(e.getMessage().contains("The MCP server is not enabled"));
+        }
+    }
+
+    @Test
+    public void test_prepareRequest_featureFlagDisabled_get() throws Exception {
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        RestMcpServerAction messageStreamingAction = new RestMcpServerAction(mlFeatureEnabledSetting);
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.GET)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .build();
         

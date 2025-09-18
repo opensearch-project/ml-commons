@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 import static org.opensearch.rest.RestRequest.Method.POST;
+import static org.opensearch.rest.RestRequest.Method.GET;
 
 import java.io.IOException;
 import java.util.List;
@@ -51,7 +52,7 @@ public class RestMcpServerAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return List.of(new Route(POST, MCP_SERVER_ENDPOINT));
+        return List.of(new Route(POST, MCP_SERVER_ENDPOINT), new Route(GET, MCP_SERVER_ENDPOINT));
     }
 
     @Override
@@ -63,6 +64,11 @@ public class RestMcpServerAction extends BaseRestHandler {
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
+        }
+        if (request.method() == RestRequest.Method.GET) {
+            return channel -> {
+                channel.sendResponse(new BytesRestResponse(RestStatus.METHOD_NOT_ALLOWED, "", BytesArray.EMPTY));
+            };
         }
 
         return channel -> {
@@ -94,7 +100,7 @@ public class RestMcpServerAction extends BaseRestHandler {
                             } else if (response.getMcpResponse() != null) {
                                 channel.sendResponse(new BytesRestResponse(RestStatus.OK, "application/json", response.getMcpResponse()));
                             } else {
-                                channel.sendResponse(new BytesRestResponse(RestStatus.ACCEPTED, "application/json", BytesArray.EMPTY));
+                                channel.sendResponse(new BytesRestResponse(RestStatus.ACCEPTED, "", BytesArray.EMPTY));
                             }
                         } catch (Exception e) {
                             log.error("Failed to send response", e);
