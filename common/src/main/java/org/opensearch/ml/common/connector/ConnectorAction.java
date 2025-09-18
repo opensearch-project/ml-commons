@@ -47,6 +47,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List.of(SAGEMAKER, OPENAI, BEDROCK, COHERE);
 
     private static final String INBUILT_FUNC_PREFIX = "connector.";
+    private static final String EMBED = "embed";
+    private static final String EMBEDDING = "embedding";
     private static final String PRE_PROCESS_FUNC = "PreProcessFunction";
     private static final String POST_PROCESS_FUNC = "PostProcessFunction";
     private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
@@ -216,8 +218,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         String endPoint = substitutor.replace(url);
         String remoteServer = getRemoteServerFromURL(endPoint);
         if (!remoteServer.isEmpty()) {
-            validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
-            validateProcessFunctions(remoteServer, postProcessFunction, POST_PROCESS_FUNC);
+            validateProcessFunctions(endPoint, remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
+            validateProcessFunctions(endPoint, remoteServer, postProcessFunction, POST_PROCESS_FUNC);
         }
     }
 
@@ -232,7 +234,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 
-    private void validateProcessFunctions(String remoteServer, String processFunction, String funcNameForWarnText) {
+    private void validateProcessFunctions(String endPointUrl, String remoteServer, String processFunction, String funcNameForWarnText) {
         if (isInBuiltProcessFunction(processFunction)) {
             switch (remoteServer) {
                 case OPENAI:
@@ -255,6 +257,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                         logWarningForInvalidProcessFunc(SAGEMAKER, funcNameForWarnText);
                     }
             }
+            validateEmbeddingProcessFunctions(endPointUrl, remoteServer, processFunction, funcNameForWarnText);
         }
     }
 
@@ -273,6 +276,17 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                     + remoteServer
                     + " for better results."
             );
+    }
+
+    private void validateEmbeddingProcessFunctions(
+        String endPointUrl,
+        String remoteServer,
+        String processFunction,
+        String funcNameForWarnText
+    ) {
+        if (endPointUrl.contains(EMBED) && !(processFunction.contains(EMBEDDING))) {
+            logWarningForInvalidProcessFunc(remoteServer + " " + EMBEDDING, funcNameForWarnText);
+        }
     }
 
     public enum ActionType {
