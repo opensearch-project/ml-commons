@@ -113,13 +113,19 @@ public class McpStatelessServerHolder {
             ActionListener<Boolean> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> searchListener = ActionListener.wrap(r -> {
                 r.forEach((key, value) -> {
-                    if (!IN_MEMORY_MCP_TOOLS.containsKey(key)) {
+                    // Use putIfAbsent to make check-and-act atomic
+                    Long previousVersion = IN_MEMORY_MCP_TOOLS.putIfAbsent(key, value.v2());
+                    if (previousVersion == null) {
+                        // We successfully added the key, now add the tool
                         getMcpStatelessAsyncServerInstance()
                             .addTool(mcpToolsHelper.createToolSpecification(value.v1()))
-                            .doOnSuccess(y -> IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
-                            .doOnError(x -> log.error("Failed to auto load tool: {}", value.v1().getName(), x))
+                            .doOnError(x -> {
+                                // If tool addition fails, remove from memory cache
+                                IN_MEMORY_MCP_TOOLS.remove(key);
+                                log.error("Failed to auto load tool: {}", value.v1().getName(), x);
+                            })
                             .subscribe();
-                    } else if (IN_MEMORY_MCP_TOOLS.get(key) < value.v2()) {
+                    } else if (previousVersion < value.v2()) {
                         // Chain the operations to avoid race conditions
                         getMcpStatelessAsyncServerInstance().removeTool(key).onErrorResume(e -> {
                             log.warn("Failed to remove old tool version: {}", key, e);
