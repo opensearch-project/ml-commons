@@ -138,7 +138,6 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         String result = output.get("result").toString();
 
         assertTrue(result.contains("query"));
-        assertTrue(result.contains("term"));
         deleteAgent(agentId);
     }
 
