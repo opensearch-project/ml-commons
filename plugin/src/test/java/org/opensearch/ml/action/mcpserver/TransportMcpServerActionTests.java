@@ -91,7 +91,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
         assertNull(response.getMcpResponse());
         assertNotNull(response.getError());
         assertEquals(JSON_RPC_SERVER_NOT_READY_ERROR, response.getError().get(ERROR_CODE_FIELD));
-        assertEquals("MCP handler not ready - server initialization failed", response.getError().get(MESSAGE_FIELD));
+        assertEquals("MCP transport provider not ready - server may not be properly initialized", response.getError().get(MESSAGE_FIELD));
     }
 
     public void test_doExecute_invalidJsonRpcMessage() {
