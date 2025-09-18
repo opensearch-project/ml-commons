@@ -41,6 +41,12 @@
         "llm_id": {
           "type": "keyword"
         },
+        "disable_history": {
+          "type": "boolean"
+        },
+        "disable_session": {
+          "type": "boolean"
+        },
         "max_infer_size": {
           "type": "integer"
         },
