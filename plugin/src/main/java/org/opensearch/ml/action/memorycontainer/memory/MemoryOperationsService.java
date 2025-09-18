@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_BEFORE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -14,7 +19,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -61,8 +65,6 @@ public class MemoryOperationsService {
         List<UpdateRequest> updateRequests = new ArrayList<>();
         List<DeleteRequest> deleteRequests = new ArrayList<>();
 
-        List<IndexRequest> historyAddRequests = new ArrayList<>();
-
         Instant now = Instant.now();
 
         for (MemoryDecision decision : decisions) {
@@ -83,7 +85,6 @@ public class MemoryOperationsService {
 
                     MemoryResult memoryResult = MemoryResult.builder().memoryId(null).memory(decision.getText()).event(MemoryEvent.ADD).oldMemory(null).build();
                     results.add(memoryResult);
-                    historyAddRequests.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
                     break;
 
                 case UPDATE:
@@ -95,7 +96,6 @@ public class MemoryOperationsService {
                     updateRequests.add(updateRequest);
                     memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.UPDATE).oldMemory(decision.getOldMemory()).build();
                     results.add(memoryResult);
-                    historyAddRequests.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
                     break;
 
                 case DELETE:
@@ -104,7 +104,6 @@ public class MemoryOperationsService {
 
                     memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.DELETE).oldMemory(null).build();
                     results.add(memoryResult);
-                    historyAddRequests.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
                     break;
 
                 case NONE:
@@ -140,36 +139,23 @@ public class MemoryOperationsService {
             log.debug("Executed {} memory operations successfully", bulkResponse.getItems().length);
 
             BulkItemResponse[] items = bulkResponse.getItems();
-            int itemIndex = 0;
 
-            for (int i = 0; i < results.size(); i++) {
+            for (int i = 0; i < bulkResponse.getItems().length; i++) {
                 MemoryResult result = results.get(i);
-                if (result.getEvent() == MemoryEvent.ADD && itemIndex < items.length) {
-                    while (itemIndex < items.length && items[itemIndex].getOpType() != DocWriteRequest.OpType.INDEX) {
-                        itemIndex++;
-                    }
-
-                    if (itemIndex < items.length && !items[itemIndex].isFailed()) {
-                        String actualId = items[itemIndex].getId();
-                        results
-                            .set(
-                                i,
-                                MemoryResult
-                                    .builder()
-                                    .memoryId(actualId)
-                                    .memory(result.getMemory())
-                                    .event(MemoryEvent.ADD)
-                                    .oldMemory(null)
-                                    .build()
-                            );
-                    }
-                    itemIndex++;
+                if (result.getEvent() == MemoryEvent.ADD && !items[i].isFailed()) {
+                    String actualId = items[i].getId();
+                    results.get(i).setMemoryId(actualId);
                 }
             }
 
+            if (memoryConfig.isDisableHistory()) {
+                listener.onResponse(results);
+                return;
+            }
+
             BulkRequest bulkHistoryRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            for (IndexRequest request : historyAddRequests) {
-                bulkHistoryRequest.add(request);
+            for (MemoryResult memoryResult : results) {
+                bulkHistoryRequest.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
             }
             client.bulk(bulkHistoryRequest, ActionListener.wrap(bulkHistoryResponse -> {
                 if (bulkHistoryResponse.hasFailures()) {
@@ -188,15 +174,15 @@ public class MemoryOperationsService {
 
     private Map<String, Object> createMemoryHistory(MemoryResult memoryResult) {
         Map<String, Object> history = new HashMap<>();
-        history.put("memory_id", memoryResult.getMemoryId());
-        history.put("action", memoryResult.getEvent().getValue());
+        history.put(MEMORY_ID_FIELD, memoryResult.getMemoryId());
+        history.put(MEMORY_ACTION_FIELD, memoryResult.getEvent().getValue());
         if (memoryResult.getOldMemory() != null) {
-            history.put("before", Map.of("memory", memoryResult.getOldMemory()));//TODO: support other fields like namespace
+            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));//TODO: support other fields like namespace
         }
         if (memoryResult.getMemory() != null) {
-            history.put("after", Map.of("memory", memoryResult.getMemory()));//TODO: support other fields like namespace
+            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));//TODO: support other fields like namespace
         }
-        history.put("created_time", Instant.now());//TODO: support other fields like namespace
+        history.put(CREATED_TIME_FIELD, Instant.now());//TODO: support other fields like namespace
         return history;
     }
 
