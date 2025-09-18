@@ -8,6 +8,7 @@ package org.opensearch.ml.action.IndexInsight;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_CONFIG_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 
 import java.time.Instant;
@@ -81,7 +82,13 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             return;
         }
         if (!this.mlFeatureEnabledSetting.isIndexInsightEnabled()) {
-            actionListener.onFailure(new RuntimeException("Index insight feature is not enabled yet."));
+            actionListener
+                .onFailure(
+                    new RuntimeException(
+                        "Index insight feature is not enabled yet. To enable, please update the setting "
+                            + ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.getKey()
+                    )
+                );
             return;
         }
         String indexName = mlIndexInsightGetRequest.getIndexName();
