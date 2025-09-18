@@ -8,6 +8,8 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_HISTORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_SESSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INDEX_SETTINGS_FIELD;
@@ -63,6 +65,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private List<MemoryStrategy> strategies;
     @Builder.Default
     private Map<String, Map<String, Object>> indexSettings = new HashMap<>();
+    @Builder.Default
+    private boolean disableHistory = false;
+    private boolean disableSession = false;
     private String tenantId;
 
     public MemoryConfiguration(
@@ -74,6 +79,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Integer maxInferSize,
         List<MemoryStrategy> strategies,
         Map<String, Map<String, Object>> indexSettings,
+        boolean disableHistory,
+        boolean disableSession,
         String tenantId
     ) {
         // Validate first
@@ -94,6 +101,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (indexSettings != null && !indexSettings.isEmpty()) {
             this.indexSettings.putAll(indexSettings);
         }
+        this.disableHistory = disableHistory;
+        this.disableSession = disableSession;
         this.tenantId = tenantId;
     }
 
@@ -111,6 +120,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.indexSettings = input.readMap(StreamInput::readString, StreamInput::readMap);
         }
+        this.disableHistory = input.readBoolean();
+        this.disableSession = input.readBoolean();
         this.tenantId = input.readOptionalString();
     }
 
@@ -134,7 +145,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-
+        out.writeBoolean(disableHistory);
+        out.writeBoolean(disableSession);
         out.writeOptionalString(tenantId);
     }
 
@@ -173,6 +185,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (!indexSettings.isEmpty()) {
             builder.field(INDEX_SETTINGS_FIELD, indexSettings);
         }
+        builder.field(DISABLE_HISTORY_FIELD, disableHistory);
+        builder.field(DISABLE_SESSION_FIELD, disableSession);
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -189,6 +203,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Integer maxInferSize = null;
         List<MemoryStrategy> strategies = new ArrayList<>();
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
+        boolean disableHistory = false;
+        boolean disableSession = false;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -224,6 +240,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case INDEX_SETTINGS_FIELD:
                     indexSettings = parser.map(HashMap::new, p -> p.map());
                     break;
+                case DISABLE_HISTORY_FIELD:
+                    disableHistory = parser.booleanValue();
+                    break;
+                case DISABLE_SESSION_FIELD:
+                    disableSession = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -241,6 +263,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .maxInferSize(maxInferSize)
             .strategies(strategies)
             .indexSettings(indexSettings)
+            .disableHistory(disableHistory)
+            .disableSession(disableSession)
             .tenantId(tenantId)
             .build();
     }

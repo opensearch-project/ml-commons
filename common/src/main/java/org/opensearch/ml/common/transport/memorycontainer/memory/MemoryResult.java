@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 
+import lombok.Setter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -23,6 +24,7 @@ import lombok.ToString;
  * Represents a single memory result in the MLAddMemoryResponse
  */
 @Getter
+@Setter
 @ToString
 @Builder
 public class MemoryResult implements ToXContentObject, Writeable {

@@ -20,7 +20,10 @@ public class MemoryContainerConstants {
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
 
+
     // Field names for MemoryConfiguration
+    public static final String DISABLE_HISTORY_FIELD = "disable_history";
+    public static final String DISABLE_SESSION_FIELD = "disable_session";
     public static final String MEMORY_INDEX_PREFIX_FIELD = "index_prefix";
     public static final String EMBEDDING_MODEL_TYPE_FIELD = "embedding_model_type";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
@@ -54,6 +57,9 @@ public class MemoryContainerConstants {
     public static final String METADATA_FIELD = "metadata";
     public static final String TAGS_FIELD = "tags";
     public static final String MEMORY_ID_FIELD = "memory_id";
+    public static final String MEMORY_ACTION_FIELD = "action";
+    public static final String MEMORY_BEFORE_FIELD = "before";
+    public static final String MEMORY_AFTER_FIELD = "after";
     public static final String MEMORY_TYPE_FIELD = "memory_type";
     public static final String ROLE_FIELD = "role";
 

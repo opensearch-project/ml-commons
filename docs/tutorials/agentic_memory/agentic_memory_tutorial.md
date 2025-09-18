@@ -110,8 +110,11 @@ This API will create following resources:
 - Ingest pipeline:
     - `test1-long-term-memory-embedding`: this pipeline will use embedding model to convert text into embedding. This pipeline will be configured as default pipeline of `test1-long-term-memory`.
 
-You can set optional index settings for these 4 memory index. Add `index_settings` to `configuration` when create memory container.
-For example:
+You can set optional values
+1. index settings for these 4 memory index. Add `index_settings` to `configuration` when create memory container.
+2. disable tracking session or history by setting `disable_history`, `disable_session` as `true`
+
+Example:
 ```
 POST _plugins/_ml/memory_containers/_create
 {
@@ -119,6 +122,8 @@ POST _plugins/_ml/memory_containers/_create
   "description": "Store conversation history",
   "configuration": {
     "index_prefix": "test0",
+    "disable_history": true, // default is false, set as true will not create long term memory history index
+    "disable_session": true, // default is false, set as true will not create session index
     "index_settings": {
       "short_term_memory_index" : { // use one of these values: session_index, short_term_memory_index, long_term_memory_index, long_term_memory_history_index
         "index": {
@@ -130,10 +135,6 @@ POST _plugins/_ml/memory_containers/_create
   }
 }
 ```
-
-TODOs:
-1. Add `"enable_history": false,` to control enable/disable tracking memory event history
-2. Add `"enable_session_tracking": true,` to control enable/disable tracking session meta data.
 
 User can have multiple options to provision memory container for the long term memory index.
 

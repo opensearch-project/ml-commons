@@ -171,19 +171,33 @@ public class TransportCreateMemoryContainerAction extends
                 listener.onResponse(shortTermMemoryIndexName);
             }, listener::onFailure));
         } else {
-            mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
-                mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
-                    // Return the actual index name that was created
-                    // Create the memory data index with appropriate mapping
-                    createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
-                        // Return the actual index name that was created
-                        mlIndicesHandler.createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
-                            listener.onResponse(longTermMemoryIndexName);
-                        }, listener::onFailure));
-                    }, listener::onFailure));
+            if (configuration.isDisableSession()) {
+                createMemoryIndexes(container, listener, configuration, shortTermMemoryIndexName, longTermMemoryIndexName, longTermMemoryHistoryIndexName);
+            } else {
+                mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
+                    createMemoryIndexes(container, listener, configuration, shortTermMemoryIndexName, longTermMemoryIndexName, longTermMemoryHistoryIndexName);
                 }, listener::onFailure));
-            }, listener::onFailure));
+            }
+
         }
+    }
+
+    private void createMemoryIndexes(MLMemoryContainer container, ActionListener<String> listener, MemoryConfiguration configuration, String shortTermMemoryIndexName, String longTermMemoryIndexName, String longTermMemoryHistoryIndexName) {
+        mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
+            // Return the actual index name that was created
+            // Create the memory data index with appropriate mapping
+            createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
+                // Return the actual index name that was created
+                if (!configuration.isDisableHistory()) {
+                    mlIndicesHandler.createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
+                        listener.onResponse(longTermMemoryIndexName);
+                    }, listener::onFailure));
+                } else {
+                    listener.onResponse(longTermMemoryIndexName);
+                }
+
+            }, listener::onFailure));
+        }, listener::onFailure));
     }
 
     private void createLongTermMemoryIngestPipeline(String indexName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener) {
