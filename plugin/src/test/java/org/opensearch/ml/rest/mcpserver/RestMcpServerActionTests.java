@@ -100,7 +100,7 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
             .build();
 
         executeRestChannelConsumer(request);
-        
+
         ArgumentCaptor<BytesRestResponse> responseCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
         verify(channel).sendResponse(responseCaptor.capture());
         BytesRestResponse response = responseCaptor.getValue();
