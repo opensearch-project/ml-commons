@@ -33,6 +33,7 @@ import lombok.extern.log4j.Log4j2;
 public class ToolUtils {
 
     public static final String TOOL_OUTPUT_FILTERS_FIELD = "output_filter";
+    public static final String TOOL_OUTPUT_ESCAPED = "output_escaped";
     public static final String TOOL_REQUIRED_PARAMS = "required_parameters";
     public static final String NO_ESCAPE_PARAMS = "no_escape_params";
 

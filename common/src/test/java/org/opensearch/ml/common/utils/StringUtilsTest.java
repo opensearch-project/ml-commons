@@ -857,14 +857,21 @@ public class StringUtilsTest {
     @Test
     public void prepareJsonValue_returnsRawIfJson() {
         String json = "{\"key\": 123}";
-        String result = StringUtils.prepareJsonValue(json);
+        String result = StringUtils.prepareJsonValue(json, false);
         assertSame(json, result);  // branch where isJson(input)==true
+    }
+
+    @Test
+    public void prepareJsonValue_returnEscapeJsonIfForce() {
+        String json = "{\"key\": 123}";
+        String result = StringUtils.prepareJsonValue(json, true);
+        assertEquals("{\\\"key\\\": 123}", result);
     }
 
     @Test
     public void prepareJsonValue_escapesBadCharsOtherwise() {
         String input = "Tom & Jerry \"<script>";
-        String escaped = StringUtils.prepareJsonValue(input);
+        String escaped = StringUtils.prepareJsonValue(input, false);
         assertNotEquals(input, escaped);
         assertFalse(StringUtils.isJson(escaped));
         assertEquals("Tom & Jerry \\\"<script>", escaped);
