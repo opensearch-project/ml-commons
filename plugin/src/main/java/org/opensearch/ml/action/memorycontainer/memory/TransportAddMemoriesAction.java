@@ -13,7 +13,6 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -147,11 +146,13 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         try {
             List<MessageInput> messages = input.getMessages();
 
+            MemoryConfiguration configuration = container.getConfiguration();
+
             boolean userProvidedSessionId = input.getNamespace() != null && input.getNamespace().containsKey(SESSION_ID_FIELD);
 
-            if (!userProvidedSessionId && input.getMemoryType() == ShortTermMemoryType.CONVERSATION) {
-                IndexRequest indexRequest = new IndexRequest(container.getConfiguration().getSessionIndexName());
-                //TODO: update messages.get(0).getContent()
+            if (!userProvidedSessionId && input.getMemoryType() == ShortTermMemoryType.CONVERSATION && !configuration.isDisableSession()) {
+                IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
+                //TODO: use LLM to summarize first user message
                 String summary = messages.get(0).getContentText();
                 indexRequest.source(Map.of(SUMMARY_FIELD, summary, NAMESPACE_FIELD, input.getNamespace()));
                 client.index(indexRequest, ActionListener.wrap(r -> {
