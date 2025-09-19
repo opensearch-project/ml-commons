@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.settings;
 
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_GLOBAL_TENANT_ID_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
@@ -372,4 +374,14 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.agentic_memory_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
         "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
+
+    public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
+        .simpleString("plugins.ml-commons." + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    public static final Setting<String> REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL = Setting
+        .simpleString(
+            "plugins.ml-commons." + REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY,
+            Setting.Property.NodeScope,
+            Setting.Property.Final
+        );
 }
