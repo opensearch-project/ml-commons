@@ -22,7 +22,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.URL_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 
 import java.io.IOException;
@@ -59,8 +59,8 @@ import lombok.extern.log4j.Log4j2;
 @NoArgsConstructor
 @EqualsAndHashCode
 @Getter
-@org.opensearch.ml.common.annotation.Connector(MCP_SSE)
-public class McpConnector implements Connector {
+@org.opensearch.ml.common.annotation.Connector(MCP_STREAMABLE_HTTP)
+public class McpStreamableHttpConnector implements Connector {
 
     protected String name;
     protected String description;
@@ -93,7 +93,7 @@ public class McpConnector implements Connector {
     protected Map<String, String> headers;
 
     @Builder
-    public McpConnector(
+    public McpStreamableHttpConnector(
         String name,
         String description,
         String version,
@@ -124,7 +124,7 @@ public class McpConnector implements Connector {
         this.parameters = parameters;
     }
 
-    public McpConnector(String protocol, XContentParser parser) throws IOException {
+    public McpStreamableHttpConnector(String protocol, XContentParser parser) throws IOException {
         this.protocol = protocol;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -227,13 +227,13 @@ public class McpConnector implements Connector {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-            return new McpConnector(streamInput);
+            return new McpStreamableHttpConnector(streamInput);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public McpConnector(StreamInput input) throws IOException {
+    public McpStreamableHttpConnector(StreamInput input) throws IOException {
         this.protocol = input.readString();
         parseFromStream(input);
     }

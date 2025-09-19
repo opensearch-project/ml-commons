@@ -433,6 +433,14 @@ configurations.all {
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
     resolutionStrategy.force 'com.google.code.gson:gson:2.13.2'
     resolutionStrategy.force "com.google.errorprone:error_prone_annotations:${versions.error_prone_annotations}"
+    resolutionStrategy.force 'com.fasterxml.jackson.core:jackson-annotations:2.18.3'
+    resolutionStrategy.force 'com.networknt:json-schema-validator:1.5.7'
+    resolutionStrategy.force 'com.fasterxml.jackson:jackson-bom:2.18.3'
+    resolutionStrategy.force 'org.yaml:snakeyaml:2.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.18.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.18.3'
+    resolutionStrategy.force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
