@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "index_name": {
+      "type": "keyword"
+    },
+    "status": {
+      "type": "keyword"
+    },
+    "task_type": {
+      "type": "keyword"
+    },
+    "content": {
+      "type": "keyword"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

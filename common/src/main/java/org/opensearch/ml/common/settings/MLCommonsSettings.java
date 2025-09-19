@@ -212,6 +212,10 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /** Feature Flag setting for index insight */
+    public static final Setting<Boolean> ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.index_insight_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     /** Feature Flag setting for conversational memory */
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
