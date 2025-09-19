@@ -136,6 +136,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
+                            MLPredictionTaskAction.NAME,
                             client,
                             sdkClient,
                             ActionListener.wrap(access -> {

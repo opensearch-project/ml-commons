@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
@@ -93,7 +94,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+
+            // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
+            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+                checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
+            } else {
+                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            }
         }
     }
 
@@ -105,6 +112,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 mlFeatureEnabledSetting,
                 tenantId,
                 modelGroupId,
+                MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
                 ActionListener

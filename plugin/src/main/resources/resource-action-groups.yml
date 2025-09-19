@@ -1,0 +1,18 @@
+# For resource-access-management
+resource_types:
+  org.opensearch.ml.common.MLModelGroup:
+    ml_read_only:
+      - "cluster:admin/opensearch/ml/model_groups/search"
+      - "cluster:admin/opensearch/ml/model_groups/get"
+      - "cluster:admin/opensearch/ml/models/search"
+      - "cluster:admin/opensearch/ml/models/get"
+      - "indices:data/read*"
+
+    ml_read_write:
+      - "cluster:admin/opensearch/ml/model*"
+      - "indices:*"
+
+    ml_full_access:
+      - "cluster:admin/opensearch/ml/model*"
+      - "indices:*"
+      - "cluster:admin/security/resource/share"
