@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.common.httpclient;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -31,6 +33,15 @@ public class MLHttpClientFactoryTests {
     public void test_getSdkAsyncHttpClient_success() {
         SdkAsyncHttpClient client = MLHttpClientFactory.getAsyncHttpClient(Duration.ofSeconds(100), Duration.ofSeconds(100), 100);
         assertNotNull(client);
+    }
+
+    @Test
+    public void test_invalidIP_localHost_privateIPDisabled() {
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLHttpClientFactory.validate(HTTP, "127.0.0.1", 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has private ip address: 127.0.0.1", exception.getMessage());
     }
 
     @Test
