@@ -33,11 +33,15 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -74,7 +78,12 @@ public class StringUtils {
     public static final Gson gson;
 
     static {
-        gson = new Gson();
+        gson = new GsonBuilder()
+            .disableHtmlEscaping()
+            .registerTypeAdapter(ModelTensor.class, new ToStringTypeAdapter<>(ModelTensor.class))
+            .registerTypeAdapter(ModelTensorOutput.class, new ToStringTypeAdapter<>(ModelTensorOutput.class))
+            .registerTypeAdapter(ModelTensors.class, new ToStringTypeAdapter<>(ModelTensors.class))
+            .create();
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 

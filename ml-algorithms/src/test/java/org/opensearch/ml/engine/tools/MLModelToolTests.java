@@ -237,4 +237,17 @@ public class MLModelToolTests {
     public void testToolWithBlankModelId() {
         assertThrows(IllegalArgumentException.class, () -> new MLModelTool(client, "", "response"));
     }
+
+    @Test
+    public void testFactoryCreateWithProcessorEnhancement() {
+        Map<String, Object> toolParams = Map
+            .of("model_id", "test_model_id", "response_field", "custom_response", "processor_configs", "[{\"type\":\"test_processor\"}]");
+
+        MLModelTool tool = MLModelTool.Factory.getInstance().create(toolParams);
+
+        assertEquals("test_model_id", tool.getModelId());
+        assertEquals("custom_response", tool.getResponseField());
+        // Verify that the output parser was enhanced (not null and different from basic parser)
+        assertTrue(tool.getOutputParser() != null);
+    }
 }
