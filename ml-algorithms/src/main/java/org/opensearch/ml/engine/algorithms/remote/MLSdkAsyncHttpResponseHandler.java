@@ -206,6 +206,8 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
             ModelTensors tensors = processOutput(action, body, connector, scriptService, parameters, mlGuard);
             tensors.setStatusCode(statusCode);
             actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
+        } catch (IllegalArgumentException e) {
+            actionListener.onFailure(e);
         } catch (Exception e) {
             log.error("Failed to process response body: {}", body, e);
             actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
