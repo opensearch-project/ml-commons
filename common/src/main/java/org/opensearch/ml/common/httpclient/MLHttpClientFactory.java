@@ -78,35 +78,52 @@ public class MLHttpClientFactory {
                 if (bytes.length != 4) {
                     return true;
                 } else {
-                    int firstOctets = bytes[0] & 0xff;
-                    int firstInOctal = parseWithOctal(String.valueOf(firstOctets));
-                    int firstInHex = Integer.parseInt(String.valueOf(firstOctets), 16);
-                    if (firstInOctal == 127 || firstInHex == 127) {
-                        return bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 1;
-                    } else if (firstInOctal == 10 || firstInHex == 10) {
-                        return true;
-                    } else if (firstInOctal == 172 || firstInHex == 172) {
-                        int secondOctets = bytes[1] & 0xff;
-                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
-                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
-                        return (secondInOctal >= 16 && secondInOctal <= 32) || (secondInHex >= 16 && secondInHex <= 32);
-                    } else if (firstInOctal == 192 || firstInHex == 192) {
-                        int secondOctets = bytes[1] & 0xff;
-                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
-                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
-                        return secondInOctal == 168 || secondInHex == 168;
-                    }
+                    // case 127.0.0.1
+                    boolean isLocalHost = eqCheckValue(bytes[0], 127)
+                        && eqCheckValue(bytes[1], 0)
+                        && eqCheckValue(bytes[2], 0)
+                        && eqCheckValue(bytes[3], 1);
+                    // case 10.x.x.x
+                    boolean isLocalHost10 = eqCheckValue(bytes[0], 10);
+                    // case 172.16.x.x - 172.31.x.x
+                    boolean isLocalHost172 = eqCheckValue(bytes[0], 172) && rangeCheckValue(bytes[1]);
+                    // case 192.168.x.x
+                    boolean isLocalHost192 = eqCheckValue(bytes[0], 192) && eqCheckValue(bytes[1], 168);
+                    // case 169.254.x.x
+                    boolean isLocalHost169 = eqCheckValue(bytes[0], 169) && eqCheckValue(bytes[1], 254);
+
+                    return isLocalHost || isLocalHost10 || isLocalHost172 || isLocalHost192 || isLocalHost169;
                 }
             }
         }
         return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
     }
 
-    private static int parseWithOctal(String input) {
+    private static boolean eqCheckValue(byte input, int targetValue) {
+        int original = input & 0xff;
+        return original == targetValue || parseWithRadix(original, 8) == targetValue || parseWithRadix(original, 16) == targetValue;
+    }
+
+    private static boolean rangeCheckValue(byte input) {
+        int original = input & 0xff;
+        if (original >= 16 && original <= 31) {
+            return true;
+        } else {
+            int octalValue = parseWithRadix(original, 8);
+            if (octalValue >= 16 && octalValue <= 31) {
+                return true;
+            } else {
+                int hexValue = parseWithRadix(original, 16);
+                return hexValue >= 16 && hexValue <= 31;
+            }
+        }
+    }
+
+    private static int parseWithRadix(int input, int radix) {
         try {
-            return Integer.parseInt(input, 8);
+            return Integer.parseInt(String.valueOf(input), radix);
         } catch (NumberFormatException e) {
-            return Integer.parseInt(input);
+            return input;
         }
     }
 }
