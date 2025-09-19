@@ -1,9 +1,12 @@
 package org.opensearch.ml.engine.encryptor;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
@@ -19,6 +22,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -50,6 +54,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -777,6 +782,106 @@ public class EncryptorImplTest {
 
         // Now run it
         encryptor.encrypt("test", TENANT_ID);
+    }
+
+    @Test
+    public void test_MultipleEncryptDecryptRequests_From_SingleThread() throws InterruptedException, IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        for (int i = 0; i < 3; i++) {
+            String encrypted = encryptor.encrypt("test", null);
+            Assert.assertNotNull(encrypted);
+            String decrypted = encryptor.decrypt(encrypted, null);
+            Assert.assertEquals("test", decrypted);
+        }
+    }
+
+    @Test
+    public void test_MultipleEncryptDecryptRequests_From_MultipleThreads() throws InterruptedException, IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        TestThreadPool testThreadPool = new TestThreadPool("testThreadPool");
+        CountDownLatch latch = new CountDownLatch(9);
+        String[] tenantIds = new String[] { "123456", "1234567", null };
+        String[] texts = new String[] { "test1", "test2", "test3" };
+        for (int i = 0; i < 3; i++) {
+            testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[0], texts[0], latch); });
+            testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[1], texts[1], latch); });
+            testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[2], texts[2], latch); });
+        }
+        Assert.assertTrue("Test should encrypt or decrypt within the specified time period", latch.await(60, SECONDS));
+        verify(mlIndicesHandler, timeout(1000).times(3)).initMLConfigIndex(any());
+    }
+
+    @Test
+    public void test_MultipleEncryptDecryptRequests_From_MultipleThreads_Throws_Exception() throws InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new RuntimeException("random test exception"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        TestThreadPool testThreadPool = new TestThreadPool("testThreadPool");
+        CountDownLatch latch = new CountDownLatch(3);
+        for (int i = 0; i < 3; i++) {
+            testThreadPool.generic().submit(() -> {
+                try {
+                    encryptor.encrypt("test", "123456");
+                } catch (Exception e) {
+                    Assert.assertTrue(e instanceof RuntimeException);
+                    latch.countDown();
+                }
+            });
+        }
+        Assert.assertTrue("Test should throw expected exception within the specified time period", latch.await(20, SECONDS));
+        verify(mlIndicesHandler, timeout(1000).times(1)).initMLConfigIndex(any());
+    }
+
+    void testEncryptionDecryption(String tenantId, String text, CountDownLatch latch) {
+        String encrypted = encryptor.encrypt(text, tenantId);
+        Assert.assertNotNull(encrypted);
+        String decrypted = encryptor.decrypt(encrypted, tenantId);
+        Assert.assertEquals(text, decrypted);
+        latch.countDown();
     }
 
     // Helper method to prepare a valid IndexResponse
