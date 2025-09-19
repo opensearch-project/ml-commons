@@ -122,4 +122,12 @@ public class ModelTensorTest {
             .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
             .build();
     }
+
+    @Test
+    public void test_ToString() {
+        String result = modelTensor.toString();
+        String expected =
+            "{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"},\"result\":\"test result\",\"dataAsMap\":{\"key1\":\"test value1\",\"key2\":\"test value2\"}}";
+        assertEquals(expected, result);
+    }
 }

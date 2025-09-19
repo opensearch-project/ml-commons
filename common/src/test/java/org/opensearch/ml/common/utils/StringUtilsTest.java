@@ -31,6 +31,10 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import com.google.gson.JsonElement;
 import com.google.gson.TypeAdapter;
@@ -256,6 +260,48 @@ public class StringUtilsTest {
      * in the values. Verifies that the method correctly extracts the prefixes of the toString()
      * method calls.
      */
+    @Test
+    public void testCollectToStringPrefixes() {
+        Map<String, String> map = new HashMap<>();
+        map.put("key1", "${parameters.tensor.toString()}");
+        map.put("key2", "${parameters.output.toString()}");
+        map.put("key3", "normal value");
+
+        List<String> prefixes = StringUtils.collectToStringPrefixes(map);
+
+        assertEquals(2, prefixes.size());
+        assertTrue(prefixes.contains("tensor"));
+        assertTrue(prefixes.contains("output"));
+    }
+
+    @Test
+    public void test_GsonTypeAdapters() {
+        // Test ModelTensor serialization
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .name("test_tensor")
+            .data(new Number[] { 1, 2, 3 })
+            .dataType(MLResultDataType.INT32)
+            .build();
+
+        String tensorJson = StringUtils.gson.toJson(tensor);
+        assertEquals(tensor.toString(), tensorJson);
+
+        // Test ModelTensorOutput serialization
+        List<ModelTensors> outputs = new ArrayList<>();
+        outputs.add(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build());
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+
+        String outputJson = StringUtils.gson.toJson(output);
+        assertEquals(output.toString(), outputJson);
+
+        // Test ModelTensors serialization
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+
+        String tensorsJson = StringUtils.gson.toJson(tensors);
+        assertEquals(tensors.toString(), tensorsJson);
+    }
+
     @Test
     public void testGetToStringPrefix() {
         Map<String, String> parameters = new HashMap<>();

@@ -274,4 +274,12 @@ public class ModelTensorsTest {
         ModelTensor modelTensor = parsedTensors.getMlModelTensors().get(0);
         assertEquals("test_tensor", modelTensor.getName());
     }
+
+    @Test
+    public void test_ToString() {
+        String result = modelTensors.toString();
+        String expected =
+            "{\"output\":[{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}]}";
+        assertEquals(expected, result);
+    }
 }

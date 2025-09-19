@@ -581,4 +581,83 @@ public class ConnectorUtilsTest {
         assertEquals("POST", request.method());
         assertEquals("http://test.com/mock/gpt-3.5", request.url().toString());
     }
+
+    @Test
+    public void processOutput_WithProcessorChain() throws IOException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("processor_configs", "[{\"type\":\"test_processor\"}]");
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        String modelResponse = "{\"result\":\"test response\"}";
+
+        ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, parameters, null);
+
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+    }
+
+    @Test
+    public void processOutput_WithProcessorChainAndResponseFilter() throws IOException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("processor_configs", "[{\"type\":\"test_processor\"}]");
+        parameters.put("response_filter", "$.data");
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        String modelResponse = "{\"data\":{\"result\":\"filtered response\"}}";
+
+        ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, parameters, null);
+
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+    }
+
+    @Test
+    public void processOutput_WithResponseFilterOnly() throws IOException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("response_filter", "$.data");
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        String modelResponse = "{\"data\":{\"result\":\"filtered response\"}}";
+
+        ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, parameters, null);
+
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+    }
 }
