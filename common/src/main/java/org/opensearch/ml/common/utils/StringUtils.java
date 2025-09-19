@@ -35,6 +35,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -77,7 +80,6 @@ public class StringUtils {
 
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
-    public static final Gson gson = new Gson();
     public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
         .serializeNulls()
         .registerTypeAdapter(Float.class, new PlainFloatAdapter())
@@ -86,6 +88,15 @@ public class StringUtils {
         .registerTypeAdapter(double.class, new PlainDoubleAdapter())
         .create();
 
+    public static final Gson gson;
+    static {
+        gson = new GsonBuilder()
+            .disableHtmlEscaping()
+            .registerTypeAdapter(ModelTensor.class, new ToStringTypeAdapter<>(ModelTensor.class))
+            .registerTypeAdapter(ModelTensorOutput.class, new ToStringTypeAdapter<>(ModelTensorOutput.class))
+            .registerTypeAdapter(ModelTensors.class, new ToStringTypeAdapter<>(ModelTensors.class))
+            .create();
+    }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
     public static final ObjectMapper MAPPER = new ObjectMapper();
