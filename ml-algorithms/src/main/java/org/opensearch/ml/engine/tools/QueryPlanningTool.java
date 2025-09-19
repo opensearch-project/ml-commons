@@ -27,6 +27,8 @@ import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.reflect.TypeToken;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -46,13 +48,16 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String USER_PROMPT_FIELD = "user_prompt";
     public static final String INDEX_MAPPING_FIELD = "index_mapping";
     public static final String QUERY_FIELDS_FIELD = "query_fields";
-    private static final String GENERATION_TYPE_FIELD = "generation_type";
+    public static final String GENERATION_TYPE_FIELD = "generation_type";
     private static final String LLM_GENERATED_TYPE_FIELD = "llmGenerated";
-    private static final String USER_SEARCH_TEMPLATES_TYPE_FIELD = "user_templates";
-    private static final String SEARCH_TEMPLATES_FIELD = "search_templates";
+    public static final String USER_SEARCH_TEMPLATES_TYPE_FIELD = "user_templates";
+    public static final String SEARCH_TEMPLATES_FIELD = "search_templates";
     public static final String TEMPLATE_FIELD = "template";
+    private static final String TEMPLATE_ID_FIELD = "template_id";
+    private static final String TEMPLATE_DESCRIPTION_FIELD = "template_description";
     private static final String DEFAULT_SYSTEM_PROMPT =
         "You are an OpenSearch Query DSL generation assistant, translating natural language questions to OpenSeach DSL Queries";
+
     @Getter
     private final String generationType;
     @Getter
@@ -102,17 +107,19 @@ public class QueryPlanningTool implements WithModelTool {
         templateSelectionParameters.put(SEARCH_TEMPLATES_FIELD, searchTemplates);
 
         ActionListener<T> templateSelectionListener = ActionListener.wrap(r -> {
+            // Default search template if LLM does not choose or if returned search template is null
+            parameters.put(TEMPLATE_FIELD, DEFAULT_SEARCH_TEMPLATE);
             try {
                 String templateId = (String) r;
                 if (templateId == null || templateId.isBlank() || templateId.equals("null")) {
-                    // Default search template if LLM does not choose
-                    parameters.put(TEMPLATE_FIELD, DEFAULT_SEARCH_TEMPLATE);
                     executeQueryPlanning(parameters, listener);
                 } else {
                     // Retrieve search template by ID
                     GetStoredScriptRequest getStoredScriptRequest = new GetStoredScriptRequest(templateId);
                     client.admin().cluster().getStoredScript(getStoredScriptRequest, ActionListener.wrap(getStoredScriptResponse -> {
-                        parameters.put(TEMPLATE_FIELD, gson.toJson(getStoredScriptResponse.getSource().getSource()));
+                        if (getStoredScriptResponse.getSource() != null) {
+                            parameters.put(TEMPLATE_FIELD, gson.toJson(getStoredScriptResponse.getSource().getSource()));
+                        }
                         executeQueryPlanning(parameters, listener);
                     }, e -> { listener.onFailure(e); }));
                 }
@@ -233,12 +240,36 @@ public class QueryPlanningTool implements WithModelTool {
                     throw new IllegalArgumentException("search_templates field is required when generation_type is 'user_templates'");
                 } else {
                     // array is parsed as a json string
-                    searchTemplates = gson.toJson((String) map.get(SEARCH_TEMPLATES_FIELD));
-
+                    String searchTemplatesJson = (String) map.get(SEARCH_TEMPLATES_FIELD);
+                    validateSearchTemplates(searchTemplatesJson);
+                    searchTemplates = gson.toJson(searchTemplatesJson);
                 }
             }
 
             return new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates);
+        }
+
+        private void validateSearchTemplates(Object searchTemplatesObj) {
+            List<Map<String, String>> templates = gson.fromJson(searchTemplatesObj.toString(), new TypeToken<List<Map<String, String>>>() {
+            }.getType());
+
+            for (Map<String, String> template : templates) {
+                validateTemplateFields(template);
+            }
+        }
+
+        private void validateTemplateFields(Map<String, String> template) {
+            // Validate templateId
+            String templateId = template.get(TEMPLATE_ID_FIELD);
+            if (templateId == null || templateId.isBlank()) {
+                throw new IllegalArgumentException("search_templates field entries must have a template_id");
+            }
+
+            // Validate templateDescription
+            String templateDescription = template.get(TEMPLATE_DESCRIPTION_FIELD);
+            if (templateDescription == null || templateDescription.isBlank()) {
+                throw new IllegalArgumentException("search_templates field entries must have a template_description");
+            }
         }
 
         @Override

@@ -96,6 +96,38 @@ public class QueryPlanningToolTests {
     }
 
     @Test
+    public void testCreateWithInvalidSearchTemplatesDescription() throws IllegalArgumentException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        params.put("query_text", "help me find some books related to wind");
+        params.put("search_templates", "[{'template_id': 'template_id', 'template_des': 'test_description'}]");
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_description", exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithInvalidSearchTemplatesID() throws IllegalArgumentException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        params.put("query_text", "help me find some books related to wind");
+        params.put("search_templates", "[{'templateid': 'template_id', 'template_description': 'test_description'}]");
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_id", exception.getMessage());
+    }
+
+    @Test
     public void testRun() throws ExecutionException, InterruptedException {
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
         doAnswer(invocation -> {
