@@ -16,6 +16,7 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,6 +32,9 @@ import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
 
+import com.google.gson.JsonElement;
+import com.google.gson.TypeAdapter;
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 
 public class StringUtilsTest {
@@ -949,4 +953,133 @@ public class StringUtilsTest {
         assertEquals(0, array.size());
     }
 
+    // reflect method for PlainDoubleAdapter
+    private static TypeAdapter<Double> createPlainDoubleAdapter() {
+        try {
+            Class<?> clazz = Class.forName("org.opensearch.ml.common.utils.StringUtils$PlainDoubleAdapter");
+            Constructor<?> constructor = clazz.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            Object adapterInstance = constructor.newInstance();
+            return (TypeAdapter<Double>) adapterInstance;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create PlainDoubleAdapter via reflection", e);
+        }
+    }
+
+    @Test
+    public void testSerializeScientificNotation_RemovesExponent() {
+        Map<String, Object> data = Map.of("test1", 1e30, "test2", 1.2e3, "test3", 9.5e-3, "test4", 1.56e-30);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("1000000000000000000000000000000"));
+        assertTrue(json.contains("1200"));
+        assertTrue(json.contains("0.0095"));
+        assertTrue(json.contains("0.00000000000000000000000000000156"));
+
+    }
+
+    @Test
+    public void testSerializeInteger_RemovesDecimalPoint() {
+        Map<String, Object> data = Map.of("intLike", 42.0);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("42"));
+        assertFalse(json.contains("42.0"));
+    }
+
+    @Test
+    public void testSerializeNaNAndInfinity_BecomesNull() {
+        Map<String, Double> data = new HashMap<>();
+        data.put("nul", null);
+        data.put("nan", Double.NaN);
+        data.put("inf", Double.POSITIVE_INFINITY);
+        data.put("ninf", Double.NEGATIVE_INFINITY);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"nan\":null"));
+        assertTrue(json.contains("\"inf\":null"));
+        assertTrue(json.contains("\"ninf\":null"));
+        assertTrue(json.contains("\"nul\":null"));
+
+        assertFalse(json.contains("NaN"));
+        assertFalse(json.contains("Infinity"));
+    }
+
+    @Test
+    public void testDeserializeBackToDouble() {
+        String json = "{\"value\": 12345.6789}";
+
+        Map<?, ?> result = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, Map.class);
+
+        Object value = result.get("value");
+        assertTrue(value instanceof Double);
+        assertEquals(12345.6789, (Double) value, 1e-7);
+    }
+
+    @Test
+    public void testQuotedScientificNotation_RemainsString() {
+        String json = "{\"code\":\"1e-6\"}";
+
+        Map<?, ?> result = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, Map.class);
+
+        assertEquals("1e-6", result.get("code"));
+    }
+
+    @Test
+    public void testSerializeFloatScientificNotation_RemovesExponent_InPojo() {
+        java.util.Map<String, Float> data = new java.util.LinkedHashMap<>();
+        data.put("fObj", 1.23e-5f);
+        data.put("fPrim", 9.5e-3f);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"fObj\":0.0000123"));
+
+        assertTrue(json.contains("\"fPrim\":0.0095") || json.contains("\"fPrim\":9.5E-3") || json.contains("\"fPrim\":9.5e-3"));
+    }
+
+    @Test
+    public void testSerializeFloatNaNAndInfinity_BecomesNull_InPojo() {
+        java.util.Map<String, Float> data = new java.util.LinkedHashMap<>();
+        data.put("fObj", Float.NaN);
+        data.put("fPrimBox", Float.POSITIVE_INFINITY);
+        data.put("fNull", null);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"fObj\":null"));
+        assertTrue(json.contains("\"fNull\":null"));
+        assertTrue(json.contains("\"fPrimBox\":null") || !json.contains("\"fPrimBox\""));
+    }
+
+    @Test
+    public void testDeserializeScientificNotation_ToFloatAndPrimitive() {
+        String jsonObj = "{\"fObj\":1.23e-5}";
+        java.lang.reflect.Type mapType = new com.google.gson.reflect.TypeToken<java.util.Map<String, Float>>() {
+        }.getType();
+        java.util.Map<String, Float> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonObj, mapType);
+        assertEquals(1.23e-5f, m.get("fObj"), 1e-9f);
+
+        String jsonArr = "[4.56e1]";
+        float[] arr = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonArr, float[].class);
+        assertEquals(45.6f, arr[0], 1e-6f);
+    }
+
+    @Test
+    public void testDeserializeNullFloat_ToNull() {
+        String json = "{\"fObj\":null,\"fPrim\":1.0}";
+
+        java.lang.reflect.Type mapType = new TypeToken<java.util.Map<String, JsonElement>>() {
+        }.getType();
+        java.util.Map<String, JsonElement> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, mapType);
+
+        assertTrue(m.containsKey("fObj"));
+        assertTrue(m.get("fObj").isJsonNull());
+
+        assertTrue(m.get("fPrim").isJsonPrimitive());
+        assertEquals(1.0f, m.get("fPrim").getAsFloat(), 1e-9f);
+    }
 }
