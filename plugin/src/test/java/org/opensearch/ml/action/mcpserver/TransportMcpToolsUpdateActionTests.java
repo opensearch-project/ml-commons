@@ -6,12 +6,20 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -147,7 +155,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper,
+                mcpToolsHelper,
                 mlFeatureEnabledSetting
         );
         action.doExecute(task, mock(MLMcpToolsUpdateNodesRequest.class), listener);

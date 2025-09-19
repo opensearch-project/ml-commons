@@ -30,7 +30,6 @@ import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
-import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodesResponse;
@@ -66,7 +65,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
         McpToolsHelper mcpToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLMcpToolsRemoveAction.NAME, transportService, actionFilters, MLMcpMessageRequest::new);
+        super(MLMcpToolsRemoveAction.NAME, transportService, actionFilters, MLMcpToolsRemoveNodesRequest::new);
         this.transportService = transportService;
         this.clusterService = clusterService;
         this.threadPool = threadPool;

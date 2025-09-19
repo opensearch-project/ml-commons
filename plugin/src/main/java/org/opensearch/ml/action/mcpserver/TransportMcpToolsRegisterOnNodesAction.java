@@ -45,6 +45,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
     McpToolsHelper mcpToolsHelper;
+    McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
     public TransportMcpToolsRegisterOnNodesAction(
@@ -55,7 +56,8 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         ToolFactoryWrapper toolFactoryWrapper,
-        McpToolsHelper mcpToolsHelper
+        McpToolsHelper mcpToolsHelper,
+        McpStatelessServerHolder mcpStatelessServerHolder
     ) {
         super(
             MLMcpToolsRegisterOnNodesAction.NAME,
@@ -75,6 +77,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
         this.mcpToolsHelper = mcpToolsHelper;
+        this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
     @Override
@@ -111,12 +114,17 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     private MLMcpToolsRegisterNodeResponse registerToolsOnNode(List<McpToolRegisterInput> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
-            if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(tool.getName())) {
-                return McpAsyncServerHolder
-                    .getMcpAsyncServerInstance()
+            // Use putIfAbsent to make check-and-act atomic
+            Long previousVersion = McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.putIfAbsent(tool.getName(), tool.getVersion());
+            if (previousVersion == null) {
+                // We successfully added the key, now add the tool
+                return mcpStatelessServerHolder
+                    .getMcpStatelessAsyncServerInstance()
                     .addTool(mcpToolsHelper.createToolSpecification(tool))
-                    .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
-
+                    .doOnError(x -> {
+                        // If tool addition fails, remove from memory cache
+                        McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
+                    });
             }
             return Mono.empty();
         }).doOnError(e -> {
