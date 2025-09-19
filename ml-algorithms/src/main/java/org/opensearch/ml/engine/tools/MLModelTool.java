@@ -24,6 +24,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 
@@ -171,11 +172,17 @@ public class MLModelTool implements WithModelTool {
 
         @Override
         public MLModelTool create(Map<String, Object> map) {
-            return new MLModelTool(
-                client,
-                (String) map.get(MODEL_ID_FIELD),
-                (String) map.getOrDefault(RESPONSE_FIELD, DEFAULT_RESPONSE_FIELD)
-            );
+            String modelId = (String) map.get(MODEL_ID_FIELD);
+            String responseField = (String) map.getOrDefault(RESPONSE_FIELD, DEFAULT_RESPONSE_FIELD);
+
+            // Create the tool with basic configuration
+            MLModelTool tool = new MLModelTool(client, modelId, responseField);
+
+            // Enhance the output parser with processors if configured
+            Parser baseParser = tool.getOutputParser();
+            tool.setOutputParser(ToolParser.createFromToolParams(map, baseParser));
+
+            return tool;
         }
 
         @Override

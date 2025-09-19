@@ -50,6 +50,7 @@ import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
 import com.jayway.jsonpath.JsonPath;
@@ -252,11 +253,37 @@ public class ConnectorUtils {
         boolean scriptReturnModelTensor = postProcessFunction != null
             && processedResponse.isPresent()
             && org.opensearch.ml.common.utils.StringUtils.isJson(response);
-        if (responseFilter == null) {
-            connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
+
+        // Apply output processor chain if configured
+        Object processedOutput;
+        // Apply output processor chain if configured
+        List<Map<String, Object>> processorConfigs = ProcessorChain.extractProcessorConfigs(parameters);
+        if (!processorConfigs.isEmpty()) {
+            ProcessorChain processorChain = new ProcessorChain(processorConfigs);
+
+            if (responseFilter != null) {
+                // Apply filter first, then processor chain
+                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
+                processedOutput = processorChain.process(filteredResponse);
+            } else {
+                // Apply processor chain to whole response
+                processedOutput = processorChain.process(response);
+            }
+
+            // Handle the processed output
+            if (processedOutput instanceof String) {
+                connector.parseResponse((String) processedOutput, modelTensors, scriptReturnModelTensor);
+            } else {
+                connector.parseResponse(processedOutput, modelTensors, scriptReturnModelTensor);
+            }
         } else {
-            Object filteredResponse = JsonPath.parse(response).read(parameters.get(RESPONSE_FILTER_FIELD));
-            connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+            // Original flow without processor chain
+            if (responseFilter == null) {
+                connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
+            } else {
+                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
+                connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+            }
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
     }

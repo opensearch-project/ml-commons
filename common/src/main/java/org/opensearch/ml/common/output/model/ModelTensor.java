@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -289,4 +290,14 @@ public class ModelTensor implements Writeable, ToXContentObject {
             out.writeBoolean(false);
         }
     }
+
+    @Override
+    public String toString() {
+        try {
+            return this.toXContent(JsonXContent.contentBuilder(), null).toString();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -101,5 +102,14 @@ public class ModelTensorOutput extends MLOutput {
         }
 
         return ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build();
+    }
+
+    @Override
+    public String toString() {
+        try {
+            return this.toXContent(JsonXContent.contentBuilder(), null).toString();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
