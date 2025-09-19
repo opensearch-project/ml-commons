@@ -426,17 +426,69 @@ public class ConnectorUtilsTest {
         params.put("key1", inputKey1);
         params.put("key2", "test value");
         params.put("key3", inputKey3);
-        params.put("NO_ESCAPE_PARAMS", "key1,key3");
+        params.put("no_escape_params", "key1,key3");
 
         RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
 
         ConnectorUtils.escapeRemoteInferenceInputData(inputData);
 
-        String expectedKey1 = "hello \\\"world\\\"";
-        String expectedKey3 = "special \\\"chars\\\"";
-        assertEquals(expectedKey1, inputData.getParameters().get("key1"));
+        assertEquals(inputKey1, inputData.getParameters().get("key1"));
         assertEquals("test value", inputData.getParameters().get("key2"));
-        assertEquals(expectedKey3, inputData.getParameters().get("key3"));
+        assertEquals(inputKey3, inputData.getParameters().get("key3"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_NullValue() {
+        Map<String, String> params = new HashMap<>();
+        params.put("key1", null);
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertNull(inputData.getParameters().get("key1"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_JsonValue() {
+        Map<String, String> params = new HashMap<>();
+        params.put("key1", "{\"test\": \"value\"}");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\"test\": \"value\"}", inputData.getParameters().get("key1"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_EscapeValue() {
+        Map<String, String> params = new HashMap<>();
+        params.put("key1", "test\"value");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("test\\\"value", inputData.getParameters().get("key1"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_NoEscapeParam() {
+        Map<String, String> params = new HashMap<>();
+        params.put("key1", "test\"value");
+        params.put("no_escape_params", "key1");
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("test\"value", inputData.getParameters().get("key1"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_NullParameters() {
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(null).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertNull(inputData.getParameters());
     }
 
     @Test
@@ -654,6 +706,60 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
         String modelResponse = "{\"data\":{\"result\":\"filtered response\"}}";
+
+        ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, parameters, null);
+
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+    }
+
+    @Test
+    public void processOutput_ScriptReturnModelTensor_WithJsonResponse() throws IOException {
+        String postprocessResult = "{\"name\":\"test\",\"data\":[1,2,3]}";
+        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult));
+
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction("custom_script")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        String modelResponse = "{\"result\":\"test\"}";
+
+        ModelTensors tensors = ConnectorUtils
+            .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
+
+        assertEquals(1, tensors.getMlModelTensors().size());
+    }
+
+    @Test
+    public void processOutput_WithProcessorChain_StringOutput() throws IOException {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("processor_configs", "[{\"type\":\"test_processor\"}]");
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        String modelResponse = "{\"result\":\"test response\"}";
 
         ModelTensors tensors = ConnectorUtils.processOutput(PREDICT.name(), modelResponse, connector, scriptService, parameters, null);
 

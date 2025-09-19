@@ -169,6 +169,9 @@ public class ConnectorUtils {
     }
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
+        if (inputData.getParameters() == null) {
+            return;
+        }
         Map<String, String> newParameters = new HashMap<>();
         String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
         Set<String> noEscapParamSet = new HashSet<>();

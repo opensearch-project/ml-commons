@@ -178,7 +178,7 @@ public class ModelTensors implements Writeable, ToXContentObject {
         try {
             return this.toXContent(JsonXContent.contentBuilder(), null).toString();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalArgumentException("Can't convert ModelTensor to string", e);
         }
     }
 }
