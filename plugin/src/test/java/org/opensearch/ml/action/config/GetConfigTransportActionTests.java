@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.config;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -16,6 +15,9 @@ import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -43,6 +45,8 @@ import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -82,6 +86,9 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
     MLConfigGetRequest mlConfigGetRequest;
     ThreadContext threadContext;
 
+    private static final String TEST_INDEX = "test-index";
+    private static final String TEST_ID = "test-id";
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -103,6 +110,11 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
+        GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+        GetResponse getResponse = new GetResponse(new GetResult(TEST_INDEX, TEST_ID, -2, 0, 1, false, null, null, null));
+        when(response.getResponse()).thenReturn(getResponse);
+        CompletionStage<GetDataObjectResponse> completionStageResult = CompletableFuture.completedStage(response);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(completionStageResult);
         getConfigTransportAction.doExecute(null, mlConfigGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -110,11 +122,7 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testGetTask_RuntimeException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("errorMessage"));
-            return null;
-        }).when(client).get(any(), any());
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenThrow(new RuntimeException("errorMessage"));
         getConfigTransportAction.doExecute(null, mlConfigGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -122,15 +130,31 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testGetTask_IndexNotFoundException() {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IndexNotFoundException("Index Not Found"));
+        CompletionStage<GetDataObjectResponse> completionStageResult = mock(CompletionStage.class);
+        doAnswer(invocationOnMock -> {
+            BiConsumer<GetDataObjectResponse, Throwable> biConsumer = invocationOnMock.getArgument(0);
+            biConsumer.accept(null, new IndexNotFoundException("Index Not Found"));
             return null;
-        }).when(client).get(any(), any());
+        }).when(completionStageResult).whenComplete(any(BiConsumer.class));
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(completionStageResult);
         getConfigTransportAction.doExecute(null, mlConfigGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get config index", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testGetTask_generalException() {
+        CompletionStage<GetDataObjectResponse> completionStageResult = mock(CompletionStage.class);
+        doAnswer(invocationOnMock -> {
+            BiConsumer<GetDataObjectResponse, Throwable> biConsumer = invocationOnMock.getArgument(0);
+            biConsumer.accept(null, new RuntimeException("System error"));
+            return null;
+        }).when(completionStageResult).whenComplete(any(BiConsumer.class));
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(completionStageResult);
+        getConfigTransportAction.doExecute(null, mlConfigGetRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("System error", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -162,12 +186,10 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         MLConfigGetRequest request = new MLConfigGetRequest(configID, null);
         Task task = mock(Task.class);
 
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
-
+        GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+        when(response.getResponse()).thenReturn(getResponse);
+        CompletionStage<GetDataObjectResponse> completionStageResult = CompletableFuture.completedStage(response);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(completionStageResult);
         getConfigTransportAction.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLConfigGetResponse.class));
     }
@@ -185,11 +207,10 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         MLConfigGetRequest request = new MLConfigGetRequest(configID, null);
         Task task = mock(Task.class);
 
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
+        GetDataObjectResponse response = mock(GetDataObjectResponse.class);
+        when(response.getResponse()).thenReturn(getResponse);
+        CompletionStage<GetDataObjectResponse> completionStageResult = CompletableFuture.completedStage(response);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(completionStageResult);
 
         getConfigTransportAction.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLConfigGetResponse.class));

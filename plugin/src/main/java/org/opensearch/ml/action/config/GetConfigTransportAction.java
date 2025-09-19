@@ -94,7 +94,7 @@ public class GetConfigTransportAction extends HandledTransportAction<ActionReque
                 if (throwable != null) {
                     Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
-                        wrappedListener.onFailure(new OpenSearchStatusException("Fail to get config index", RestStatus.NOT_FOUND));
+                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to get config index", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get ML config {}", configId, e);
                         wrappedListener.onFailure(e);
