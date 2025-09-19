@@ -170,6 +170,14 @@ public class ModelTensorOutputTest {
         assertArrayEquals(new long[] { 1, 3 }, modelTensor.getShape());
     }
 
+    @Test
+    public void test_ToString() {
+        String result = modelTensorOutput.toString();
+        String expected =
+            "{\"inference_results\":[{\"output\":[{\"name\":\"test\",\"data_type\":\"FLOAT32\",\"shape\":[1,3],\"data\":[1.0,2.0,3.0],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}]}]}";
+        assertEquals(expected, result);
+    }
+
     private void readInputStream(ModelTensorOutput input, Consumer<ModelTensorOutput> verify) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         input.writeTo(bytesStreamOutput);

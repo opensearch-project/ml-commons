@@ -491,4 +491,38 @@ public class MLFlowAgentRunnerTest {
         assertNotNull(additionalInfo.get(SECOND_TOOL + ".output"));
     }
 
+    @Test
+    public void testRunWithReturnDataAsMap() {
+        final Map<String, String> params = new HashMap<>();
+        Map<String, Object> toolOutput = Map.of("key1", "value1", "key2", "value2");
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .includeOutputInAgentResponse(true)
+            .parameters(Map.of("return_data_as_map", "true"))
+            .build();
+        final MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).tools(Arrays.asList(toolSpec)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse(toolOutput);
+            return null;
+        }).when(firstTool).run(anyMap(), any());
+
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object capturedValue = objectCaptor.getValue();
+
+        if (capturedValue instanceof List) {
+            List<ModelTensor> agentOutput = (List<ModelTensor>) capturedValue;
+            assertEquals(1, agentOutput.size());
+            assertEquals(FIRST_TOOL + ".output", agentOutput.get(0).getName());
+            assertEquals(toolOutput, agentOutput.get(0).getDataAsMap());
+        } else if (capturedValue instanceof Map) {
+            Map<String, Object> agentOutput = (Map<String, Object>) capturedValue;
+            assertEquals(toolOutput, agentOutput);
+        }
+    }
+
 }
