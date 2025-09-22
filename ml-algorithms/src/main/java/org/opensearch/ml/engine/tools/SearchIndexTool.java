@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.*;
+import static org.opensearch.ml.common.utils.StringUtils.PLAIN_NUMBER_GSON;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -175,7 +176,11 @@ public class SearchIndexTool implements Tool {
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                         index = jsonObject.get(INDEX_FIELD).getAsString();
                         JsonElement queryElement = jsonObject.get(QUERY_FIELD);
-                        query = queryElement == null ? null : queryElement.toString();
+
+                        if (queryElement != null) {
+                            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
+                            query = PLAIN_NUMBER_GSON.toJson(queryObject);
+                        }
                     }
                 } catch (JsonSyntaxException e) {
                     log.error("Invalid JSON input: {}", input, e);
