@@ -46,6 +46,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
     McpToolsHelper mcpToolsHelper;
+    McpStatelessServerHolder mcpStatelessServerHolder;
 
     @Inject
     public TransportMcpToolsUpdateOnNodesAction(
@@ -56,7 +57,8 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         ToolFactoryWrapper toolFactoryWrapper,
-        McpToolsHelper mcpToolsHelper
+        McpToolsHelper mcpToolsHelper,
+        McpStatelessServerHolder mcpStatelessServerHolder
     ) {
         super(
             MLMcpToolsUpdateOnNodesAction.NAME,
@@ -76,6 +78,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
         this.mcpToolsHelper = mcpToolsHelper;
+        this.mcpStatelessServerHolder = mcpStatelessServerHolder;
     }
 
     @Override
@@ -112,12 +115,16 @@ public class TransportMcpToolsUpdateOnNodesAction extends
     private MLMcpToolsUpdateNodeResponse updateToolsOnNode(List<McpToolUpdateInput> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
-            McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
-            McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(tool.getName()).onErrorResume(e -> Mono.empty()).subscribe();
-            return McpAsyncServerHolder
-                .getMcpAsyncServerInstance()
+            McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
+            mcpStatelessServerHolder
+                .getMcpStatelessAsyncServerInstance()
+                .removeTool(tool.getName())
+                .onErrorResume(e -> Mono.empty())
+                .subscribe();
+            return mcpStatelessServerHolder
+                .getMcpStatelessAsyncServerInstance()
                 .addTool(mcpToolsHelper.createToolSpecification(tool))
-                .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
+                .doOnSuccess(x -> McpStatelessServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
         }).doOnError(e -> {
             log
                 .error(

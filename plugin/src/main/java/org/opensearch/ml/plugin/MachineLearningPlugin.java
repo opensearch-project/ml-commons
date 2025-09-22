@@ -95,10 +95,9 @@ import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
-import org.opensearch.ml.action.mcpserver.McpAsyncServerHolder;
+import org.opensearch.ml.action.mcpserver.McpStatelessServerHolder;
 import org.opensearch.ml.action.mcpserver.McpToolsHelper;
-import org.opensearch.ml.action.mcpserver.TransportMcpMessageAction;
-import org.opensearch.ml.action.mcpserver.TransportMcpMessageDispatchedAction;
+import org.opensearch.ml.action.mcpserver.TransportMcpServerAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsListAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsRegisterAction;
 import org.opensearch.ml.action.mcpserver.TransportMcpToolsRegisterOnNodesAction;
@@ -194,8 +193,7 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
-import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageDispatchAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
@@ -371,7 +369,7 @@ import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
-import org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction;
+import org.opensearch.ml.rest.mcpserver.RestMcpServerAction;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -448,6 +446,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
+    public static final String MCP_TOOLS_SYNC_THREAD_POOL = "opensearch_mcp_tools_sync";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     public static final String ML_COMMONS_JOBS_TYPE = "opensearch_ml_commons_jobs";
@@ -494,6 +493,7 @@ public class MachineLearningPlugin extends Plugin
     private ScriptService scriptService;
     private Encryptor encryptor;
     private McpToolsHelper mcpToolsHelper;
+    private McpStatelessServerHolder statelessServerHolder;
 
     public MachineLearningPlugin() {}
 
@@ -578,11 +578,10 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLMcpToolsRegisterOnNodesAction.INSTANCE, TransportMcpToolsRegisterOnNodesAction.class),
                 new ActionHandler<>(MLMcpToolsRemoveAction.INSTANCE, TransportMcpToolsRemoveAction.class),
                 new ActionHandler<>(MLMcpToolsRemoveOnNodesAction.INSTANCE, TransportMcpToolsRemoveOnNodesAction.class),
-                new ActionHandler<>(MLMcpMessageAction.INSTANCE, TransportMcpMessageAction.class),
-                new ActionHandler<>(MLMcpMessageDispatchAction.INSTANCE, TransportMcpMessageDispatchedAction.class),
                 new ActionHandler<>(MLMcpToolsListAction.INSTANCE, TransportMcpToolsListAction.class),
                 new ActionHandler<>(MLMcpToolsUpdateAction.INSTANCE, TransportMcpToolsUpdateAction.class),
-                new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class)
+                new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class),
+                new ActionHandler<>(MLMcpServerAction.INSTANCE, TransportMcpServerAction.class)
             );
     }
 
@@ -865,8 +864,8 @@ public class MachineLearningPlugin extends Plugin
             MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
         }
 
-        mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
-        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
+        mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
+        statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
 
         return ImmutableList
             .of(
@@ -898,7 +897,8 @@ public class MachineLearningPlugin extends Plugin
                 cmHandler,
                 sdkClient,
                 toolFactoryWrapper,
-                mcpToolsHelper
+                mcpToolsHelper,
+                statelessServerHolder
             );
     }
 
@@ -994,10 +994,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
         RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
-        RestMcpConnectionMessageStreamingAction restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(
-            clusterService,
-            mlFeatureEnabledSetting
-        );
+        RestMcpServerAction restMcpServerAction = new RestMcpServerAction(mlFeatureEnabledSetting);
         RestMLMcpToolsRegisterAction restMLRegisterMcpToolsAction = new RestMLMcpToolsRegisterAction(
             toolFactories,
             clusterService,
@@ -1070,7 +1067,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLGetToolAction,
                 restMLGetConfigAction,
                 restMLCancelBatchJobAction,
-                restMcpConnectionMessageStreamingAction,
+                restMcpServerAction,
                 restMLRegisterMcpToolsAction,
                 restMLRemoveMcpToolsAction,
                 restMLListMcpToolsAction,
@@ -1156,6 +1153,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder mcpThreadPool = new FixedExecutorBuilder(
+            settings,
+            MCP_TOOLS_SYNC_THREAD_POOL,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + MCP_TOOLS_SYNC_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -1167,7 +1172,8 @@ public class MachineLearningPlugin extends Plugin
                 predictThreadPool,
                 remotePredictThreadPool,
                 batchIngestThreadPool,
-                sdkClientThreadPool
+                sdkClientThreadPool,
+                mcpThreadPool
             );
     }
 
