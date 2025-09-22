@@ -1,4 +1,4 @@
-name: Java CI with Gradle
+name: Publish zip
 
 on:
   push:
@@ -31,16 +31,6 @@ jobs:
 
     - name: Build with Gradle Wrapper
       run: ./gradlew assemble
-
-    - name: Create GitHub Pre-release
-      id: create_release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.event.inputs.branch }}
-        name: Pre-release ${{ github.event.inputs.branch }}
-        prerelease: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload plugin distributions
       uses: softprops/action-gh-release@v2
