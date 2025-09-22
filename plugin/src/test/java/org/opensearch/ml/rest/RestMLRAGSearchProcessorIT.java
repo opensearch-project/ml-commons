@@ -110,6 +110,52 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     private static final String BEDROCK_ANTHROPIC_CLAUDE_3_5_SONNET = "anthropic.claude-3-5-sonnet-20240620-v1:0";
     private static final String BEDROCK_ANTHROPIC_CLAUDE_3_SONNET = "anthropic.claude-3-sonnet-20240229-v1:0";
 
+    private static final String BEDROCK_CONNECTOR_BLUEPRINT_INVOKE = "{\n"
+        + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
+        + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
+        + "  \"version\": 1,\n"
+        + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"parameters\": {\n"
+        + "    \"region\": \""
+        + GITHUB_CI_AWS_REGION
+        + "\",\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"model\": \""
+        + "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        + "\",\n"
+        + "    \"system_prompt\": \"You are a helpful assistant.\",\n"
+        + "\"response_filter\": \"$.content[0].text\""
+        + "  },\n"
+        + "  \"credential\": {\n"
+        + "    \"access_key\": \""
+        + AWS_ACCESS_KEY_ID
+        + "\",\n"
+        + "    \"secret_key\": \""
+        + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
+        + "\"\n"
+        + "  },\n"
+        + "  \"actions\": [\n"
+        + "        {\n"
+        + "            \"action_type\": \""
+        + "predict"
+        + "\",\n"
+        + "            \"method\": \"POST\",\n"
+        + "            \"headers\": {\n"
+        + "                \"content-type\": \"application/json\"\n"
+        + "            },\n"
+        + "            \"url\": \"https://bedrock-runtime."
+        + GITHUB_CI_AWS_REGION
+        + ".amazonaws.com/model/"
+        + "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        + "/invoke\",\n"
+        + "           \"request_body\": \"{\\\"messages\\\":[{\\\"role\\\": \\\"user\\\", \\\"content\\\":[ {\\\"type\\\": \\\"text\\\", \\\"text\\\":\\\"${parameters.inputs}\\\"}]}], \\\"max_tokens\\\":300, \\\"temperature\\\":0.5,  \\\"anthropic_version\\\":\\\"bedrock-2023-05-31\\\" }\"\n"
+        + "        }\n"
+        + "    ]\n"
+        + "}";
+
     private static final String BEDROCK_CONNECTOR_BLUEPRINT1 = "{\n"
         + "  \"name\": \"Bedrock Connector: claude2\",\n"
         + "  \"description\": \"The connector to bedrock claude2 model\",\n"
@@ -180,7 +226,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "    ]\n"
         + "}";
 
-    private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
+    static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2 = "{\n"
         + "  \"name\": \"Bedrock Connector: claude 3.5\",\n"
         + "  \"description\": \"The connector to bedrock claude 3.5 model\",\n"
         + "  \"version\": 1,\n"
@@ -267,8 +313,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "}";
 
     private static final String BEDROCK_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
-        ? BEDROCK_CONNECTOR_BLUEPRINT2
-        : BEDROCK_CONNECTOR_BLUEPRINT1;
+        ? BEDROCK_CONNECTOR_BLUEPRINT_INVOKE
+        : BEDROCK_CONNECTOR_BLUEPRINT_INVOKE;
 
     private static final String BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT = AWS_SESSION_TOKEN == null
         ? BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2
@@ -286,7 +332,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "\"\n"
         + "    },\n"
         + "    \"parameters\": {\n"
-        + "        \"model\": \"command\"\n"
+        + "        \"model\": \"command-a-03-2025\"\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
@@ -420,6 +466,26 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "        \"context_size\": %d,\n"
         + "        \"message_size\": %d,\n"
         + "        \"timeout\": %d\n"
+        + "      }\n"
+        + "  }\n"
+        + "}";
+
+    private static final String BM25_SEARCH_REQUEST_WITH_CONVO_WITH_LLM_RESPONSE_TEMPLATE = "{\n"
+        + "  \"_source\": [\"%s\"],\n"
+        + "  \"query\" : {\n"
+        + "    \"match\": {\"%s\": \"%s\"}\n"
+        + "  },\n"
+        + "   \"ext\": {\n"
+        + "      \"generative_qa_parameters\": {\n"
+        + "        \"llm_model\": \"%s\",\n"
+        + "        \"llm_question\": \"%s\",\n"
+        + "        \"memory_id\": \"%s\",\n"
+        + "        \"system_prompt\": \"%s\",\n"
+        + "        \"user_instructions\": \"%s\",\n"
+        + "        \"context_size\": %d,\n"
+        + "        \"message_size\": %d,\n"
+        + "        \"timeout\": %d,\n"
+        + "        \"llm_response_field\": \"%s\"\n"
         + "      }\n"
         + "  }\n"
         + "}";
@@ -703,6 +769,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.contextSize = 5;
         requestParameters.interactionSize = 5;
         requestParameters.timeout = 60;
+        requestParameters.llmResponseField = "response";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -1062,6 +1129,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.interactionSize = 5;
         requestParameters.timeout = 60;
         requestParameters.conversationId = conversationId;
+        requestParameters.llmResponseField = "response";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -1234,7 +1302,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         throws Exception {
 
         // TODO build these templates dynamically
-        String httpEntity = requestParameters.llmResponseField != null
+        String httpEntity = requestParameters.llmResponseField != null && requestParameters.conversationId == null
             ? String
                 .format(
                     Locale.ROOT,
@@ -1345,10 +1413,27 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                         requestParameters.interactionSize,
                         requestParameters.timeout
                     )
+            : (requestParameters.llmResponseField == null)
+                ? String
+                    .format(
+                        Locale.ROOT,
+                        BM25_SEARCH_REQUEST_WITH_CONVO_TEMPLATE,
+                        requestParameters.source,
+                        requestParameters.source,
+                        requestParameters.match,
+                        requestParameters.llmModel,
+                        requestParameters.llmQuestion,
+                        requestParameters.conversationId,
+                        requestParameters.systemPrompt,
+                        requestParameters.userInstructions,
+                        requestParameters.contextSize,
+                        requestParameters.interactionSize,
+                        requestParameters.timeout
+                    )
             : String
                 .format(
                     Locale.ROOT,
-                    BM25_SEARCH_REQUEST_WITH_CONVO_TEMPLATE,
+                    BM25_SEARCH_REQUEST_WITH_CONVO_WITH_LLM_RESPONSE_TEMPLATE,
                     requestParameters.source,
                     requestParameters.source,
                     requestParameters.match,
@@ -1359,7 +1444,8 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                     requestParameters.userInstructions,
                     requestParameters.contextSize,
                     requestParameters.interactionSize,
-                    requestParameters.timeout
+                    requestParameters.timeout,
+                    requestParameters.llmResponseField
                 );
         return makeRequest(
             client(),
