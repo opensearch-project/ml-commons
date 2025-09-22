@@ -122,7 +122,6 @@ public class AgentUtils {
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
 
-    public static final String NO_ESCAPE_PARAMS = "no_escape_params";
     public static final String TOOLS = "_tools";
     public static final String TOOL_TEMPLATE = "tool_template";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";

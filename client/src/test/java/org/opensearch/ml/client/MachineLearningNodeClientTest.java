@@ -87,6 +87,9 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrel
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
+import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
+import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
@@ -206,6 +209,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLRegisterAgentResponse> registerAgentResponseActionListener;
+
+    @Mock
+    ActionListener<MLAgentGetResponse> getAgentResponseActionListener;
 
     @Mock
     ActionListener<DeleteResponse> deleteAgentActionListener;
@@ -1165,6 +1171,27 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLRegisterAgentAction.INSTANCE), isA(MLRegisterAgentRequest.class), any());
         verify(registerAgentResponseActionListener).onResponse(argumentCaptor.capture());
         assertEquals(agentId, (argumentCaptor.getValue()).getAgentId());
+    }
+
+    @Test
+    public void testGetAgent() {
+        String agentId = "agentId";
+        MLAgent mlAgent = MLAgent.builder().name("Agent name").type(MLAgentType.FLOW.name()).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLAgentGetResponse> actionListener = invocation.getArgument(2);
+            MLAgentGetResponse output = new MLAgentGetResponse(mlAgent);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLAgentGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLAgentGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLAgentGetResponse.class);
+
+        machineLearningNodeClient.getAgent(agentId, getAgentResponseActionListener);
+
+        verify(client).execute(eq(MLAgentGetAction.INSTANCE), isA(MLAgentGetRequest.class), any());
+        verify(getAgentResponseActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(mlAgent, (argumentCaptor.getValue()).getMlAgent());
     }
 
     @Test

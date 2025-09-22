@@ -34,6 +34,7 @@ public class ToolUtils {
 
     public static final String TOOL_OUTPUT_FILTERS_FIELD = "output_filter";
     public static final String TOOL_REQUIRED_PARAMS = "required_parameters";
+    public static final String NO_ESCAPE_PARAMS = "no_escape_params";
 
     /**
      * Extracts required parameters based on tool attributes specification.
