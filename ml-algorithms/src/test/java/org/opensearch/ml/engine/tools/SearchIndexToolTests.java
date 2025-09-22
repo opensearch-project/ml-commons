@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -24,6 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
@@ -409,4 +411,37 @@ public class SearchIndexToolTests {
         assertFalse(((String) result).contains("took"));
     }
 
+    @Test
+    @SneakyThrows
+    public void testRun_withMatchQuery_triggersPlainDoubleGson() {
+        String input = "{\"index\":\"test-index\",\"query\":{}}";
+        Map<String, String> params = Map.of("input", input);
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        mockedSearchIndexTool.run(params, listener);
+
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        verify(client, never()).execute(any(), any(), any());
+
+        assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withRangeQuery_triggersPlainDoubleGson() {
+        String input = "{\"index\":\"test-index\",\"query\":{}}";
+        Map<String, String> params = Map.of("input", input);
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        mockedSearchIndexTool.run(params, listener);
+
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        verify(client, never()).execute(any(), any(), any());
+
+        assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
+    }
 }
