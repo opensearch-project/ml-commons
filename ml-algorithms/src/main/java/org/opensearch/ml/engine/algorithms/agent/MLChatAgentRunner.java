@@ -1052,7 +1052,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     traceNumber,
                     additionalInfo,
                     summaryThought,
-                    0, // 不使用 maxIterations 格式化，直接使用 summaryResponse
+                    0,
                     tools
                 );
             }, e -> { log.warn("Failed to generate LLM summary", e); }));
@@ -1092,10 +1092,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
     ) {
         String incompleteResponse;
         if (maxIterations == 0) {
-            // 直接使用 lastThought 中的完整消息（用于摘要情况）
             incompleteResponse = lastThought.get();
         } else {
-            // 传统格式化（用于普通情况）
             incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
                 ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
                 : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
