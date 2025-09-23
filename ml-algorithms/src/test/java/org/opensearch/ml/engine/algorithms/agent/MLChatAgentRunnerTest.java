@@ -1395,16 +1395,27 @@ public class MLChatAgentRunnerTest {
 
     @Test
     public void testExtractSummaryFromResponse() {
-        MLTaskResponse response = MLTaskResponse.builder()
-            .output(ModelTensorOutput.builder()
-                .mlModelOutputs(Arrays.asList(
-                    ModelTensors.builder()
-                        .mlModelTensors(Arrays.asList(
-                            ModelTensor.builder()
-                                .dataAsMap(ImmutableMap.of("response", "Valid summary text"))
-                                .build()))
-                        .build()))
-                .build())
+        MLTaskResponse response = MLTaskResponse
+            .builder()
+            .output(
+                ModelTensorOutput
+                    .builder()
+                    .mlModelOutputs(
+                        Arrays
+                            .asList(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(
+                                        Arrays
+                                            .asList(
+                                                ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "Valid summary text")).build()
+                                            )
+                                    )
+                                    .build()
+                            )
+                    )
+                    .build()
+            )
             .build();
 
         String result = mlChatAgentRunner.extractSummaryFromResponse(response);
