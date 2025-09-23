@@ -1,3 +1,4 @@
+
 /*
  * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
@@ -16,6 +17,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,6 +40,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -62,6 +65,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -76,9 +80,14 @@ import org.opensearch.ml.stats.otel.counters.MLOperationalMetricsCounter;
 import org.opensearch.ml.stats.otel.metrics.OperationalMetric;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.StreamTransportResponseHandler;
+import org.opensearch.transport.TransportChannel;
+import org.opensearch.transport.TransportException;
+import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.stream.StreamTransportResponse;
 
 import com.google.common.collect.ImmutableList;
 
@@ -138,8 +147,50 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     @Override
+    protected String getTransportStreamActionName() {
+        return MLPredictionStreamTaskAction.NAME;
+    }
+
+    @Override
     protected TransportResponseHandler<MLTaskResponse> getResponseHandler(ActionListener<MLTaskResponse> listener) {
         return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
+    }
+
+    private TransportResponseHandler<MLTaskResponse> getResponseStreamHandler(TransportChannel channel) {
+        return new StreamTransportResponseHandler<MLTaskResponse>() {
+            @Override
+            public void handleStreamResponse(StreamTransportResponse<MLTaskResponse> streamResponse) {
+                try {
+                    MLTaskResponse response;
+                    while ((response = streamResponse.nextResponse()) != null) {
+                        channel.sendResponseBatch(response);
+                    }
+                    channel.completeStream();
+                    streamResponse.close();
+                } catch (Exception e) {
+                    streamResponse.cancel("Test error", e);
+                }
+            }
+
+            @Override
+            public void handleException(TransportException exp) {
+                try {
+                    channel.sendResponse(exp);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            public String executor() {
+                return ThreadPool.Names.SAME;
+            }
+
+            @Override
+            public MLTaskResponse read(StreamInput in) throws IOException {
+                return new MLTaskResponse(in);
+            }
+        };
     }
 
     @Override
@@ -176,7 +227,21 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 } else {
                     log.debug("Execute ML predict request {} remotely on node {}", request.getRequestID(), node.getId());
                     request.setDispatchTask(false);
-                    transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                    // Check if this is a streaming request
+                    if (isStreamingRequest(request)) {
+                        TransportChannel channel = request.getStreamingChannel();
+                        log.debug("Using streaming transport for request {}", request.getRequestID());
+                        transportService
+                            .sendRequest(
+                                node,
+                                getTransportStreamActionName(),
+                                request,
+                                TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STREAM).build(),
+                                getResponseStreamHandler(channel)
+                            );
+                    } else {
+                        transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                    }
                 }
             }, listener::onFailure);
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
@@ -254,6 +319,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
      */
     @Override
     protected void executeTask(MLPredictionTaskRequest request, ActionListener<MLTaskResponse> listener) {
+        TransportChannel channel = request.getStreamingChannel();
         final String tenantId = request.getTenantId();
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();
@@ -288,7 +354,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     log.warn(error + " in task " + mlTask.getTaskId());
                     listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
                 } else {
-                    executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, tenantId, listener);
+                    executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, tenantId, listener, channel);
                 }
             }, exception -> {
                 log.error("Failed to check the maximum BATCH_PREDICTION Task limits", exception);
@@ -296,7 +362,20 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             }));
             return;
         }
-        executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, tenantId, listener);
+        executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, tenantId, listener, channel);
+    }
+
+    private boolean isStreamingRequest(MLPredictionTaskRequest request) {
+        try {
+            if (request.getMlInput() != null && request.getMlInput().getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+                Map<String, String> parameters = inputDataSet.getParameters();
+                return parameters != null && "true".equals(parameters.get("stream"));
+            }
+        } catch (Exception e) {
+            log.debug("Failed to check streaming parameter, defaulting to non-streaming", e);
+        }
+        return false;
     }
 
     private void executePredictionByInputDataType(
@@ -306,13 +385,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLTask mlTask,
         FunctionName functionName,
         String tenantId,
-        ActionListener<MLTaskResponse> listener
+        ActionListener<MLTaskResponse> listener,
+        TransportChannel channel
     ) {
         switch (inputDataType) {
             case SEARCH_QUERY:
                 ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
                     MLInput newInput = mlInput.toBuilder().inputDataset(dataSet).build();
-                    predict(modelId, tenantId, mlTask, newInput, listener);
+                    predict(modelId, tenantId, mlTask, newInput, listener, channel);
                 }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
                     handleAsyncMLTaskFailure(mlTask, e);
@@ -325,7 +405,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             case TEXT_DOCS:
             default:
                 String threadPoolName = getPredictThreadPool(functionName);
-                threadPool.executor(threadPoolName).execute(() -> { predict(modelId, tenantId, mlTask, mlInput, listener); });
+                threadPool.executor(threadPoolName).execute(() -> { predict(modelId, tenantId, mlTask, mlInput, listener, channel); });
                 break;
         }
     }
@@ -341,7 +421,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return functionName == FunctionName.REMOTE ? REMOTE_PREDICT_THREAD_POOL : PREDICT_THREAD_POOL;
     }
 
-    private void predict(String modelId, String tenantId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
+    private void predict(
+        String modelId,
+        String tenantId,
+        MLTask mlTask,
+        MLInput mlInput,
+        ActionListener<MLTaskResponse> listener,
+        TransportChannel channel
+    ) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
         ActionName actionName = getActionNameFromInput(mlInput);
@@ -373,15 +460,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 .tenantId(tenantId)
                 .build();
             mlModelManager.deployModel(modelId, tenantId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
-                runPredict(modelId, tenantId, mlTask, mlInput, functionName, actionName, internalListener);
+                runPredict(modelId, tenantId, mlTask, mlInput, functionName, actionName, internalListener, channel);
             }, e -> {
                 log.error("Failed to auto deploy model {}", modelId, e);
                 internalListener.onFailure(e);
             }));
             return;
         }
-
-        runPredict(modelId, tenantId, mlTask, mlInput, functionName, actionName, internalListener);
+        runPredict(modelId, tenantId, mlTask, mlInput, functionName, actionName, internalListener, channel);
     }
 
     // todo: add setting to control this as it can impact predict latency
@@ -434,7 +520,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLInput mlInput,
         FunctionName algorithm,
         ActionName actionName,
-        ActionListener<MLTaskResponse> internalListener
+        ActionListener<MLTaskResponse> internalListener,
+        TransportChannel channel
     ) {
         // run predict
         if (modelId != null) {
@@ -507,7 +594,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
-                        predictor.asyncPredict(mlInput, trackPredictDurationListener); // with listener
+                        predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                     } else {
                         // long startTime = System.nanoTime();
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
