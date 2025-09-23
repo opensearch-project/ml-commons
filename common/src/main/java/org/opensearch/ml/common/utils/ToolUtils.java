@@ -145,7 +145,10 @@ public class ToolUtils {
             executeParams.putAll(toolSpec.getConfigMap());
         }
         // Place tenant_id last to prevent unintended overriding of the tenant identifier
-        executeParams.put(TENANT_ID_FIELD, tenantId);
+        executeParams.remove(TENANT_ID_FIELD);
+        if (tenantId != null) {
+            executeParams.put(TENANT_ID_FIELD, tenantId);
+        }
         return executeParams;
     }
 
