@@ -94,7 +94,7 @@ public class WriteToScratchPadTool implements Tool {
         }
 
         String existing_notes = StringUtils.toJson(parameters.getOrDefault(SCRATCHPAD_NOTES_KEY, ""));
-        parameters.put(SCRATCHPAD_NOTES_KEY, existing_notes + current_notes);
+        parameters.put(SCRATCHPAD_NOTES_KEY, existing_notes + "\n" + current_notes);
         // The agent runner will intercept this call to update the persistent scratchpad.
         // This response is what the LLM will see as the observation.
         listener.onResponse((T) ("Wrote to scratchpad: " + current_notes));
