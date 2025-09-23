@@ -36,6 +36,9 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
+import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
+import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
@@ -292,6 +295,13 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void getAgent(String agentId, ActionListener<MLAgentGetResponse> listener) {
+        MLAgentGetRequest mlAgentGetRequest = MLAgentGetRequest.builder().agentId(agentId).build();
+
+        client.execute(MLAgentGetAction.INSTANCE, mlAgentGetRequest, getMlGetAgentResponseActionListener(listener));
+    }
+
+    @Override
     public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
         MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId, tenantId);
         client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
@@ -343,6 +353,10 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLRegisterAgentResponse> listener
     ) {
         return wrapActionListener(listener, MLRegisterAgentResponse::fromActionResponse);
+    }
+
+    private ActionListener<MLAgentGetResponse> getMlGetAgentResponseActionListener(ActionListener<MLAgentGetResponse> listener) {
+        return wrapActionListener(listener, MLAgentGetResponse::fromActionResponse);
     }
 
     private ActionListener<MLExecuteTaskResponse> getMLExecuteResponseActionListener(ActionListener<MLExecuteTaskResponse> listener) {
