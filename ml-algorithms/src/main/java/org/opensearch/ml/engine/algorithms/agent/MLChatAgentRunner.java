@@ -1103,7 +1103,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    private String extractSummaryFromResponse(MLTaskResponse response) {
+    public String extractSummaryFromResponse(MLTaskResponse response) {
         try {
             String outputString = outputToOutputString(response.getOutput());
             if (outputString != null && !outputString.trim().isEmpty()) {

@@ -1396,4 +1396,32 @@ public class MLChatAgentRunnerTest {
     // assertTrue("Should contain assistant message", chatHistory.contains("Assistant: It's sunny today!"));
     // assertTrue("Should contain system context", chatHistory.contains("[Context] Weather data retrieved from API"));
     // }
+
+    @Test
+    public void testExtractSummaryFromResponse() {
+        MLTaskResponse response = MLTaskResponse.builder()
+            .output(ModelTensorOutput.builder()
+                .mlModelOutputs(Arrays.asList(
+                    ModelTensors.builder()
+                        .mlModelTensors(Arrays.asList(
+                            ModelTensor.builder()
+                                .dataAsMap(ImmutableMap.of("response", "Valid summary text"))
+                                .build()))
+                        .build()))
+                .build())
+            .build();
+
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        assertEquals("Valid summary text", result);
+    }
+
+    @Test
+    public void testGenerateLLMSummaryWithNullSteps() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
+
+        mlChatAgentRunner.generateLLMSummary(null, llmSpec, "tenant", listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
 }
