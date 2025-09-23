@@ -979,7 +979,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         if (shouldSummarize && !traceTensors.isEmpty()) {
             generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
-                String incompleteResponse = String.format(MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
+                String incompleteResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
                 sendFinalAnswer(
                     sessionId,
                     listener,
