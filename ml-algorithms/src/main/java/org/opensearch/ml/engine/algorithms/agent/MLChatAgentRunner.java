@@ -137,8 +137,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
-    private static final String MAX_ITERATIONS_SUMMARY_MESSAGE =
-        "Agent reached maximum iterations (%d) without completing the task. Here's a summary of the steps taken:\n\n%s";
+    private static final String MAX_ITERATIONS_SUMMARY_MESSAGE = MAX_ITERATIONS_MESSAGE + ". Here's a summary of the steps taken:\n\n%s";
 
     private Client client;
     private Settings settings;
@@ -428,17 +427,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     lastToolSelectionResponse.set(thoughtResponse);
                     lastToolCallId.set(toolCallId);
 
-                    // Record execution step for summary
-                    if (thought != null && !"null".equals(thought) && !thought.trim().isEmpty()) {
-                        executionSteps.add(String.format("Thought: %s", thought.trim()));
-                    }
-                    if (action != null && !"null".equals(action) && !action.trim().isEmpty()) {
-                        String actionDesc = actionInput != null && !"null".equals(actionInput)
-                            ? String.format("Action: %s(%s)", action.trim(), actionInput.trim())
-                            : String.format("Action: %s", action.trim());
-                        executionSteps.add(actionDesc);
-                    }
-
                     traceTensors
                         .add(
                             ModelTensors
@@ -475,7 +463,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             maxIterations,
                             tools,
                             tmpParameters,
-                            executionSteps,
                             llm,
                             tenantId
                         );
@@ -612,7 +599,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             maxIterations,
                             tools,
                             tmpParameters,
-                            executionSteps,
                             llm,
                             tenantId
                         );
@@ -1045,14 +1031,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations,
         Map<String, Tool> tools,
         Map<String, String> parameters,
-        List<String> executionSteps,
         LLMSpec llmSpec,
         String tenantId
     ) {
         boolean shouldSummarize = Boolean.parseBoolean(parameters.getOrDefault(SUMMARIZE_WHEN_MAX_ITERATION, "false"));
 
-        if (shouldSummarize && !executionSteps.isEmpty()) {
-            generateLLMSummary(executionSteps, llmSpec, tenantId, ActionListener.wrap(summary -> {
+        if (shouldSummarize && !traceTensors.isEmpty()) {
+            generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
                 String incompleteResponse = String.format(MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
                 sendFinalAnswer(
                     sessionId,
@@ -1123,7 +1108,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         cleanUpResource(tools);
     }
 
-    void generateLLMSummary(List<String> stepsSummary, LLMSpec llmSpec, String tenantId, ActionListener<String> listener) {
+    void generateLLMSummary(List<ModelTensors> stepsSummary, LLMSpec llmSpec, String tenantId, ActionListener<String> listener) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Steps summary cannot be null or empty"));
             return;
@@ -1134,7 +1119,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
             if (llmSpec.getParameters() != null) {
                 summaryParams.putAll(llmSpec.getParameters());
             }
-            String summaryPrompt = String.format(SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepsSummary));
+
+            // Convert ModelTensors to strings before joining
+            List<String> stepStrings = new ArrayList<>();
+            for (ModelTensors tensor : stepsSummary) {
+                stepStrings.add(outputToOutputString(tensor));
+            }
+            String summaryPrompt = String.format(SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
             summaryParams.put("inputs", summaryPrompt);
             summaryParams.put("prompt", summaryPrompt);
             summaryParams.putIfAbsent("stop", gson.toJson(new String[] { "\n\n", "```" }));
