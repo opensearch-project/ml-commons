@@ -989,7 +989,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             for (ModelTensors tensor : stepsSummary) {
                 stepStrings.add(outputToOutputString(tensor));
             }
-            String summaryPrompt = String.format(SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
+            String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
             summaryParams.put("inputs", summaryPrompt);
             summaryParams.put("prompt", summaryPrompt);
             summaryParams.putIfAbsent("stop", gson.toJson(new String[] { "\n\n", "```" }));
