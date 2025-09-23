@@ -55,6 +55,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -64,6 +65,26 @@ public interface RemoteConnectorExecutor {
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
 
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        executeAction(action, mlInput, actionListener, null);
+    }
+
+    default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
+        // Check for streaming
+        if (channel != null) {
+            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new ActionListener<Tuple<Integer, ModelTensors>>() {
+                @Override
+                public void onResponse(Tuple<Integer, ModelTensors> response) {
+                    actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(Arrays.asList(response.v2()))));
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    actionListener.onFailure(e);
+                }
+            }, channel);
+            return;
+        }
+
         ActionListener<Collection<Tuple<Integer, ModelTensors>>> tensorActionListener = ActionListener.wrap(r -> {
             // Only all sub-requests success will call logics here
             ModelTensors[] modelTensors = new ModelTensors[r.size()];
@@ -94,11 +115,18 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
-                        groupedActionListener
+                        groupedActionListener,
+                        null
                     );
                 }
             } else {
-                preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new GroupedActionListener<>(tensorActionListener, 1));
+                preparePayloadAndInvoke(
+                    action,
+                    mlInput,
+                    new ExecutionContext(0),
+                    new GroupedActionListener<>(tensorActionListener, 1),
+                    null
+                );
             }
         } catch (Exception e) {
             actionListener.onFailure(e);
@@ -180,7 +208,8 @@ public interface RemoteConnectorExecutor {
         String action,
         MLInput mlInput,
         ExecutionContext executionContext,
-        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener,
+        TransportChannel channel
     ) {
         Connector connector = getConnector();
 
@@ -241,6 +270,9 @@ public interface RemoteConnectorExecutor {
             }
             if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
+            } else if (parameters.containsKey("stream")) {
+                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(channel);
+                invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, streamListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
@@ -313,6 +345,15 @@ public interface RemoteConnectorExecutor {
         String payload,
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    );
+
+    void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> streamListener
     );
 
     static class RetryableActionExtension extends RetryableAction<Tuple<Integer, ModelTensors>> {

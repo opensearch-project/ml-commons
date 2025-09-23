@@ -74,6 +74,11 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     }
 
     @Override
+    protected String getTransportStreamActionName() {
+        return MLExecuteTaskAction.NAME;
+    }
+
+    @Override
     protected TransportResponseHandler<MLExecuteTaskResponse> getResponseHandler(ActionListener<MLExecuteTaskResponse> listener) {
         return new ActionListenerResponseHandler<>(listener, MLExecuteTaskResponse::new);
     }

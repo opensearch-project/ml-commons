@@ -323,6 +323,9 @@ public class RestActionUtils {
         String path = request.path();
         String[] segments = path.split("/");
         String methodName = segments[segments.length - 1];
+        if ("stream".equals(methodName)) {
+            methodName = segments[segments.length - 2];
+        }
         methodName = methodName.startsWith("_") ? methodName.substring(1) : methodName;
 
         // find the action type for "/_plugins/_ml/_predict/<algorithm>/<model_id>"
