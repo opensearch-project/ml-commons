@@ -430,6 +430,10 @@ configurations.all {
     resolutionStrategy.force "org.opensearch:opensearch:${opensearch_version}"
     resolutionStrategy.force "org.bouncycastle:bcprov-jdk18on:1.78.1"
     resolutionStrategy.force 'io.projectreactor:reactor-core:3.7.0'
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib:1.9.23"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.23"
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
     resolutionStrategy.force "com.google.code.gson:gson:${versions.gson}"
     resolutionStrategy.force "software.amazon.awssdk:bom:${versions.aws}"
