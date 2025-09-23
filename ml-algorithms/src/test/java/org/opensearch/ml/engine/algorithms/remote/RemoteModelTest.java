@@ -18,6 +18,7 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -117,6 +118,13 @@ public class RemoteModelTest extends MLStaticMockBase {
         when(mlInput.getInputDataset()).thenReturn(
                 new RemoteInferenceInputDataSet(Collections.emptyMap(), ConnectorAction.ActionType.BATCH_PREDICT));
         asyncPredict_ModelDeployed_WrongInput("no BATCH_PREDICT action found");
+    }
+
+    @Test
+    public void test_initModel_throwIllegalStateException() {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage("Method is not implemented");
+        remoteModel.initModel(mlModel, new HashMap<>(), encryptor);
     }
 
     private void asyncPredict_ModelDeployed_WrongInput(String expExceptionMessage) {
