@@ -979,8 +979,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         if (shouldSummarize && !traceTensors.isEmpty()) {
             generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
-                String incompleteResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
-                sendFinalAnswer(
+                String summaryResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
+                AtomicReference<String> summaryThought = new AtomicReference<>(summaryResponse);
+                sendTraditionalMaxIterationsResponse(
                     sessionId,
                     listener,
                     question,
@@ -991,12 +992,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     conversationIndexMemory,
                     traceNumber,
                     additionalInfo,
-                    incompleteResponse
+                    summaryThought,
+                    0, // 不使用 maxIterations 格式化，直接使用 summaryResponse
+                    tools
                 );
-                cleanUpResource(tools);
             }, e -> { log.warn("Failed to generate LLM summary", e); }));
         } else {
-            // Use traditional approach
             sendTraditionalMaxIterationsResponse(
                 sessionId,
                 listener,
@@ -1030,9 +1031,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations,
         Map<String, Tool> tools
     ) {
-        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
-            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
-            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        String incompleteResponse;
+        if (maxIterations == 0) {
+            // 直接使用 lastThought 中的完整消息（用于摘要情况）
+            incompleteResponse = lastThought.get();
+        } else {
+            // 传统格式化（用于普通情况）
+            incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+                ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+                : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        }
         sendFinalAnswer(
             sessionId,
             listener,
@@ -1068,7 +1076,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
             String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
             summaryParams.put("inputs", summaryPrompt);
-            summaryParams.put("prompt", summaryPrompt);
+            summaryParams.put(PROMPT, summaryPrompt);
             summaryParams.putIfAbsent("stop", gson.toJson(new String[] { "\n\n", "```" }));
 
             ActionRequest request = new MLPredictionTaskRequest(
