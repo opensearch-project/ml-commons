@@ -24,6 +24,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
@@ -462,6 +463,24 @@ public interface MachineLearningClient {
      * @param mlAgent Register agent input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#register-agent
      */
     void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener);
+
+    /**
+     * Get agent
+     * @param agentId The id of the agent to get
+     * @return the result future
+     */
+    default ActionFuture<MLAgentGetResponse> getAgent(String agentId) {
+        PlainActionFuture<MLAgentGetResponse> actionFuture = PlainActionFuture.newFuture();
+        getAgent(agentId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Get agent
+     * @param agentId The id of the agent to get
+     * @param listener a listener to be notified of the result
+     */
+    void getAgent(String agentId, ActionListener<MLAgentGetResponse> listener);
 
     /**
      * Delete agent

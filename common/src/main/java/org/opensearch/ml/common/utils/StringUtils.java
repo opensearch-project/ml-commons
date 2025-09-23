@@ -8,6 +8,8 @@ package org.opensearch.ml.common.utils;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.action.ValidateActions.addValidationError;
 
+import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -38,11 +40,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.TypeAdapter;
 import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
@@ -71,11 +77,15 @@ public class StringUtils {
 
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
-    public static final Gson gson;
+    public static final Gson gson = new Gson();
+    public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
+        .serializeNulls()
+        .registerTypeAdapter(Float.class, new PlainFloatAdapter())
+        .registerTypeAdapter(float.class, new PlainFloatAdapter())
+        .registerTypeAdapter(Double.class, new PlainDoubleAdapter())
+        .registerTypeAdapter(double.class, new PlainDoubleAdapter())
+        .create();
 
-    static {
-        gson = new Gson();
-    }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
     public static final ObjectMapper MAPPER = new ObjectMapper();
@@ -600,6 +610,51 @@ public class StringUtils {
         } catch (JsonSyntaxException e) {
             log.error("Failed to parse JSON array string: {}", jsonArrayString, e);
             return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Custom Gson adapter for Double and Float type.
+     * Serializes numbers without scientific notation.
+     * Writes null for null, NaN, and Infinity values.
+     * Deserializes JSON numbers back to Double and Float.
+     */
+    private static class PlainDoubleAdapter extends TypeAdapter<Double> {
+        @Override
+        public void write(JsonWriter out, Double value) throws IOException {
+            if (value == null || value.isNaN() || value.isInfinite()) {
+                out.nullValue();
+                return;
+            }
+
+            BigDecimal bd = BigDecimal.valueOf(value).stripTrailingZeros();
+
+            out.jsonValue(bd.toPlainString());
+        }
+
+        @Override
+        public Double read(JsonReader in) throws IOException {
+            return in.nextDouble();
+        }
+    }
+
+    public static class PlainFloatAdapter extends TypeAdapter<Float> {
+        @Override
+        public void write(JsonWriter out, Float value) throws IOException {
+            if (value == null || value.isNaN() || value.isInfinite()) {
+                out.nullValue();
+                return;
+            }
+
+            BigDecimal bd = new BigDecimal(Float.toString(value)).stripTrailingZeros();
+            out.jsonValue(bd.toPlainString());
+        }
+
+        @Override
+        public Float read(JsonReader in) throws IOException {
+            double d = in.nextDouble();
+            float f = (float) d;
+            return f;
         }
     }
 }
