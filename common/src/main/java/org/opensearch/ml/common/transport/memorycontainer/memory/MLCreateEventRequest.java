@@ -23,31 +23,31 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
-public class MLAddMemoriesRequest extends ActionRequest {
+public class MLCreateEventRequest extends ActionRequest {
 
-    MLAddMemoriesInput mlAddMemoryInput;
+    MLCreateEventInput mlCreateEventInput;
 
     @Builder
-    public MLAddMemoriesRequest(MLAddMemoriesInput mlAddMemoryInput) {
-        this.mlAddMemoryInput = mlAddMemoryInput;
+    public MLCreateEventRequest(MLCreateEventInput mlCreateEventInput) {
+        this.mlCreateEventInput = mlCreateEventInput;
     }
 
-    public MLAddMemoriesRequest(StreamInput in) throws IOException {
+    public MLCreateEventRequest(StreamInput in) throws IOException {
         super(in);
-        this.mlAddMemoryInput = new MLAddMemoriesInput(in);
+        this.mlCreateEventInput = new MLCreateEventInput(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        this.mlAddMemoryInput.writeTo(out);
+        this.mlCreateEventInput.writeTo(out);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (mlAddMemoryInput == null) {
-            exception = addValidationError("ML add memory input can't be null", exception);
+        if (mlCreateEventInput == null) {
+            exception = addValidationError("ML create event input can't be null", exception);
         }
         return exception;
     }

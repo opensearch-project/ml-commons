@@ -5,10 +5,17 @@
 
 package org.opensearch.ml.common.memorycontainer;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ENABLED_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_TYPE_FIELD;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -16,12 +23,10 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @Setter
@@ -60,10 +65,10 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
 
-        builder.field("id", id);
-        builder.field("enabled", enabled);
-        builder.field("type", type);
-        builder.field("namespace", namespace);
+        builder.field(STRATEGY_ID_FIELD, id);
+        builder.field(STRATEGY_ENABLED_FIELD, enabled);
+        builder.field(STRATEGY_TYPE_FIELD, type);
+        builder.field(NAMESPACE_FIELD, namespace);
 
         builder.endObject();
         return builder;
@@ -81,17 +86,17 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case "id":
+                case STRATEGY_ID_FIELD:
                     id = parser.text();
                     break;
-                case "enabled":
+                case STRATEGY_ENABLED_FIELD:
                     // Skip this field - it's now auto-determined
                     enabled = parser.booleanValue();
                     break;
-                case "type":
+                case STRATEGY_TYPE_FIELD:
                     type = parser.text();
                     break;
-                case "namespace":
+                case NAMESPACE_FIELD:
                     namespace = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
@@ -104,13 +109,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             }
         }
 
-        return MemoryStrategy
-            .builder()
-            .id(id)
-            .enabled(enabled)
-            .type(type)
-            .namespace(namespace)
-            .build();
+        return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).build();
     }
 
 }

@@ -16,7 +16,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
 import org.opensearch.ml.utils.MemorySearchQueryBuilder;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -35,7 +35,7 @@ public class MemorySearchService {
 
     public void searchSimilarFactsForSession(
         MemoryStrategy strategy,
-        MLAddMemoriesInput input,
+        MLCreateEventInput input,
         List<String> facts,
         MemoryConfiguration memoryConfig,
         ActionListener<List<FactSearchResult>> listener
@@ -50,14 +50,14 @@ public class MemorySearchService {
         int maxInferSize = memoryConfig != null && memoryConfig.getMaxInferSize() != null ? memoryConfig.getMaxInferSize() : 5;
 
         // Limit the number of facts to process based on maxInferSize
-        List<String> factsToProcess = facts.size() > maxInferSize ? facts.subList(0, maxInferSize) : facts;//TODO: check this part
+        List<String> factsToProcess = facts.size() > maxInferSize ? facts.subList(0, maxInferSize) : facts;// TODO: check this part
 
         searchFactsSequentially(strategy, input, factsToProcess, 0, memoryConfig, maxInferSize, allResults, listener);
     }
 
     private void searchFactsSequentially(
         MemoryStrategy strategy,
-        MLAddMemoriesInput input,
+        MLCreateEventInput input,
         List<String> facts,
         int currentIndex,
         MemoryConfiguration memoryConfig,

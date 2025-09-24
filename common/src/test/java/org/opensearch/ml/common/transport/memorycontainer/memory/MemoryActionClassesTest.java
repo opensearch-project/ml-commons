@@ -16,10 +16,10 @@ import org.junit.Test;
 public class MemoryActionClassesTest {
 
     @Test
-    public void testMLAddMemoriesAction() {
-        assertNotNull(MLAddMemoriesAction.INSTANCE);
-        assertEquals("cluster:admin/opensearch/ml/memory_containers/memories/add", MLAddMemoriesAction.NAME);
-        assertEquals(MLAddMemoriesAction.NAME, MLAddMemoriesAction.INSTANCE.name());
+    public void testMLCreateEventAction() {
+        assertNotNull(MLCreateEventAction.INSTANCE);
+        assertEquals("cluster:admin/opensearch/ml/memory_containers/events/create", MLCreateEventAction.NAME);
+        assertEquals(MLCreateEventAction.NAME, MLCreateEventAction.INSTANCE.name());
     }
 
     @Test

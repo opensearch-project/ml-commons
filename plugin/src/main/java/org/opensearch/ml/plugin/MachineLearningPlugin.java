@@ -109,8 +109,10 @@ import org.opensearch.ml.action.mcpserver.TransportMcpToolsUpdateOnNodesAction;
 import org.opensearch.ml.action.memorycontainer.TransportCreateMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.TransportDeleteMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.TransportGetMemoryContainerAction;
-import org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportCreateEventAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteEventAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportGetEventAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportGetMemoryAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction;
@@ -206,8 +208,10 @@ import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNod
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteEventAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetEventAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
@@ -303,14 +307,15 @@ import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.rest.RestMLAddMemoriesAction;
 import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
+import org.opensearch.ml.rest.RestMLCreateEventAction;
 import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
+import org.opensearch.ml.rest.RestMLDeleteEventAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
@@ -322,6 +327,7 @@ import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetControllerAction;
+import org.opensearch.ml.rest.RestMLGetEventAction;
 import org.opensearch.ml.rest.RestMLGetIndexInsightAction;
 import org.opensearch.ml.rest.RestMLGetIndexInsightConfigAction;
 import org.opensearch.ml.rest.RestMLGetMemoryAction;
@@ -547,7 +553,9 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLCreateMemoryContainerAction.INSTANCE, TransportCreateMemoryContainerAction.class),
                 new ActionHandler<>(MLMemoryContainerGetAction.INSTANCE, TransportGetMemoryContainerAction.class),
                 new ActionHandler<>(MLMemoryContainerDeleteAction.INSTANCE, TransportDeleteMemoryContainerAction.class),
-                new ActionHandler<>(MLAddMemoriesAction.INSTANCE, TransportAddMemoriesAction.class),
+                new ActionHandler<>(MLCreateEventAction.INSTANCE, TransportCreateEventAction.class),
+                new ActionHandler<>(MLGetEventAction.INSTANCE, TransportGetEventAction.class),
+                new ActionHandler<>(MLDeleteEventAction.INSTANCE, TransportDeleteEventAction.class),
                 new ActionHandler<>(MLSearchMemoriesAction.INSTANCE, TransportSearchMemoriesAction.class),
                 new ActionHandler<>(MLDeleteMemoryAction.INSTANCE, TransportDeleteMemoryAction.class),
                 new ActionHandler<>(MLUpdateMemoryAction.INSTANCE, TransportUpdateMemoryAction.class),
@@ -966,7 +974,7 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
         RestMLGetMemoryContainerAction restMLGetMemoryContainerAction = new RestMLGetMemoryContainerAction(mlFeatureEnabledSetting);
-        RestMLAddMemoriesAction restMLAddMemoriesAction = new RestMLAddMemoriesAction(mlFeatureEnabledSetting);
+        RestMLCreateEventAction restMLCreateEventAction = new RestMLCreateEventAction(mlFeatureEnabledSetting);
         RestMLSearchMemoriesAction restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
         RestMLDeleteMemoryAction restMLDeleteMemoryAction = new RestMLDeleteMemoryAction(mlFeatureEnabledSetting);
         RestMLUpdateMemoryAction restMLUpdateMemoryAction = new RestMLUpdateMemoryAction(mlFeatureEnabledSetting);
@@ -977,6 +985,8 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
         RestMLGetMemoryAction restMLGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
+        RestMLGetEventAction restMLGetEventAction = new RestMLGetEventAction(mlFeatureEnabledSetting);
+        RestMLDeleteEventAction restMLDeleteEventAction = new RestMLDeleteEventAction(mlFeatureEnabledSetting);
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
@@ -1047,7 +1057,9 @@ public class MachineLearningPlugin extends Plugin
                 restMLCreateMemoryContainerAction,
                 restMLGetMemoryContainerAction,
                 restMLDeleteMemoryContainerAction,
-                restMLAddMemoriesAction,
+                restMLCreateEventAction,
+                restMLGetEventAction,
+                restMLDeleteEventAction,
                 restMLSearchMemoriesAction,
                 restMLDeleteMemoryAction,
                 restMLUpdateMemoryAction,
@@ -1159,12 +1171,12 @@ public class MachineLearningPlugin extends Plugin
         );
 
         FixedExecutorBuilder agenticMemoryThreadPool = new FixedExecutorBuilder(
-                settings,
-                AGENTIC_MEMORY_THREAD_POOL,
-                OpenSearchExecutors.allocatedProcessors(settings) * 4,
-                10000,
-                ML_THREAD_POOL_PREFIX + AGENTIC_MEMORY_THREAD_POOL,
-                false
+            settings,
+            AGENTIC_MEMORY_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + AGENTIC_MEMORY_THREAD_POOL,
+            false
         );
 
         return ImmutableList

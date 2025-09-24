@@ -27,7 +27,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SHORT_TERM_MEMORY_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 import static org.opensearch.ml.common.utils.IndexUtils.ALL_NODES_REPLICA_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS;
@@ -179,8 +178,6 @@ public class MLIndicesHandler {
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
-
-
     public void createShortTermMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_SHORT_MEMORY_INDEX_MAPPING_PATH);
         Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SHORT_TERM_MEMORY_INDEX);
@@ -193,7 +190,12 @@ public class MLIndicesHandler {
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
-    public void createLongTermMemoryIndex(String pipelineName, String indexName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener) {
+    public void createLongTermMemoryIndex(
+        String pipelineName,
+        String indexName,
+        MemoryConfiguration memoryConfig,
+        ActionListener<Boolean> listener
+    ) {
         try {
             Map<String, Object> indexSettings = new HashMap<>();
             Map<String, Object> indexMappings = new HashMap<>();
@@ -206,7 +208,6 @@ public class MLIndicesHandler {
             properties.put(NAMESPACE_FIELD, Map.of("type", "flat_object"));
             properties.put(NAMESPACE_SIZE_FIELD, Map.of("type", "integer"));
             properties.put(MEMORY_FIELD, Map.of("type", "text")); // Keep as text for full-text search
-            properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
             properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
             properties.put(CREATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
             properties.put(LAST_UPDATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
@@ -258,7 +259,13 @@ public class MLIndicesHandler {
         initIndexIfAbsent(indexName, mapping, null, version, listener);
     }
 
-    public void initIndexIfAbsent(String indexName, String mapping, Map<String, Object> indexSettings, Integer version, ActionListener<Boolean> listener) {
+    public void initIndexIfAbsent(
+        String indexName,
+        String mapping,
+        Map<String, Object> indexSettings,
+        Integer version,
+        ActionListener<Boolean> listener
+    ) {
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             if (!MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName)) {
@@ -283,7 +290,10 @@ public class MLIndicesHandler {
                 if (indexSettings != null) {
                     request.settings(indexSettings);
                 } else {
-                    request.settings(indexName.equals(MLIndex.CONFIG.getIndexName()) ? ALL_NODES_REPLICA_INDEX_SETTINGS : DEFAULT_INDEX_SETTINGS);
+                    request
+                        .settings(
+                            indexName.equals(MLIndex.CONFIG.getIndexName()) ? ALL_NODES_REPLICA_INDEX_SETTINGS : DEFAULT_INDEX_SETTINGS
+                        );
                 }
                 client.admin().indices().create(request, actionListener);
             } else {
@@ -293,46 +303,47 @@ public class MLIndicesHandler {
                         if (r) {
                             // return true if should update index
                             client
-                                    .admin()
-                                    .indices()
-                                    .putMapping(
-                                            new PutMappingRequest().indices(indexName).source(mapping, XContentType.JSON),
-                                            ActionListener.wrap(response -> {
-                                                if (response.isAcknowledged()) {
-                                                    UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                                    updateSettingRequest.indices(indexName);
-                                                    if (indexSettings != null) {
-                                                        updateSettingRequest.settings(indexSettings);
+                                .admin()
+                                .indices()
+                                .putMapping(
+                                    new PutMappingRequest().indices(indexName).source(mapping, XContentType.JSON),
+                                    ActionListener.wrap(response -> {
+                                        if (response.isAcknowledged()) {
+                                            UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
+                                            updateSettingRequest.indices(indexName);
+                                            if (indexSettings != null) {
+                                                updateSettingRequest.settings(indexSettings);
+                                            } else {
+                                                updateSettingRequest
+                                                    .settings(
+                                                        indexName.equals(MLIndex.CONFIG.getIndexName())
+                                                            ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
+                                                            : UPDATED_DEFAULT_INDEX_SETTINGS
+                                                    );
+                                            }
+                                            client
+                                                .admin()
+                                                .indices()
+                                                .updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
+                                                    if (response.isAcknowledged()) {
+                                                        indexMappingUpdated.get(indexName).set(true);
+                                                        internalListener.onResponse(true);
                                                     } else {
-                                                        updateSettingRequest.settings(
-                                                                indexName.equals(MLIndex.CONFIG.getIndexName())
-                                                                        ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
-                                                                        : UPDATED_DEFAULT_INDEX_SETTINGS
-                                                        );
+                                                        internalListener
+                                                            .onFailure(new MLException("Failed to update index setting for: " + indexName));
                                                     }
-                                                    client
-                                                            .admin()
-                                                            .indices()
-                                                            .updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
-                                                                if (response.isAcknowledged()) {
-                                                                    indexMappingUpdated.get(indexName).set(true);
-                                                                    internalListener.onResponse(true);
-                                                                } else {
-                                                                    internalListener
-                                                                            .onFailure(new MLException("Failed to update index setting for: " + indexName));
-                                                                }
-                                                            }, exception -> {
-                                                                log.error("Failed to update index setting for: {}", indexName, exception);
-                                                                internalListener.onFailure(exception);
-                                                            }));
-                                                } else {
-                                                    internalListener.onFailure(new MLException("Failed to update index: " + indexName));
-                                                }
-                                            }, exception -> {
-                                                log.error("Failed to update index {}", indexName, exception);
-                                                internalListener.onFailure(exception);
-                                            })
-                                    );
+                                                }, exception -> {
+                                                    log.error("Failed to update index setting for: {}", indexName, exception);
+                                                    internalListener.onFailure(exception);
+                                                }));
+                                        } else {
+                                            internalListener.onFailure(new MLException("Failed to update index: " + indexName));
+                                        }
+                                    }, exception -> {
+                                        log.error("Failed to update index {}", indexName, exception);
+                                        internalListener.onFailure(exception);
+                                    })
+                                );
                         } else {
                             // no need to update index if it does not exist or the version is already
                             // up-to-date.

@@ -55,10 +55,7 @@
         }
       }
     },
-    "binary_data": {
-      "type": "binary"
-    },
-    "structured_data": {
+    "data": {
       "type": "flat_object"
     },
     "namespace": {

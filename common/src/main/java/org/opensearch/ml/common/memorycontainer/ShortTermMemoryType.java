@@ -9,7 +9,7 @@ package org.opensearch.ml.common.memorycontainer;
  * Enum representing the type of memory entry
  */
 public enum ShortTermMemoryType {
-    CONVERSATION("conversation"),
+    CONVERSATIONAL("conversational"),
     DATA("data");
 
     private final String value;
@@ -39,7 +39,7 @@ public enum ShortTermMemoryType {
             }
         }
 
-        throw new IllegalArgumentException("Invalid short memory type: " + value + ". Must be one of: CONVERSATION, DATA");
+        throw new IllegalArgumentException("Invalid short memory type: " + value + ". Must be one of: CONVERSATIONAL, DATA");
     }
 
     @Override
