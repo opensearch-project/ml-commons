@@ -155,7 +155,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
 
     private SearchRequest buildSearchRequest(String query, MemoryConfiguration memoryConfig, String indexName) throws IOException {
         // Note: Size limit removed - search will return all matching results
-         int maxResults = memoryConfig != null ? memoryConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
+        int maxResults = memoryConfig != null ? memoryConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
 
         // Use utility class to build the appropriate query
         XContentBuilder queryBuilder = MemorySearchQueryBuilder.buildQueryByStorageType(query, memoryConfig);
@@ -197,10 +197,6 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 }
             }
 
-            // Parse tags
-            @SuppressWarnings("unchecked")
-            Map<String, String> tags = (Map<String, String>) sourceMap.get(TAGS_FIELD);
-
             // Parse timestamps
             Instant createdTime = null;
             Instant lastUpdatedTime = null;
@@ -228,7 +224,6 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 .userId(userId)
                 .memoryType(memoryType)
                 .role(role)
-                .tags(tags)
                 .createdTime(createdTime)
                 .lastUpdatedTime(lastUpdatedTime)
                 .build();

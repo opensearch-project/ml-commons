@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -87,7 +86,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
 
         // Assign values after validation
-        this.indexPrefix = indexPrefix == null ? "memory-" + UUID.randomUUID() : indexPrefix;
+        this.indexPrefix = indexPrefix == null ? ".plugins-ml" : indexPrefix;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;
@@ -270,18 +269,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     }
 
     public String getSessionIndexName() {
-        return indexPrefix + "-session";
+        return indexPrefix + "-agentic-memory-sessions";
     }
 
     public String getShortTermMemoryIndexName() {
-        return indexPrefix + "-short-term-memory";
+        return indexPrefix + "-agentic-memory-events";
     }
 
     public String getLongMemoryIndexName() {
-        return indexPrefix + "-long-term-memory";
+        return indexPrefix + "-agentic-memory-memories";
     }
+
     public String getLongMemoryHistoryIndexName() {
-        return indexPrefix + "-long-term-memory-history";
+        return indexPrefix + "-agentic-memory-memory-histories";
     }
 
     public Map<String, Object> getMemoryIndexMapping(String indexName) {

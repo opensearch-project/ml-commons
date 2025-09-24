@@ -31,8 +31,8 @@ import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.transport.client.Client;
@@ -53,7 +53,7 @@ public class MemoryOperationsService {
         MemoryConfiguration memoryConfig,
         Map<String, String> namespace,
         User user,
-        MLAddMemoriesInput input,
+        MLCreateEventInput input,
         MemoryConfiguration configuration,
         ActionListener<List<MemoryResult>> listener
     ) {
@@ -75,7 +75,6 @@ public class MemoryOperationsService {
                         .memory(decision.getText())
                         .memoryType(MemoryType.SEMANTIC)
                         .namespace(namespace)
-                        .tags(input.getTags())
                         .createdTime(now)
                         .lastUpdatedTime(now)
                         .build();
@@ -83,7 +82,13 @@ public class MemoryOperationsService {
                     IndexRequest addRequest = new IndexRequest(longTermMemoryIndex).source(newMemory.toIndexMap());
                     addRequests.add(addRequest);
 
-                    MemoryResult memoryResult = MemoryResult.builder().memoryId(null).memory(decision.getText()).event(MemoryEvent.ADD).oldMemory(null).build();
+                    MemoryResult memoryResult = MemoryResult
+                        .builder()
+                        .memoryId(null)
+                        .memory(decision.getText())
+                        .event(MemoryEvent.ADD)
+                        .oldMemory(null)
+                        .build();
                     results.add(memoryResult);
                     break;
 
@@ -94,7 +99,13 @@ public class MemoryOperationsService {
 
                     UpdateRequest updateRequest = new UpdateRequest(longTermMemoryIndex, decision.getId()).doc(updateDoc);
                     updateRequests.add(updateRequest);
-                    memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.UPDATE).oldMemory(decision.getOldMemory()).build();
+                    memoryResult = MemoryResult
+                        .builder()
+                        .memoryId(decision.getId())
+                        .memory(decision.getText())
+                        .event(MemoryEvent.UPDATE)
+                        .oldMemory(decision.getOldMemory())
+                        .build();
                     results.add(memoryResult);
                     break;
 
@@ -102,7 +113,13 @@ public class MemoryOperationsService {
                     DeleteRequest deleteRequest = new DeleteRequest(longTermMemoryIndex, decision.getId());
                     deleteRequests.add(deleteRequest);
 
-                    memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.DELETE).oldMemory(null).build();
+                    memoryResult = MemoryResult
+                        .builder()
+                        .memoryId(decision.getId())
+                        .memory(decision.getText())
+                        .event(MemoryEvent.DELETE)
+                        .oldMemory(null)
+                        .build();
                     results.add(memoryResult);
                     break;
 
@@ -177,12 +194,12 @@ public class MemoryOperationsService {
         history.put(MEMORY_ID_FIELD, memoryResult.getMemoryId());
         history.put(MEMORY_ACTION_FIELD, memoryResult.getEvent().getValue());
         if (memoryResult.getOldMemory() != null) {
-            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));//TODO: support other fields like namespace
+            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));// TODO: support other fields like namespace
         }
         if (memoryResult.getMemory() != null) {
-            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));//TODO: support other fields like namespace
+            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));// TODO: support other fields like namespace
         }
-        history.put(CREATED_TIME_FIELD, Instant.now());//TODO: support other fields like namespace
+        history.put(CREATED_TIME_FIELD, Instant.now());// TODO: support other fields like namespace
         return history;
     }
 
@@ -191,7 +208,7 @@ public class MemoryOperationsService {
         List<MemoryInfo> memoryInfos,
         String sessionId,
         String indexName,
-        ActionListener<MLAddMemoriesResponse> actionListener
+        ActionListener<MLCreateEventResponse> actionListener
     ) {
         if (indexRequests.isEmpty()) {
             log.warn("No memories to index");
@@ -205,7 +222,7 @@ public class MemoryOperationsService {
     public void createFactMemoriesFromList(
         List<String> facts,
         String indexName,
-        MLAddMemoriesInput input,
+        MLCreateEventInput input,
         Map<String, String> strategyNameSpace,
         User user,
         List<IndexRequest> indexRequests,
@@ -218,7 +235,6 @@ public class MemoryOperationsService {
                 .memory(fact)
                 .memoryType(MemoryType.SEMANTIC)
                 .namespace(strategyNameSpace)
-                .tags(input.getTags())
                 .createdTime(now)
                 .lastUpdatedTime(now)
                 .build();
@@ -237,11 +253,11 @@ public class MemoryOperationsService {
         String sessionId,
         String indexName,
         List<MemoryResult> results,
-        ActionListener<MLAddMemoriesResponse> actionListener
+        ActionListener<MLCreateEventResponse> actionListener
     ) {
         if (currentIndex >= indexRequests.size()) {
             log.debug("Successfully indexed {} memories in index {}", indexRequests.size(), indexName);
-            MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(results).sessionId(sessionId).build();
+            MLCreateEventResponse response = MLCreateEventResponse.builder().eventId(null).sessionId(sessionId).build();
             actionListener.onResponse(response);
             return;
         }

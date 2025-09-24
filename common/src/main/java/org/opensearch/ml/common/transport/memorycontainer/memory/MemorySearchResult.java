@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -38,7 +37,6 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
     private final String userId;
     private final MemoryType memoryType;
     private final String role;
-    private final Map<String, String> tags;
     private final Instant createdTime;
     private final Instant lastUpdatedTime;
 
@@ -51,7 +49,6 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         String userId,
         MemoryType memoryType,
         String role,
-        Map<String, String> tags,
         Instant createdTime,
         Instant lastUpdatedTime
     ) {
@@ -63,7 +60,6 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         this.userId = userId;
         this.memoryType = memoryType;
         this.role = role;
-        this.tags = tags;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
     }
@@ -78,11 +74,6 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         String memoryTypeStr = in.readOptionalString();
         this.memoryType = memoryTypeStr != null ? MemoryType.fromString(memoryTypeStr) : null;
         this.role = in.readOptionalString();
-        if (in.readBoolean()) {
-            this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
-        } else {
-            this.tags = null;
-        }
         this.createdTime = in.readOptionalInstant();
         this.lastUpdatedTime = in.readOptionalInstant();
     }
@@ -97,12 +88,6 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         out.writeOptionalString(userId);
         out.writeOptionalString(memoryType != null ? memoryType.toString() : null);
         out.writeOptionalString(role);
-        if (tags != null && !tags.isEmpty()) {
-            out.writeBoolean(true);
-            out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
-        } else {
-            out.writeBoolean(false);
-        }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdatedTime);
     }
@@ -127,9 +112,6 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         }
         if (role != null) {
             builder.field(ROLE_FIELD, role);
-        }
-        if (tags != null && !tags.isEmpty()) {
-            builder.field(TAGS_FIELD, tags);
         }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
