@@ -12,6 +12,7 @@ import static org.opensearch.ml.engine.function_calling.OpenaiV1ChatCompletionsF
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
+import java.io.IOException;
 import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -274,14 +275,25 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
          */
         @Override
         public void onFailure(EventSource eventSource, Throwable t, Response response) {
-            log.error("SSE failure.");
             if (t != null) {
+                // Network/connection error
                 log.error("Error: " + t.getMessage(), t);
                 if (t instanceof StreamResetException && t.getMessage().contains("NO_ERROR")) {
                     // TODO: reconnect
                 } else {
-                    streamActionListener.onFailure(new MLException("SSE failure.", t));
+                    streamActionListener.onFailure(new MLException("SSE failure with network error", t));
                 }
+            } else if (response != null) {
+                // HTTP error (e.g., 400 Bad Request)
+                try {
+                    String errorBody = response.body() != null ? response.body().string() : "";
+                    streamActionListener.onFailure(new MLException("Error from remote service: " + errorBody));
+                } catch (IOException e) {
+                    streamActionListener.onFailure(new MLException("SSE failure - unable to read error details"));
+                }
+            } else {
+                // Unknown failure
+                streamActionListener.onFailure(new MLException("SSE failure"));
             }
         }
 

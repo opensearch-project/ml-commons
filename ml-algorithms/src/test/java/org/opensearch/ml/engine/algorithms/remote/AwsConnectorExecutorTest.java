@@ -264,7 +264,7 @@ public class AwsConnectorExecutorTest {
             );
 
         Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
+        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any(), null);
     }
 
     @Test

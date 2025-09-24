@@ -367,6 +367,10 @@ public class HttpConnector extends AbstractConnector {
     }
 
     private boolean neededStreamParameterInPayload(Map<String, String> parameters) {
+        if (parameters == null) {
+            return false;
+        }
+
         boolean isStream = parameters.containsKey("stream");
         if (!isStream) {
             return false;

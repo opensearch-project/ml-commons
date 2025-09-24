@@ -1,12 +1,26 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.algorithms.remote;
 
-import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.transport.TransportResponse;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.TransportRequest;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class StreamPredictActionListener<Response extends TransportResponse, Request extends TransportRequest>
     implements
         ActionListener<Response> {
@@ -46,10 +60,32 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
     @Override
     public void onFailure(Exception e) {
         try {
-            channel.sendResponse(e);
-        } catch (IOException exc) {
+            MLTaskResponse errorResponse = createErrorResponse(e);
+            channel.sendResponseBatch(errorResponse);
             channel.completeStream();
-            throw new RuntimeException(exc);
+        } catch (Exception exc) {
+            try {
+                channel.completeStream();
+            } catch (Exception streamException) {
+                log.error("Failed to complete stream", streamException);
+            }
         }
+    }
+
+    private MLTaskResponse createErrorResponse(Exception error) {
+        String errorMessage = error.getMessage();
+        if (errorMessage == null || errorMessage.trim().isEmpty()) {
+            errorMessage = "Request failed";
+        }
+
+        Map<String, Object> errorData = new LinkedHashMap<>();
+        errorData.put("error", errorMessage);
+        errorData.put("is_last", true);
+
+        ModelTensor errorTensor = ModelTensor.builder().name("error").dataAsMap(errorData).build();
+        ModelTensors errorTensors = ModelTensors.builder().mlModelTensors(List.of(errorTensor)).build();
+        ModelTensorOutput errorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(errorTensors)).build();
+
+        return MLTaskResponse.builder().output(errorOutput).build();
     }
 }
