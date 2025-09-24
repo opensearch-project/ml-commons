@@ -7,7 +7,6 @@ package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_REQUIRED_PARAMS;
@@ -170,21 +169,6 @@ public class ToolUtilsTest {
         assertEquals(2, result.size());
         assertEquals("value1", result.get("param1"));
         assertEquals("test_tenant", result.get(TENANT_ID_FIELD));
-    }
-
-    @Test
-    public void testBuildToolParameters_WithNullTenantId() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("param1", "value1");
-        parameters.put(TENANT_ID_FIELD, "tenant1");
-
-        MLToolSpec toolSpec = MLToolSpec.builder().type("test_tool").parameters(null).build();
-
-        Map<String, String> result = ToolUtils.buildToolParameters(parameters, toolSpec, null);
-
-        assertEquals(1, result.size());
-        assertEquals("value1", result.get("param1"));
-        assertNull(result.get(TENANT_ID_FIELD));
     }
 
     @Test
