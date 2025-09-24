@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_ESCAPED;
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_ESCAPE_OUTPUT;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
@@ -121,7 +121,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                             StringUtils
                                 .prepareJsonValue(
                                     filteredOutput,
-                                    Boolean.parseBoolean(toolParameters.getOrDefault(TOOL_OUTPUT_ESCAPED, "false"))
+                                    Boolean.parseBoolean(toolParameters.getOrDefault(TOOL_ESCAPE_OUTPUT, "false"))
                                 )
                         );
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
