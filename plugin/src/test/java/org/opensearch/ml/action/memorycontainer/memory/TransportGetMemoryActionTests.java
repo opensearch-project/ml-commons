@@ -437,6 +437,74 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             + "}";
     }
 
+    private String createMemoryJsonWithDenseEmbedding() {
+        long currentTimeEpoch = System.currentTimeMillis();
+        return "{"
+            + "\"session_id\":\"test-session\","
+            + "\"memory\":\"Test memory with dense embedding\","
+            + "\"memory_type\":\"RAW_MESSAGE\","
+            + "\"user_id\":\"test-user\","
+            + "\"created_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"last_updated_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"memory_embedding\":[0.1,0.2,0.3,0.4]"
+            + "}";
+    }
+
+    private String createMemoryJsonWithSparseEmbedding() {
+        long currentTimeEpoch = System.currentTimeMillis();
+        return "{"
+            + "\"session_id\":\"test-session\","
+            + "\"memory\":\"Test memory with sparse embedding\","
+            + "\"memory_type\":\"RAW_MESSAGE\","
+            + "\"user_id\":\"test-user\","
+            + "\"created_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"last_updated_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"memory_embedding\":{\"token1\":0.5,\"token2\":0.8,\"token3\":0.2}"
+            + "}";
+    }
+
+    private String createMemoryJsonWithWrappedEmbedding() {
+        long currentTimeEpoch = System.currentTimeMillis();
+        return "{"
+            + "\"session_id\":\"test-session\","
+            + "\"memory\":\"Test memory with wrapped embedding\","
+            + "\"memory_type\":\"RAW_MESSAGE\","
+            + "\"user_id\":\"test-user\","
+            + "\"created_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"last_updated_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"memory_embedding\":{\"values\":[0.1,0.2,0.3]}"
+            + "}";
+    }
+
+    private String createMemoryJsonWithInvalidEmbedding() {
+        long currentTimeEpoch = System.currentTimeMillis();
+        return "{"
+            + "\"session_id\":\"test-session\","
+            + "\"memory\":\"Test memory with invalid embedding\","
+            + "\"memory_type\":\"RAW_MESSAGE\","
+            + "\"user_id\":\"test-user\","
+            + "\"created_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"last_updated_time\":"
+            + currentTimeEpoch
+            + ","
+            + "\"memory_embedding\":\"invalid_string_embedding\""
+            + "}";
+    }
+
     @Test
     public void testDoExecuteWithFeatureDisabled() {
         // Setup feature flag to be disabled
@@ -460,5 +528,150 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         
         // Verify that no other operations were attempted
         verify(memoryContainerHelper, never()).getMemoryContainer(any(String.class), any(ActionListener.class));
+    }
+
+    @Test
+    public void testDoExecuteWithDenseEmbeddingArray() {
+        // Setup request
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+
+        // Setup memory container helper to return container
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(testMemoryContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+
+        // Setup client to return response with dense embedding as array
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
+            when(getResponse.isExists()).thenReturn(true);
+            when(getResponse.getSourceAsString()).thenReturn(createMemoryJsonWithDenseEmbedding());
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+
+        // Execute
+        action.doExecute(task, getRequest, actionListener);
+
+        // Verify successful response
+        ArgumentCaptor<MLGetMemoryResponse> responseCaptor = forClass(MLGetMemoryResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+
+        MLGetMemoryResponse capturedResponse = responseCaptor.getValue();
+        assertNotNull(capturedResponse);
+        MLMemory returnedMemory = capturedResponse.getMlMemory();
+        assertNotNull(returnedMemory);
+        assertNotNull(returnedMemory.getMemoryEmbedding());
+    }
+
+    @Test
+    public void testDoExecuteWithSparseEmbeddingObject() {
+        // Setup request
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+
+        // Setup memory container helper to return container
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(testMemoryContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+
+        // Setup client to return response with sparse embedding as object
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
+            when(getResponse.isExists()).thenReturn(true);
+            when(getResponse.getSourceAsString()).thenReturn(createMemoryJsonWithSparseEmbedding());
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+
+        // Execute
+        action.doExecute(task, getRequest, actionListener);
+
+        // Verify successful response
+        ArgumentCaptor<MLGetMemoryResponse> responseCaptor = forClass(MLGetMemoryResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+
+        MLGetMemoryResponse capturedResponse = responseCaptor.getValue();
+        assertNotNull(capturedResponse);
+        MLMemory returnedMemory = capturedResponse.getMlMemory();
+        assertNotNull(returnedMemory);
+        assertNotNull(returnedMemory.getMemoryEmbedding());
+    }
+
+    @Test
+    public void testDoExecuteWithWrappedDenseEmbedding() {
+        // Setup request
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+
+        // Setup memory container helper to return container
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(testMemoryContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+
+        // Setup client to return response with wrapped dense embedding
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
+            when(getResponse.isExists()).thenReturn(true);
+            when(getResponse.getSourceAsString()).thenReturn(createMemoryJsonWithWrappedEmbedding());
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+
+        // Execute
+        action.doExecute(task, getRequest, actionListener);
+
+        // Verify successful response
+        ArgumentCaptor<MLGetMemoryResponse> responseCaptor = forClass(MLGetMemoryResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+
+        MLGetMemoryResponse capturedResponse = responseCaptor.getValue();
+        assertNotNull(capturedResponse);
+        MLMemory returnedMemory = capturedResponse.getMlMemory();
+        assertNotNull(returnedMemory);
+        assertNotNull(returnedMemory.getMemoryEmbedding());
+    }
+
+    @Test
+    public void testDoExecuteWithInvalidEmbeddingType() {
+        // Setup request
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+
+        // Setup memory container helper to return container
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(testMemoryContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
+
+        // Setup client to return response with invalid embedding type (string)
+        doAnswer(invocation -> {
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
+            when(getResponse.isExists()).thenReturn(true);
+            when(getResponse.getSourceAsString()).thenReturn(createMemoryJsonWithInvalidEmbedding());
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+
+        // Execute
+        action.doExecute(task, getRequest, actionListener);
+
+        // Verify successful response (should gracefully handle invalid embedding)
+        ArgumentCaptor<MLGetMemoryResponse> responseCaptor = forClass(MLGetMemoryResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+
+        MLGetMemoryResponse capturedResponse = responseCaptor.getValue();
+        assertNotNull(capturedResponse);
+        MLMemory returnedMemory = capturedResponse.getMlMemory();
+        assertNotNull(returnedMemory);
+        // Invalid embedding should be null (gracefully handled)
+        assertNull(returnedMemory.getMemoryEmbedding());
     }
 }
