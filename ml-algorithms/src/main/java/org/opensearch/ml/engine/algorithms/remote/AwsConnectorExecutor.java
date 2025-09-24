@@ -13,13 +13,11 @@ import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -43,7 +41,6 @@ import org.opensearch.transport.client.Client;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import okhttp3.OkHttpClient;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -83,15 +80,11 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     private SdkAsyncHttpClient httpClient;
 
-    private OkHttpClient okHttpClient;
-
     private BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient;
 
     @Setter
     @Getter
     private StreamTransportService streamTransportService;
-
-    private AtomicBoolean isStreamClosed = new AtomicBoolean(false);
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -101,18 +94,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
         this.bedrockRuntimeAsyncClient = buildBedrockRuntimeAsyncClient(httpClient);
-        try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                this.okHttpClient = new OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
-                    .readTimeout(1, TimeUnit.MINUTES)
-                    .retryOnConnectionFailure(true)
-                    .build();
-                return null;
-            });
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException("Failed to build OkHttpClient.", e);
-        }
     }
 
     @Override
@@ -179,6 +160,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
+            AtomicBoolean isStreamClosed = new AtomicBoolean(false);
             String llmInterface = parameters.get(LLM_INTERFACE);
             llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
@@ -196,6 +178,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             }).onError(error -> {
                 // Handle errors
                 log.error("Converse stream error: {}", error.getMessage());
+                actionListener.onFailure(new MLException("Error from remote service: " + error.getMessage(), error));
             }).onComplete(() -> {
                 // Handle completion
                 log.debug("Converse stream complete");

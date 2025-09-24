@@ -1,4 +1,3 @@
-
 /*
  * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
@@ -6,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_PREDICT_THREAD_POOL;
@@ -80,7 +80,7 @@ import reactor.core.publisher.Mono;
 @Log4j2
 public class RestMLPredictionStreamAction extends BaseRestHandler {
 
-    private static final String ML_PREDICTION_STREAM_ACTION = "ml_prediction_streaming_action";
+    private static final String ML_PREDICTION_STREAM_ACTION = "ml_prediction_stream_action";
 
     private MLModelManager modelManager;
 
@@ -118,6 +118,21 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
     }
 
     @Override
+    public boolean supportsContentStream() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsStreaming() {
+        return true;
+    }
+
+    @Override
+    public boolean allowsUnsafeBuffers() {
+        return true;
+    }
+
+    @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         if (!mlFeatureEnabledSetting.isStreamEnabled()) {
             throw new IllegalStateException(STREAM_DISABLED_ERR_MSG);
@@ -126,6 +141,11 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
         String userAlgorithm = request.param(PARAMETER_ALGORITHM);
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
+
+        // If model not in cache, validate it exists before start streaming
+        if (!functionName.isPresent()) {
+            validateModelExists(modelId, request);
+        }
 
         return channel -> {
             StreamingRestChannel streamingChannel = (StreamingRestChannel) channel;
@@ -172,6 +192,25 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
                 }
             }).subscribe();
         };
+    }
+
+    private void validateModelExists(String modelId, RestRequest request) throws IOException {
+        try {
+            CompletableFuture<MLModel> future = new CompletableFuture<>();
+
+            modelManager
+                .getModel(
+                    modelId,
+                    getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
+                    ActionListener.wrap(future::complete, future::completeExceptionally)
+                );
+
+            // Wait for validation
+            future.get(5, SECONDS);
+
+        } catch (Exception e) {
+            throw (RuntimeException) (e.getCause());
+        }
     }
 
     private void loadModelAndExecuteStreaming(
@@ -259,21 +298,6 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
             );
     }
 
-    @Override
-    public boolean supportsContentStream() {
-        return true;
-    }
-
-    @Override
-    public boolean supportsStreaming() {
-        return true;
-    }
-
-    @Override
-    public boolean allowsUnsafeBuffers() {
-        return true;
-    }
-
     /**
      * Creates a MLPredictionTaskRequest from a RestRequest
      *
@@ -282,6 +306,7 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request, BytesReference content) throws IOException {
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
@@ -305,62 +330,72 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
             RemoteInferenceMLInput input = (RemoteInferenceMLInput) mlInput;
             RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) input.getInputDataset();
             inputDataSet.getParameters().put("stream", String.valueOf(true));
-            return new MLPredictionTaskRequest(modelId, input, null, null);
+            return new MLPredictionTaskRequest(modelId, input, null, tenantId);
         }
-        return new MLPredictionTaskRequest(modelId, mlInput, null, null);
+        return new MLPredictionTaskRequest(modelId, mlInput, null, tenantId);
     }
 
     private HttpChunk convertToHttpChunk(MLTaskResponse response) throws IOException {
-        String content = "";
+        String sseData;
         boolean isLast = false;
 
-        // Extract content and is_last flag
         try {
-            ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
-            if (output != null && !output.getMlModelOutputs().isEmpty()) {
-                ModelTensors modelTensors = output.getMlModelOutputs().get(0);
-                if (!modelTensors.getMlModelTensors().isEmpty()) {
-                    Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(0).getDataAsMap();
-                    if (dataMap.containsKey("content")) {
-                        content = (String) dataMap.get("content");
-                    }
-                    if (dataMap.containsKey("is_last")) {
-                        isLast = Boolean.TRUE.equals(dataMap.get("is_last"));
-                    }
-                }
+            Map<String, ?> dataMap = extractDataMap(response);
+
+            if (dataMap.containsKey("error")) {
+                // Error response
+                String errorMessage = (String) dataMap.get("error");
+                sseData = String.format("data: {\"error\": \"%s\"}\n\n", errorMessage.replace("\"", "\\\"").replace("\n", "\\n"));
+                isLast = true;
+            } else {
+                // Regular response - extract content and build proper structure
+                String content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
+                isLast = dataMap.containsKey("is_last") ? Boolean.TRUE.equals(dataMap.get("is_last")) : false;
+
+                // Create the proper response structure
+                Map<String, Object> chunkData = new LinkedHashMap<>();
+                chunkData.put("content", content);
+                chunkData.put("is_last", isLast);
+
+                ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(chunkData).build();
+                ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+                ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+                XContentBuilder builder = XContentFactory.jsonBuilder();
+                tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                sseData = "data: " + builder.toString() + "\n\n";
             }
         } catch (Exception e) {
-            log.error("Failed to extract content from response", e);
-            content = "";
+            log.error("Failed to process response", e);
+            sseData = "data: {\"error\": \"Processing failed\"}\n\n";
+            isLast = true;
         }
+        return createHttpChunk(sseData, isLast);
+    }
 
-        // Create ModelTensorOutput structure
-        Map<String, Object> chunkData = new LinkedHashMap<>();
-        chunkData.put("content", content);
-        chunkData.put("is_last", isLast);
+    private Map<String, ?> extractDataMap(MLTaskResponse response) {
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        if (output != null && !output.getMlModelOutputs().isEmpty()) {
+            ModelTensors tensors = output.getMlModelOutputs().get(0);
+            if (!tensors.getMlModelTensors().isEmpty()) {
+                return tensors.getMlModelTensors().get(0).getDataAsMap();
+            }
+        }
+        return Map.of();
+    }
 
-        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(chunkData).build();
-        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonData = builder.toString();
-
-        String sseData = "data: " + jsonData + "\n\n";
+    private HttpChunk createHttpChunk(String sseData, boolean isLast) {
         BytesReference bytesRef = BytesReference.fromByteBuffer(ByteBuffer.wrap(sseData.getBytes()));
-
         return new HttpChunk() {
             @Override
             public void close() {
-                if (bytesRef instanceof Releasable) {
+                if (bytesRef instanceof Releasable)
                     ((Releasable) bytesRef).close();
-                }
             }
 
             @Override
             public boolean isLast() {
-                return false;
+                return isLast;
             }
 
             @Override
