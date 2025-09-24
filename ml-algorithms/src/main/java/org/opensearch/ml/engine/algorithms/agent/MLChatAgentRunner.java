@@ -177,8 +177,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         if (functionCalling != null) {
             functionCalling.configure(params);
         }
-
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = mlAgent.getMemory() == null ? null : mlAgent.getMemory().getType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
         String title = params.get(MLAgentExecutor.QUESTION);
@@ -186,6 +185,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
+
+        if (memoryType == null || memoryType.isBlank()) {
+            runAgent(mlAgent, params, listener, null, null, functionCalling);
+            return;
+        }
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
@@ -327,7 +331,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
 
-        List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
+        List<ModelTensors> traceTensors = (conversationIndexMemory == null)
+            ? new ArrayList<>()
+            : createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
@@ -552,8 +558,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
     }
 
-    private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
-        List<ModelTensors> finalModelTensors = sessionId;
+    private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> modelTensorsList, List<ModelTensor> lastThought) {
+        List<ModelTensors> finalModelTensors = modelTensorsList;
         finalModelTensors.add(ModelTensors.builder().mlModelTensors(lastThought).build());
         return finalModelTensors;
     }
@@ -760,19 +766,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
         List<ModelTensors> cotModelTensors = new ArrayList<>();
 
-        cotModelTensors
-            .add(
-                ModelTensors
-                    .builder()
-                    .mlModelTensors(
-                        List
-                            .of(
-                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
-                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
-                            )
-                    )
-                    .build()
-            );
+        if (sessionId != null && !sessionId.isBlank()) {
+            cotModelTensors
+                .add(
+                    ModelTensors
+                        .builder()
+                        .mlModelTensors(
+                            List
+                                .of(
+                                    ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
+                                    ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
+                                )
+                        )
+                        .build()
+                );
+        }
         return cotModelTensors;
     }
 
