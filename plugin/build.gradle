@@ -488,6 +488,15 @@ configurations.all {
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
     resolutionStrategy.force 'com.google.code.gson:gson:2.13.2'
     resolutionStrategy.force "com.google.errorprone:error_prone_annotations:${versions.error_prone_annotations}"
+    resolutionStrategy.force 'software.amazon.awssdk:bom:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:auth:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:aws-core:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:aws-query-protocol:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:aws-xml-protocol:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:protocol-core:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:regions:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:netty-nio-client:2.30.31'
+    resolutionStrategy.force 'software.amazon.awssdk:s3:2.30.31'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
