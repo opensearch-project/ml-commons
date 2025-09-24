@@ -58,7 +58,6 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
-import org.opensearch.identity.PluginSubject;
 import org.opensearch.index.analysis.AnalyzerProvider;
 import org.opensearch.index.analysis.PreBuiltAnalyzerProviderFactory;
 import org.opensearch.index.analysis.PreConfiguredTokenizer;
@@ -392,13 +391,11 @@ import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.ml.tools.GetToolTransportAction;
 import org.opensearch.ml.tools.ListToolsTransportAction;
 import org.opensearch.ml.utils.IndexUtils;
-import org.opensearch.ml.utils.PluginClient;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.AnalysisPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
-import org.opensearch.plugins.IdentityAwarePlugin;
 import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
@@ -440,8 +437,7 @@ public class MachineLearningPlugin extends Plugin
         IngestPlugin,
         SystemIndexPlugin,
         TelemetryAwarePlugin,
-        JobSchedulerExtension,
-        IdentityAwarePlugin {
+        JobSchedulerExtension {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
@@ -475,7 +471,6 @@ public class MachineLearningPlugin extends Plugin
     private MLEngine mlEngine;
 
     private Client client;
-    private PluginClient pluginClient;
     private ClusterService clusterService;
     private ThreadPool threadPool;
     private Set<String> indicesToListen;
@@ -610,7 +605,6 @@ public class MachineLearningPlugin extends Plugin
     ) {
         this.indexUtils = new IndexUtils(client, clusterService);
         this.client = client;
-        this.pluginClient = new PluginClient(client);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
@@ -904,8 +898,7 @@ public class MachineLearningPlugin extends Plugin
                 cmHandler,
                 sdkClient,
                 toolFactoryWrapper,
-                mcpToolsHelper,
-                pluginClient
+                mcpToolsHelper
             );
     }
 
@@ -1454,10 +1447,4 @@ public class MachineLearningPlugin extends Plugin
         return (parser, id, jobDocVersion) -> MLJobParameter.parse(parser);
     }
 
-    @Override
-    public void assignSubject(PluginSubject pluginSubject) {
-        if (this.pluginClient != null) {
-            this.pluginClient.setSubject(pluginSubject);
-        }
-    }
 }

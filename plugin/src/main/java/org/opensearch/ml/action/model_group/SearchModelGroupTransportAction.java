@@ -25,7 +25,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.utils.PluginClient;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -42,7 +41,6 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class SearchModelGroupTransportAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
     Client client;
-    PluginClient pluginClient;
     SdkClient sdkClient;
     ClusterService clusterService;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -57,12 +55,10 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         SdkClient sdkClient,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        PluginClient pluginClient
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelGroupSearchAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
-        this.pluginClient = pluginClient;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -97,7 +93,6 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
                 // If a model-group is shared, then it will have been shared at-least at read access, hence the final result is guaranteed
                 // to only contain model-groups that the user at-least has read access to.
                 addAccessibleModelGroupsFilterAndSearch(tenantId, request, doubleWrappedListener);
-                // pluginClient.search(request, doubleWrappedListener);
                 return;
             }
             if (!modelAccessControlHelper.skipModelAccessControl(user)) {
