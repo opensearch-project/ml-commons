@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -31,7 +32,6 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 import org.reactivestreams.Publisher;
@@ -191,7 +191,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        assert captor.getValue().getMessage().equals("Error communicating with remote model: runtime exception");
+        assertEquals("Error communicating with remote model: runtime exception", captor.getValue().getMessage());
     }
 
     @Test
@@ -209,7 +209,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
     public void test_onNext() {
         test_onSubscribe();// set the subscription to non-null.
         responseSubscriber.onNext(ByteBuffer.wrap("hello world".getBytes()));
-        assert mlSdkAsyncHttpResponseHandler.getResponseBody().toString().equals("hello world");
+        assertEquals("hello world", mlSdkAsyncHttpResponseHandler.getResponseBody().toString());
     }
 
     @Test
@@ -221,7 +221,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        assert captor.getValue().getMessage().equals("Remote service returned error status 500 with empty body");
+        assertEquals("Remote service returned error status 500 with empty body", captor.getValue().getMessage());
     }
 
     @Test
@@ -283,7 +283,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         mlSdkAsyncHttpResponseHandler.onStream(stream);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("Error from remote service: Model current status is: FAILED");
+        assertEquals("Error from remote service: Model current status is: FAILED", captor.getValue().getMessage());
         assert captor.getValue().status().getStatus() == 500;
     }
 
@@ -302,7 +302,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         mlSdkAsyncHttpResponseHandler.onStream(stream);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("Remote service returned empty response body");
+        assertEquals("Remote service returned empty response body", captor.getValue().getMessage());
     }
 
     @Test
@@ -380,14 +380,12 @@ public class MLSdkAsyncHttpResponseHandlerTest {
 
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(RemoteConnectorThrottlingException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor
-            .getValue()
-            .getMessage()
-            .equals(
-                "Error from remote service: The request was denied due to remote server throttling. "
-                    + "To change the retry policy and behavior, please update the connector client_config."
-            );
         assert captor.getValue().status().getStatus() == HttpStatusCode.BAD_REQUEST;
+        assertEquals(
+            "Error from remote service: The request was denied due to remote server throttling. "
+                + "To change the retry policy and behavior, please update the connector client_config.",
+            captor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -416,8 +414,39 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         };
         mlSdkAsyncHttpResponseHandler.onStream(stream);
 
-        ArgumentCaptor<MLException> captor = ArgumentCaptor.forClass(MLException.class);
+        ArgumentCaptor<IllegalArgumentException> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("Fail to execute PREDICT in aws connector");
+        assertEquals("no PREDICT action found", captor.getValue().getMessage());
+    }
+
+    /**
+     * Asserts that IllegalArgumentException is propagated where post-processing function fails
+     * on response
+     */
+    @Test
+    public void onComplete_InvalidEmbeddingBedRockPostProcessingOccurs_IllegalArgumentExceptionThrown() {
+        String invalidEmbeddingResponse = "{ \"embedding\": [[1]] }";
+
+        mlSdkAsyncHttpResponseHandler.onHeaders(sdkHttpResponse);
+        Publisher<ByteBuffer> stream = s -> {
+            try {
+                s.onSubscribe(mock(Subscription.class));
+                s.onNext(ByteBuffer.wrap(invalidEmbeddingResponse.getBytes()));
+                s.onComplete();
+            } catch (Throwable e) {
+                s.onError(e);
+            }
+        };
+        mlSdkAsyncHttpResponseHandler.onStream(stream);
+
+        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+
+        // Error message
+        assertEquals(
+            "BedrockEmbeddingPostProcessFunction exception message should match",
+            "The embedding should be a non-empty List containing Float values.",
+            exceptionCaptor.getValue().getMessage()
+        );
     }
 }
