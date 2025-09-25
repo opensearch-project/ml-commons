@@ -155,7 +155,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
 
     private SearchRequest buildSearchRequest(String query, MemoryConfiguration memoryConfig, String indexName) throws IOException {
         // Note: Size limit removed - search will return all matching results
-         int maxResults = memoryConfig != null ? memoryConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
+        int maxResults = memoryConfig != null ? memoryConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
 
         // Use utility class to build the appropriate query
         XContentBuilder queryBuilder = MemorySearchQueryBuilder.buildQueryByStorageType(query, memoryConfig);

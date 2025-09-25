@@ -83,7 +83,13 @@ public class MemoryOperationsService {
                     IndexRequest addRequest = new IndexRequest(longTermMemoryIndex).source(newMemory.toIndexMap());
                     addRequests.add(addRequest);
 
-                    MemoryResult memoryResult = MemoryResult.builder().memoryId(null).memory(decision.getText()).event(MemoryEvent.ADD).oldMemory(null).build();
+                    MemoryResult memoryResult = MemoryResult
+                        .builder()
+                        .memoryId(null)
+                        .memory(decision.getText())
+                        .event(MemoryEvent.ADD)
+                        .oldMemory(null)
+                        .build();
                     results.add(memoryResult);
                     break;
 
@@ -94,7 +100,13 @@ public class MemoryOperationsService {
 
                     UpdateRequest updateRequest = new UpdateRequest(longTermMemoryIndex, decision.getId()).doc(updateDoc);
                     updateRequests.add(updateRequest);
-                    memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.UPDATE).oldMemory(decision.getOldMemory()).build();
+                    memoryResult = MemoryResult
+                        .builder()
+                        .memoryId(decision.getId())
+                        .memory(decision.getText())
+                        .event(MemoryEvent.UPDATE)
+                        .oldMemory(decision.getOldMemory())
+                        .build();
                     results.add(memoryResult);
                     break;
 
@@ -102,7 +114,13 @@ public class MemoryOperationsService {
                     DeleteRequest deleteRequest = new DeleteRequest(longTermMemoryIndex, decision.getId());
                     deleteRequests.add(deleteRequest);
 
-                    memoryResult = MemoryResult.builder().memoryId(decision.getId()).memory(decision.getText()).event(MemoryEvent.DELETE).oldMemory(null).build();
+                    memoryResult = MemoryResult
+                        .builder()
+                        .memoryId(decision.getId())
+                        .memory(decision.getText())
+                        .event(MemoryEvent.DELETE)
+                        .oldMemory(null)
+                        .build();
                     results.add(memoryResult);
                     break;
 
@@ -177,12 +195,12 @@ public class MemoryOperationsService {
         history.put(MEMORY_ID_FIELD, memoryResult.getMemoryId());
         history.put(MEMORY_ACTION_FIELD, memoryResult.getEvent().getValue());
         if (memoryResult.getOldMemory() != null) {
-            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));//TODO: support other fields like namespace
+            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));// TODO: support other fields like namespace
         }
         if (memoryResult.getMemory() != null) {
-            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));//TODO: support other fields like namespace
+            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));// TODO: support other fields like namespace
         }
-        history.put(CREATED_TIME_FIELD, Instant.now());//TODO: support other fields like namespace
+        history.put(CREATED_TIME_FIELD, Instant.now());// TODO: support other fields like namespace
         return history;
     }
 

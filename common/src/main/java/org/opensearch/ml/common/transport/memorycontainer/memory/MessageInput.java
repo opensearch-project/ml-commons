@@ -42,7 +42,7 @@ public class MessageInput implements ToXContentObject, Writeable {
         this.contentText = contentText;
         this.content = content;
 
-        if (role == null || (content == null && contentText == null) ) {
+        if (role == null || (content == null && contentText == null)) {
             throw new IllegalArgumentException("Message must have role and content");
         }
     }
@@ -70,7 +70,7 @@ public class MessageInput implements ToXContentObject, Writeable {
         if (contentText != null) {
             out.writeBoolean(true);
             out.writeMap(content);
-        } else  {
+        } else {
             out.writeBoolean(false);
         }
     }

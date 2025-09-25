@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 
-import lombok.Setter;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -18,6 +17,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
 
 /**

@@ -149,49 +149,67 @@ public class TransportCreateMemoryContainerAction extends
             .build();
     }
 
-    private void createMemoryDataIndices(
-        MLMemoryContainer container,
-        User user,
-        ActionListener<String> listener
-    ) {
+    private void createMemoryDataIndices(MLMemoryContainer container, User user, ActionListener<String> listener) {
         String userId = user != null ? user.getName() : "default";
         MemoryConfiguration configuration = container.getConfiguration();
         String indexPrefix = configuration != null ? configuration.getIndexPrefix() : null;
 
         // Convert to lowercase as OpenSearch doesn't support uppercase in index names
         final String sessionIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-session";
-        final String shortTermMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-short-term-memory";
+        final String workingMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-working-memory";
         final String longTermMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-long-term-memory";
         final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName();
 
         if (configuration.getLlmId() == null || configuration.getStrategies().isEmpty()) {
-            mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
+            mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
                 // Return the actual index name that was created
                 // Create the memory data index with appropriate mapping
-                listener.onResponse(shortTermMemoryIndexName);
+                listener.onResponse(workingMemoryIndexName);
             }, listener::onFailure));
         } else {
             if (configuration.isDisableSession()) {
-                createMemoryIndexes(container, listener, configuration, shortTermMemoryIndexName, longTermMemoryIndexName, longTermMemoryHistoryIndexName);
+                createMemoryIndexes(
+                    container,
+                    listener,
+                    configuration,
+                    workingMemoryIndexName,
+                    longTermMemoryIndexName,
+                    longTermMemoryHistoryIndexName
+                );
             } else {
                 mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
-                    createMemoryIndexes(container, listener, configuration, shortTermMemoryIndexName, longTermMemoryIndexName, longTermMemoryHistoryIndexName);
+                    createMemoryIndexes(
+                        container,
+                        listener,
+                        configuration,
+                        workingMemoryIndexName,
+                        longTermMemoryIndexName,
+                        longTermMemoryHistoryIndexName
+                    );
                 }, listener::onFailure));
             }
 
         }
     }
 
-    private void createMemoryIndexes(MLMemoryContainer container, ActionListener<String> listener, MemoryConfiguration configuration, String shortTermMemoryIndexName, String longTermMemoryIndexName, String longTermMemoryHistoryIndexName) {
-        mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
+    private void createMemoryIndexes(
+        MLMemoryContainer container,
+        ActionListener<String> listener,
+        MemoryConfiguration configuration,
+        String workingMemoryIndexName,
+        String longTermMemoryIndexName,
+        String longTermMemoryHistoryIndexName
+    ) {
+        mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
             // Return the actual index name that was created
             // Create the memory data index with appropriate mapping
             createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {
                 // Return the actual index name that was created
                 if (!configuration.isDisableHistory()) {
-                    mlIndicesHandler.createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
-                        listener.onResponse(longTermMemoryIndexName);
-                    }, listener::onFailure));
+                    mlIndicesHandler
+                        .createLongTermMemoryHistoryIndex(longTermMemoryHistoryIndexName, configuration, ActionListener.wrap(success2 -> {
+                            listener.onResponse(longTermMemoryIndexName);
+                        }, listener::onFailure));
                 } else {
                     listener.onResponse(longTermMemoryIndexName);
                 }
@@ -207,9 +225,7 @@ public class TransportCreateMemoryContainerAction extends
                 createTextEmbeddingPipeline(pipelineName, memoryConfig, ActionListener.wrap(success -> {
                     log.info("Successfully created text embedding pipeline: {}", indexName + "-embedding");
                     mlIndicesHandler.createLongTermMemoryIndex(pipelineName, indexName, memoryConfig, listener);
-                }, e -> {
-                    log.error("Failed to create text embedding pipeline", e);
-                }));
+                }, e -> { log.error("Failed to create text embedding pipeline", e); }));
             } else {
                 mlIndicesHandler.createLongTermMemoryIndex(null, indexName, memoryConfig, listener);
             }
@@ -219,37 +235,35 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void createTextEmbeddingPipeline(String pipelineName, MemoryConfiguration memoryConfig,
-                                             ActionListener<Boolean> listener) throws IOException {
-        String processorName = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING? "text_embedding":"sparse_encoding";
-        XContentBuilder builder = XContentFactory.jsonBuilder()
-                .startObject()
-                .field("description", "Agentic Memory Text embedding pipeline")
-                .startArray("processors")
-                .startObject()
-                .startObject(processorName)
-                .field("model_id", memoryConfig.getEmbeddingModelId())
-                .startObject("field_map")
-                .field(MEMORY_FIELD, MEMORY_EMBEDDING_FIELD)
-                .endObject()
-                .endObject()
-                .endObject()
-                .endArray()
-                .endObject();
+    private void createTextEmbeddingPipeline(String pipelineName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener)
+        throws IOException {
+        String processorName = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING ? "text_embedding" : "sparse_encoding";
+        XContentBuilder builder = XContentFactory
+            .jsonBuilder()
+            .startObject()
+            .field("description", "Agentic Memory Text embedding pipeline")
+            .startArray("processors")
+            .startObject()
+            .startObject(processorName)
+            .field("model_id", memoryConfig.getEmbeddingModelId())
+            .startObject("field_map")
+            .field(MEMORY_FIELD, MEMORY_EMBEDDING_FIELD)
+            .endObject()
+            .endObject()
+            .endObject()
+            .endArray()
+            .endObject();
 
         BytesReference source = BytesReference.bytes(builder);
         PutPipelineRequest request = new PutPipelineRequest(pipelineName, source, XContentType.JSON);
 
-        client.admin().cluster().putPipeline(request, ActionListener.wrap(
-                response -> {
-                    log.info("Pipeline created: {}", pipelineName);
-                    listener.onResponse(true);
-                },
-                error -> {
-                    log.error("Failed to create pipeline", error);
-                    listener.onFailure(error);
-                }
-        ));
+        client.admin().cluster().putPipeline(request, ActionListener.wrap(response -> {
+            log.info("Pipeline created: {}", pipelineName);
+            listener.onResponse(true);
+        }, error -> {
+            log.error("Failed to create pipeline", error);
+            listener.onFailure(error);
+        }));
     }
 
     private void indexMemoryContainer(MLMemoryContainer container, ActionListener<String> listener) {

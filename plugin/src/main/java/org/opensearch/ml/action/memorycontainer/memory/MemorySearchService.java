@@ -50,7 +50,7 @@ public class MemorySearchService {
         int maxInferSize = memoryConfig != null && memoryConfig.getMaxInferSize() != null ? memoryConfig.getMaxInferSize() : 5;
 
         // Limit the number of facts to process based on maxInferSize
-        List<String> factsToProcess = facts.size() > maxInferSize ? facts.subList(0, maxInferSize) : facts;//TODO: check this part
+        List<String> factsToProcess = facts.size() > maxInferSize ? facts.subList(0, maxInferSize) : facts;// TODO: check this part
 
         searchFactsSequentially(strategy, input, factsToProcess, 0, memoryConfig, maxInferSize, allResults, listener);
     }
