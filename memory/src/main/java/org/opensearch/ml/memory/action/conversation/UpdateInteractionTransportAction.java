@@ -64,7 +64,7 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
         String interactionId = updateInteractionRequest.getInteractionId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             Map<String, Object> updateContent = updateInteractionRequest.getUpdateContent();
-            updateContent.putIfAbsent(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, Instant.now());
+            updateContent.put(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, Instant.now());
 
             cmHandler.updateInteraction(interactionId, updateContent, getUpdateResponseListener(interactionId, listener, context));
         } catch (Exception e) {
