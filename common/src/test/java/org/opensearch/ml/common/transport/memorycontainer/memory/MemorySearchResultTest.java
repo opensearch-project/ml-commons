@@ -24,7 +24,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 public class MemorySearchResultTest {
 
@@ -53,7 +53,7 @@ public class MemorySearchResultTest {
             .sessionId("session-456")
             .agentId("agent-789")
             .userId("user-101")
-            .memoryType(MemoryStrategyType.SEMANTIC)
+            .memoryType(MemoryType.RAW_MESSAGE)
             .role("user")
             .tags(testTags)
             .createdTime(testCreatedTime)
@@ -88,7 +88,7 @@ public class MemorySearchResultTest {
         assertEquals("session-456", resultWithAllFields.getSessionId());
         assertEquals("agent-789", resultWithAllFields.getAgentId());
         assertEquals("user-101", resultWithAllFields.getUserId());
-        assertEquals(MemoryStrategyType.SEMANTIC, resultWithAllFields.getMemoryType());
+        assertEquals(MemoryType.RAW_MESSAGE, resultWithAllFields.getMemoryType());
         assertEquals("user", resultWithAllFields.getRole());
         assertEquals(testTags, resultWithAllFields.getTags());
         assertEquals(testCreatedTime, resultWithAllFields.getCreatedTime());
@@ -124,7 +124,7 @@ public class MemorySearchResultTest {
             "session-1",
             "agent-1",
             "user-1",
-            MemoryStrategyType.SEMANTIC,
+            MemoryType.SEMANTIC,
             "assistant",
             tags,
             now,
@@ -137,7 +137,7 @@ public class MemorySearchResultTest {
         assertEquals("session-1", result.getSessionId());
         assertEquals("agent-1", result.getAgentId());
         assertEquals("user-1", result.getUserId());
-        assertEquals(MemoryStrategyType.SEMANTIC, result.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, result.getMemoryType());
         assertEquals("assistant", result.getRole());
         assertEquals(tags, result.getTags());
         assertEquals(now, result.getCreatedTime());
@@ -278,7 +278,7 @@ public class MemorySearchResultTest {
             .memoryId("fact-123")
             .memory("User's name is John")
             .score(0.9f)
-            .memoryType(MemoryStrategyType.SEMANTIC)
+            .memoryType(MemoryType.SEMANTIC)
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
@@ -286,13 +286,13 @@ public class MemorySearchResultTest {
         StreamInput in = out.bytes().streamInput();
         MemorySearchResult deserialized = new MemorySearchResult(in);
 
-        assertEquals(MemoryStrategyType.SEMANTIC, deserialized.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, deserialized.getMemoryType());
 
         // Test XContent
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         factResult.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        assertTrue(jsonString.contains("\"memory_type\":\"SEMANTIC\""));
+        assertTrue(jsonString.contains("\"memory_type\":\"FACT\""));
     }
 
     @Test

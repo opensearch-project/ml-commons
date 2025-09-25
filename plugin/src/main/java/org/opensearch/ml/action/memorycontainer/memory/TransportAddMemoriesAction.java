@@ -5,15 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DATA_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
@@ -21,7 +13,6 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +24,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -45,16 +37,20 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventAction;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventRequest;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventResponse;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -66,7 +62,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class TransportCreateEventAction extends HandledTransportAction<MLCreateEventRequest, MLCreateEventResponse> {
+public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemoriesRequest, MLAddMemoriesResponse> {
 
     final Client client;
     final NamedXContentRegistry xContentRegistry;
@@ -80,61 +76,41 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
     final ThreadPool threadPool;
 
     @Inject
-    public TransportCreateEventAction(
+    public TransportAddMemoriesAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
+        ClusterService clusterService,
+        ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLModelManager mlModelManager,
         MemoryContainerHelper memoryContainerHelper,
         ThreadPool threadPool
     ) {
-        this(
-            transportService,
-            actionFilters,
-            client,
-            xContentRegistry,
-            mlFeatureEnabledSetting,
-            memoryContainerHelper,
-            new MemoryProcessingService(client, xContentRegistry),
-            new MemorySearchService(client),
-            new MemoryOperationsService(client),
-            threadPool
-        );
-    }
-
-    TransportCreateEventAction(
-        TransportService transportService,
-        ActionFilters actionFilters,
-        Client client,
-        NamedXContentRegistry xContentRegistry,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MemoryContainerHelper memoryContainerHelper,
-        MemoryProcessingService memoryProcessingService,
-        MemorySearchService memorySearchService,
-        MemoryOperationsService memoryOperationsService,
-        ThreadPool threadPool
-    ) {
-        super(MLCreateEventAction.NAME, transportService, actionFilters, MLCreateEventRequest::new);
+        super(MLAddMemoriesAction.NAME, transportService, actionFilters, MLAddMemoriesRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.memoryContainerHelper = memoryContainerHelper;
-        this.memoryProcessingService = memoryProcessingService;
-        this.memorySearchService = memorySearchService;
-        this.memoryOperationsService = memoryOperationsService;
+
+        // Initialize services
+        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        this.memorySearchService = new MemorySearchService(client);
+        this.memoryOperationsService = new MemoryOperationsService(client);
         this.threadPool = threadPool;
     }
 
     @Override
-    protected void doExecute(Task task, MLCreateEventRequest request, ActionListener<MLCreateEventResponse> actionListener) {
+    protected void doExecute(Task task, MLAddMemoriesRequest request, ActionListener<MLAddMemoriesResponse> actionListener) {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
             actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
             return;
         }
 
         User user = RestActionUtils.getUserContext(client);
-        MLCreateEventInput input = request.getMlCreateEventInput();
+        MLAddMemoriesInput input = request.getMlAddMemoryInput();
 
         if (input == null) {
             actionListener.onFailure(new IllegalArgumentException("Memory input is required"));
@@ -152,10 +128,7 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
             if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
                 actionListener
                     .onFailure(
-                        new OpenSearchStatusException(
-                            "User doesn't have permissions to create events in this container",
-                            RestStatus.FORBIDDEN
-                        )
+                        new OpenSearchStatusException("User doesn't have permissions to add memory to this container", RestStatus.FORBIDDEN)
                     );
                 return;
             }
@@ -165,10 +138,10 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
     }
 
     private void createNewSessionIfAbsent(
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         MLMemoryContainer container,
         User user,
-        ActionListener<MLCreateEventResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
             List<MessageInput> messages = input.getMessages();
@@ -177,9 +150,7 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
 
             boolean userProvidedSessionId = input.getNamespace() != null && input.getNamespace().containsKey(SESSION_ID_FIELD);
 
-            if (!userProvidedSessionId
-                && input.getMemoryType() == MemoryType.CONVERSATIONAL
-                && !configuration.isDisableSession()) {
+            if (!userProvidedSessionId && input.getMemoryType() == ShortTermMemoryType.CONVERSATION && !configuration.isDisableSession()) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
                 String summary = messages.get(0).getContentText();
@@ -197,10 +168,10 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
     }
 
     private void processAndIndexMemory(
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         MLMemoryContainer container,
         User user,
-        ActionListener<MLCreateEventResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
             List<MessageInput> messages = input.getMessages();
@@ -214,11 +185,18 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
                 return;
             }
 
-            String shortTermMemoryIndex = container.getConfiguration().getShortTermMemoryIndexName();
-            IndexRequest indexRequest = createShortTermMemoryRequest(shortTermMemoryIndex, input);
+            String workingMemoryIndex = container.getConfiguration().getWorkingMemoryIndexName();
+            IndexRequest indexRequest = createWorkingMemoryRequest(workingMemoryIndex, input);
 
             client.index(indexRequest, ActionListener.wrap(r -> {
-                MLCreateEventResponse response = MLCreateEventResponse.builder().eventId(r.getId()).sessionId(input.getSessionId()).build();
+                List<MemoryResult> allResults = new ArrayList<>();
+                // allResults.add(MemoryResult.builder().memoryId(r.getId()).build());
+                MLAddMemoriesResponse response = MLAddMemoriesResponse
+                    .builder()
+                    .results(allResults)
+                    .sessionId(input.getSessionId())
+                    .workingMemoryId(r.getId())
+                    .build();
                 actionListener.onResponse(response);
 
                 if (infer) {
@@ -231,50 +209,18 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
             }, actionListener::onFailure));
 
         } catch (Exception e) {
-            log.error("Failed to create event", e);
+            log.error("Failed to add memory", e);
             actionListener.onFailure(e);
         }
     }
 
-    private IndexRequest createShortTermMemoryRequest(String shortTermMemoryIndex, MLCreateEventInput mlCreateEventInput) {
-        IndexRequest indexRequest = new IndexRequest(shortTermMemoryIndex);
+    private IndexRequest createWorkingMemoryRequest(String workingMemoryIndex, MLAddMemoriesInput mlAddMemoriesInput) {
+        IndexRequest indexRequest = new IndexRequest(workingMemoryIndex);
 
         try {
             XContentBuilder builder = XContentFactory.jsonBuilder();
-            builder.startObject();
-
-            // Serialize event content (this duplicates MLCreateEventInput.toXContent() logic
-            // but we need to add timestamps, so we can't use toXContent directly)
-            if (mlCreateEventInput.getMemoryContainerId() != null) {
-                builder.field(MEMORY_CONTAINER_ID_FIELD, mlCreateEventInput.getMemoryContainerId());
-            }
-            if (mlCreateEventInput.getMemoryType() != null) {
-                builder.field(MEMORY_TYPE_FIELD, mlCreateEventInput.getMemoryType());
-            }
-            if (mlCreateEventInput.getMessages() != null && !mlCreateEventInput.getMessages().isEmpty()) {
-                builder.startArray(MESSAGES_FIELD);
-                for (MessageInput message : mlCreateEventInput.getMessages()) {
-                    message.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                }
-                builder.endArray();
-            }
-            if (mlCreateEventInput.getData() != null) {
-                builder.field(DATA_FIELD, mlCreateEventInput.getData());
-            }
-            if (mlCreateEventInput.getNamespace() != null && !mlCreateEventInput.getNamespace().isEmpty()) {
-                builder.field(NAMESPACE_FIELD, mlCreateEventInput.getNamespace());
-            }
-            builder.field(INFER_FIELD, mlCreateEventInput.isInfer());
-            if (mlCreateEventInput.getMetadata() != null && !mlCreateEventInput.getMetadata().isEmpty()) {
-                builder.field(METADATA_FIELD, mlCreateEventInput.getMetadata());
-            }
-
-            // Add timestamps
-            Instant now = Instant.now();
-            builder.field(CREATED_TIME_FIELD, now.toEpochMilli());
-            builder.field(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
-
-            builder.endObject();
+            // Add memory content from input object
+            mlAddMemoriesInput.toXContentWithTimeStamp(builder, ToXContent.EMPTY_PARAMS);
 
             indexRequest.source(builder);
             return indexRequest;
@@ -285,10 +231,10 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
     }
 
     private void extractLongTermMemory(
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         MLMemoryContainer container,
         User user,
-        ActionListener<MLCreateEventResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         List<MessageInput> messages = input.getMessages();
         log.debug("Processing {} messages for fact extraction", messages.size());
@@ -326,12 +272,12 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
     private void storeLongTermMemory(
         MemoryStrategy strategy,
         Map<String, String> strategyNameSpace,
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         List<MessageInput> messages,
         User user,
         List<String> facts,
         MemoryConfiguration memoryConfig,
-        ActionListener<MLCreateEventResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
@@ -353,11 +299,8 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
                                 input,
                                 memoryConfig,
                                 ActionListener.wrap(operationResults -> {
-                                    MLCreateEventResponse response = MLCreateEventResponse
-                                        .builder()
-                                        .eventId(null)
-                                        .sessionId(input.getSessionId())
-                                        .build();
+                                    List<MemoryResult> allResults = new ArrayList<>(operationResults);
+                                    MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
                                     actionListener.onResponse(response);
                                 }, actionListener::onFailure)
                             );
@@ -379,11 +322,8 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
                             input,
                             memoryConfig,
                             ActionListener.wrap(operationResults -> {
-                                MLCreateEventResponse response = MLCreateEventResponse
-                                    .builder()
-                                    .eventId(null)
-                                    .sessionId(input.getSessionId())
-                                    .build();
+                                List<MemoryResult> allResults = new ArrayList<>(operationResults);
+                                MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
                                 actionListener.onResponse(response);
                             }, actionListener::onFailure)
                         );

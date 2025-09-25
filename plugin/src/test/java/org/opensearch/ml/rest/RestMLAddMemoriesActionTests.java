@@ -12,7 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATE_EVENT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORIES_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 
 import java.util.HashMap;
@@ -31,9 +31,9 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventAction;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventRequest;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventResponse;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -43,11 +43,11 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
 
-public class RestMLCreateEventActionTests extends OpenSearchTestCase {
+public class RestMLAddMemoriesActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
-    private RestMLCreateEventAction restMLCreateEventAction;
+    private RestMLAddMemoriesAction restMLAddMemoriesAction;
     private NodeClient client;
     private ThreadPool threadPool;
 
@@ -61,15 +61,15 @@ public class RestMLCreateEventActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
-        restMLCreateEventAction = new RestMLCreateEventAction(mlFeatureEnabledSetting);
+        restMLAddMemoriesAction = new RestMLAddMemoriesAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
         doAnswer(invocation -> {
-            ActionListener<MLCreateEventResponse> actionListener = invocation.getArgument(2);
+            ActionListener<MLAddMemoriesResponse> actionListener = invocation.getArgument(2);
             return null;
-        }).when(client).execute(eq(MLCreateEventAction.INSTANCE), any(), any());
+        }).when(client).execute(eq(MLAddMemoriesAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -80,25 +80,25 @@ public class RestMLCreateEventActionTests extends OpenSearchTestCase {
     }
 
     public void testGetName() {
-        assertEquals("ml_create_event_action", restMLCreateEventAction.getName());
+        assertEquals("ml_add_memories_action", restMLAddMemoriesAction.getName());
     }
 
     public void testRoutes() {
-        List<RestHandler.Route> routes = restMLCreateEventAction.routes();
+        List<RestHandler.Route> routes = restMLAddMemoriesAction.routes();
         assertNotNull(routes);
         assertEquals(1, routes.size());
         assertEquals(RestRequest.Method.POST, routes.get(0).getMethod());
-        assertEquals(CREATE_EVENT_PATH, routes.get(0).getPath());
+        assertEquals(MEMORIES_PATH, routes.get(0).getPath());
     }
 
     public void testPrepareRequest() throws Exception {
         RestRequest request = getRestRequest();
-        restMLCreateEventAction.handleRequest(request, channel, client);
+        restMLAddMemoriesAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<MLCreateEventRequest> argumentCaptor = ArgumentCaptor.forClass(MLCreateEventRequest.class);
-        verify(client, times(1)).execute(eq(MLCreateEventAction.INSTANCE), argumentCaptor.capture(), any());
+        ArgumentCaptor<MLAddMemoriesRequest> argumentCaptor = ArgumentCaptor.forClass(MLAddMemoriesRequest.class);
+        verify(client, times(1)).execute(eq(MLAddMemoriesAction.INSTANCE), argumentCaptor.capture(), any());
 
-        MLCreateEventRequest capturedRequest = argumentCaptor.getValue();
+        MLAddMemoriesRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
     }
 
@@ -108,11 +108,11 @@ public class RestMLCreateEventActionTests extends OpenSearchTestCase {
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(CREATE_EVENT_PATH)
+            .withPath(MEMORIES_PATH)
             .withParams(params)
             .build();
 
-        Exception exception = expectThrows(Exception.class, () -> { restMLCreateEventAction.handleRequest(request, channel, client); });
+        Exception exception = expectThrows(Exception.class, () -> { restMLAddMemoriesAction.handleRequest(request, channel, client); });
 
         assertTrue(exception.getMessage().contains("empty body"));
     }
@@ -122,12 +122,12 @@ public class RestMLCreateEventActionTests extends OpenSearchTestCase {
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(CREATE_EVENT_PATH)
+            .withPath(MEMORIES_PATH)
             .withContent(new BytesArray(requestContent), MediaType.fromMediaType("application/json"))
             .build();
 
         Exception exception = expectThrows(IllegalArgumentException.class, () -> {
-            restMLCreateEventAction.handleRequest(request, channel, client);
+            restMLAddMemoriesAction.handleRequest(request, channel, client);
         });
 
         assertNotNull(exception);
@@ -140,7 +140,7 @@ public class RestMLCreateEventActionTests extends OpenSearchTestCase {
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
-            .withPath(CREATE_EVENT_PATH)
+            .withPath(MEMORIES_PATH)
             .withParams(params)
             .withContent(new BytesArray(requestContent), MediaType.fromMediaType("application/json"))
             .build();

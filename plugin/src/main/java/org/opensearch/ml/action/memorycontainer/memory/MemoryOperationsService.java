@@ -30,9 +30,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventResponse;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.transport.client.Client;
@@ -53,7 +53,7 @@ public class MemoryOperationsService {
         MemoryConfiguration memoryConfig,
         Map<String, String> namespace,
         User user,
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         MemoryConfiguration configuration,
         ActionListener<List<MemoryResult>> listener
     ) {
@@ -73,8 +73,9 @@ public class MemoryOperationsService {
                     MLMemory newMemory = MLMemory
                         .builder()
                         .memory(decision.getText())
-                        .memoryType(MemoryStrategyType.SEMANTIC)
+                        .memoryType(MemoryType.SEMANTIC)
                         .namespace(namespace)
+                        .tags(input.getTags())
                         .createdTime(now)
                         .lastUpdatedTime(now)
                         .build();
@@ -208,7 +209,7 @@ public class MemoryOperationsService {
         List<MemoryInfo> memoryInfos,
         String sessionId,
         String indexName,
-        ActionListener<MLCreateEventResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         if (indexRequests.isEmpty()) {
             log.warn("No memories to index");
@@ -222,7 +223,7 @@ public class MemoryOperationsService {
     public void createFactMemoriesFromList(
         List<String> facts,
         String indexName,
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         Map<String, String> strategyNameSpace,
         User user,
         List<IndexRequest> indexRequests,
@@ -233,8 +234,9 @@ public class MemoryOperationsService {
             MLMemory factMemory = MLMemory
                 .builder()
                 .memory(fact)
-                .memoryType(MemoryStrategyType.SEMANTIC)
+                .memoryType(MemoryType.SEMANTIC)
                 .namespace(strategyNameSpace)
+                .tags(input.getTags())
                 .createdTime(now)
                 .lastUpdatedTime(now)
                 .build();
@@ -253,11 +255,11 @@ public class MemoryOperationsService {
         String sessionId,
         String indexName,
         List<MemoryResult> results,
-        ActionListener<MLCreateEventResponse> actionListener
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         if (currentIndex >= indexRequests.size()) {
             log.debug("Successfully indexed {} memories in index {}", indexRequests.size(), indexName);
-            MLCreateEventResponse response = MLCreateEventResponse.builder().eventId(null).sessionId(sessionId).build();
+            MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(results).sessionId(sessionId).build();
             actionListener.onResponse(response);
             return;
         }

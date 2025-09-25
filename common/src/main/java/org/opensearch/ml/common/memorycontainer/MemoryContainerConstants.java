@@ -30,18 +30,17 @@ public class MemoryContainerConstants {
     public static final String LLM_ID_FIELD = "llm_id";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
     public static final String STRATEGIES_FIELD = "strategies";
-    public static final String STRATEGY_ID_FIELD = "id";
-    public static final String STRATEGY_ENABLED_FIELD = "enabled";
     public static final String STRATEGY_FIELD = "strategy";
-    public static final String STRATEGY_TYPE_FIELD = "type";  // Kept for backward compatibility
     public static final String INDEX_SETTINGS_FIELD = "index_settings";
+    public static final String ID_FIELD = "id";
+    public static final String ENABLED_FIELD = "enabled";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
 
     // Memory index setting key
     public static final String SESSION_INDEX = "session_index";
-    public static final String SHORT_TERM_MEMORY_INDEX = "short_term_memory_index";
+    public static final String WORKING_MEMORY_INDEX = "working_memory_index";
     public static final String LONG_TERM_MEMORY_INDEX = "long_term_memory_index";
     public static final String LONG_TERM_MEMORY_HISTORY_INDEX = "long_term_memory_history_index";
 
@@ -49,13 +48,15 @@ public class MemoryContainerConstants {
     public static final String USER_ID_FIELD = "user_id";
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String SESSION_ID_FIELD = "session_id";
-    public static final String EVENT_ID_FIELD = "event_id";
+    public static final String WORKING_MEMORY_ID_FIELD = "working_memory_id";
     public static final String NAMESPACE_FIELD = "namespace";
-    public static final String DATA_FIELD = "data";
+    public static final String BINARY_DATA_FIELD = "binary_data";
+    public static final String STRUCTURED_DATA_FIELD = "structured_data";
     public static final String NAMESPACE_SIZE_FIELD = "namespace_size";
     public static final String MEMORY_FIELD = "memory";
     public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";
     public static final String METADATA_FIELD = "metadata";
+    public static final String TAGS_FIELD = "tags";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String MEMORY_ACTION_FIELD = "action";
     public static final String MEMORY_BEFORE_FIELD = "before";
@@ -85,16 +86,15 @@ public class MemoryContainerConstants {
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_MEMORY_ID = "memory_id";
+    public static final String PARAMETER_WORKING_MEMORY_ID = "working_memory_id";
     public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
-    public static final String EVENTS_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/events";
-    public static final String CREATE_EVENT_PATH = EVENTS_PATH + "/_create";
-    public static final String PARAMETER_EVENT_ID = "event_id";
+    public static final String WORKING_MEMORIES_PATH = MEMORIES_PATH + "/working";
     public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/_search";
     public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
-    public static final String GET_EVENT_PATH = EVENTS_PATH + "/{" + PARAMETER_EVENT_ID + "}";
-    public static final String DELETE_EVENT_PATH = EVENTS_PATH + "/{" + PARAMETER_EVENT_ID + "}";
+    public static final String GET_WORKING_MEMORY_PATH = WORKING_MEMORIES_PATH + "/{" + PARAMETER_WORKING_MEMORY_ID + "}";
+    public static final String DELETE_WORKING_MEMORY_PATH = WORKING_MEMORIES_PATH + "/{" + PARAMETER_WORKING_MEMORY_ID + "}";
 
     // Memory types are defined in MemoryType enum
 

@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -41,11 +42,12 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     // Core fields
     private String memory;
-    private MemoryStrategyType memoryType;
+    private MemoryType memoryType;
 
     // Optional fields
     private String role;
     private Map<String, String> namespace;
+    private Map<String, String> tags;
 
     // System fields
     private Instant createdTime;
@@ -57,9 +59,10 @@ public class MLMemory implements ToXContentObject, Writeable {
     @Builder
     public MLMemory(
         String memory,
-        MemoryStrategyType memoryType,
+        MemoryType memoryType,
         String role,
         Map<String, String> namespace,
+        Map<String, String> tags,
         Instant createdTime,
         Instant lastUpdatedTime,
         Object memoryEmbedding
@@ -68,6 +71,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.memoryType = memoryType;
         this.role = role;
         this.namespace = namespace;
+        this.tags = tags;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
         this.memoryEmbedding = memoryEmbedding;
@@ -75,10 +79,13 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     public MLMemory(StreamInput in) throws IOException {
         this.memory = in.readString();
-        this.memoryType = in.readEnum(MemoryStrategyType.class);
+        this.memoryType = in.readEnum(MemoryType.class);
         this.role = in.readOptionalString();
         if (in.readBoolean()) {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
+        }
+        if (in.readBoolean()) {
+            this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         this.createdTime = in.readInstant();
         this.lastUpdatedTime = in.readInstant();
@@ -90,6 +97,12 @@ public class MLMemory implements ToXContentObject, Writeable {
         out.writeString(memory);
         out.writeEnum(memoryType);
         out.writeOptionalString(role);
+        if (tags != null && !tags.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
         if (namespace != null && !namespace.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
@@ -110,6 +123,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         if (role != null) {
             builder.field(ROLE_FIELD, role);
         }
+        if (tags != null && !tags.isEmpty()) {
+            builder.field(TAGS_FIELD, tags);
+        }
         if (namespace != null && !namespace.isEmpty()) {
             builder.field(NAMESPACE_FIELD, namespace);
             builder.field(NAMESPACE_SIZE_FIELD, namespace.size());
@@ -128,9 +144,10 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     public static MLMemory parse(XContentParser parser) throws IOException {
         String memory = null;
-        MemoryStrategyType memoryType = null;
+        MemoryType memoryType = null;
         String role = null;
         Map<String, String> namespace = null;
+        Map<String, String> tags = null;
         Instant createdTime = null;
         Instant lastUpdatedTime = null;
         Object memoryEmbedding = null;
@@ -145,10 +162,13 @@ public class MLMemory implements ToXContentObject, Writeable {
                     memory = parser.text();
                     break;
                 case MEMORY_TYPE_FIELD:
-                    memoryType = MemoryStrategyType.fromString(parser.text());
+                    memoryType = MemoryType.fromString(parser.text());
                     break;
                 case ROLE_FIELD:
                     role = parser.text();
+                    break;
+                case TAGS_FIELD:
+                    tags = StringUtils.getParameterMap(parser.map());
                     break;
                 case NAMESPACE_FIELD:
                     namespace = StringUtils.getParameterMap(parser.map());
@@ -175,6 +195,7 @@ public class MLMemory implements ToXContentObject, Writeable {
             .memoryType(memoryType)
             .role(role)
             .namespace(namespace)
+            .tags(tags)
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdatedTime)
             .memoryEmbedding(memoryEmbedding)
@@ -206,6 +227,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         if (namespace != null && !namespace.isEmpty()) {
             result.put(NAMESPACE_FIELD, namespace);
             result.put(NAMESPACE_SIZE_FIELD, namespace.size());
+        }
+        if (tags != null && !tags.isEmpty()) {
+            result.put(TAGS_FIELD, tags);
         }
         if (memoryEmbedding != null) {
             result.put(MEMORY_EMBEDDING_FIELD, memoryEmbedding);

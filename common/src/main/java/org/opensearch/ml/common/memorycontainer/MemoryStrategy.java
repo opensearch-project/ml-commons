@@ -6,11 +6,10 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENABLED_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ENABLED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_TYPE_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,20 +36,20 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     private String id;
     private boolean enabled;
-    private MemoryStrategyType strategy;
+    private String type;
     private List<String> namespace;
 
-    public MemoryStrategy(String id, boolean enabled, MemoryStrategyType strategy, List<String> namespace) {
+    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace) {
         this.id = id;
         this.enabled = enabled;
-        this.strategy = strategy;
+        this.type = type;
         this.namespace = namespace;
     }
 
     public MemoryStrategy(StreamInput input) throws IOException {
         this.id = input.readString();
         this.enabled = input.readBoolean();
-        this.strategy = input.readEnum(MemoryStrategyType.class);
+        this.type = input.readString();
         this.namespace = input.readStringList();
     }
 
@@ -58,7 +57,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
         out.writeBoolean(enabled);
-        out.writeEnum(strategy);
+        out.writeString(type);
         out.writeStringCollection(namespace);
     }
 
@@ -66,9 +65,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
 
-        builder.field(STRATEGY_ID_FIELD, id);
-        builder.field(STRATEGY_ENABLED_FIELD, enabled);
-        builder.field(STRATEGY_FIELD, strategy.getValue());
+        builder.field(ID_FIELD, id);
+        builder.field(ENABLED_FIELD, enabled);
+        builder.field(STRATEGY_FIELD, type);
         builder.field(NAMESPACE_FIELD, namespace);
 
         builder.endObject();
@@ -77,8 +76,8 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     public static MemoryStrategy parse(XContentParser parser) throws IOException {
         String id = null;
-        boolean enabled = true;
-        MemoryStrategyType strategy = null;
+        boolean enabled = true;  // Default to true
+        String type = null;
         List<String> namespace = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -87,18 +86,14 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case STRATEGY_ID_FIELD:
+                case ID_FIELD:
                     id = parser.text();
                     break;
-                case STRATEGY_ENABLED_FIELD:
+                case ENABLED_FIELD:
                     enabled = parser.booleanValue();
                     break;
                 case STRATEGY_FIELD:
-                    strategy = MemoryStrategyType.fromString(parser.text());
-                    break;
-                case STRATEGY_TYPE_FIELD:
-                    // Backward compatibility
-                    strategy = MemoryStrategyType.fromString(parser.text());
+                    type = parser.text();
                     break;
                 case NAMESPACE_FIELD:
                     namespace = new ArrayList<>();
@@ -113,14 +108,14 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             }
         }
 
-        // Generate ID if not provided: strategy_name + UUID
-        if (id == null && strategy != null) {
-            id = strategy.getValue().toLowerCase() + "_" + UUID.randomUUID().toString();
+        // Generate ID with type prefix if not provided
+        if (id == null && type != null) {
+            id = type.toLowerCase() + "_" + UUID.randomUUID().toString();
         } else if (id == null) {
             id = UUID.randomUUID().toString();
         }
 
-        return MemoryStrategy.builder().id(id).enabled(enabled).strategy(strategy).namespace(namespace).build();
+        return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).build();
     }
 
 }

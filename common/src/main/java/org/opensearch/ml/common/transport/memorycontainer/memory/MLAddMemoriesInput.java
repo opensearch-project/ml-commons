@@ -7,16 +7,21 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BINARY_DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +33,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
@@ -36,80 +41,60 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Input payload for creating short-term events in a memory container
+ * Input data for adding memory to a memory container
  */
 @Getter
 @Setter
 @Builder
-public class MLCreateEventInput implements ToXContentObject, Writeable {
+public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private MemoryType memoryType;  // Auto-detected from fields
+    private ShortTermMemoryType memoryType;
     private List<MessageInput> messages;
-    private Map<String, Object> data;
+    private String binaryData;
+    private Map<String, Object> structuredData;
 
     // Optional fields
     private Map<String, String> namespace;
     private boolean infer;
     private Map<String, String> metadata;
+    private Map<String, String> tags;
 
-    public MLCreateEventInput(
+    public MLAddMemoriesInput(
         String memoryContainerId,
-        MemoryType memoryType,
+        ShortTermMemoryType memoryType,
         List<MessageInput> messages,
-        Map<String, Object> data,
+        String binaryData,
+        Map<String, Object> structuredData,
         Map<String, String> namespace,
         boolean infer,
-        Map<String, String> metadata
+        Map<String, String> metadata,
+        Map<String, String> tags
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
         this.memoryContainerId = memoryContainerId;
+        this.memoryType = memoryType == null ? ShortTermMemoryType.CONVERSATION : memoryType;
         this.messages = messages;
-        this.data = data;
+        this.binaryData = binaryData;
+        this.structuredData = structuredData;
         this.namespace = namespace;
+        this.infer = infer; // default infer is false
         this.metadata = metadata;
-
-        // Auto-detect memory type and set infer defaults
-        if (messages != null && !messages.isEmpty()) {
-            this.memoryType = MemoryType.CONVERSATIONAL;
-            this.infer = infer; // User can override
-        } else if (data != null) {
-            this.memoryType = MemoryType.DATA;
-            this.infer = false; // Always false for data
-        } else {
-            this.memoryType = memoryType; // Use provided type if neither messages nor data
-        }
-
+        this.tags = tags;
         validate();
     }
 
     public void validate() {
-        // Check mutual exclusion
-        if (messages != null && !messages.isEmpty() && data != null) {
-            throw new IllegalArgumentException("Cannot specify both 'messages' and 'data' fields in the same request");
-        }
-
-        // Check at least one is provided
-        if ((messages == null || messages.isEmpty()) && data == null) {
-            throw new IllegalArgumentException("Must specify either 'messages' or 'data' field");
-        }
-
-        // Validate infer field for data type
-        if (data != null && infer) {
-            throw new IllegalArgumentException("infer=true is not supported for data memory type");
-        }
-
-        // Validate infer with messages
         if (messages == null || messages.isEmpty()) {
             if (infer) {
                 throw new IllegalArgumentException("No messages provided when inferring memory");
             }
         }
 
-        if (infer && memoryType != MemoryType.CONVERSATIONAL) {
-            throw new IllegalArgumentException("Infer is only supported for conversational memory");
+        if (infer && memoryType != ShortTermMemoryType.CONVERSATION) {
+            throw new IllegalArgumentException("Infer is only supported for conversation memory");
         }
 
         if (memoryContainerId == null) {
@@ -117,9 +102,9 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
         }
     }
 
-    public MLCreateEventInput(StreamInput in) throws IOException {
+    public MLAddMemoriesInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readEnum(MemoryType.class);
+        this.memoryType = in.readEnum(ShortTermMemoryType.class);
         if (in.readBoolean()) {
             int messagesSize = in.readVInt();
             this.messages = new ArrayList<>(messagesSize);
@@ -127,8 +112,9 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
                 this.messages.add(new MessageInput(in));
             }
         }
+        this.binaryData = in.readOptionalString();
         if (in.readBoolean()) {
-            this.data = in.readMap();
+            this.structuredData = in.readMap();
         }
         if (in.readBoolean()) {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
@@ -136,6 +122,9 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
         this.infer = in.readBoolean();
         if (in.readBoolean()) {
             this.metadata = in.readMap(StreamInput::readString, StreamInput::readString);
+        }
+        if (in.readBoolean()) {
+            this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
     }
 
@@ -153,9 +142,10 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
 
-        if (data != null) {
+        out.writeOptionalString(binaryData);
+        if (structuredData != null) {
             out.writeBoolean(true);
-            out.writeMap(data);
+            out.writeMap(structuredData);
         } else {
             out.writeBoolean(false);
         }
@@ -169,6 +159,12 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
         if (metadata != null && !metadata.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(metadata, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (tags != null && !tags.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
         }
@@ -189,8 +185,11 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
             builder.endArray();
         }
 
-        if (data != null) {
-            builder.field(DATA_FIELD, data);
+        if (binaryData != null) {
+            builder.field(BINARY_DATA_FIELD, binaryData);
+        }
+        if (structuredData != null) {
+            builder.field(STRUCTURED_DATA_FIELD, structuredData);
         }
         if (namespace != null && !namespace.isEmpty()) {
             builder.field(NAMESPACE_FIELD, namespace);
@@ -199,17 +198,59 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
         if (metadata != null && !metadata.isEmpty()) {
             builder.field(METADATA_FIELD, metadata);
         }
+        if (tags != null && !tags.isEmpty()) {
+            builder.field(TAGS_FIELD, tags);
+        }
         builder.endObject();
         return builder;
     }
 
-    public static MLCreateEventInput parse(XContentParser parser, String memoryContainerId) throws IOException {
+    public XContentBuilder toXContentWithTimeStamp(XContentBuilder builder, ToXContent.Params params) throws IOException {
+        Instant now = Instant.now();
+        builder.startObject();
+        if (memoryContainerId != null) {
+            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        }
+        builder.field(MEMORY_TYPE_FIELD, memoryType);
+        if (messages != null && messages.size() > 0) {
+            builder.startArray(MESSAGES_FIELD);
+            for (MessageInput message : messages) {
+                message.toXContent(builder, params);
+            }
+            builder.endArray();
+        }
+        if (binaryData != null) {
+            builder.field(BINARY_DATA_FIELD, binaryData);
+        }
+        if (structuredData != null) {
+            builder.field(STRUCTURED_DATA_FIELD, structuredData);
+        }
+        if (namespace != null && !namespace.isEmpty()) {
+            builder.field(NAMESPACE_FIELD, namespace);
+        }
+        builder.field(INFER_FIELD, infer);
+        if (metadata != null && !metadata.isEmpty()) {
+            builder.field(METADATA_FIELD, metadata);
+        }
+        if (tags != null && !tags.isEmpty()) {
+            builder.field(TAGS_FIELD, tags);
+        }
+        builder.field(CREATED_TIME_FIELD, now);
+        builder.field(LAST_UPDATED_TIME_FIELD, now);
+        builder.endObject();
+        return builder;
+    }
+
+    public static MLAddMemoriesInput parse(XContentParser parser, String memoryContainerId) throws IOException {
+        String memoryType = null;
         List<MessageInput> messages = null;
-        Map<String, Object> data = null;
+        String binaryData = null;
+        Map<String, Object> structuredData = null;
         Map<String, String> namespace = null;
-        Boolean inferSpecified = null; // Track if user explicitly set infer
+        Map<String, String> longTermMemoryNamespace = null;
         boolean infer = false;
         Map<String, String> metadata = null;
+        Map<String, String> tags = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -220,6 +261,9 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
                 case MEMORY_CONTAINER_ID_FIELD:
                     memoryContainerId = parser.text();
                     break;
+                case MEMORY_TYPE_FIELD:
+                    memoryType = parser.text();
+                    break;
                 case MESSAGES_FIELD:
                     messages = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -227,17 +271,23 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
                         messages.add(MessageInput.parse(parser));
                     }
                     break;
-                case DATA_FIELD:
-                    data = parser.map();
+                case BINARY_DATA_FIELD:
+                    binaryData = parser.text();
+                    break;
+                case STRUCTURED_DATA_FIELD:
+                    structuredData = parser.map();
                     break;
                 case NAMESPACE_FIELD:
                     namespace = StringUtils.getParameterMap(parser.map());
                     break;
                 case INFER_FIELD:
-                    inferSpecified = parser.booleanValue();
+                    infer = parser.booleanValue();
                     break;
                 case METADATA_FIELD:
                     metadata = StringUtils.getParameterMap(parser.map());
+                    break;
+                case TAGS_FIELD:
+                    tags = StringUtils.getParameterMap(parser.map());
                     break;
                 default:
                     parser.skipChildren();
@@ -245,30 +295,17 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
             }
         }
 
-        // Handle infer defaults based on type
-        if (messages != null && !messages.isEmpty()) {
-            // Conversational type: default infer to true if not specified
-            infer = inferSpecified != null ? inferSpecified : true;
-        } else if (data != null) {
-            // Data type: always false, error if user tries to set to true
-            if (inferSpecified != null && inferSpecified) {
-                throw new IllegalArgumentException("infer=true is not supported for data memory type");
-            }
-            infer = false;
-        } else {
-            // Use provided value or false as default
-            infer = inferSpecified != null ? inferSpecified : false;
-        }
-
-        return MLCreateEventInput
+        return MLAddMemoriesInput
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType(null) // Will be auto-detected in constructor
+            .memoryType(memoryType == null ? ShortTermMemoryType.CONVERSATION : ShortTermMemoryType.fromString(memoryType))
             .messages(messages)
-            .data(data)
+            .binaryData(binaryData)
+            .structuredData(structuredData)
             .namespace(namespace)
             .infer(infer)
             .metadata(metadata)
+            .tags(tags)
             .build();
     }
 

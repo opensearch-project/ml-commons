@@ -22,7 +22,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 public class MLGetMemoryResponseTest {
 
@@ -34,7 +34,7 @@ public class MLGetMemoryResponseTest {
         testMemory = MLMemory
             .builder()
             .memory("Test memory content")
-            .memoryType(MemoryStrategyType.SEMANTIC)
+            .memoryType(MemoryType.RAW_MESSAGE)
             .role("user")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
@@ -48,7 +48,7 @@ public class MLGetMemoryResponseTest {
         assertNotNull(responseNormal);
         assertNotNull(responseNormal.getMlMemory());
         assertEquals("Test memory content", responseNormal.getMlMemory().getMemory());
-        assertEquals(MemoryStrategyType.SEMANTIC, responseNormal.getMlMemory().getMemoryType());
+        assertEquals(MemoryType.RAW_MESSAGE, responseNormal.getMlMemory().getMemoryType());
         assertEquals("user", responseNormal.getMlMemory().getRole());
     }
 
@@ -85,7 +85,7 @@ public class MLGetMemoryResponseTest {
         assertNotNull(result);
         assertNotNull(result.getMlMemory());
         assertEquals("Test memory content", result.getMlMemory().getMemory());
-        assertEquals(MemoryStrategyType.SEMANTIC, result.getMlMemory().getMemoryType());
+        assertEquals(MemoryType.RAW_MESSAGE, result.getMlMemory().getMemoryType());
         assertEquals("user", result.getMlMemory().getRole());
     }
 

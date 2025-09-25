@@ -155,16 +155,16 @@ public class TransportCreateMemoryContainerAction extends
         String indexPrefix = configuration != null ? configuration.getIndexPrefix() : null;
 
         // Convert to lowercase as OpenSearch doesn't support uppercase in index names
-        final String sessionIndexName = configuration.getSessionIndexName().toLowerCase(Locale.ROOT);
-        final String shortTermMemoryIndexName = configuration.getShortTermMemoryIndexName().toLowerCase(Locale.ROOT);
-        final String longTermMemoryIndexName = configuration.getLongMemoryIndexName().toLowerCase(Locale.ROOT);
-        final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName().toLowerCase(Locale.ROOT);
+        final String sessionIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-session";
+        final String workingMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-working-memory";
+        final String longTermMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-long-term-memory";
+        final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName();
 
         if (configuration.getLlmId() == null || configuration.getStrategies().isEmpty()) {
-            mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
+            mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
                 // Return the actual index name that was created
                 // Create the memory data index with appropriate mapping
-                listener.onResponse(shortTermMemoryIndexName);
+                listener.onResponse(workingMemoryIndexName);
             }, listener::onFailure));
         } else {
             if (configuration.isDisableSession()) {
@@ -172,7 +172,7 @@ public class TransportCreateMemoryContainerAction extends
                     container,
                     listener,
                     configuration,
-                    shortTermMemoryIndexName,
+                    workingMemoryIndexName,
                     longTermMemoryIndexName,
                     longTermMemoryHistoryIndexName
                 );
@@ -182,7 +182,7 @@ public class TransportCreateMemoryContainerAction extends
                         container,
                         listener,
                         configuration,
-                        shortTermMemoryIndexName,
+                        workingMemoryIndexName,
                         longTermMemoryIndexName,
                         longTermMemoryHistoryIndexName
                     );
@@ -196,11 +196,11 @@ public class TransportCreateMemoryContainerAction extends
         MLMemoryContainer container,
         ActionListener<String> listener,
         MemoryConfiguration configuration,
-        String shortTermMemoryIndexName,
+        String workingMemoryIndexName,
         String longTermMemoryIndexName,
         String longTermMemoryHistoryIndexName
     ) {
-        mlIndicesHandler.createShortTermMemoryDataIndex(shortTermMemoryIndexName, configuration, ActionListener.wrap(success -> {
+        mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
             // Return the actual index name that was created
             // Create the memory data index with appropriate mapping
             createLongTermMemoryIngestPipeline(longTermMemoryIndexName, container.getConfiguration(), ActionListener.wrap(success1 -> {

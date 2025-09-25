@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 /**
  * Helper class to track memory info for response building
@@ -13,10 +13,10 @@ import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 public class MemoryInfo {
     private String memoryId;
     private final String content;
-    private final MemoryStrategyType type;
+    private final MemoryType type;
     private final boolean includeInResponse;
 
-    public MemoryInfo(String memoryId, String content, MemoryStrategyType type, boolean includeInResponse) {
+    public MemoryInfo(String memoryId, String content, MemoryType type, boolean includeInResponse) {
         this.memoryId = memoryId;
         this.content = content;
         this.type = type;
@@ -35,7 +35,7 @@ public class MemoryInfo {
         return content;
     }
 
-    public MemoryStrategyType getType() {
+    public MemoryType getType() {
         return type;
     }
 
