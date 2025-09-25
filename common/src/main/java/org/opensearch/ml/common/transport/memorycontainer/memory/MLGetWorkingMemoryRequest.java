@@ -12,51 +12,46 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
+import lombok.Builder;
 import lombok.Getter;
 
-/**
- * Request to get an event from a memory container
- */
 @Getter
-public class MLGetEventRequest extends ActionRequest {
-
+public class MLGetWorkingMemoryRequest extends ActionRequest {
     private String memoryContainerId;
-    private String eventId;
+    private String workingMemoryId;
 
-    public MLGetEventRequest(String memoryContainerId, String eventId) {
+    @Builder
+    public MLGetWorkingMemoryRequest(String memoryContainerId, String workingMemoryId) {
         this.memoryContainerId = memoryContainerId;
-        this.eventId = eventId;
+        this.workingMemoryId = workingMemoryId;
     }
 
-    public MLGetEventRequest(StreamInput in) throws IOException {
+    public MLGetWorkingMemoryRequest(StreamInput in) throws IOException {
         super(in);
         this.memoryContainerId = in.readString();
-        this.eventId = in.readString();
+        this.workingMemoryId = in.readString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(memoryContainerId);
-        out.writeString(eventId);
+        out.writeString(workingMemoryId);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-
         if (memoryContainerId == null || memoryContainerId.isEmpty()) {
             exception = new ActionRequestValidationException();
             exception.addValidationError("Memory container id is required");
         }
-
-        if (eventId == null || eventId.isEmpty()) {
+        if (workingMemoryId == null || workingMemoryId.isEmpty()) {
             if (exception == null) {
                 exception = new ActionRequestValidationException();
             }
-            exception.addValidationError("Event id is required");
+            exception.addValidationError("Working memory id is required");
         }
-
         return exception;
     }
 }

@@ -23,7 +23,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.log4j.Log4j2;
@@ -135,7 +135,7 @@ public class MemorySearchQueryBuilder {
             boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_FIELD + "." + key, namespace.get(key)));
         }
         boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_SIZE_FIELD, strategy.getNamespace().size()));
-        boolQuery.filter(QueryBuilders.termQuery(MEMORY_TYPE_FIELD, MemoryStrategyType.SEMANTIC.getValue()));
+        boolQuery.filter(QueryBuilders.termQuery(MEMORY_TYPE_FIELD, MemoryType.SEMANTIC.getValue()));
 
         // Add the search query
         if (memoryConfig != null) {

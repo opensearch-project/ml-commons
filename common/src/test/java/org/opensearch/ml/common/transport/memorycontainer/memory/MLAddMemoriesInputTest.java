@@ -31,11 +31,11 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-public class MLCreateEventInputTest {
+public class MLAddMemoriesInputTest {
 
-    private MLCreateEventInput inputWithAllFields;
-    private MLCreateEventInput inputMinimal;
-    private MLCreateEventInput inputNoOptionals;
+    private MLAddMemoriesInput inputWithAllFields;
+    private MLAddMemoriesInput inputMinimal;
+    private MLAddMemoriesInput inputNoOptionals;
     private List<MessageInput> testMessages;
     private Map<String, String> testTags;
 
@@ -53,7 +53,7 @@ public class MLCreateEventInputTest {
         testTags.put("priority", "low");
 
         // Input with all fields
-        inputWithAllFields = MLCreateEventInput
+        inputWithAllFields = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
             .messages(testMessages)
@@ -64,10 +64,10 @@ public class MLCreateEventInputTest {
             .build();
 
         // Minimal input (only required fields)
-        inputMinimal = MLCreateEventInput.builder().messages(Arrays.asList(new MessageInput(null, "Single message"))).build();
+        inputMinimal = MLAddMemoriesInput.builder().messages(Arrays.asList(new MessageInput(null, "Single message"))).build();
 
         // Input without optional fields
-        inputNoOptionals = new MLCreateEventInput(
+        inputNoOptionals = new MLAddMemoriesInput(
             "container-999",
             Arrays.asList(new MessageInput("user", "Test message")),
             null,
@@ -105,14 +105,14 @@ public class MLCreateEventInputTest {
         // Test null messages
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLCreateEventInput("container-1", null, null, null, null, null)
+            () -> new MLAddMemoriesInput("container-1", null, null, null, null, null)
         );
         assertEquals("Messages list cannot be empty", exception.getMessage());
 
         // Test empty messages
         exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLCreateEventInput("container-1", new ArrayList<>(), null, null, null, null)
+            () -> new MLAddMemoriesInput("container-1", new ArrayList<>(), null, null, null, null)
         );
         assertEquals("Messages list cannot be empty", exception.getMessage());
 
@@ -122,7 +122,7 @@ public class MLCreateEventInputTest {
             manyMessages.add(new MessageInput("user", "Message " + i));
         }
         // Should not throw exception anymore
-        MLCreateEventInput inputWithManyMessages = new MLCreateEventInput("container-1", manyMessages, null, null, null, null);
+        MLAddMemoriesInput inputWithManyMessages = new MLAddMemoriesInput("container-1", manyMessages, null, null, null, null);
         assertNotNull(inputWithManyMessages);
         assertEquals(100, inputWithManyMessages.getMessages().size());
     }
@@ -133,7 +133,7 @@ public class MLCreateEventInputTest {
         BytesStreamOutput out = new BytesStreamOutput();
         inputWithAllFields.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventInput deserialized = new MLCreateEventInput(in);
+        MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertEquals(inputWithAllFields.getMemoryContainerId(), deserialized.getMemoryContainerId());
         assertEquals(inputWithAllFields.getMessages().size(), deserialized.getMessages().size());
@@ -155,7 +155,7 @@ public class MLCreateEventInputTest {
         BytesStreamOutput out = new BytesStreamOutput();
         inputMinimal.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventInput deserialized = new MLCreateEventInput(in);
+        MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertNull(deserialized.getMemoryContainerId());
         assertEquals(1, deserialized.getMessages().size());
@@ -168,7 +168,7 @@ public class MLCreateEventInputTest {
     @Test
     public void testStreamInputOutputEmptyTags() throws IOException {
         // Test with empty tags
-        MLCreateEventInput inputEmptyTags = MLCreateEventInput
+        MLAddMemoriesInput inputEmptyTags = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(new MessageInput("user", "Test")))
             .tags(new HashMap<>())
@@ -177,7 +177,7 @@ public class MLCreateEventInputTest {
         BytesStreamOutput out = new BytesStreamOutput();
         inputEmptyTags.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventInput deserialized = new MLCreateEventInput(in);
+        MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertNull(deserialized.getTags());
     }
@@ -232,7 +232,7 @@ public class MLCreateEventInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLCreateEventInput parsed = MLCreateEventInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         assertEquals("container-123", parsed.getMemoryContainerId());
         assertEquals(2, parsed.getMessages().size());
@@ -254,7 +254,7 @@ public class MLCreateEventInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLCreateEventInput parsed = MLCreateEventInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         assertNull(parsed.getMemoryContainerId());
         assertEquals(1, parsed.getMessages().size());
@@ -275,7 +275,7 @@ public class MLCreateEventInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLCreateEventInput parsed = MLCreateEventInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         assertEquals(1, parsed.getMessages().size());
         assertEquals("Test", parsed.getMessages().get(0).getContent());
@@ -283,7 +283,7 @@ public class MLCreateEventInputTest {
 
     @Test
     public void testSetters() {
-        MLCreateEventInput input = MLCreateEventInput.builder().messages(Arrays.asList(new MessageInput("user", "Initial"))).build();
+        MLAddMemoriesInput input = MLAddMemoriesInput.builder().messages(Arrays.asList(new MessageInput("user", "Initial"))).build();
 
         input.setMemoryContainerId("new-container");
         input.setSessionId("new-session");
@@ -307,7 +307,7 @@ public class MLCreateEventInputTest {
         }
 
         // Should succeed with large number of messages
-        MLCreateEventInput input = new MLCreateEventInput("container-1", manyMessages, null, null, null, null);
+        MLAddMemoriesInput input = new MLAddMemoriesInput("container-1", manyMessages, null, null, null, null);
         assertEquals(1000, input.getMessages().size());
     }
 
@@ -322,7 +322,7 @@ public class MLCreateEventInputTest {
                 new MessageInput("assistant", "Response with unicode 🚀✨")
             );
 
-        MLCreateEventInput specialInput = MLCreateEventInput
+        MLAddMemoriesInput specialInput = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-with-special-chars")
             .messages(specialMessages)
@@ -334,7 +334,7 @@ public class MLCreateEventInputTest {
         BytesStreamOutput out = new BytesStreamOutput();
         specialInput.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventInput deserialized = new MLCreateEventInput(in);
+        MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertEquals(specialInput.getMemoryContainerId(), deserialized.getMemoryContainerId());
         assertEquals(specialInput.getSessionId(), deserialized.getSessionId());
@@ -353,7 +353,7 @@ public class MLCreateEventInputTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        MLCreateEventInput parsed = MLCreateEventInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         // Verify all fields match
         assertEquals(inputWithAllFields.getMemoryContainerId(), parsed.getMemoryContainerId());

@@ -20,15 +20,15 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 
-public class MLCreateEventRequestTest {
+public class MLAddMemoriesRequestTest {
 
-    private MLCreateEventInput testInput;
-    private MLCreateEventRequest request;
+    private MLAddMemoriesInput testInput;
+    private MLAddMemoriesRequest request;
 
     @Before
     public void setUp() {
         MessageInput message = new MessageInput("user", "Test message content");
-        testInput = MLCreateEventInput
+        testInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-123")
@@ -37,15 +37,15 @@ public class MLCreateEventRequestTest {
             .infer(true)
             .build();
 
-        request = MLCreateEventRequest.builder().mlCreateEventInput(testInput).build();
+        request = MLAddMemoriesRequest.builder().mlAddMemoryInput(testInput).build();
     }
 
     @Test
     public void testBuilder() {
         assertNotNull(request);
-        assertNotNull(request.getMlCreateEventInput());
-        assertEquals(testInput, request.getMlCreateEventInput());
-        assertEquals("container-123", request.getMlCreateEventInput().getMemoryContainerId());
+        assertNotNull(request.getMlAddMemoryInput());
+        assertEquals(testInput, request.getMlAddMemoryInput());
+        assertEquals("container-123", request.getMlAddMemoryInput().getMemoryContainerId());
     }
 
     @Test
@@ -54,14 +54,14 @@ public class MLCreateEventRequestTest {
         request.writeTo(out);
 
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventRequest deserialized = new MLCreateEventRequest(in);
+        MLAddMemoriesRequest deserialized = new MLAddMemoriesRequest(in);
 
-        assertNotNull(deserialized.getMlCreateEventInput());
-        assertEquals(request.getMlCreateEventInput().getMemoryContainerId(), deserialized.getMlCreateEventInput().getMemoryContainerId());
-        assertEquals(request.getMlCreateEventInput().getSessionId(), deserialized.getMlCreateEventInput().getSessionId());
-        assertEquals(request.getMlCreateEventInput().getAgentId(), deserialized.getMlCreateEventInput().getAgentId());
-        assertEquals(request.getMlCreateEventInput().getInfer(), deserialized.getMlCreateEventInput().getInfer());
-        assertEquals(request.getMlCreateEventInput().getMessages().size(), deserialized.getMlCreateEventInput().getMessages().size());
+        assertNotNull(deserialized.getMlAddMemoryInput());
+        assertEquals(request.getMlAddMemoryInput().getMemoryContainerId(), deserialized.getMlAddMemoryInput().getMemoryContainerId());
+        assertEquals(request.getMlAddMemoryInput().getSessionId(), deserialized.getMlAddMemoryInput().getSessionId());
+        assertEquals(request.getMlAddMemoryInput().getAgentId(), deserialized.getMlAddMemoryInput().getAgentId());
+        assertEquals(request.getMlAddMemoryInput().getInfer(), deserialized.getMlAddMemoryInput().getInfer());
+        assertEquals(request.getMlAddMemoryInput().getMessages().size(), deserialized.getMlAddMemoryInput().getMessages().size());
     }
 
     @Test
@@ -72,26 +72,26 @@ public class MLCreateEventRequestTest {
 
     @Test
     public void testValidateWithNullInput() {
-        MLCreateEventRequest invalidRequest = MLCreateEventRequest.builder().mlCreateEventInput(null).build();
+        MLAddMemoriesRequest invalidRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(null).build();
 
         ActionRequestValidationException exception = invalidRequest.validate();
         assertNotNull(exception);
         assertEquals(1, exception.validationErrors().size());
-        assertTrue(exception.validationErrors().get(0).contains("ML create event input can't be null"));
+        assertTrue(exception.validationErrors().get(0).contains("ML add memory input can't be null"));
     }
 
     @Test
     public void testToString() {
         String toString = request.toString();
         assertNotNull(toString);
-        assertTrue(toString.contains("MLCreateEventRequest"));
-        assertTrue(toString.contains("mlCreateEventInput"));
+        assertTrue(toString.contains("MLAddMemoriesRequest"));
+        assertTrue(toString.contains("mlAddMemoryInput"));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testWithEmptyMessages() {
         // Empty messages list is not allowed - should throw exception
-        MLCreateEventInput.builder().messages(Collections.emptyList()).memoryContainerId("container-empty").build();
+        MLAddMemoriesInput.builder().messages(Collections.emptyList()).memoryContainerId("container-empty").build();
     }
 
     @Test
@@ -100,38 +100,38 @@ public class MLCreateEventRequestTest {
         MessageInput msg2 = new MessageInput("assistant", "Second message");
         MessageInput msg3 = new MessageInput("user", "Third message");
 
-        MLCreateEventInput multiInput = MLCreateEventInput
+        MLAddMemoriesInput multiInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(msg1, msg2, msg3))
             .memoryContainerId("container-multi")
             .sessionId("session-multi")
             .build();
 
-        MLCreateEventRequest multiRequest = MLCreateEventRequest.builder().mlCreateEventInput(multiInput).build();
+        MLAddMemoriesRequest multiRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(multiInput).build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
         multiRequest.writeTo(out);
 
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventRequest deserialized = new MLCreateEventRequest(in);
+        MLAddMemoriesRequest deserialized = new MLAddMemoriesRequest(in);
 
-        assertEquals(3, deserialized.getMlCreateEventInput().getMessages().size());
-        assertEquals("First message", deserialized.getMlCreateEventInput().getMessages().get(0).getContent());
-        assertEquals("Second message", deserialized.getMlCreateEventInput().getMessages().get(1).getContent());
-        assertEquals("Third message", deserialized.getMlCreateEventInput().getMessages().get(2).getContent());
+        assertEquals(3, deserialized.getMlAddMemoryInput().getMessages().size());
+        assertEquals("First message", deserialized.getMlAddMemoryInput().getMessages().get(0).getContent());
+        assertEquals("Second message", deserialized.getMlAddMemoryInput().getMessages().get(1).getContent());
+        assertEquals("Third message", deserialized.getMlAddMemoryInput().getMessages().get(2).getContent());
     }
 
     @Test
     public void testWithMinimalInput() throws IOException {
         MessageInput message = new MessageInput(null, "Minimal message");
-        MLCreateEventInput minimalInput = MLCreateEventInput
+        MLAddMemoriesInput minimalInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-minimal")
             .build();
 
-        MLCreateEventRequest minimalRequest = MLCreateEventRequest.builder().mlCreateEventInput(minimalInput).build();
+        MLAddMemoriesRequest minimalRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(minimalInput).build();
 
         assertNull(minimalRequest.validate());
 
@@ -140,18 +140,18 @@ public class MLCreateEventRequestTest {
         minimalRequest.writeTo(out);
 
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventRequest deserialized = new MLCreateEventRequest(in);
+        MLAddMemoriesRequest deserialized = new MLAddMemoriesRequest(in);
 
-        assertEquals("container-minimal", deserialized.getMlCreateEventInput().getMemoryContainerId());
-        assertNull(deserialized.getMlCreateEventInput().getSessionId());
-        assertNull(deserialized.getMlCreateEventInput().getAgentId());
-        assertNull(deserialized.getMlCreateEventInput().getInfer()); // Null when not set
+        assertEquals("container-minimal", deserialized.getMlAddMemoryInput().getMemoryContainerId());
+        assertNull(deserialized.getMlAddMemoryInput().getSessionId());
+        assertNull(deserialized.getMlAddMemoryInput().getAgentId());
+        assertNull(deserialized.getMlAddMemoryInput().getInfer()); // Null when not set
     }
 
     @Test
     public void testWithComplexTags() throws IOException {
         MessageInput message = new MessageInput("user", "Tagged message");
-        MLCreateEventInput taggedInput = MLCreateEventInput
+        MLAddMemoriesInput taggedInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-tags")
@@ -161,18 +161,18 @@ public class MLCreateEventRequestTest {
             .infer(false)
             .build();
 
-        MLCreateEventRequest taggedRequest = MLCreateEventRequest.builder().mlCreateEventInput(taggedInput).build();
+        MLAddMemoriesRequest taggedRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(taggedInput).build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
         taggedRequest.writeTo(out);
 
         StreamInput in = out.bytes().streamInput();
-        MLCreateEventRequest deserialized = new MLCreateEventRequest(in);
+        MLAddMemoriesRequest deserialized = new MLAddMemoriesRequest(in);
 
-        assertEquals(3, deserialized.getMlCreateEventInput().getTags().size());
-        assertEquals("technical", deserialized.getMlCreateEventInput().getTags().get("category"));
-        assertEquals("high", deserialized.getMlCreateEventInput().getTags().get("priority"));
-        assertEquals("2024-01-01", deserialized.getMlCreateEventInput().getTags().get("timestamp"));
+        assertEquals(3, deserialized.getMlAddMemoryInput().getTags().size());
+        assertEquals("technical", deserialized.getMlAddMemoryInput().getTags().get("category"));
+        assertEquals("high", deserialized.getMlAddMemoryInput().getTags().get("priority"));
+        assertEquals("2024-01-01", deserialized.getMlAddMemoryInput().getTags().get("timestamp"));
     }
 }

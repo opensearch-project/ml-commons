@@ -8,7 +8,7 @@ package org.opensearch.ml.engine.indices;
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_SESSION_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_SHORT_MEMORY_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_WORKING_MEMORY_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
@@ -26,7 +26,8 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SHORT_TERM_MEMORY_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
 import static org.opensearch.ml.common.utils.IndexUtils.ALL_NODES_REPLICA_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS;
@@ -178,9 +179,9 @@ public class MLIndicesHandler {
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
-    public void createShortTermMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
-        String indexMappings = getMapping(ML_SHORT_MEMORY_INDEX_MAPPING_PATH);
-        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SHORT_TERM_MEMORY_INDEX);
+    public void createWorkingMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_WORKING_MEMORY_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX);
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
@@ -208,6 +209,7 @@ public class MLIndicesHandler {
             properties.put(NAMESPACE_FIELD, Map.of("type", "flat_object"));
             properties.put(NAMESPACE_SIZE_FIELD, Map.of("type", "integer"));
             properties.put(MEMORY_FIELD, Map.of("type", "text")); // Keep as text for full-text search
+            properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
             properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
             properties.put(CREATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
             properties.put(LAST_UPDATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));

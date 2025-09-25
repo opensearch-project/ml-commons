@@ -30,7 +30,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
@@ -187,15 +187,19 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             String role = (String) sourceMap.get(ROLE_FIELD);
 
             // Parse memory type
-            MemoryStrategyType memoryType = null;
+            MemoryType memoryType = null;
             String memoryTypeStr = (String) sourceMap.get(MEMORY_TYPE_FIELD);
             if (memoryTypeStr != null) {
                 try {
-                    memoryType = MemoryStrategyType.valueOf(memoryTypeStr);
+                    memoryType = MemoryType.valueOf(memoryTypeStr);
                 } catch (IllegalArgumentException e) {
                     log.warn("Invalid memory type: {}", memoryTypeStr);
                 }
             }
+
+            // Parse tags
+            @SuppressWarnings("unchecked")
+            Map<String, String> tags = (Map<String, String>) sourceMap.get(TAGS_FIELD);
 
             // Parse timestamps
             Instant createdTime = null;
@@ -224,6 +228,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 .userId(userId)
                 .memoryType(memoryType)
                 .role(role)
+                .tags(tags)
                 .createdTime(createdTime)
                 .lastUpdatedTime(lastUpdatedTime)
                 .build();

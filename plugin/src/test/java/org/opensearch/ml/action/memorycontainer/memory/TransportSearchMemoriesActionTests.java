@@ -42,7 +42,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
-import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesRequest;
@@ -546,7 +546,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         assertEquals("session-1", result1.getSessionId());
         assertEquals("user-1", result1.getUserId());
         assertEquals("agent-1", result1.getAgentId());
-        assertEquals(MemoryStrategyType.SEMANTIC, result1.getMemoryType());
+        assertEquals(MemoryType.RAW_MESSAGE, result1.getMemoryType());
         assertEquals("user", result1.getRole());
         assertNotNull(result1.getTags());
         assertEquals("value1", result1.getTags().get("key1"));
@@ -556,7 +556,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         assertEquals("memory-2", result2.getMemoryId());
         assertEquals("Second memory", result2.getMemory());
         assertEquals(0.8f, result2.getScore(), 0.001);
-        assertEquals(MemoryStrategyType.SEMANTIC, result2.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, result2.getMemoryType());
     }
 
     @Test

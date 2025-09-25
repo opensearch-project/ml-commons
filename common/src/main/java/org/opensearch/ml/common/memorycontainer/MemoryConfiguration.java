@@ -86,7 +86,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
 
         // Assign values after validation
-        this.indexPrefix = indexPrefix == null ? ".plugins-ml" : indexPrefix;
+        this.indexPrefix = indexPrefix == null ? ".ml-plugin" : indexPrefix;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;
@@ -269,19 +269,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     }
 
     public String getSessionIndexName() {
-        return indexPrefix + "-agentic-memory-sessions";
+        return indexPrefix + "-memory-session";
     }
 
-    public String getShortTermMemoryIndexName() {
-        return indexPrefix + "-agentic-memory-events";
+    public String getWorkingMemoryIndexName() {
+        return indexPrefix + "-memory-working";
     }
 
     public String getLongMemoryIndexName() {
-        return indexPrefix + "-agentic-memory-memories";
+        return indexPrefix + "-memory-long-term";
     }
 
     public String getLongMemoryHistoryIndexName() {
-        return indexPrefix + "-agentic-memory-memory-histories";
+        return indexPrefix + "-memory-history";
     }
 
     public Map<String, Object> getMemoryIndexMapping(String indexName) {

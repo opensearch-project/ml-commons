@@ -6,14 +6,15 @@
 package org.opensearch.ml.common.memorycontainer;
 
 /**
- * Enum representing the type of memory strategy
+ * Enum representing the type of memory entry
  */
-public enum MemoryStrategyType {
-    SEMANTIC("SEMANTIC");
+public enum ShortTermMemoryType {
+    CONVERSATION("conversation"),
+    DATA("data");
 
     private final String value;
 
-    MemoryStrategyType(String value) {
+    ShortTermMemoryType(String value) {
         this.value = value;
     }
 
@@ -22,23 +23,23 @@ public enum MemoryStrategyType {
     }
 
     /**
-     * Parse string value to MemoryStrategyType
-     * @param value string representation of memory strategy type
-     * @return corresponding MemoryStrategyType enum
+     * Parse string value to MemoryType
+     * @param value string representation of memory type
+     * @return corresponding MemoryType enum
      * @throws IllegalArgumentException if value is invalid
      */
-    public static MemoryStrategyType fromString(String value) {
+    public static ShortTermMemoryType fromString(String value) {
         if (value == null) {
             return null;
         }
 
-        for (MemoryStrategyType type : MemoryStrategyType.values()) {
+        for (ShortTermMemoryType type : ShortTermMemoryType.values()) {
             if (type.value.equalsIgnoreCase(value)) {
                 return type;
             }
         }
 
-        throw new IllegalArgumentException("Invalid memory strategy type: " + value + ". Must be: SEMANTIC");
+        throw new IllegalArgumentException("Invalid short memory type: " + value + ". Must be one of: CONVERSATION, DATA");
     }
 
     @Override

@@ -16,7 +16,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.utils.MemorySearchQueryBuilder;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -35,7 +35,7 @@ public class MemorySearchService {
 
     public void searchSimilarFactsForSession(
         MemoryStrategy strategy,
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         List<String> facts,
         MemoryConfiguration memoryConfig,
         ActionListener<List<FactSearchResult>> listener
@@ -57,7 +57,7 @@ public class MemorySearchService {
 
     private void searchFactsSequentially(
         MemoryStrategy strategy,
-        MLCreateEventInput input,
+        MLAddMemoriesInput input,
         List<String> facts,
         int currentIndex,
         MemoryConfiguration memoryConfig,
