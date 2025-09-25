@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ENABLED_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_TYPE_FIELD;
 
@@ -36,20 +37,20 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     private String id;
     private boolean enabled;
-    private String type;
+    private MemoryStrategyType strategy;
     private List<String> namespace;
 
-    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace) {
+    public MemoryStrategy(String id, boolean enabled, MemoryStrategyType strategy, List<String> namespace) {
         this.id = id;
         this.enabled = enabled;
-        this.type = type;
+        this.strategy = strategy;
         this.namespace = namespace;
     }
 
     public MemoryStrategy(StreamInput input) throws IOException {
         this.id = input.readString();
         this.enabled = input.readBoolean();
-        this.type = input.readString();
+        this.strategy = input.readEnum(MemoryStrategyType.class);
         this.namespace = input.readStringList();
     }
 
@@ -57,7 +58,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
         out.writeBoolean(enabled);
-        out.writeString(type);
+        out.writeEnum(strategy);
         out.writeStringCollection(namespace);
     }
 
@@ -67,7 +68,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
         builder.field(STRATEGY_ID_FIELD, id);
         builder.field(STRATEGY_ENABLED_FIELD, enabled);
-        builder.field(STRATEGY_TYPE_FIELD, type);
+        builder.field(STRATEGY_FIELD, strategy.getValue());
         builder.field(NAMESPACE_FIELD, namespace);
 
         builder.endObject();
@@ -75,9 +76,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     }
 
     public static MemoryStrategy parse(XContentParser parser) throws IOException {
-        String id = UUID.randomUUID().toString();
-        boolean enabled = false;
-        String type = null;
+        String id = null;
+        boolean enabled = true;
+        MemoryStrategyType strategy = null;
         List<String> namespace = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -90,11 +91,14 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                     id = parser.text();
                     break;
                 case STRATEGY_ENABLED_FIELD:
-                    // Skip this field - it's now auto-determined
                     enabled = parser.booleanValue();
                     break;
+                case STRATEGY_FIELD:
+                    strategy = MemoryStrategyType.fromString(parser.text());
+                    break;
                 case STRATEGY_TYPE_FIELD:
-                    type = parser.text();
+                    // Backward compatibility
+                    strategy = MemoryStrategyType.fromString(parser.text());
                     break;
                 case NAMESPACE_FIELD:
                     namespace = new ArrayList<>();
@@ -109,7 +113,14 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             }
         }
 
-        return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).build();
+        // Generate ID if not provided: strategy_name + UUID
+        if (id == null && strategy != null) {
+            id = strategy.getValue().toLowerCase() + "_" + UUID.randomUUID().toString();
+        } else if (id == null) {
+            id = UUID.randomUUID().toString();
+        }
+
+        return MemoryStrategy.builder().id(id).enabled(enabled).strategy(strategy).namespace(namespace).build();
     }
 
 }

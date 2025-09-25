@@ -15,7 +15,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -35,7 +35,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
     private final String sessionId;
     private final String agentId;
     private final String userId;
-    private final MemoryType memoryType;
+    private final MemoryStrategyType memoryType;
     private final String role;
     private final Instant createdTime;
     private final Instant lastUpdatedTime;
@@ -47,7 +47,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         String sessionId,
         String agentId,
         String userId,
-        MemoryType memoryType,
+        MemoryStrategyType memoryType,
         String role,
         Instant createdTime,
         Instant lastUpdatedTime
@@ -72,7 +72,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         this.agentId = in.readOptionalString();
         this.userId = in.readOptionalString();
         String memoryTypeStr = in.readOptionalString();
-        this.memoryType = memoryTypeStr != null ? MemoryType.fromString(memoryTypeStr) : null;
+        this.memoryType = memoryTypeStr != null ? MemoryStrategyType.fromString(memoryTypeStr) : null;
         this.role = in.readOptionalString();
         this.createdTime = in.readOptionalInstant();
         this.lastUpdatedTime = in.readOptionalInstant();

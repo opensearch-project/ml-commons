@@ -33,7 +33,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryResponse;
@@ -123,7 +123,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             .builder()
             .sessionId("test-session")
             .memory("Test memory content")
-            .memoryType(MemoryType.RAW_MESSAGE)
+            .memoryType(MemoryStrategyType.SEMANTIC)
             .userId("test-user")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
@@ -206,13 +206,13 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Verify the memory content matches what was in the JSON
         assertEquals("test-session", returnedMemory.getSessionId());
         assertEquals("Test memory content", returnedMemory.getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, returnedMemory.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, returnedMemory.getMemoryType());
         assertEquals("test-user", returnedMemory.getUserId());
         assertNotNull(returnedMemory.getCreatedTime());
         assertNotNull(returnedMemory.getLastUpdatedTime());
         assertTrue(expectedJson.contains("\"session_id\":\"test-session\""));
         assertTrue(expectedJson.contains("\"memory\":\"Test memory content\""));
-        assertTrue(expectedJson.contains("\"memory_type\":\"RAW_MESSAGE\""));
+        assertTrue(expectedJson.contains("\"memory_type\":\"SEMANTIC\""));
         assertTrue(expectedJson.contains("\"user_id\":\"test-user\""));
     }
 
@@ -427,7 +427,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         return "{"
             + "\"session_id\":\"test-session\","
             + "\"memory\":\"Test memory content\","
-            + "\"memory_type\":\"RAW_MESSAGE\","
+            + "\"memory_type\":\"SEMANTIC\","
             + "\"user_id\":\"test-user\","
             + "\"created_time\":"
             + currentTimeEpoch

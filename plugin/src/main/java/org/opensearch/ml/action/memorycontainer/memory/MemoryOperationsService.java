@@ -30,7 +30,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
@@ -73,7 +73,7 @@ public class MemoryOperationsService {
                     MLMemory newMemory = MLMemory
                         .builder()
                         .memory(decision.getText())
-                        .memoryType(MemoryType.SEMANTIC)
+                        .memoryType(MemoryStrategyType.SEMANTIC)
                         .namespace(namespace)
                         .createdTime(now)
                         .lastUpdatedTime(now)
@@ -233,7 +233,7 @@ public class MemoryOperationsService {
             MLMemory factMemory = MLMemory
                 .builder()
                 .memory(fact)
-                .memoryType(MemoryType.SEMANTIC)
+                .memoryType(MemoryStrategyType.SEMANTIC)
                 .namespace(strategyNameSpace)
                 .createdTime(now)
                 .lastUpdatedTime(now)

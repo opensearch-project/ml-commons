@@ -9,7 +9,8 @@ package org.opensearch.ml.common.memorycontainer;
  * Enum representing the type of memory entry
  */
 public enum MemoryType {
-    SEMANTIC("SEMANTIC");
+    CONVERSATIONAL("conversational"),
+    DATA("data");
 
     private final String value;
 
@@ -38,7 +39,7 @@ public enum MemoryType {
             }
         }
 
-        throw new IllegalArgumentException("Invalid memory type: " + value + ". Must be either RAW_MESSAGE or FACT");
+        throw new IllegalArgumentException("Invalid memory type: " + value + ". Must be one of: CONVERSATIONAL, DATA");
     }
 
     @Override

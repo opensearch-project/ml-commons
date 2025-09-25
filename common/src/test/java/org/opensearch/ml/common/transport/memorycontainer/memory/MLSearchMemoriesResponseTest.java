@@ -27,7 +27,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class MLSearchMemoriesResponseTest {
 
@@ -50,7 +50,7 @@ public class MLSearchMemoriesResponseTest {
                     .score(0.95f)
                     .sessionId("session-123")
                     .userId("user-456")
-                    .memoryType(MemoryType.RAW_MESSAGE)
+                    .memoryType(MemoryStrategyType.SEMANTIC)
                     .role("assistant")
                     .tags(tags)
                     .createdTime(Instant.now())
@@ -62,7 +62,7 @@ public class MLSearchMemoriesResponseTest {
                     .memory("Deep learning uses neural networks")
                     .score(0.87f)
                     .sessionId("session-123")
-                    .memoryType(MemoryType.SEMANTIC)
+                    .memoryType(MemoryStrategyType.SEMANTIC)
                     .build(),
                 MemorySearchResult.builder().memoryId("mem-3").memory("Neural networks have multiple layers").score(0.75f).build()
             );
