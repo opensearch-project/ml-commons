@@ -201,14 +201,14 @@ public class QueryPlanningPromptTemplate {
             + "- If no perfect match exists, pick the closest by the criteria above. Never output “none” or invent an id.";
 
     public static final String TEMPLATE_SELECTION_INPUTS = "question: ${parameters.query_text}\n"
-        + "templates: ${parameters.search_templates}";
+        + "search_templates: ${parameters.search_templates}";
 
     public static final String TEMPLATE_SELECTION_EXAMPLES = "Example A: \n"
         + "question: 'what shoes are highly rated'\n"
-        + "templates:\n"
+        + "search_templates :\n"
         + "[\n"
-        + "{'id':'product-search-template','description':'Searches products in an e-commerce store.'},\n"
-        + "{'id':'sales-value-analysis-template','description':'Aggregates sales value for top-selling products.'}\n"
+        + "{'template_id':'product-search-template','template_description':'Searches products in an e-commerce store.'},\n"
+        + "{'template_id':'sales-value-analysis-template','template_description':'Aggregates sales value for top-selling products.'}\n"
         + "]\n"
         + "Example output : 'product-search-template'";
 
