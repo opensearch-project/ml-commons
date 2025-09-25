@@ -45,7 +45,7 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLCreateEventInput;
@@ -178,7 +178,7 @@ public class TransportCreateEventAction extends HandledTransportAction<MLCreateE
             boolean userProvidedSessionId = input.getNamespace() != null && input.getNamespace().containsKey(SESSION_ID_FIELD);
 
             if (!userProvidedSessionId
-                && input.getMemoryType() == ShortTermMemoryType.CONVERSATIONAL
+                && input.getMemoryType() == MemoryType.CONVERSATIONAL
                 && !configuration.isDisableSession()) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message

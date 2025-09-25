@@ -18,7 +18,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
@@ -122,7 +122,7 @@ public class MLGetEventResponse extends ActionResponse implements ToXContentObje
      */
     public static MLGetEventResponse parse(XContentParser parser, String eventId) throws IOException {
         String memoryContainerId = null;
-        ShortTermMemoryType memoryType = null;
+        MemoryType memoryType = null;
         List<MessageInput> messages = null;
         Map<String, Object> data = null;
         Map<String, String> namespace = null;
@@ -140,7 +140,7 @@ public class MLGetEventResponse extends ActionResponse implements ToXContentObje
                     memoryContainerId = parser.text();
                     break;
                 case MEMORY_TYPE_FIELD:
-                    memoryType = ShortTermMemoryType.fromString(parser.text());
+                    memoryType = MemoryType.fromString(parser.text());
                     break;
                 case MESSAGES_FIELD:
                     messages = new ArrayList<>();

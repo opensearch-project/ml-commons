@@ -29,6 +29,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryDecisionRequest;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -57,10 +58,10 @@ public class MemoryProcessingService {
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
-        if ("semantic".equalsIgnoreCase(strategy.getType())) {// TODO: change to enum
+        if (strategy.getStrategy() == MemoryStrategyType.SEMANTIC) {
             extractFactsFromConversation(messages, memoryConfig, listener);
         } else {
-            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
+            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getStrategy()));
         }
     }
 

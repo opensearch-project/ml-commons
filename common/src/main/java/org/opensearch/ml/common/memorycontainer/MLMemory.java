@@ -41,7 +41,7 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     // Core fields
     private String memory;
-    private MemoryType memoryType;
+    private MemoryStrategyType memoryType;
 
     // Optional fields
     private String role;
@@ -57,7 +57,7 @@ public class MLMemory implements ToXContentObject, Writeable {
     @Builder
     public MLMemory(
         String memory,
-        MemoryType memoryType,
+        MemoryStrategyType memoryType,
         String role,
         Map<String, String> namespace,
         Instant createdTime,
@@ -75,7 +75,7 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     public MLMemory(StreamInput in) throws IOException {
         this.memory = in.readString();
-        this.memoryType = in.readEnum(MemoryType.class);
+        this.memoryType = in.readEnum(MemoryStrategyType.class);
         this.role = in.readOptionalString();
         if (in.readBoolean()) {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
@@ -128,7 +128,7 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     public static MLMemory parse(XContentParser parser) throws IOException {
         String memory = null;
-        MemoryType memoryType = null;
+        MemoryStrategyType memoryType = null;
         String role = null;
         Map<String, String> namespace = null;
         Instant createdTime = null;
@@ -145,7 +145,7 @@ public class MLMemory implements ToXContentObject, Writeable {
                     memory = parser.text();
                     break;
                 case MEMORY_TYPE_FIELD:
-                    memoryType = MemoryType.fromString(parser.text());
+                    memoryType = MemoryStrategyType.fromString(parser.text());
                     break;
                 case ROLE_FIELD:
                     role = parser.text();

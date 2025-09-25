@@ -28,7 +28,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
@@ -45,7 +45,7 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private ShortTermMemoryType memoryType;  // Auto-detected from fields
+    private MemoryType memoryType;  // Auto-detected from fields
     private List<MessageInput> messages;
     private Map<String, Object> data;
 
@@ -56,7 +56,7 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
 
     public MLCreateEventInput(
         String memoryContainerId,
-        ShortTermMemoryType memoryType,
+        MemoryType memoryType,
         List<MessageInput> messages,
         Map<String, Object> data,
         Map<String, String> namespace,
@@ -73,10 +73,10 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
 
         // Auto-detect memory type and set infer defaults
         if (messages != null && !messages.isEmpty()) {
-            this.memoryType = ShortTermMemoryType.CONVERSATIONAL;
+            this.memoryType = MemoryType.CONVERSATIONAL;
             this.infer = infer; // User can override
         } else if (data != null) {
-            this.memoryType = ShortTermMemoryType.DATA;
+            this.memoryType = MemoryType.DATA;
             this.infer = false; // Always false for data
         } else {
             this.memoryType = memoryType; // Use provided type if neither messages nor data
@@ -108,7 +108,7 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
             }
         }
 
-        if (infer && memoryType != ShortTermMemoryType.CONVERSATIONAL) {
+        if (infer && memoryType != MemoryType.CONVERSATIONAL) {
             throw new IllegalArgumentException("Infer is only supported for conversational memory");
         }
 
@@ -119,7 +119,7 @@ public class MLCreateEventInput implements ToXContentObject, Writeable {
 
     public MLCreateEventInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readEnum(ShortTermMemoryType.class);
+        this.memoryType = in.readEnum(MemoryType.class);
         if (in.readBoolean()) {
             int messagesSize = in.readVInt();
             this.messages = new ArrayList<>(messagesSize);

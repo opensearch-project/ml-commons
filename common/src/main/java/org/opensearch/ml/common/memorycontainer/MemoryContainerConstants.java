@@ -32,7 +32,8 @@ public class MemoryContainerConstants {
     public static final String STRATEGIES_FIELD = "strategies";
     public static final String STRATEGY_ID_FIELD = "id";
     public static final String STRATEGY_ENABLED_FIELD = "enabled";
-    public static final String STRATEGY_TYPE_FIELD = "type";
+    public static final String STRATEGY_FIELD = "strategy";
+    public static final String STRATEGY_TYPE_FIELD = "type";  // Kept for backward compatibility
     public static final String INDEX_SETTINGS_FIELD = "index_settings";
 
     // Default values
