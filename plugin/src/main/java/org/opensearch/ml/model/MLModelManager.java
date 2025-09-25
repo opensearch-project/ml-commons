@@ -38,6 +38,8 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_P
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -63,6 +65,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -179,6 +182,7 @@ public class MLModelManager {
     private final ThreadPool threadPool;
     private final NamedXContentRegistry xContentRegistry;
     private final ModelHelper modelHelper;
+    private Settings settings;
 
     private final MLModelCacheHelper modelCacheHelper;
     private final MLStats mlStats;
@@ -228,6 +232,7 @@ public class MLModelManager {
         this.threadPool = threadPool;
         this.xContentRegistry = xContentRegistry;
         this.modelHelper = modelHelper;
+        this.settings = settings;
         this.clusterService = clusterService;
         this.scriptService = scriptService;
         this.modelCacheHelper = modelCacheHelper;
@@ -1440,30 +1445,36 @@ public class MLModelManager {
         setupRateLimiter(modelId, eligibleNodeCount, mlModel.getRateLimiter());
         setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
         setupModelInterface(modelId, mlModel.getModelInterface());
-        if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-            setupParamsAndPredictable(modelId, mlModel);
+        ActionListener<String> initModelActionListener = ActionListener.wrap(r -> {
             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
             modelCacheHelper.refreshLastAccessTime(modelId);
-            wrappedListener.onResponse("successful");
-            return;
+            wrappedListener.onResponse(r);
+        }, e -> {
+            log.error("Failed to deploy model, model id: {}", modelId, e);
+            wrappedListener.onFailure(e);
+        });
+        if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
+            setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
         }
         log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
         getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
             mlModel.setConnector(connector);
-            setupParamsAndPredictable(modelId, mlModel);
-            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
-            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-            modelCacheHelper.refreshLastAccessTime(modelId);
-            wrappedListener.onResponse("successful");
+            setupParamsAndPredictable(modelId, mlModel, initModelActionListener);
             log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
         }, wrappedListener::onFailure));
     }
 
-    private void setupParamsAndPredictable(String modelId, MLModel mlModel) {
+    private void setupParamsAndPredictable(String modelId, MLModel mlModel, ActionListener<String> listener) {
         Map<String, Object> params = setUpParameterMap(modelId, mlModel.getTenantId());
-        Predictable predictable = mlEngine.deploy(mlModel, params);
-        modelCacheHelper.setPredictor(modelId, predictable);
+        ActionListener<Predictable> wrappedListener = ActionListener.wrap(r -> {
+            modelCacheHelper.setPredictor(modelId, r);
+            listener.onResponse("successful");
+        }, e -> {
+            log.error("Failed to deploy model", e);
+            listener.onFailure(e);
+        });
+        mlEngine.deploy(mlModel, params, wrappedListener);
     }
 
     private Map<String, Object> setUpParameterMap(String modelId, String tenantId) {
@@ -1497,6 +1508,8 @@ public class MLModelManager {
             log.info("Setting up ML guard parameter for ML predictor.");
         }
         params.put(CONNECTOR_PRIVATE_IP_ENABLED, mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+        params.put(SDK_CLIENT, sdkClient);
+        params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);
     }
 
@@ -1522,16 +1535,16 @@ public class MLModelManager {
                 setupMLGuard(modelId, mlModel.getTenantId(), mlModel.getGuardrails());
                 setupModelInterface(modelId, mlModel.getModelInterface());
                 if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+                    String completeModelCacheUpdateMessage = String
+                        .format(Locale.ROOT, "Completed the model cache update for the remote model %s", modelId);
                     if (mlModel.getConnector() != null) {
-                        setupParamsAndPredictable(modelId, mlModel);
-                        wrappedListener.onResponse("Successfully updated model cache for the remote model " + modelId);
-                        log.info("Completed the model cache update for the remote model {}", modelId);
+                        setupParamsAndPredictable(modelId, mlModel, wrappedListener);
+                        log.info(completeModelCacheUpdateMessage);
                     } else {
                         getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
                             mlModel.setConnector(connector);
-                            setupParamsAndPredictable(modelId, mlModel);
-                            wrappedListener.onResponse("Successfully updated model cache for the remote model " + modelId);
-                            log.info("Completed the model cache update for the remote model {}", modelId);
+                            setupParamsAndPredictable(modelId, mlModel, wrappedListener);
+                            log.info(completeModelCacheUpdateMessage);
                         }, wrappedListener::onFailure));
                     }
                 }
@@ -1570,16 +1583,16 @@ public class MLModelManager {
                     int eligibleNodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
                     setupUserRateLimiterMap(modelId, eligibleNodeCount, controller.getUserRateLimiter());
                     if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+                        String deployModelControllerCompleteMessage = String
+                            .format(Locale.ROOT, "Deployed model controller for the remote model %s", modelId);
                         if (mlModel.getConnector() != null) {
-                            setupParamsAndPredictable(modelId, mlModel);
-                            wrappedListener.onResponse("Successfully deployed model controller for the remote model " + modelId);
-                            log.info("Deployed model controller for the remote model {}", modelId);
+                            setupParamsAndPredictable(modelId, mlModel, wrappedListener);
+                            log.info(deployModelControllerCompleteMessage);
                         } else {
                             getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
                                 mlModel.setConnector(connector);
-                                setupParamsAndPredictable(modelId, mlModel);
-                                wrappedListener.onResponse("Successfully deployed model controller for the remote model " + modelId);
-                                log.info("Deployed model controller for the remote model {}", modelId);
+                                setupParamsAndPredictable(modelId, mlModel, wrappedListener);
+                                log.info(deployModelControllerCompleteMessage);
                             }, wrappedListener::onFailure));
                         }
                         return;
@@ -1608,16 +1621,16 @@ public class MLModelManager {
                 getModel(modelId, ActionListener.wrap(mlModel -> {
                     removeUserRateLimiterMap(modelId);
                     if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+                        String undeployModelControllerCompleteMessage = String
+                            .format(Locale.ROOT, "Undeployed model controller for the remote model %s", modelId);
                         if (mlModel.getConnector() != null) {
-                            setupParamsAndPredictable(modelId, mlModel);
-                            wrappedListener.onResponse("Successfully undeployed model controller for the remote model " + modelId);
-                            log.info("Undeployed model controller for the remote model {}", modelId);
+                            setupParamsAndPredictable(modelId, mlModel, wrappedListener);
+                            log.info(undeployModelControllerCompleteMessage);
                         } else {
                             getConnector(mlModel.getConnectorId(), mlModel.getTenantId(), ActionListener.wrap(connector -> {
                                 mlModel.setConnector(connector);
-                                setupParamsAndPredictable(modelId, mlModel);
-                                wrappedListener.onResponse("Successfully undeployed model controller for the remote model " + modelId);
-                                log.info("Undeployed model controller for the remote model {}", modelId);
+                                setupParamsAndPredictable(modelId, mlModel, wrappedListener);
+                                log.info(undeployModelControllerCompleteMessage);
                             }, wrappedListener::onFailure));
                         }
                         return;
@@ -1995,7 +2008,12 @@ public class MLModelManager {
                 return;
             }
 
-            parseAndReturnModel(getResponse, response.source().get(ALGORITHM_FIELD).toString(), modelId, listener);
+            parseAndReturnModel(
+                getResponse,
+                Optional.ofNullable(response.source().get(FUNCTION_NAME_FIELD)).orElse(response.source().get(ALGORITHM_FIELD)).toString(),
+                modelId,
+                listener
+            );
         } catch (Exception e) {
             listener.onFailure(e);
         }

@@ -8,7 +8,14 @@ package org.opensearch.ml.engine;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
@@ -19,14 +26,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -37,6 +47,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -57,7 +68,10 @@ import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalcu
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchModule;
+
+import software.amazon.awssdk.utils.ImmutableMap;
 
 // TODO: refactor MLEngineClassLoader's static functions to avoid mockStatic
 public class MLEngineTest extends MLStaticMockBase {
@@ -522,5 +536,75 @@ public class MLEngineTest extends MLStaticMockBase {
         assertNotNull(decryptedCredential);
         assertEquals("test_key_value", decryptedCredential.get("key"));
         assertEquals(null, decryptedCredential.get("region"));
+    }
+
+    @Test
+    public void testDeploy_withPredictableActionListener_successful() throws IOException {
+        String encryptedAccessKey = mlEngine.encrypt("access-key", null);
+        String encryptedSecretKey = mlEngine.encrypt("secret-key", null);
+        String testConnector = String.format(Locale.ROOT, """
+            {
+                "name": "sagemaker: t2ppl",
+                "description": "t2ppl model",
+                "version": 1,
+                "protocol": "aws_sigv4",
+                "credential": {
+                    "access_key": "%s",
+                    "secret_key": "%s"
+                },
+                "parameters": {
+                    "region": "us-east-1",
+                    "service_name": "sagemaker",
+                    "input_type": "search_document"
+                },
+                "actions": [
+                    {
+                        "action_type": "predict",
+                        "method": "POST",
+                        "headers": {
+                            "content-type": "application/json",
+                            "x-amz-content-sha256": "required"
+                        },
+                        "url": "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/my-endpoint/invocations",
+                        "request_body": "{\\"prompt\\":\\"${parameters.prompt}\\"}"
+                    }
+                ]
+            }
+            """, encryptedAccessKey, encryptedSecretKey);
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                testConnector
+            );
+        parser.nextToken();
+
+        MLModel model = mock(MLModel.class);
+        AwsConnector connector = new AwsConnector("aws_sigv4", parser);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getConnector()).thenReturn(connector);
+        ActionListener<Predictable> actionListener = mock(ActionListener.class);
+        SdkClient sdkClient = mock(SdkClient.class);
+        when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
+        Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
+        mlEngine.deploy(model, params, actionListener);
+        verify(actionListener).onResponse(any(Predictable.class));
+    }
+
+    @Test
+    public void testDeploy_withPredictableActionListener_exceptional() {
+        MLModel model = mock(MLModel.class);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(model.getConnector()).thenThrow(new RuntimeException("Runtime error"));
+        ActionListener<Predictable> actionListener = mock(ActionListener.class);
+        SdkClient sdkClient = mock(SdkClient.class);
+        when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
+        Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
+        mlEngine.deploy(model, params, actionListener);
+        ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Runtime error"));
     }
 }

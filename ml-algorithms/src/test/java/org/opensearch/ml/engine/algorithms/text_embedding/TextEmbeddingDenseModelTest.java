@@ -556,6 +556,13 @@ public class TextEmbeddingDenseModelTest {
     }
 
     @Test
+    public void test_initModelAsync_throwIllegalStateException() {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage("Method is not implemented");
+        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor);
+    }
+
+    @Test
     public void initModel_NullModelZipFile() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model file is null");
