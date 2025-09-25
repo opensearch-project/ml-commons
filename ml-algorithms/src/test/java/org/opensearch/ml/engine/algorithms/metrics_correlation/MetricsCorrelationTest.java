@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -839,5 +840,22 @@ public class MetricsCorrelationTest {
             0,
             false
         );
+    }
+
+    @Test
+    public void testIndexMappingContentLoading() throws Exception {
+        // Test that the mapping content is loaded correctly from the file
+        // This test verifies the fix for the XContent parsing issue
+        String mappingContent = org.opensearch.ml.common.utils.IndexUtils
+            .getMappingFromFile(org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH);
+
+        // Verify that the mapping content is not null and contains expected JSON structure
+        assertNotNull("Mapping content should not be null", mappingContent);
+        assertTrue("Mapping content should contain JSON structure", mappingContent.contains("{"));
+        assertTrue("Mapping content should contain mappings", mappingContent.contains("mappings") || mappingContent.contains("properties"));
+
+        // Verify that it's not just a file path (the old bug)
+        assertFalse(mappingContent.equals(org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH));
+        assertFalse(mappingContent.contains(".json"));
     }
 }
