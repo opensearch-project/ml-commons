@@ -35,6 +35,7 @@ public class InteractionTests {
             .builder()
             .id("test-interaction-id")
             .createTime(time)
+            .updatedTime(time)
             .conversationId("conversation-id")
             .input("sample inputs")
             .promptTemplate("some prompt template")
@@ -135,7 +136,7 @@ public class InteractionTests {
         interaction.toXContent(builder, EMPTY_PARAMS);
         String interactionContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"updated_time\":null,\"response\":\"sample response\",\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}",
+            "{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"response\":\"sample response\",\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}",
             interactionContent
         );
     }
