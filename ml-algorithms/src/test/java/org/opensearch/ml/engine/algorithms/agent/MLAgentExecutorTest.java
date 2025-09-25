@@ -1446,4 +1446,82 @@ public class MLAgentExecutorTest {
         Exception exception = exceptionCaptor.getValue();
         Assert.assertEquals(memoryException, exception);
     }
+
+    @Test
+    public void test_AsyncExecution_NullOutput() throws IOException {
+        Mockito.doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse(null);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task-123", 1, 0, 2, true);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput output = (MLTaskOutput) objectCaptor.getValue();
+        Assert.assertNotNull(output.getTaskId());
+    }
+
+    @Test
+    public void test_AsyncExecution_Failure() throws IOException {
+        Mockito.doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Agent execution failed"));
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task-123", 1, 0, 2, true);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput output = (MLTaskOutput) objectCaptor.getValue();
+        Assert.assertNotNull(output.getTaskId());
+    }
 }
