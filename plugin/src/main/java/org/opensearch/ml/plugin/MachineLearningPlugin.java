@@ -7,6 +7,7 @@ package org.opensearch.ml.plugin;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SESSION_MANAGEMENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_INDEX_PATTERN;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
@@ -114,7 +115,9 @@ import org.opensearch.ml.action.memorycontainer.TransportDeleteMemoryContainerAc
 import org.opensearch.ml.action.memorycontainer.TransportGetMemoryContainerAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteMemoryAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportDeleteWorkingMemoryAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportGetMemoryAction;
+import org.opensearch.ml.action.memorycontainer.memory.TransportGetWorkingMemoryAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportSearchMemoriesAction;
 import org.opensearch.ml.action.memorycontainer.memory.TransportUpdateMemoryAction;
 import org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction;
@@ -211,7 +214,9 @@ import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDelet
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteWorkingMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetWorkingMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -321,6 +326,7 @@ import org.opensearch.ml.rest.RestMLDeleteMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
+import org.opensearch.ml.rest.RestMLDeleteWorkingMemoryAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
@@ -335,6 +341,7 @@ import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
+import org.opensearch.ml.rest.RestMLGetWorkingMemoryAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLPredictionStreamAction;
@@ -562,6 +569,8 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLDeleteMemoryAction.INSTANCE, TransportDeleteMemoryAction.class),
                 new ActionHandler<>(MLUpdateMemoryAction.INSTANCE, TransportUpdateMemoryAction.class),
                 new ActionHandler<>(MLGetMemoryAction.INSTANCE, TransportGetMemoryAction.class),
+                new ActionHandler<>(MLGetWorkingMemoryAction.INSTANCE, TransportGetWorkingMemoryAction.class),
+                new ActionHandler<>(MLDeleteWorkingMemoryAction.INSTANCE, TransportDeleteWorkingMemoryAction.class),
                 new ActionHandler<>(MLRegisterAgentAction.INSTANCE, TransportRegisterAgentAction.class),
                 new ActionHandler<>(MLSearchAgentAction.INSTANCE, TransportSearchAgentAction.class),
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
@@ -1000,6 +1009,8 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
         RestMLGetMemoryAction restMLGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
+        RestMLGetWorkingMemoryAction restMLGetWorkingMemoryAction = new RestMLGetWorkingMemoryAction(mlFeatureEnabledSetting);
+        RestMLDeleteWorkingMemoryAction restMLDeleteWorkingMemoryAction = new RestMLDeleteWorkingMemoryAction(mlFeatureEnabledSetting);
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
@@ -1073,6 +1084,8 @@ public class MachineLearningPlugin extends Plugin
                 restMLDeleteMemoryAction,
                 restMLUpdateMemoryAction,
                 restMLGetMemoryAction,
+                restMLGetWorkingMemoryAction,
+                restMLDeleteWorkingMemoryAction,
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,
@@ -1180,12 +1193,12 @@ public class MachineLearningPlugin extends Plugin
         );
 
         FixedExecutorBuilder agenticMemoryThreadPool = new FixedExecutorBuilder(
-                settings,
-                AGENTIC_MEMORY_THREAD_POOL,
-                OpenSearchExecutors.allocatedProcessors(settings) * 4,
-                10000,
-                ML_THREAD_POOL_PREFIX + AGENTIC_MEMORY_THREAD_POOL,
-                false
+            settings,
+            AGENTIC_MEMORY_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + AGENTIC_MEMORY_THREAD_POOL,
+            false
         );
         FixedExecutorBuilder streamPredictThreadPool = new FixedExecutorBuilder(
             settings,
@@ -1430,6 +1443,7 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(MCP_SESSION_MANAGEMENT_INDEX, "ML Commons MCP session management Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(MCP_TOOLS_INDEX, "ML Commons MCP tools Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_JOBS_INDEX, "ML Commons Jobs Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_AGENTIC_MEMORY_INDEX_PATTERN, "ML Commons Agentic Memory Index Pattern"));
         return systemIndexDescriptors;
     }
 
