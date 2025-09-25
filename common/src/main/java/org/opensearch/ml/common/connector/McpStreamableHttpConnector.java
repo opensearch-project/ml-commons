@@ -239,7 +239,6 @@ public class McpStreamableHttpConnector implements Connector {
     }
 
     private void parseFromStream(StreamInput input) throws IOException {
-        Version streamInputVersion = input.getVersion();
         this.name = input.readOptionalString();
         this.version = input.readOptionalString();
         this.description = input.readOptionalString();
@@ -263,10 +262,8 @@ public class McpStreamableHttpConnector implements Connector {
         if (input.readBoolean()) {
             this.headers = input.readMap(s -> s.readString(), s -> s.readString());
         }
-        if (streamInputVersion.onOrAfter(VERSION_3_1_0)) {
-            if (input.readBoolean()) {
-                this.parameters = input.readMap(s -> s.readString(), s -> s.readString());
-            }
+        if (input.readBoolean()) {
+            this.parameters = input.readMap(s -> s.readString(), s -> s.readString());
         }
     }
 

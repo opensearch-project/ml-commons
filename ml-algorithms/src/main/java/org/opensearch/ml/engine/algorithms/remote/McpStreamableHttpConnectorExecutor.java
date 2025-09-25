@@ -18,10 +18,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMAB
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Logger;
@@ -65,9 +62,10 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
 
     public List<MLToolSpec> getMcpToolSpecs() {
         String mcpServerUrl = connector.getUrl();
-        String endpoint = connector.getParameters() != null && connector.getParameters().containsKey(ENDPOINT_FIELD)
-            ? connector.getParameters().get(ENDPOINT_FIELD)
-            : MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT;
+        String endpoint = Optional
+            .ofNullable(connector.getParameters())
+            .map(params -> params.get(ENDPOINT_FIELD))
+            .orElse(MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT);
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
         try {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
