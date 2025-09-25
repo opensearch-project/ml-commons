@@ -25,9 +25,9 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryDecisionRequest;
-import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -51,8 +51,13 @@ public class MemoryProcessingService {
         this.xContentRegistry = xContentRegistry;
     }
 
-    public void runMemoryStrategy(MemoryStrategy strategy, List<MessageInput> messages, MemoryConfiguration memoryConfig, ActionListener<List<String>> listener) {
-        if ("semantic".equalsIgnoreCase(strategy.getType())) {//TODO: change to enum
+    public void runMemoryStrategy(
+        MemoryStrategy strategy,
+        List<MessageInput> messages,
+        MemoryConfiguration memoryConfig,
+        ActionListener<List<String>> listener
+    ) {
+        if ("semantic".equalsIgnoreCase(strategy.getType())) {// TODO: change to enum
             extractFactsFromConversation(messages, memoryConfig, listener);
         } else {
             listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));

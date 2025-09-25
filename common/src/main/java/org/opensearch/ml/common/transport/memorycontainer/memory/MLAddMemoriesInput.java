@@ -33,12 +33,12 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
-import org.opensearch.ml.common.utils.StringUtils;
 
 /**
  * Input data for adding memory to a memory container
