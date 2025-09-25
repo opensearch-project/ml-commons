@@ -8,6 +8,9 @@ package org.opensearch.ml.common.output.model;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -281,5 +284,16 @@ public class ModelTensorsTest {
         String expected =
             "{\"output\":[{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}]}";
         assertEquals(expected, result);
+    }
+
+    @Test
+    public void test_ToString_ThrowsException() throws IOException {
+        ModelTensors spyTensors = spy(modelTensors);
+        doThrow(new IOException("Mock IOException")).when(spyTensors).toXContent(any(XContentBuilder.class), any());
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Can't convert ModelTensor to string");
+
+        spyTensors.toString();
     }
 }
