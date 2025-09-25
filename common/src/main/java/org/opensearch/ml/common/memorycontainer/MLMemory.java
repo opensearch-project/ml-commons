@@ -26,11 +26,11 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.ml.common.utils.StringUtils;
 
 /**
  * Represents a memory entry in a memory container
