@@ -16,12 +16,16 @@ public class QueryPlanningPromptTemplate {
         + "- wildcard / prefix on keyword: \"starts with\" / pattern matching.\n"
         + "- exists: field presence/absence.\n"
         + "- nested query / nested agg: ONLY if the mapping for that exact path (or a parent) has \"type\":\"nested\".\n"
+        + "- neural: semantic similarity on a 'semantic' or 'knn_vector' field (dense). Use \"query_text\" and \"k\"; include \"model_id\" unless bound in mapping.\n"
+        + "- neural (top-level): allowed when it's the only relevance clause needed; otherwise wrap in a bool when combining with filters/other queries.\n"
         + "\n"
         + "Mechanics:\n"
         + "- Put exact constraints (term, terms, range, exists, prefix, wildcard) in bool.filter (non-scoring). Put full-text relevance (match, match_phrase, multi_match) in bool.must.\n"
         + "- Top N items/products/documents: return top hits (set \"size\": N as an integer) and sort by the relevant metric(s). Do not use aggregations for item lists.\n"
+        + "- Neural retrieval size: set \"k\" ≥ \"size\" (e.g. heuristic, k = max(size*5, 100)).\n"
         + "- Spelling tolerance: match_phrase does NOT support fuzziness; use match or multi_match with \"fuzziness\": \"AUTO\" when tolerant matching is needed.\n"
-        + "- Numeric note: use integers for sizes (e.g., \"size\": 5), not floats.\n";
+        + "- Text operators (OR vs AND): default to OR for natural-language queries; to tighten, use minimum_should_match (e.g., \"75%\" requires ~75% of terms). Use AND only when every token is essential; if order/adjacency matters, use match_phrase. (Applies to match/multi_match.)\n"
+        + "- Numeric note: use ONLY integers for size and k (e.g., \"size\": 5), not floats (wrong e.g., \"size\": 5.0).\n";
 
     public static final String AGGREGATION_RULES = "Aggregations (counts, averages, grouped summaries, distributions):\n"
         + "- Use aggregations when the user asks for grouped summaries (e.g., counts by category, averages by brand, or top N categories/brands).\n"
@@ -32,6 +36,50 @@ public class QueryPlanningPromptTemplate {
         + "- Use sub-aggregations + order for \"top N groups by metric\".\n"
         + "- If grouping/filtering exactly on a text field, use its .keyword sub-field when present.\n";
 
+    public static final String SEMANTIC_SEARCH_RULES =
+        """
+            NEURAL / SEMANTIC SEARCH (DENSE ONLY)
+            When to use:
+            - The intent is conceptual/semantic (“about”, “similar to”, long phrases, synonyms), and the mapping has:
+              • type: "semantic", or
+              • type: "knn_vector".
+            - You also have exact filters (term/range/etc.) but text relevance still matters → add neural on that text field.
+            - The user explicitly asks for semantic/neural/vector/embedding search.
+            When NOT to use:
+            - The request is purely structured/exact (IDs, codes, only term/range).
+            - No suitable "semantic" or "knn_vector" field exists.
+            - No Model ID found for neural search.
+            How to query:
+            - Use the \"neural\" clause against the chosen field.
+            - Required: \"query_text\" and \"k\".
+            - \"model_id\" rules:
+              • For \"semantic\" fields, model usually bound in mapping → omit unless overriding.
+              • For \"knn_vector\", include \"model_id\" unless a default is bound elsewhere.
+              • If model ID is not found, do not generate query with Neural clause.
+            Top-level usage:
+            - If there are no filters/other clauses, \"neural\" MAY be the root query (no bool).
+            - Use a bool wrapper only when combining with filters or additional queries; keep exact filters in bool.filter.
+            Sizing:
+            - \"size\": N is the returned hits.
+            - Set \"k\" ≥ \"size\" (heuristic: k (int) = max(size*5, 100), reasonable cap ≈ 1000).
+            Field choice:
+            - Prefer a field that semantically represents intent (e.g., description/title/content).
+            - If multiple candidates exist, pick the single best; add more only if clearly beneficial.
+            Fallback:
+            - If no suitable neural field exists or if no model id is found, do NOT add a neural clause; proceed with classic DSL or fall back to DEFAULT_QUERY if nothing relevant exists.
+            """;
+
+    public static final String DATE_RULES =
+        """
+            DATE RULES
+            - Use range on date/date_nanos in bool.filter.
+            - Emit ISO 8601 UTC ('Z') bounds; don't set time_zone for explicit UTC. (now is UTC)
+            - Date math: now±N{y|M|w|d|h|m|s} (M=month, m=minute; e.g., now-7d .. now = last 7 days).
+            - Rounding: "/UNIT" floors to start (now/d, now/w, now/M, now/y). Examples: last full day → now-1d/d .. now/d; last full month → now-1M/M .. now/M.
+            - End boundaries: prefer the next unit’s start (avoid 23:59:59).
+            - Formats: only add "format" when inputs aren’t default; epoch_millis allowed.
+            - Buckets: use date_histogram (set calendar_interval or fixed_interval); add time_zone only when local day/week/month buckets are required.
+            """;
     // ==== FIELD SELECTION & PROXYING ====
     public static final String FIELD_SELECTION_AND_PROXYING =
         "Goal: pick the smallest set of mapping fields that best capture the user's intent.\n"
@@ -50,6 +98,10 @@ public class QueryPlanningPromptTemplate {
         + "\n"
         + AGGREGATION_RULES
         + "\n"
+        + DATE_RULES
+        + "\n"
+        + SEMANTIC_SEARCH_RULES
+        + "\n"
         + "==== FIELD SELECTION & PROXYING ====\n"
         + FIELD_SELECTION_AND_PROXYING;
 
@@ -64,12 +116,12 @@ public class QueryPlanningPromptTemplate {
         + "\n";
 
     // ==== EXAMPLES ==== (Field selection lines included only where they clarify proxies vs. distractors)
-    public static final String EXAMPLE_1 = "Example 1 — numeric range\n"
-        + "Input: Show all products that cost more than 50 dollars.\n"
-        + "Mapping: { \"properties\": { \"price\": { \"type\": \"float\" }, \"cost\": { \"type\": \"float\" }, \"color\": { \"type\": \"keyword\" } } }\n"
-        + "Query Fields: [price]\n"
-        + "Field selection: relevant=[price, cost]; ignored=[color]\n"
-        + "Output: { \"query\": { \"range\": { \"price\": { \"gt\": 50 } } } }\n";
+    public static final String EXAMPLE_1 = "Example 1 — numeric + date range (merged)\n"
+        + "Input: Show all products that cost more than 50 dollars in the last 30 days.\n"
+        + "Mapping: { \"properties\": { \"price\": { \"type\": \"float\" }, \"created_at\": { \"type\": \"date\" }, \"color\": { \"type\": \"keyword\" } } }\n"
+        + "Query Fields: [price, created_at]\n"
+        + "Field selection: relevant=[price(float), created_at(date)]; ignored=[color]\n"
+        + "Output: { \"query\": { \"bool\": { \"filter\": [{ \"range\": { \"price\": { \"gt\": 50 } } }, { \"range\": { \"created_at\": { \"gte\": \"now-30d/d\", \"lte\": \"now\" } } } ] } } }\n";
 
     public static final String EXAMPLE_2 = "Example 2 — text match + exact filter (spelling tolerant)\n"
         + "Input: Find employees in London who are active.\n"
@@ -83,57 +135,63 @@ public class QueryPlanningPromptTemplate {
         + "Mapping: { \"properties\": { \"city\": { \"type\": \"text\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } }, \"department\": { \"type\": \"keyword\" } } }\n"
         + "Output: { \"query\": { \"match_phrase\": { \"city\": \"New York City\" } } }\n";
 
-    public static final String EXAMPLE_4 = "Example 4 — multi_match across multiple text fields (spelling tolerant)\n"
-        + "Input: Find profiles mentioning \"data engineering\" in the title or summary.\n"
-        + "Mapping: { \"properties\": { \"title\": { \"type\": \"text\" }, \"summary\": { \"type\": \"text\" }, \"department\": { \"type\": \"keyword\" }, \"region\": { \"type\": \"keyword\" } } }\n"
-        + "Output: { \"query\": { \"multi_match\": { \"query\": \"data engineering\", \"fields\": [\"title\", \"summary\"], \"fuzziness\": \"AUTO\" } } }\n";
+    public static final String EXAMPLE_4 = "Example 4 — multi_match across fields + SHOULD filters\n"
+        + "Input: Find profiles mentioning \\\"data engineering\\\" in the title or summary that are research papers or blogs.\n"
+        + "Mapping: { \"properties\": { \"title\": { \"type\": \"text\" }, \"summary\": { \"type\": \"text\" }, \"type\": { \"type\": \"keyword\" } } }\n"
+        + "Output: { \"query\": { \"bool\": { \"must\": [ { \"multi_match\": { \"query\": \"data engineering\", \"fields\": [\"title\", \"summary\"], \"fuzziness\": \"AUTO\" } } ], \"should\": [ { \"term\": { \"type\": \"research paper\" } }, { \"term\": { \"type\": \"blog\" } } ], \"minimum_should_match\": 1 } } }\n";
 
-    public static final String EXAMPLE_5 = "Example 5 — bool with SHOULD\n"
-        + "Input: Search articles about \"machine learning\" that are research papers or blogs.\n"
-        + "Mapping: { \"properties\": { \"content\": { \"type\": \"text\" }, \"type\": { \"type\": \"keyword\" } } }\n"
-        + "Output: { \"query\": { \"bool\": { \"must\": [ { \"match\": { \"content\": \"machine learning\" } } ], \"should\": [ { \"term\": { \"type\": \"research paper\" } }, { \"term\": { \"type\": \"blog\" } } ], \"minimum_should_match\": 1 } } }\n";
-
-    public static final String EXAMPLE_6 = "Example 6 — wildcard + exists (exact filters in bool.filter)\n"
+    public static final String EXAMPLE_5 = "Example 5 — wildcard + exists (exact filters in bool.filter)\n"
         + "Input: Find users whose email starts with \"sam\" and who have a phone number on file.\n"
         + "Mapping: { \"properties\": { \"email\": { \"type\": \"keyword\" }, \"phone\": { \"type\": \"keyword\" }, \"avatar_url\": { \"type\": \"keyword\" } } }\n"
         + "Field selection: relevant=[email(prefix), phone(exists)]; ignored=[avatar_url]\n"
         + "Output: { \"query\": { \"bool\": { \"filter\": [ { \"prefix\": { \"email\": \"sam\" } }, { \"exists\": { \"field\": \"phone\" } } ] } } }\n";
 
-    public static final String EXAMPLE_7 = "Example 7 — nested query (only when mapping says nested)\n"
+    public static final String EXAMPLE_6 = "Example 6 — nested query (only when mapping says nested)\n"
         + "Input: Find books where an author's first_name is John AND last_name is Doe.\n"
         + "Mapping: { \"properties\": { \"author\": { \"type\": \"nested\", \"properties\": { \"first_name\": { \"type\": \"text\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } }, \"last_name\": { \"type\": \"text\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } } } }, \"title\": { \"type\": \"text\" } } }\n"
         + "Output: { \"query\": { \"nested\": { \"path\": \"author\", \"query\": { \"bool\": { \"must\": [ { \"term\": { \"author.first_name.keyword\": \"John\" } }, { \"term\": { \"author.last_name.keyword\": \"Doe\" } } ] } } } } }\n";
 
-    public static final String EXAMPLE_8 = "Example 8 — terms aggregation\n"
+    public static final String EXAMPLE_7 = "Example 7 — terms aggregation\n"
         + "Input: Show the number of orders per status.\n"
         + "Mapping: { \"properties\": { \"status\": { \"type\": \"keyword\" }, \"order_id\": { \"type\": \"keyword\" } } }\n"
         + "Output: { \"size\": 0, \"aggs\": { \"orders_by_status\": { \"terms\": { \"field\": \"status\" } } } }\n";
 
-    public static final String EXAMPLE_9 = "Example 9 — top N items by metric (hits + sort, no aggs)\n"
+    public static final String EXAMPLE_8 = "Example 8 — top N items by metric (hits + sort, no aggs)\n"
         + "Input: Show the 5 highest-rated electronics products.\n"
         + "Mapping: { \"properties\": { \"category\": { \"type\": \"keyword\" }, \"rating\": { \"type\": \"float\" }, \"reviews_count\": { \"type\": \"integer\" }, \"product_name\": { \"type\": \"text\" }, \"description\": { \"type\": \"text\" } } }\n"
         + "Field selection: relevant=[category(keyword), rating(float), reviews_count(integer), product_name(text), description(text)]\n"
         + "Output: { \"size\": 5, \"query\": { \"bool\": { \"filter\": [ { \"term\": { \"category\": \"electronics\" } } ] } }, \"sort\": [ { \"rating\": { \"order\": \"desc\" } }, { \"reviews_count\": { \"order\": \"desc\" } } ] }\n";
 
-    public static final String EXAMPLE_10 = "Example 10 — top N categories (grouping via aggs; not for item lists)\n"
+    public static final String EXAMPLE_9 = "Example 9 — top N categories (grouping via aggs; not for item lists)\n"
         + "Input: List the top 3 categories by total sales volume.\n"
         + "Mapping: { \"properties\": { \"category\": { \"type\": \"text\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } }, \"sales\": { \"type\": \"float\" }, \"region\": { \"type\": \"keyword\" } } }\n"
         + "Field selection: relevant=[category.keyword, sales]; ignored=[region]\n"
         + "Output: { \"size\": 0, \"aggs\": { \"top_categories\": { \"terms\": { \"field\": \"category.keyword\", \"size\": 3, \"order\": { \"total_sales\": \"desc\" } }, \"aggs\": { \"total_sales\": { \"sum\": { \"field\": \"sales\" } } } } } }\n";
 
-    public static final String EXAMPLE_11 = "Example 11 — ambiguous mapping, proxy success\n"
+    public static final String EXAMPLE_10 = "Example 10 — ambiguous mapping, proxy success\n"
         + "Input: Give medicines shipped from Vietnam.\n"
         + "Mapping: { \"properties\": { \"item_name\": { \"type\": \"text\" }, \"product_category\": { \"type\": \"keyword\" }, \"country\": { \"type\": \"keyword\" }, \"ship_status\": { \"type\": \"keyword\" }, \"notes\": { \"type\": \"text\" } } }\n"
         + "Query Fields: [product_category, origin_country]\n"
         + "Field selection: relevant=[product_category, country(proxy for origin), ship_status(proxy for shipped)]; ignored=[notes, item_name]\n"
         + "Output: { \"query\": { \"bool\": { \"filter\": [ { \"term\": { \"product_category\": \"medicines\" } }, { \"term\": { \"country\": \"Vietnam\" } }, { \"term\": { \"ship_status\": \"shipped\" } } ] } } }\n";
 
-    public static final String EXAMPLE_12 = "Example 12 — true fallback (no remotely relevant fields)\n"
+    public static final String EXAMPLE_11 = "Example 11 — true fallback (no remotely relevant fields)\n"
         + "Input: List satellites with periapsis above 400km.\n"
         + "Mapping: { \"properties\": { \"name\": { \"type\": \"text\" }, \"color\": { \"type\": \"keyword\" } } }\n"
         + "Output: "
         + DEFAULT_QUERY
         + "\n";
+
+    public static final String EXAMPLE_12 = "Example 12 — neural preferred with safe fallback (merged)\n"
+        + "Input: Find articles about \\\"LLM hallucinations\\\". Model Id may or may not be provided.\n"
+        + "Mapping: { \"properties\": { \"content\": {\"type\":\"text\"}, \"content_vector\": {\"type\":\"knn_vector\",\"dimension\":768}, \"tags\": {\"type\":\"keyword\"}, \"published_at\": {\"type\":\"date\"} } }\n"
+        + "Output (with model_id): { \"size\": 10, \"query\": { \"neural\": { \"content_vector\": { \"query_text\": \"LLM hallucinations\", \"model_id\": \"m-dense-001\", \"k\": 200 } } } }\n"
+        + "Output (fallback without model_id): { \"size\": 10, \"query\": { \"match\": { \"content\": { \"query\": \"LLM hallucinations\" } } } }\n";
+
+    public static final String EXAMPLE_13 = "Example 13 — neural on semantic field + exact filters (mapping includes non-semantic fields)\n"
+        + "Input: Find \\\"wireless noise cancelling headphones with multipoint\\\" under $200; brand Sony.\n"
+        + "Mapping: { \"properties\": { \"price\": {\"type\":\"float\"}, \"brand\": {\"type\":\"keyword\"}, \"title\": {\"type\":\"text\"}, \"description\": {\"type\":\"semantic\", \"model_id\":\"m-sem-123\"} } }\n"
+        + "Output: { \"size\": 10, \"query\": { \"bool\": { \"must\": [ { \"neural\": { \"description\": { \"query_text\": \"wireless noise cancelling headphones with multipoint\", \"k\": 120 } } } ], \"filter\": [ { \"range\": { \"price\": { \"lte\": 200 } } }, { \"term\": { \"brand\": \"Sony\" } } ] } } }\n";
 
     public static final String EXAMPLES = "==== EXAMPLES ====\n"
         + EXAMPLE_1
@@ -147,28 +205,33 @@ public class QueryPlanningPromptTemplate {
         + EXAMPLE_9
         + EXAMPLE_10
         + EXAMPLE_11
-        + EXAMPLE_12;
+        + EXAMPLE_12
+        + EXAMPLE_13;
 
-    public static final String PROMPT_SUFFIX = "==== INPUT ====\n"
-        + "Question: ${parameters.query_text}\n"
-        + "Mapping: ${parameters.index_mapping:-}\n"
-        + "Query Fields: ${parameters.query_fields:-}\n\n"
-        + "==== OUTPUT ====\n"
-        + "GIVE THE OUTPUT PART ONLY IN YOUR RESPONSE (a single JSON object)\n"
-        + "Use this template provided by the user as reference to generate the query: ${parameters.template}\n\n"
-        + "Output:";
+    public static final String TEMPLATE_USE_INSTRUCTIONS =
+        "Use this search template provided by the user as reference to generate the query: ${parameters.template}\n\n"
+            + "Note that this template might contain terms that are not relevant to the question at hand, in that case ignore the template";
 
-    public static final String DEFAULT_USER_PROMPT = PROMPT_PREFIX
+    public static final String DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT = PROMPT_PREFIX
         + "\n\n"
         + OUTPUT_FORMAT_INSTRUCTIONS
         + "\n"
         + EXAMPLES
-        + "\n\n"
-        + PROMPT_SUFFIX;
+        + "\n"
+        + TEMPLATE_USE_INSTRUCTIONS;
+
+    public static final String DEFAULT_QUERY_PLANNING_USER_PROMPT = "Question: ${parameters.question}\n"
+        + "Mapping: ${parameters.index_mapping:-}\n"
+        + "Query Fields: ${parameters.query_fields:-}\n"
+        + "Sample Document from index:${parameters.sample_document:-}\n"
+        + "In UTC:${parameters.current_time:-} format: yyyy-MM-dd'T'HH:mm:ss'Z'\n"
+        + "Embedding Model ID for Neural Search:${parameters.embedding_model_id:- not provided} \n"
+        + "==== OUTPUT ====\n"
+        + "GIVE THE OUTPUT PART ONLY IN YOUR RESPONSE (a single JSON object)\n"
+        + "Output:";
 
     // Template selection prompt
-
-    public static final String TEMPLATE_SELECTION_SYSTEM_PROMPT = "==== PURPOSE ====\n"
+    public static final String TEMPLATE_SELECTION_PURPOSE = "==== PURPOSE ====\n"
         + "You are an OpenSearch Search Template selector. Given a natural language question, a list of search template IDs and search template descriptions, choose the search template ID which is most related to the given question.\n\n";
 
     public static final String TEMPLATE_SELECTION_GOAL = "Given:\n"
@@ -200,7 +263,7 @@ public class QueryPlanningPromptTemplate {
         "- Your output MUST be exactly one of the provided template ids (regex: ^[A-Za-z0-9_-]+$).\n"
             + "- If no perfect match exists, pick the closest by the criteria above. Never output “none” or invent an id.";
 
-    public static final String TEMPLATE_SELECTION_INPUTS = "question: ${parameters.query_text}\n"
+    public static final String TEMPLATE_SELECTION_INPUTS = "question: ${parameters.question}\n"
         + "search_templates: ${parameters.search_templates}";
 
     public static final String TEMPLATE_SELECTION_EXAMPLES = "Example A: \n"
@@ -212,7 +275,8 @@ public class QueryPlanningPromptTemplate {
         + "]\n"
         + "Example output : 'product-search-template'";
 
-    public static final String TEMPLATE_SELECTION_USER_PROMPT = "==== GOAL ====\n"
+    public static final String TEMPLATE_SELECTION_SYSTEM_PROMPT = TEMPLATE_SELECTION_PURPOSE
+        + "==== GOAL ====\n"
         + TEMPLATE_SELECTION_GOAL
         + "\n"
         + "==== OUTPUT RULES ====\n"
@@ -225,10 +289,9 @@ public class QueryPlanningPromptTemplate {
         + TEMPLATE_SELECTION_VALIDATION
         + "\n"
         + "==== EXAMPLES ====\n"
-        + TEMPLATE_SELECTION_EXAMPLES
-        + "\n"
-        + "==== INPUTS ====\n"
-        + TEMPLATE_SELECTION_INPUTS;
+        + TEMPLATE_SELECTION_EXAMPLES;
+
+    public static final String TEMPLATE_SELECTION_USER_PROMPT = "==== INPUTS ====\n" + TEMPLATE_SELECTION_INPUTS;
 
     public static final String DEFAULT_SEARCH_TEMPLATE = "{"
         + "\"from\": {{from}}{{^from}}0{{/from}},"
