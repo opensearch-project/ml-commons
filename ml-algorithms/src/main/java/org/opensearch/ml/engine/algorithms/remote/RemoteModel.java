@@ -6,15 +6,20 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -28,6 +33,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.client.Client;
 
@@ -47,6 +53,8 @@ public class RemoteModel implements Predictable {
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
     public static final String GUARDRAILS = "guardrails";
     public static final String CONNECTOR_PRIVATE_IP_ENABLED = "connectorPrivateIpEnabled";
+    public static final String SDK_CLIENT = "sdk_client";
+    public static final String SETTINGS = "settings";
 
     private RemoteConnectorExecutor connectorExecutor;
 
@@ -98,11 +106,14 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
-        try {
+    public CompletionStage<Boolean> initModelAsync(MLModel model, Map<String, Object> params, Encryptor encryptor) {
+        SdkClient sdkClient = (SdkClient) params.get(SDK_CLIENT);
+        return sdkClient.isGlobalResource(MLIndex.MODEL.getIndexName(), model.getModelId()).thenCompose(isGlobalResource -> {
+            String decryptTenantId = Boolean.TRUE.equals(isGlobalResource)
+                ? REMOTE_METADATA_GLOBAL_TENANT_ID.get((Settings) params.get(SETTINGS))
+                : model.getTenantId();
             Connector connector = model.getConnector().cloneConnector();
-            connector
-                .decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, model.getTenantId()), model.getTenantId());
+            connector.decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, decryptTenantId), decryptTenantId);
             // This situation can only happen for inline connector where we don't provide tenant id.
             if (connector.getTenantId() == null && model.getTenantId() != null) {
                 connector.setTenantId(model.getTenantId());
@@ -116,13 +127,10 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
             this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
             this.connectorExecutor.setConnectorPrivateIpEnabled((AtomicBoolean) params.get(CONNECTOR_PRIVATE_IP_ENABLED));
-        } catch (RuntimeException e) {
-            log.error("Failed to init remote model.", e);
-            throw e;
-        } catch (Throwable e) {
+            return CompletableFuture.completedStage(true);
+        }).exceptionally(e -> {
             log.error("Failed to init remote model.", e);
             throw new MLException(e);
-        }
+        });
     }
-
 }

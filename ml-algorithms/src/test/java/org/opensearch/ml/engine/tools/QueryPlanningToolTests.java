@@ -96,6 +96,38 @@ public class QueryPlanningToolTests {
     }
 
     @Test
+    public void testCreateWithInvalidSearchTemplatesDescription() throws IllegalArgumentException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        params.put("query_text", "help me find some books related to wind");
+        params.put("search_templates", "[{'template_id': 'template_id', 'template_des': 'test_description'}]");
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_description", exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithInvalidSearchTemplatesID() throws IllegalArgumentException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
+        params.put("query_text", "help me find some books related to wind");
+        params.put("search_templates", "[{'templateid': 'template_id', 'template_description': 'test_description'}]");
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_id", exception.getMessage());
+    }
+
+    @Test
     public void testRun() throws ExecutionException, InterruptedException {
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
         doAnswer(invocation -> {
@@ -551,5 +583,102 @@ public class QueryPlanningToolTests {
 
         Exception exception = assertThrows(OpenSearchException.class, () -> factory.create(map));
         assertEquals(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE, exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithValidSearchTemplates() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params
+            .put(
+                "search_templates",
+                "[{'template_id': 'template1', 'template_description': 'description1'}, {'template_id': 'template2', 'template_description': 'description2'}]"
+            );
+
+        QueryPlanningTool tool = factory.create(params);
+        assertNotNull(tool);
+        assertEquals("user_templates", tool.getGenerationType());
+    }
+
+    @Test
+    public void testCreateWithEmptySearchTemplatesList() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params.put("search_templates", "[]");
+
+        QueryPlanningTool tool = factory.create(params);
+        assertNotNull(tool);
+        assertEquals("user_templates", tool.getGenerationType());
+    }
+
+    @Test
+    public void testCreateWithMissingSearchTemplatesField() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field is required when generation_type is 'user_templates'", exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithInvalidSearchTemplatesJson() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params.put("search_templates", "invalid_json");
+
+        assertThrows(com.google.gson.JsonSyntaxException.class, () -> factory.create(params));
+    }
+
+    @Test
+    public void testCreateWithNullTemplateId() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params.put("search_templates", "[{'template_id': null, 'template_description': 'description'}]");
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_id", exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithBlankTemplateDescription() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params.put("search_templates", "[{'template_id': 'template1', 'template_description': '   '}]");
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_description", exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithMixedValidAndInvalidTemplates() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params
+            .put(
+                "search_templates",
+                "[{'template_id': 'template1', 'template_description': 'description1'}, {'template_description': 'description2'}]"
+            );
+
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(params));
+        assertEquals("search_templates field entries must have a template_id", exception.getMessage());
+    }
+
+    @Test
+    public void testCreateWithExtraFieldsInSearchTemplates() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("generation_type", "user_templates");
+        params.put(MODEL_ID_FIELD, "test_model_id");
+        params.put("search_templates", "[{'template_id': 'template1', 'template_description': 'description1', 'extra_field': 'value'}]");
+
+        QueryPlanningTool tool = factory.create(params);
+        assertNotNull(tool);
+        assertEquals("user_templates", tool.getGenerationType());
     }
 }
