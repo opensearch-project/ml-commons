@@ -1292,4 +1292,158 @@ public class MLAgentExecutorTest {
         ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
         Assert.assertEquals(1, output.getMlModelOutputs().size());
     }
+
+    @Test
+    public void test_ExecuteAgent_SyncMode() throws IOException {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "test question");
+        params.put(MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parentInteractionId");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+        agentMLInput.setIsAsync(false);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
+        Assert.assertEquals(1, output.getMlModelOutputs().size());
+        Assert.assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
+        Assert.assertEquals(modelTensor, output.getMlModelOutputs().get(0).getMlModelTensors().get(0));
+    }
+
+    @Test
+    public void test_ExecuteAgent_AsyncMode() throws IOException {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task-123", 1, 0, 2, true);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "test question");
+        params.put(MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parentInteractionId");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+        agentMLInput.setIsAsync(true);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput output = (MLTaskOutput) objectCaptor.getValue();
+        Assert.assertEquals("task-123", output.getTaskId());
+        Assert.assertEquals("RUNNING", output.getStatus());
+    }
+
+    @Test
+    public void test_UpdateInteractionWithFailure() throws IOException {
+        RuntimeException testException = new RuntimeException("Test failure message");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onFailure(testException);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MEMORY_ID, "memoryId");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test-parent-id");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        ArgumentCaptor<Map<String, Object>> updateCaptor = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(memoryManager).updateInteraction(Mockito.eq("test-parent-id"), updateCaptor.capture(), Mockito.any());
+        Map<String, Object> updateContent = updateCaptor.getValue();
+        Assert.assertEquals("Agent execution failed: Test failure message", updateContent.get("response"));
+    }
+
+    @Test
+    public void test_ConversationMemoryCreationFailure() throws IOException {
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", true, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        RuntimeException memoryException = new RuntimeException("Failed to read conversation memory");
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onFailure(memoryException);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq("test question"), Mockito.eq(null), Mockito.any(), Mockito.any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put(QUESTION, "test question");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertEquals(memoryException, exception);
+    }
 }
