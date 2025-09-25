@@ -110,6 +110,7 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
         Interaction testInteraction = new Interaction(
             "iid",
             Instant.now(),
+            Instant.now(),
             "cid",
             "test-input",
             "pt",

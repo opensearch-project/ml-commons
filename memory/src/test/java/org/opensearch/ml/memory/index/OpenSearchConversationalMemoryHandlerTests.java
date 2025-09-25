@@ -329,6 +329,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         Interaction interaction = new Interaction(
             "iid",
             Instant.now(),
+            Instant.now(),
             "cid",
             "inp",
             "pt",

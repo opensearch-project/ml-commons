@@ -84,6 +84,7 @@ public class GetTracesTransportActionTests extends OpenSearchTestCase {
         Interaction testTrace = new Interaction(
             "test-trace",
             Instant.now(),
+            Instant.now(),
             "test-cid",
             "test-input",
             "pt",
@@ -111,6 +112,7 @@ public class GetTracesTransportActionTests extends OpenSearchTestCase {
     public void testGetTraces_MorePages() {
         Interaction testTrace = new Interaction(
             "test-trace",
+            Instant.now(),
             Instant.now(),
             "test-cid",
             "test-input",
