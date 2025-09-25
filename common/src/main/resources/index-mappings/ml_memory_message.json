@@ -1,12 +1,16 @@
 {
   "_meta": {
-    "schema_version": 1
+    "schema_version": 2
   },
   "properties": {
     "memory_id": {
       "type": "keyword"
     },
     "create_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "updated_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
     },

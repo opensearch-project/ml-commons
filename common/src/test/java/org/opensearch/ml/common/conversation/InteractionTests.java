@@ -52,6 +52,8 @@ public class InteractionTests {
             .of(
                 ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
                 time.toString(),
+                ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD,
+                time.toString(),
                 ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
                 "conversation-id",
                 ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
@@ -72,6 +74,7 @@ public class InteractionTests {
         Interaction interaction = Interaction.fromMap("test-interaction-id", params);
         assertEquals(interaction.getId(), "test-interaction-id");
         assertEquals(interaction.getCreateTime(), time);
+        assertEquals(interaction.getUpdatedTime(), time);
         assertEquals(interaction.getInput(), "sample inputs");
         assertEquals(interaction.getPromptTemplate(), "some prompt template");
         assertEquals(interaction.getResponse(), "sample responses");
@@ -132,7 +135,7 @@ public class InteractionTests {
         interaction.toXContent(builder, EMPTY_PARAMS);
         String interactionContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"response\":\"sample response\",\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}",
+            "{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"updated_time\":null,\"response\":\"sample response\",\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}",
             interactionContent
         );
     }

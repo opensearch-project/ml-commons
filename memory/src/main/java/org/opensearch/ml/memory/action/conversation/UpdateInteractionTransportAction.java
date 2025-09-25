@@ -7,6 +7,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
 
+import java.time.Instant;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
@@ -19,6 +20,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
@@ -62,6 +64,7 @@ public class UpdateInteractionTransportAction extends HandledTransportAction<Act
         String interactionId = updateInteractionRequest.getInteractionId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             Map<String, Object> updateContent = updateInteractionRequest.getUpdateContent();
+            updateContent.putIfAbsent(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, Instant.now());
 
             cmHandler.updateInteraction(interactionId, updateContent, getUpdateResponseListener(interactionId, listener, context));
         } catch (Exception e) {
