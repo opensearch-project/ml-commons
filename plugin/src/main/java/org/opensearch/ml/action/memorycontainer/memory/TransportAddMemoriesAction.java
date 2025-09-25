@@ -102,7 +102,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         this.threadPool = threadPool;
     }
 
-
     @Override
     protected void doExecute(Task task, MLAddMemoriesRequest request, ActionListener<MLAddMemoriesResponse> actionListener) {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
@@ -137,11 +136,12 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             createNewSessionIfAbsent(input, container, user, actionListener);
         }, actionListener::onFailure));
     }
+
     private void createNewSessionIfAbsent(
-            MLAddMemoriesInput input,
-            MLMemoryContainer container,
-            User user,
-            ActionListener<MLAddMemoriesResponse> actionListener
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        User user,
+        ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
             List<MessageInput> messages = input.getMessages();
@@ -152,7 +152,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
             if (!userProvidedSessionId && input.getMemoryType() == ShortTermMemoryType.CONVERSATION && !configuration.isDisableSession()) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
-                //TODO: use LLM to summarize first user message
+                // TODO: use LLM to summarize first user message
                 String summary = messages.get(0).getContentText();
                 indexRequest.source(Map.of(SUMMARY_FIELD, summary, NAMESPACE_FIELD, input.getNamespace()));
                 client.index(indexRequest, ActionListener.wrap(r -> {
@@ -185,25 +185,23 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 return;
             }
 
-            String shortTermMemoryIndex = container.getConfiguration().getShortTermMemoryIndexName();
-            IndexRequest indexRequest = createShortTermMemoryRequest(shortTermMemoryIndex, input);
+            String workingMemoryIndex = container.getConfiguration().getWorkingMemoryIndexName();
+            IndexRequest indexRequest = createWorkingMemoryRequest(workingMemoryIndex, input);
 
-            client.index(indexRequest, ActionListener.wrap(r->{
+            client.index(indexRequest, ActionListener.wrap(r -> {
                 List<MemoryResult> allResults = new ArrayList<>();
-//                allResults.add(MemoryResult.builder().memoryId(r.getId()).build());
+                // allResults.add(MemoryResult.builder().memoryId(r.getId()).build());
                 MLAddMemoriesResponse response = MLAddMemoriesResponse
-                        .builder()
-                        .results(allResults)
-                        .sessionId(input.getSessionId())
-                        .shorTermMemoryId(r.getId())
-                        .build();
+                    .builder()
+                    .results(allResults)
+                    .sessionId(input.getSessionId())
+                    .workingMemoryId(r.getId())
+                    .build();
                 actionListener.onResponse(response);
 
                 if (infer) {
                     threadPool.executor(TRAIN_THREAD_POOL).execute(() -> {
-                        extractLongTermMemory(input, container, user, ActionListener.wrap(res->{
-                            log.info(res.toString());
-                        }, e->{
+                        extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
                             log.error("Failed to extract longTermMemory id from memory container", e);
                         }));
                     });
@@ -216,8 +214,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
     }
 
-    private IndexRequest createShortTermMemoryRequest(String shortTermMemoryIndex, MLAddMemoriesInput mlAddMemoriesInput) {
-        IndexRequest indexRequest = new IndexRequest(shortTermMemoryIndex);
+    private IndexRequest createWorkingMemoryRequest(String workingMemoryIndex, MLAddMemoriesInput mlAddMemoriesInput) {
+        IndexRequest indexRequest = new IndexRequest(workingMemoryIndex);
 
         try {
             XContentBuilder builder = XContentFactory.jsonBuilder();
@@ -231,6 +229,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             throw new RuntimeException("Failed to build index request", e);
         }
     }
+
     private void extractLongTermMemory(
         MLAddMemoriesInput input,
         MLMemoryContainer container,
@@ -286,63 +285,65 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         // Search for similar facts and make memory decisions
         if (!facts.isEmpty() && memoryConfig != null && memoryConfig.getLlmId() != null) {
             log.debug("Searching for similar facts in session to make memory decisions");
-            memorySearchService
-                .searchSimilarFactsForSession(strategy, input, facts, memoryConfig, ActionListener.wrap(allSearchResults -> {
-                    log.debug("Found {} total similar facts across all {} new facts", allSearchResults.size(), facts.size());
+            memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, ActionListener.wrap(allSearchResults -> {
+                log.debug("Found {} total similar facts across all {} new facts", allSearchResults.size(), facts.size());
 
-                    if (allSearchResults.size() > 0) {
-                        memoryProcessingService.makeMemoryDecisions(facts, allSearchResults, memoryConfig, ActionListener.wrap(decisions -> {
-                            memoryOperationsService
-                                    .executeMemoryOperations(
-                                            decisions,
-                                            memoryConfig,
-                                            strategyNameSpace,
-                                            user,
-                                            input,
-                                            memoryConfig,
-                                            ActionListener.wrap(operationResults -> {
-                                                List<MemoryResult> allResults = new ArrayList<>(operationResults);
-                                                MLAddMemoriesResponse response = MLAddMemoriesResponse
-                                                        .builder()
-                                                        .results(allResults)
-                                                        .build();
-                                                actionListener.onResponse(response);
-                                            }, actionListener::onFailure)
-                                    );
-                        }, e -> {
-                            log.error("Failed to make memory decisions", e);
-                            actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
-                        }));
-                    } else {
-                        List<MemoryDecision> decisions = new ArrayList<>();
-                        for (int i = 0; i < facts.size(); i++) {
-                            decisions.add(MemoryDecision.builder().id("fact_"+i).event(MemoryEvent.ADD).text(facts.get(i)).build());
-                        }
+                if (allSearchResults.size() > 0) {
+                    memoryProcessingService.makeMemoryDecisions(facts, allSearchResults, memoryConfig, ActionListener.wrap(decisions -> {
                         memoryOperationsService
-                                .executeMemoryOperations(
-                                        decisions,
-                                        memoryConfig,
-                                        strategyNameSpace,
-                                        user,
-                                        input,
-                                        memoryConfig,
-                                        ActionListener.wrap(operationResults -> {
-                                            List<MemoryResult> allResults = new ArrayList<>(operationResults);
-                                            MLAddMemoriesResponse response = MLAddMemoriesResponse
-                                                    .builder()
-                                                    .results(allResults)
-                                                    .build();
-                                            actionListener.onResponse(response);
-                                        }, actionListener::onFailure)
-                                );
+                            .executeMemoryOperations(
+                                decisions,
+                                memoryConfig,
+                                strategyNameSpace,
+                                user,
+                                input,
+                                memoryConfig,
+                                ActionListener.wrap(operationResults -> {
+                                    List<MemoryResult> allResults = new ArrayList<>(operationResults);
+                                    MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
+                                    actionListener.onResponse(response);
+                                }, actionListener::onFailure)
+                            );
+                    }, e -> {
+                        log.error("Failed to make memory decisions", e);
+                        actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
+                    }));
+                } else {
+                    List<MemoryDecision> decisions = new ArrayList<>();
+                    for (int i = 0; i < facts.size(); i++) {
+                        decisions.add(MemoryDecision.builder().id("fact_" + i).event(MemoryEvent.ADD).text(facts.get(i)).build());
                     }
-                }, e -> {
-                    log.error("Failed to search similar facts", e);
-                    actionListener.onFailure(new OpenSearchException("Failed to search similar facts: " + e.getMessage(), e));
-                }));
+                    memoryOperationsService
+                        .executeMemoryOperations(
+                            decisions,
+                            memoryConfig,
+                            strategyNameSpace,
+                            user,
+                            input,
+                            memoryConfig,
+                            ActionListener.wrap(operationResults -> {
+                                List<MemoryResult> allResults = new ArrayList<>(operationResults);
+                                MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
+                                actionListener.onResponse(response);
+                            }, actionListener::onFailure)
+                        );
+                }
+            }, e -> {
+                log.error("Failed to search similar facts", e);
+                actionListener.onFailure(new OpenSearchException("Failed to search similar facts: " + e.getMessage(), e));
+            }));
         } else {
             // No memory decisions needed
-            memoryOperationsService.createFactMemoriesFromList(facts, memoryConfig.getLongMemoryIndexName(), input, strategyNameSpace, user, indexRequests, memoryInfos);
+            memoryOperationsService
+                .createFactMemoriesFromList(
+                    facts,
+                    memoryConfig.getLongMemoryIndexName(),
+                    input,
+                    strategyNameSpace,
+                    user,
+                    indexRequests,
+                    memoryInfos
+                );
         }
     }
 
