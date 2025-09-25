@@ -282,6 +282,12 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
 
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
@@ -311,6 +317,12 @@ public class MLAgentExecutorTest {
             listener.onResponse(agentGetResponse);
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
@@ -344,6 +356,12 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
 
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
@@ -372,6 +390,12 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
 
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
@@ -399,6 +423,12 @@ public class MLAgentExecutorTest {
             listener.onResponse(agentGetResponse);
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
@@ -430,6 +460,12 @@ public class MLAgentExecutorTest {
             listener.onResponse(agentGetResponse);
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
@@ -753,6 +789,12 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).get(Mockito.any(), Mockito.any());
 
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
         indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task_id", 1, 0, 2, true);
         doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
@@ -784,6 +826,12 @@ public class MLAgentExecutorTest {
             listener.onResponse(agentGetResponse);
             return null;
         }).when(client).get(Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         doAnswer(invocation -> {
             ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
@@ -866,6 +914,13 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
 
+        // Mock the memory factory to trigger the executeAgent path
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
         // Mock the agent runner
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledSearch).getAgentRunner(Mockito.any());
 
@@ -933,6 +988,12 @@ public class MLAgentExecutorTest {
             listener.onResponse(agentGetResponse);
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         // Mock the agent runner
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledMcp).getAgentRunner(Mockito.any());
@@ -1011,6 +1072,12 @@ public class MLAgentExecutorTest {
             listener.onResponse(agentGetResponse);
             return null;
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         // Mock the agent runner
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithEnabledSearch).getAgentRunner(Mockito.any());
