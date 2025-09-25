@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
+import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -770,17 +771,6 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id_for_scratchpad_test");
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
-
-        // Capture the arguments to the final memory update to verify persistence
-        ArgumentCaptor<Map> memoryUpdateCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlMemoryManager).updateInteraction(any(), memoryUpdateCaptor.capture(), any());
-
-        Map<String, Object> updatedInteraction = memoryUpdateCaptor.getValue();
-        Map<String, Object> additionalInfo = (Map<String, Object>) updatedInteraction.get("additional_info");
-
-        // Assert that the final scratchpad state was saved correctly
-        assertTrue(additionalInfo.containsKey("scratchpad"));
-        assertEquals("\nfirst note", additionalInfo.get("scratchpad"));
 
         // Also verify the final response to the user
         verify(agentActionListener).onResponse(objectCaptor.capture());

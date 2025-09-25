@@ -321,8 +321,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
         lastLlmListener.set(firstListener);
         StepListener<?> lastStepListener = firstListener;
 
+        StringBuilder scratchpadBuilder = new StringBuilder();
         List<String> interactions = new CopyOnWriteArrayList<>();
 
+        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
+        AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
+        tmpParameters.put(PROMPT, newPrompt.get());
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
@@ -441,6 +445,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        StringSubstitutor substitutor = new StringSubstitutor(
+                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                            "${parameters.",
+                            "}"
+                        );
+                        newPrompt.set(substitutor.replace(finalPrompt));
+                        tmpParameters.put(PROMPT, newPrompt.get());
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
@@ -454,6 +465,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         lastToolSelectionResponse,
                         filteredOutput
                     );
+                    scratchpadBuilder.append(toolResponse).append("\n\n");
 
                     saveTraceData(
                         conversationIndexMemory,
@@ -467,6 +479,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         lastAction.get()
                     );
 
+                    StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
+                    newPrompt.set(substitutor.replace(finalPrompt));
+                    tmpParameters.put(PROMPT, newPrompt.get());
                     if (!interactions.isEmpty()) {
                         tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
                     }
