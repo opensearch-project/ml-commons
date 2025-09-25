@@ -18,7 +18,6 @@ import java.util.Set;
 import org.junit.After;
 import org.junit.Test;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.security.spi.resources.ResourceProvider;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
@@ -50,7 +49,7 @@ public class MLResourceSharingExtensionTests {
         assertThat(
             "Resource type should be MLModelGroup canonical name",
             provider.resourceType(),
-            equalTo(MLModelGroup.class.getCanonicalName())
+            equalTo(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)
         );
 
         String index = provider.resourceIndexName();
