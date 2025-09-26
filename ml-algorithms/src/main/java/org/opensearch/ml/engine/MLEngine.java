@@ -153,7 +153,7 @@ public class MLEngine {
     public void deploy(MLModel mlModel, Map<String, Object> params, ActionListener<Predictable> listener) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
         predictable.initModelAsync(mlModel, params, encryptor).thenAccept((b) -> listener.onResponse(predictable)).exceptionally(e -> {
-            log.error("Failed to init init model", e);
+            log.error("Failed to init model", e);
             listener.onFailure(new RuntimeException(e));
             return null;
         });
