@@ -85,12 +85,14 @@ public class MetricsCorrelation extends DLModelExecute {
     private Client client;
     private final Settings settings;
     private final ClusterService clusterService;
-    // As metrics correlation is an experimental feature we are marking the version as 1.0.0b1
+    // As metrics correlation is an experimental feature we are marking the version
+    // as 1.0.0b1
     public static final String MCORR_ML_VERSION = "1.0.0b1";
     // This is python based model which is developed in house.
     public static final String MODEL_TYPE = "in-house";
     // This is the opensearch release artifact url for the model
-    // TODO: we need to make this URL more dynamic so that user can define the version from the settings to pull
+    // TODO: we need to make this URL more dynamic so that user can define the
+    // version from the settings to pull
     // up the most updated model version.
     public static final String MCORR_MODEL_URL =
         "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b1/torch_script/metrics_correlation-1.0.0b1-torch_script.zip";
@@ -102,16 +104,14 @@ public class MetricsCorrelation extends DLModelExecute {
     }
 
     /**
-     * @param input input data for metrics correlation. This input expects a list of float array (List<float[]>)
-     * @return MetricsCorrelationOutput output of the metrics correlation algorithm is a list of objects. Each object
-     *  contains 3 properties  event_window, event_pattern and suspected_metrics
-     * @throws ExecuteException
-     */
-    /**
+     * Executes the metrics correlation algorithm.
      *
-     * @param input input data for metrics correlation. This input expects a list of float array (List<float[]>)
-     * @param listener action listener which response is MetricsCorrelationOutput, output of the metrics correlation
-     *  algorithm is a list of objects. Each object contains 3 properties  event_window, event_pattern and suspected_metrics
+     * @param input    input data for metrics correlation. This input expects a list
+     *                 of float arrays (List<float[]>)
+     * @param listener action listener which receives MetricsCorrelationOutput, a
+     *                 list of objects where each object
+     *                 contains 3 properties: event_window, event_pattern, and
+     *                 suspected_metrics
      */
     @Override
     public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) {
@@ -129,12 +129,15 @@ public class MetricsCorrelation extends DLModelExecute {
             boolean hasModelGroupIndex = clusterService.state().getMetadata().hasIndex(ML_MODEL_GROUP_INDEX);
             if (!hasModelGroupIndex) { // Create model group index if it doesn't exist
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX)
-                        .mapping(ML_MODEL_GROUP_INDEX_MAPPING_PATH, XContentType.JSON);
+                    // Load the mapping content from the file
+                    String mappingContent = org.opensearch.ml.common.utils.IndexUtils.getMappingFromFile(ML_MODEL_GROUP_INDEX_MAPPING_PATH);
+                    CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX).mapping(mappingContent, XContentType.JSON);
                     CreateIndexResponse createIndexResponse = client.admin().indices().create(request).actionGet(1000);
                     if (!createIndexResponse.isAcknowledged()) {
                         throw new MLException("Failed to create model group index");
                     }
+                } catch (java.io.IOException e) {
+                    throw new MLException("Failed to load model group index mapping", e);
                 }
             }
 
@@ -161,7 +164,8 @@ public class MetricsCorrelation extends DLModelExecute {
                             Map<String, Object> sourceAsMap = r.getSourceAsMap();
                             String state = (String) sourceAsMap.get(MODEL_STATE_FIELD);
                             if (!MLModelState.DEPLOYED.name().equals(state) && !MLModelState.PARTIALLY_DEPLOYED.name().equals(state)) {
-                                // if we find a model in the index but the model is not deployed then we will deploy the model
+                                // if we find a model in the index but the model is not deployed then we will
+                                // deploy the model
                                 deployModel(
                                     r.getId(),
                                     ActionListener
@@ -173,7 +177,8 @@ public class MetricsCorrelation extends DLModelExecute {
                             }
                         } else { // If model index doesn't exist, register model
                             log.info("metric correlation model not registered yet");
-                            // if we don't find any model in the index then we will register a model in the index
+                            // if we don't find any model in the index then we will register a model in the
+                            // index
                             registerModel(
                                 ActionListener
                                     .wrap(
@@ -200,7 +205,8 @@ public class MetricsCorrelation extends DLModelExecute {
             }
         }
 
-        // We will be waiting here until actionListeners set the model id to the modelId.
+        // We will be waiting here until actionListeners set the model id to the
+        // modelId.
         waitUntil(() -> {
             if (modelId != null) {
                 MLModelState modelState = getModel(modelId).getModelState();
@@ -370,13 +376,15 @@ public class MetricsCorrelation extends DLModelExecute {
 
     /**
      * Parse model output to model tensor output and apply result filter.
-     * @param output model output
+     * 
+     * @param output       model output
      * @param resultFilter result filter
      * @return model tensor output
      */
     public MCorrModelTensors parseModelTensorOutput(ai.djl.modality.Output output, ModelResultFilter resultFilter) {
 
-        // This is where we are making the pause. We need find out what will be the best way
+        // This is where we are making the pause. We need find out what will be the best
+        // way
         // to represent the model output.
         if (output == null) {
             throw new MLException("No output generated");
