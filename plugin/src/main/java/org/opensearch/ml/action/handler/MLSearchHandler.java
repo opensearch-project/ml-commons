@@ -187,6 +187,10 @@ public class MLSearchHandler {
         }
     }
 
+    /**
+     * Adds modelGroupIDs as search filter to prevent unauthorized access to not accessible entities.
+     */
+
     public void modelGroupGateAndSearch(
         String tenantId,
         SearchRequest request,
@@ -195,7 +199,6 @@ public class MLSearchHandler {
         SearchSourceBuilder sourceBuilder,
         ActionListener<SearchResponse> wrappedListener
     ) {
-
         // build discovery source
         sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD }, null);
         sourceBuilder.size(10_000);

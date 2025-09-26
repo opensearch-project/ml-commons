@@ -1458,5 +1458,4 @@ public class MachineLearningPlugin extends Plugin
     public ScheduledJobParser getJobParser() {
         return (parser, id, jobDocVersion) -> MLJobParameter.parse(parser);
     }
-
 }
