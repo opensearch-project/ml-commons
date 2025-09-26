@@ -345,4 +345,19 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         ActionFuture<Interaction> result = cmHandler.getInteraction("iid");
         assert (result.actionGet().equals(interaction));
     }
+
+    public void testUpdateInteraction() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> al = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+            al.onResponse(updateResponse);
+            return null;
+        }).when(interactionsIndex).updateInteraction(any(), any(), any());
+
+        ActionListener<UpdateResponse> updateInteractionListener = mock(ActionListener.class);
+        cmHandler.updateInteraction("iId", new HashMap<>(), updateInteractionListener);
+        ArgumentCaptor<UpdateResponse> argCaptor = ArgumentCaptor.forClass(UpdateResponse.class);
+        verify(updateInteractionListener, times(1)).onResponse(argCaptor.capture());
+    }
 }
