@@ -653,6 +653,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     sdkClient,
                     encryptor
                 );
+            case AG_UI:
+                return new MLAGUIAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
         }
@@ -679,7 +690,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             String result = output instanceof String
                 ? (String) output
                 : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
-            modelTensors.add(ModelTensor.builder().name("response").result(result).build());
+
+            // Check if this is AG-UI events JSON (starts with '[' and contains AG-UI event types)
+            if (result.startsWith("[") && (result.contains("RUN_STARTED") || result.contains("RUN_FINISHED"))) {
+                modelTensors.add(ModelTensor.builder().name("ag_ui_events").result(result).build());
+            } else {
+                modelTensors.add(ModelTensor.builder().name("response").result(result).build());
+            }
         }
     }
 
