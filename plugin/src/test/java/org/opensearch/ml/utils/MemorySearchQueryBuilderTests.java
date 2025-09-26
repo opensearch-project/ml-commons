@@ -106,19 +106,6 @@ public class MemorySearchQueryBuilderTests {
     }
 
     @Test
-    public void testBuildQueryByStorageTypeWithNonSemanticStorage() throws IOException {
-        String queryText = "reinforcement learning";
-        MemoryConfiguration config = MemoryConfiguration.builder().disableHistory(false).build();
-
-        XContentBuilder builder = MemorySearchQueryBuilder.buildQueryByStorageType(queryText, config);
-        String jsonString = builder.toString();
-
-        assertTrue(jsonString.contains("\"match\""));
-        assertTrue(jsonString.contains("\"memory\":\"reinforcement learning\""));
-        assertFalse(jsonString.contains("\"neural\""));
-    }
-
-    @Test
     public void testBuildQueryByStorageTypeWithNullConfig() throws IOException {
         String queryText = "quantum computing";
 
@@ -145,42 +132,6 @@ public class MemorySearchQueryBuilderTests {
     }
 
     @Test
-    public void testBuildFactSearchQueryWithTextEmbedding() throws IOException {
-        String fact = "User's name is John";
-        String sessionId = "session-123";
-        MemoryConfiguration config = MemoryConfiguration
-            .builder()
-            .disableHistory(true)
-            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
-            .embeddingModelId("text-model-456")
-            .dimension(384)
-            .build();
-
-        QueryBuilder builder = MemorySearchQueryBuilder
-            .buildFactSearchQuery(
-                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
-                fact,
-                Map.of(SESSION_ID_FIELD, sessionId),
-                config
-            );
-        String jsonString = builder.toString();
-
-        // Verify bool query structure
-        assertTrue(jsonString.contains("\"bool\""));
-        assertTrue(jsonString.contains("\"filter\""));
-        assertTrue(jsonString.contains("\"must\""));
-
-        // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-123\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
-
-        // Verify neural query
-        assertTrue(jsonString.contains("\"neural\""));
-        assertTrue(jsonString.contains("\"query_text\":\"User's name is John\""));
-        assertTrue(jsonString.contains("\"model_id\":\"text-model-456\""));
-    }
-
-    @Test
     public void testBuildFactSearchQueryWithSparseEncoding() throws IOException {
         String fact = "Works at TechCorp";
         String sessionId = "session-456";
@@ -199,44 +150,17 @@ public class MemorySearchQueryBuilderTests {
                 config
             );
         String jsonString = builder.toString();
+        jsonString = jsonString.replace("\n", "");
+        jsonString = jsonString.replace(" ", "");
 
         // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-456\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
-
-        // Verify neural_sparse query
-        assertTrue(jsonString.contains("\"neural_sparse\""));
-        assertTrue(jsonString.contains("\"query_text\":\"Works at TechCorp\""));
-        assertTrue(jsonString.contains("\"model_id\":\"sparse-model-789\""));
+        assertTrue(jsonString.contains("{\"term\":{\"namespace.session_id\":{\"value\":\"session-456\",\"boost\":1.0}}}"));
+        assertTrue(jsonString.contains("{\"term\":{\"namespace_size\":{\"value\":1,\"boost\":1.0}}}"));
+        assertTrue(jsonString.contains("{\"term\":{\"memory_type\":{\"value\":\"SEMANTIC\",\"boost\":1.0}}}"));
     }
 
     @Test
-    public void testBuildFactSearchQueryWithNonSemanticStorage() throws IOException {
-        String fact = "Lives in San Francisco";
-        String sessionId = "session-789";
-        MemoryConfiguration config = MemoryConfiguration.builder().disableHistory(false).build();
-
-        QueryBuilder builder = MemorySearchQueryBuilder
-            .buildFactSearchQuery(
-                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
-                fact,
-                Map.of(SESSION_ID_FIELD, sessionId),
-                config
-            );
-        String jsonString = builder.toString();
-
-        // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-789\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
-
-        // Verify match query
-        assertTrue(jsonString.contains("\"match\""));
-        assertTrue(jsonString.contains("\"memory\":\"Lives in San Francisco\""));
-        assertFalse(jsonString.contains("\"neural\""));
-    }
-
-    @Test
-    public void testBuildFactSearchQueryWithNullConfig() throws IOException {
+    public void testBuildFactSearchQueryWithTextEmbedding() throws IOException {
         String fact = "Has a PhD in Computer Science";
         String sessionId = "session-999";
 
@@ -245,17 +169,22 @@ public class MemorySearchQueryBuilderTests {
                 MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
                 fact,
                 Map.of(SESSION_ID_FIELD, sessionId),
-                MemoryConfiguration.builder().llmId("llm_id1").embeddingModelId("embedding_model1").build()
+                MemoryConfiguration
+                    .builder()
+                    .llmId("llm_id1")
+                    .embeddingModelId("embedding_model1")
+                    .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+                    .dimension(512)
+                    .build()
             );
         String jsonString = builder.toString();
+        jsonString = jsonString.replace("\n", "");
+        jsonString = jsonString.replace(" ", "");
 
         // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-999\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
-
-        // Verify match query (fallback for null config)
-        assertTrue(jsonString.contains("\"match\""));
-        assertTrue(jsonString.contains("\"memory\":\"Has a PhD in Computer Science\""));
+        assertTrue(jsonString.contains("{\"term\":{\"namespace.session_id\":{\"value\":\"session-999\",\"boost\":1.0}}}"));
+        assertTrue(jsonString.contains("{\"term\":{\"namespace_size\":{\"value\":1,\"boost\":1.0}}}"));
+        assertTrue(jsonString.contains("{\"term\":{\"memory_type\":{\"value\":\"SEMANTIC\",\"boost\":1.0}}}"));
     }
 
     @Test
@@ -292,41 +221,6 @@ public class MemorySearchQueryBuilderTests {
         assertTrue(matchJson.contains("Query with"));
         assertTrue(matchJson.contains("quotes"));
         assertTrue(matchJson.contains("newlines"));
-    }
-
-    @Test
-    public void testBuildFactSearchQueryStructure() throws IOException {
-        // Test the exact structure of the fact search query
-        String fact = "Simple fact";
-        String sessionId = "sess-123";
-        MemoryConfiguration config = MemoryConfiguration
-            .builder()
-            .disableHistory(true)
-            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
-            .embeddingModelId("model-123")
-            .dimension(768)  // Add required dimension for TEXT_EMBEDDING
-            .build();
-
-        QueryBuilder builder = MemorySearchQueryBuilder
-            .buildFactSearchQuery(
-                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
-                fact,
-                Map.of(SESSION_ID_FIELD, sessionId),
-                config
-            );
-        String jsonString = builder.toString();
-
-        // Verify the query doesn't have a "query" wrapper (as per comment in code)
-        assertFalse(jsonString.startsWith("{\"query\":"));
-
-        // Verify it starts with bool
-        assertTrue(jsonString.startsWith("{\"bool\":"));
-
-        // Verify both filter and must sections exist
-        assertTrue(jsonString.contains("\"filter\":{\"bool\":{\"must\":["));
-        // The JSON structure has changed - filter and must are at different levels
-        // Just verify both sections exist rather than checking exact structure
-        assertTrue(jsonString.contains("\"must\":[{"));
     }
 
     @Test

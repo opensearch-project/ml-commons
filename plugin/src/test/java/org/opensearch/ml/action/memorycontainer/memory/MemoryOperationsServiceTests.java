@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,7 +125,7 @@ public class MemoryOperationsServiceTests {
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(client, times(2)).bulk(any(), any());
     }
 
     @Test
@@ -217,7 +218,7 @@ public class MemoryOperationsServiceTests {
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(client, times(2)).bulk(any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
@@ -248,7 +249,7 @@ public class MemoryOperationsServiceTests {
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(client, times(2)).bulk(any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 

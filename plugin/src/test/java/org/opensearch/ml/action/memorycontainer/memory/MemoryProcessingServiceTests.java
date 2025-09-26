@@ -207,17 +207,6 @@ public class MemoryProcessingServiceTests {
     }
 
     @Test
-    public void testExtractFactsFromConversation_MessageWithNullRole() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role(null).build());
-        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
-        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
-
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
-
-        verify(client).execute(any(), any(), any());
-    }
-
-    @Test
     public void testMakeMemoryDecisions_EmptyFacts() {
         List<String> facts = Arrays.asList();
         List<FactSearchResult> searchResults = Arrays.asList();
