@@ -5,10 +5,11 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
-import java.util.List;
-import java.util.Map;
+import java.io.IOException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -16,19 +17,18 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memories.MLWorkingMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetWorkingMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetWorkingMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetWorkingMemoryResponse;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -38,8 +38,6 @@ public class TransportGetWorkingMemoryAction extends HandledTransportAction<MLGe
     private static final Logger log = LogManager.getLogger(TransportGetWorkingMemoryAction.class);
 
     private final Client client;
-    private final Settings settings;
-    private final ClusterService clusterService;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MemoryContainerHelper memoryContainerHelper;
 
@@ -48,15 +46,11 @@ public class TransportGetWorkingMemoryAction extends HandledTransportAction<MLGe
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
-        ClusterService clusterService,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MemoryContainerHelper memoryContainerHelper
     ) {
         super(MLGetWorkingMemoryAction.NAME, transportService, actionFilters, MLGetWorkingMemoryRequest::new);
         this.client = client;
-        this.settings = settings;
-        this.clusterService = clusterService;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.memoryContainerHelper = memoryContainerHelper;
     }
@@ -83,12 +77,9 @@ public class TransportGetWorkingMemoryAction extends HandledTransportAction<MLGe
                     actionListener.onFailure(new OpenSearchStatusException("Working memory not found", RestStatus.NOT_FOUND));
                     return;
                 }
-
                 try {
                     // Parse the source and create MLAddMemoriesInput from it
-                    Map<String, Object> source = getResponse.getSourceAsMap();
-                    MLAddMemoriesInput workingMemory = parseWorkingMemory(source, memoryContainerId);
-
+                    MLWorkingMemory workingMemory = parseWorkingMemory(getResponse.getSourceAsString());
                     MLGetWorkingMemoryResponse response = MLGetWorkingMemoryResponse.builder().workingMemory(workingMemory).build();
                     actionListener.onResponse(response);
                 } catch (Exception e) {
@@ -99,18 +90,12 @@ public class TransportGetWorkingMemoryAction extends HandledTransportAction<MLGe
         }, actionListener::onFailure));
     }
 
-    private MLAddMemoriesInput parseWorkingMemory(Map<String, Object> source, String memoryContainerId) {
-        // Reconstruct MLAddMemoriesInput from stored fields
-        // This is a simplified version - adjust based on actual stored fields
-        String memoryTypeStr = (String) source.get("memory_type");
-        return MLAddMemoriesInput
-            .builder()
-            .memoryContainerId(memoryContainerId)
-            .memoryType(memoryTypeStr != null ? ShortTermMemoryType.fromString(memoryTypeStr) : null)
-            .messages((List<MessageInput>) source.get("messages"))
-            .namespace((Map<String, String>) source.get("namespace"))
-            .metadata((Map<String, String>) source.get("metadata"))
-            .infer(Boolean.TRUE.equals(source.get("infer")))
-            .build();
+    private MLWorkingMemory parseWorkingMemory(String source) {
+        try (XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, source)) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            return MLWorkingMemory.parse(parser);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

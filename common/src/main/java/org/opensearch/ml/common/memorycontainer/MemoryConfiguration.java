@@ -66,6 +66,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private Map<String, Map<String, Object>> indexSettings = new HashMap<>();
     @Builder.Default
     private boolean disableHistory = false;
+    @Builder.Default
     private boolean disableSession = false;
     private String tenantId;
 
