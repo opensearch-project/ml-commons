@@ -17,6 +17,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.memories.MLWorkingMemory;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -26,16 +27,16 @@ import lombok.ToString;
 @ToString
 public class MLGetWorkingMemoryResponse extends ActionResponse implements ToXContentObject {
 
-    private MLAddMemoriesInput workingMemory;
+    private MLWorkingMemory workingMemory;
 
     @Builder
-    public MLGetWorkingMemoryResponse(MLAddMemoriesInput workingMemory) {
+    public MLGetWorkingMemoryResponse(MLWorkingMemory workingMemory) {
         this.workingMemory = workingMemory;
     }
 
     public MLGetWorkingMemoryResponse(StreamInput in) throws IOException {
         super(in);
-        workingMemory = new MLAddMemoriesInput(in);
+        workingMemory = new MLWorkingMemory(in);
     }
 
     @Override
