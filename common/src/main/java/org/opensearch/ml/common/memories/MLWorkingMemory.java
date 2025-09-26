@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.memorycontainer.memory;
+package org.opensearch.ml.common.memories;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
@@ -29,11 +29,11 @@ import java.util.Map;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
@@ -46,7 +46,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Builder
-public class MLAddMemoriesInput implements ToXContentObject, Writeable {
+public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
@@ -60,8 +60,10 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private boolean infer;
     private Map<String, String> metadata;
     private Map<String, String> tags;
+    private Instant createdTime;
+    private Instant lastUpdateTime;
 
-    public MLAddMemoriesInput(
+    public MLWorkingMemory(
         String memoryContainerId,
         ShortTermMemoryType memoryType,
         List<MessageInput> messages,
@@ -70,7 +72,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> namespace,
         boolean infer,
         Map<String, String> metadata,
-        Map<String, String> tags
+        Map<String, String> tags,
+        Instant createdTime,
+        Instant lastUpdateTime
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
@@ -83,22 +87,11 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         this.infer = infer; // default infer is false
         this.metadata = metadata;
         this.tags = tags;
-        validate();
+        this.createdTime = createdTime;
+        this.lastUpdateTime = lastUpdateTime;
     }
 
-    public void validate() {
-        if (messages == null || messages.isEmpty()) {
-            if (infer) {
-                throw new IllegalArgumentException("No messages provided when inferring memory");
-            }
-        }
-
-        if (memoryContainerId == null) {
-            throw new IllegalArgumentException("No memory container id provided");
-        }
-    }
-
-    public MLAddMemoriesInput(StreamInput in) throws IOException {
+    public MLWorkingMemory(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
         this.memoryType = in.readEnum(ShortTermMemoryType.class);
         if (in.readBoolean()) {
@@ -122,6 +115,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
+        this.createdTime = in.readOptionalInstant();
+        this.lastUpdateTime = in.readOptionalInstant();
     }
 
     @Override
@@ -164,10 +159,12 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalInstant(createdTime);
+        out.writeOptionalInstant(lastUpdateTime);
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
@@ -197,47 +194,18 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
         }
+        if (createdTime != null) {
+            builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
+        }
+        if (lastUpdateTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
         builder.endObject();
         return builder;
     }
 
-    public XContentBuilder toXContentWithTimeStamp(XContentBuilder builder, ToXContent.Params params) throws IOException {
-        Instant now = Instant.now();
-        builder.startObject();
-        if (memoryContainerId != null) {
-            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
-        }
-        builder.field(MEMORY_TYPE_FIELD, memoryType);
-        if (messages != null && messages.size() > 0) {
-            builder.startArray(MESSAGES_FIELD);
-            for (MessageInput message : messages) {
-                message.toXContent(builder, params);
-            }
-            builder.endArray();
-        }
-        if (binaryData != null) {
-            builder.field(BINARY_DATA_FIELD, binaryData);
-        }
-        if (structuredData != null) {
-            builder.field(STRUCTURED_DATA_FIELD, structuredData);
-        }
-        if (namespace != null && !namespace.isEmpty()) {
-            builder.field(NAMESPACE_FIELD, namespace);
-        }
-        builder.field(INFER_FIELD, infer);
-        if (metadata != null && !metadata.isEmpty()) {
-            builder.field(METADATA_FIELD, metadata);
-        }
-        if (tags != null && !tags.isEmpty()) {
-            builder.field(TAGS_FIELD, tags);
-        }
-        builder.field(CREATED_TIME_FIELD, now.toEpochMilli());
-        builder.field(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
-        builder.endObject();
-        return builder;
-    }
-
-    public static MLAddMemoriesInput parse(XContentParser parser, String memoryContainerId) throws IOException {
+    public static MLWorkingMemory parse(XContentParser parser) throws IOException {
+        String memoryContainerId = null;
         String memoryType = null;
         List<MessageInput> messages = null;
         String binaryData = null;
@@ -246,6 +214,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         boolean infer = false;
         Map<String, String> metadata = null;
         Map<String, String> tags = null;
+        Instant createdTime = null;
+        Instant lastUpdateTime = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -284,13 +254,19 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                 case TAGS_FIELD:
                     tags = StringUtils.getParameterMap(parser.map());
                     break;
+                case CREATED_TIME_FIELD:
+                    createdTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
 
-        return MLAddMemoriesInput
+        return MLWorkingMemory
             .builder()
             .memoryContainerId(memoryContainerId)
             .memoryType(memoryType == null ? ShortTermMemoryType.CONVERSATION : ShortTermMemoryType.fromString(memoryType))
@@ -301,6 +277,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             .infer(infer)
             .metadata(metadata)
             .tags(tags)
+            .createdTime(createdTime)
+            .lastUpdateTime(lastUpdateTime)
             .build();
     }
 
