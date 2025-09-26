@@ -45,7 +45,7 @@ public class MLHttpClientFactory {
     public static void validate(String protocol, String host, int port, AtomicBoolean connectorPrivateIpEnabled)
         throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
-            log.error("Remote inference protocol is not http or https: " + protocol);
+            log.error("Remote inference protocol is not http or https: {}", protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
         }
         // When port is not specified, the default port is -1, and we need to set it to 80 or 443 based on protocol.
@@ -57,7 +57,7 @@ public class MLHttpClientFactory {
             }
         }
         if (port < 0 || port > 65536) {
-            log.error("Remote inference port out of range: " + port);
+            log.error("Remote inference port out of range: {}", port);
             throw new IllegalArgumentException("Port out of range: " + port);
         }
         validateIp(host, connectorPrivateIpEnabled);
@@ -66,7 +66,7 @@ public class MLHttpClientFactory {
     private static void validateIp(String hostName, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if ((connectorPrivateIpEnabled == null || !connectorPrivateIpEnabled.get()) && hasPrivateIpAddress(addresses)) {
-            log.error("Remote inference host name has private ip address: " + hostName);
+            log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
     }
@@ -83,16 +83,17 @@ public class MLHttpClientFactory {
                         && eqCheckValue(bytes[1], 0)
                         && eqCheckValue(bytes[2], 0)
                         && eqCheckValue(bytes[3], 1);
+                    if (isLocalHost) {
+                        return true;
+                    }
                     // case 10.x.x.x
-                    boolean isLocalHost10 = eqCheckValue(bytes[0], 10);
+                    return eqCheckValue(bytes[0], 10) ||
                     // case 172.16.x.x - 172.31.x.x
-                    boolean isLocalHost172 = eqCheckValue(bytes[0], 172) && rangeCheckValue(bytes[1]);
-                    // case 192.168.x.x
-                    boolean isLocalHost192 = eqCheckValue(bytes[0], 192) && eqCheckValue(bytes[1], 168);
-                    // case 169.254.x.x
-                    boolean isLocalHost169 = eqCheckValue(bytes[0], 169) && eqCheckValue(bytes[1], 254);
-
-                    return isLocalHost || isLocalHost10 || isLocalHost172 || isLocalHost192 || isLocalHost169;
+                        (eqCheckValue(bytes[0], 172) && rangeCheckValue(bytes[1])) ||
+                        // case 192.168.x.x
+                        (eqCheckValue(bytes[0], 192) && eqCheckValue(bytes[1], 168)) ||
+                        // case 169.254.x.x
+                        (eqCheckValue(bytes[0], 169) && eqCheckValue(bytes[1], 254));
                 }
             }
         }

@@ -37,11 +37,35 @@ public class MLHttpClientFactoryTests {
 
     @Test
     public void test_invalidIP_localHost_privateIPDisabled() {
-        IllegalArgumentException exception = assertThrows(
+        IllegalArgumentException e1 = assertThrows(
             IllegalArgumentException.class,
             () -> MLHttpClientFactory.validate(HTTP, "127.0.0.1", 80, PRIVATE_IP_DISABLED)
         );
-        assertEquals("Remote inference host name has private ip address: 127.0.0.1", exception.getMessage());
+        assertEquals("Remote inference host name has private ip address: 127.0.0.1", e1.getMessage());
+
+        IllegalArgumentException e2 = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLHttpClientFactory.validate(HTTP, "192.168.0.1", 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has private ip address: 192.168.0.1", e2.getMessage());
+
+        IllegalArgumentException e3 = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLHttpClientFactory.validate(HTTP, "169.254.0.1", 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has private ip address: 169.254.0.1", e3.getMessage());
+
+        IllegalArgumentException e4 = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLHttpClientFactory.validate(HTTP, "172.16.0.1", 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has private ip address: 172.16.0.1", e4.getMessage());
+
+        IllegalArgumentException e5 = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLHttpClientFactory.validate(HTTP, "172.31.0.1", 80, PRIVATE_IP_DISABLED)
+        );
+        assertEquals("Remote inference host name has private ip address: 172.31.0.1", e5.getMessage());
     }
 
     @Test
@@ -54,6 +78,8 @@ public class MLHttpClientFactoryTests {
         MLHttpClientFactory.validate(HTTP, "177.0.1.1", 80, PRIVATE_IP_DISABLED);
         MLHttpClientFactory.validate(HTTP, "177.0.0.2", 80, PRIVATE_IP_DISABLED);
         MLHttpClientFactory.validate(HTTP, "::ffff", 80, PRIVATE_IP_DISABLED);
+        MLHttpClientFactory.validate(HTTP, "172.32.0.1", 80, PRIVATE_IP_ENABLED);
+        MLHttpClientFactory.validate(HTTP, "172.2097152", 80, PRIVATE_IP_ENABLED);
     }
 
     @Test
