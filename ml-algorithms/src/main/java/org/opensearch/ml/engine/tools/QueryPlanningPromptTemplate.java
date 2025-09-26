@@ -38,7 +38,7 @@ public class QueryPlanningPromptTemplate {
 
     public static final String SEMANTIC_SEARCH_RULES =
         """
-            NEURAL / SEMANTIC SEARCH (DENSE ONLY)
+            NEURAL / SEMANTIC SEARCH
             When to use:
             - The intent is conceptual/semantic (“about”, “similar to”, long phrases, synonyms), and the mapping has:
               • type: "semantic", or
