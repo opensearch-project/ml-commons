@@ -50,7 +50,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private ShortTermMemoryType memoryType;
+    private WorkingMemoryType memoryType;
     private List<MessageInput> messages;
     private String binaryData;
     private Map<String, Object> structuredData;
@@ -66,7 +66,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     public MLWorkingMemory(
         String memoryContainerId,
-        ShortTermMemoryType memoryType,
+        WorkingMemoryType memoryType,
         List<MessageInput> messages,
         String binaryData,
         Map<String, Object> structuredData,
@@ -81,7 +81,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
         this.memoryContainerId = memoryContainerId;
-        this.memoryType = memoryType == null ? ShortTermMemoryType.CONVERSATION : memoryType;
+        this.memoryType = memoryType == null ? WorkingMemoryType.CONVERSATIONAL : memoryType;
         this.messages = messages;
         this.binaryData = binaryData;
         this.structuredData = structuredData;
@@ -96,7 +96,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     public MLWorkingMemory(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readEnum(ShortTermMemoryType.class);
+        this.memoryType = in.readEnum(WorkingMemoryType.class);
         if (in.readBoolean()) {
             int messagesSize = in.readVInt();
             this.messages = new ArrayList<>(messagesSize);
@@ -281,7 +281,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         return MLWorkingMemory
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType(memoryType == null ? ShortTermMemoryType.CONVERSATION : ShortTermMemoryType.fromString(memoryType))
+            .memoryType(memoryType == null ? WorkingMemoryType.CONVERSATIONAL : WorkingMemoryType.fromString(memoryType))
             .messages(messages)
             .binaryData(binaryData)
             .structuredData(structuredData)
