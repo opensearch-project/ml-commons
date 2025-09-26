@@ -30,9 +30,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -48,7 +47,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class TransportUpdateMemoryContrainerAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
+public class TransportUpdateMemoryContainerAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
 
     final Client client;
     final SdkClient sdkClient;
@@ -59,7 +58,7 @@ public class TransportUpdateMemoryContrainerAction extends HandledTransportActio
     final MemoryContainerHelper memoryContainerHelper;
 
     @Inject
-    public TransportUpdateMemoryContrainerAction(
+    public TransportUpdateMemoryContainerAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
@@ -70,7 +69,7 @@ public class TransportUpdateMemoryContrainerAction extends HandledTransportActio
         MLModelManager mlModelManager,
         MemoryContainerHelper memoryContainerHelper
     ) {
-        super(MLUpdateMemoryAction.NAME, transportService, actionFilters, MLUpdateMemoryRequest::new);
+        super(MLUpdateMemoryContainerAction.NAME, transportService, actionFilters, MLUpdateMemoryContainerRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
