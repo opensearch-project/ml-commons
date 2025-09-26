@@ -76,15 +76,16 @@ public class MLMemoryContainerTests {
 
     @Test
     public void testConstructorWithAllParameters() {
-        MLMemoryContainer container = new MLMemoryContainer(
-            "test-name",
-            "test-description",
-            testUser,
-            "test-tenant",
-            testCreatedTime,
-            testLastUpdatedTime,
-            testMemoryStorageConfig
-        );
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-name")
+            .description("test-description")
+            .owner(testUser)
+            .tenantId("test-tenant")
+            .createdTime(testCreatedTime)
+            .lastUpdatedTime(testLastUpdatedTime)
+            .configuration(testMemoryStorageConfig)
+            .build();
 
         assertEquals("test-name", container.getName());
         assertEquals("test-description", container.getDescription());
@@ -403,7 +404,16 @@ public class MLMemoryContainerTests {
 
     @Test
     public void testSettersAndGetters() {
-        MLMemoryContainer container = new MLMemoryContainer(null, null, null, null, null, null, null);
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name(null)
+            .description(null)
+            .owner(null)
+            .tenantId(null)
+            .createdTime(null)
+            .lastUpdatedTime(null)
+            .configuration(null)
+            .build();
 
         container.setName("new-name");
         container.setDescription("new-description");
