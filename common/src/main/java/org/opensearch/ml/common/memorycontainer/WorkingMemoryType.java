@@ -6,15 +6,15 @@
 package org.opensearch.ml.common.memorycontainer;
 
 /**
- * Enum representing the type of memory entry
+ * Enum representing the type of working memory entry
  */
-public enum ShortTermMemoryType {
-    CONVERSATION("conversation"),
+public enum WorkingMemoryType {
+    CONVERSATIONAL("conversational"),
     DATA("data");
 
     private final String value;
 
-    ShortTermMemoryType(String value) {
+    WorkingMemoryType(String value) {
         this.value = value;
     }
 
@@ -23,23 +23,23 @@ public enum ShortTermMemoryType {
     }
 
     /**
-     * Parse string value to MemoryType
-     * @param value string representation of memory type
-     * @return corresponding MemoryType enum
+     * Parse string value to WorkingMemoryType
+     * @param value string representation of working memory type
+     * @return corresponding WorkingMemoryType enum
      * @throws IllegalArgumentException if value is invalid
      */
-    public static ShortTermMemoryType fromString(String value) {
+    public static WorkingMemoryType fromString(String value) {
         if (value == null) {
             return null;
         }
 
-        for (ShortTermMemoryType type : ShortTermMemoryType.values()) {
+        for (WorkingMemoryType type : WorkingMemoryType.values()) {
             if (type.value.equalsIgnoreCase(value)) {
                 return type;
             }
         }
 
-        throw new IllegalArgumentException("Invalid short memory type: " + value + ". Must be one of: CONVERSATION, DATA");
+        throw new IllegalArgumentException("Invalid working memory type: " + value + ". Must be one of: CONVERSATIONAL, DATA");
     }
 
     @Override

@@ -42,7 +42,7 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
@@ -157,7 +157,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
             boolean userProvidedSessionId = input.getNamespace() != null && input.getNamespace().containsKey(SESSION_ID_FIELD);
 
-            if (!userProvidedSessionId && input.getMemoryType() == ShortTermMemoryType.CONVERSATION && !configuration.isDisableSession()) {
+            if (!userProvidedSessionId && input.getMemoryType() == WorkingMemoryType.CONVERSATIONAL && !configuration.isDisableSession()) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
                 String summary = messages.get(0).getContentText();

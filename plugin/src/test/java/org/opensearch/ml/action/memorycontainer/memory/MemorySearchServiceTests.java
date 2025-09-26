@@ -34,7 +34,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.search.SearchHit;
@@ -68,7 +68,7 @@ public class MemorySearchServiceTests {
             MLAddMemoriesInput
                 .builder()
                 .namespace(Map.of(SESSION_ID_FIELD, sessionId))
-                .memoryType(ShortTermMemoryType.CONVERSATION)
+                .memoryType(WorkingMemoryType.CONVERSATIONAL)
                 .memoryContainerId("container-123")
                 .infer(true)
                 .messages(messages)
