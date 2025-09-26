@@ -312,11 +312,7 @@ public class QueryPlanningTool implements WithModelTool {
                 public void onResponse(GetIndexResponse getIndexResponse) {
                     try {
                         MappingMetadata mapping = getIndexResponse.mappings().get(indexName);
-                        if (mapping != null) {
-                            listener.onResponse(mapping.source().toString());
-                        } else {
-                            listener.onFailure(new IllegalStateException("No mapping found for the specified index"));
-                        }
+                        listener.onResponse(mapping.source().toString());
                     } catch (Exception e) {
                         listener.onFailure(new IllegalStateException("Failed to extract index mapping", e));
                     }
