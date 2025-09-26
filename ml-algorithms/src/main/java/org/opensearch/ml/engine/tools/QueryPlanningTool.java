@@ -106,7 +106,7 @@ public class QueryPlanningTool implements WithModelTool {
         + "\"additionalProperties\":false"
         + "}";
 
-    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
 
     @Getter
     @Setter
