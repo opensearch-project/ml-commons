@@ -77,7 +77,7 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String LLM_GENERATED_TYPE_FIELD = "llmGenerated";
     public static final String USER_SEARCH_TEMPLATES_TYPE_FIELD = "user_templates";
     public static final String SEARCH_TEMPLATES_FIELD = "search_templates";
-    private static final String SAMPLE_DOCUMENT_FIELD = "sample_document";
+    public static final String SAMPLE_DOCUMENT_FIELD = "sample_document";
     private static final String CURRENT_TIME_FIELD = "current_time";
     public static final String TEMPLATE_FIELD = "template";
     public static final String STRICT_FIELD = "strict";
