@@ -27,6 +27,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -63,7 +64,7 @@ public class MLToolExecutor implements Executable {
     }
 
     @Override
-    public void execute(Input input, ActionListener<Output> listener) {
+    public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) {
         if (!(input instanceof ToolMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }

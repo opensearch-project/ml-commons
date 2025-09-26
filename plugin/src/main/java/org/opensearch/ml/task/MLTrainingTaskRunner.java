@@ -102,6 +102,16 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     }
 
     @Override
+    protected TransportResponseHandler<MLTaskResponse> getResponseStreamHandler(MLTrainingTaskRequest request) {
+        throw new UnsupportedOperationException("Streaming is not supported for train task.");
+    }
+
+    @Override
+    protected boolean isStreamingRequest(MLTrainingTaskRequest request) {
+        return false;
+    }
+
+    @Override
     protected void executeTask(MLTrainingTaskRequest request, ActionListener<MLTaskResponse> listener) {
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();

@@ -68,6 +68,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -114,7 +115,7 @@ public class MetricsCorrelation extends DLModelExecute {
      *                 suspected_metrics
      */
     @Override
-    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) {
+    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener, TransportChannel channel) {
         if (!(input instanceof MetricsCorrelationInput)) {
             throw new ExecuteException("wrong input");
         }

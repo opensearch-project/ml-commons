@@ -9,12 +9,15 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.output.Output;
+import org.opensearch.transport.TransportChannel;
 
 public interface Executable {
 
     /**
      * Execute algorithm with given input data.
      * @param input input data
+     * @param listener action listener
+     * @param channel transport channel
      */
-    void execute(Input input, ActionListener<Output> listener) throws ExecuteException;
+    void execute(Input input, ActionListener<Output> listener, TransportChannel channel) throws ExecuteException;
 }

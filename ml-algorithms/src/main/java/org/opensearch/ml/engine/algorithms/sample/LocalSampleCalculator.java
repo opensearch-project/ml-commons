@@ -17,6 +17,7 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -37,7 +38,7 @@ public class LocalSampleCalculator implements Executable {
     }
 
     @Override
-    public void execute(Input input, ActionListener<Output> listener) {
+    public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) {
         if (!(input instanceof LocalSampleCalculatorInput)) {
             throw new IllegalArgumentException("wrong input");
         }

@@ -96,6 +96,7 @@ import org.opensearch.ml.action.controller.UndeployControllerTransportAction;
 import org.opensearch.ml.action.controller.UpdateControllerTransportAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
+import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
@@ -194,6 +195,7 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerAction;
 import org.opensearch.ml.common.transport.controller.MLUpdateControllerAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
@@ -324,6 +326,7 @@ import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
+import org.opensearch.ml.rest.RestMLExecuteStreamAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
@@ -449,6 +452,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
+    public static final String STREAM_EXECUTE_THREAD_POOL = "opensearch_ml_execute_stream";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
     public static final String STREAM_PREDICT_THREAD_POOL = "opensearch_ml_predict_stream";
@@ -511,6 +515,7 @@ public class MachineLearningPlugin extends Plugin
             .of(
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
+                new ActionHandler<>(MLExecuteStreamTaskAction.INSTANCE, TransportExecuteStreamTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
                 new ActionHandler<>(MLPredictionStreamTaskAction.INSTANCE, TransportPredictionStreamTaskAction.class),
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
@@ -937,6 +942,7 @@ public class MachineLearningPlugin extends Plugin
             clusterService
         );
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
+        RestMLExecuteStreamAction restMlExecuteStreamAction = new RestMLExecuteStreamAction(mlFeatureEnabledSetting, clusterService);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction(mlFeatureEnabledSetting);
@@ -1033,6 +1039,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLPredictionAction,
                 restMLPredictionStreamAction,
                 restMLExecuteAction,
+                restMlExecuteStreamAction,
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
                 restMLDeleteModelAction,
@@ -1185,6 +1192,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + STREAM_PREDICT_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder streamExecuteThreadPool = new FixedExecutorBuilder(
+            settings,
+            STREAM_EXECUTE_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 10,
+            1000000,
+            ML_THREAD_POOL_PREFIX + STREAM_EXECUTE_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -1197,7 +1212,8 @@ public class MachineLearningPlugin extends Plugin
                 remotePredictThreadPool,
                 batchIngestThreadPool,
                 sdkClientThreadPool,
-                streamPredictThreadPool
+                streamPredictThreadPool,
+                streamExecuteThreadPool
             );
     }
 

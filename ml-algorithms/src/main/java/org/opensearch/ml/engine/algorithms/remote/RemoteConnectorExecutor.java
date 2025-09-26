@@ -71,17 +71,7 @@ public interface RemoteConnectorExecutor {
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
         // Check for streaming
         if (channel != null) {
-            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new ActionListener<Tuple<Integer, ModelTensors>>() {
-                @Override
-                public void onResponse(Tuple<Integer, ModelTensors> response) {
-                    actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(Arrays.asList(response.v2()))));
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    actionListener.onFailure(e);
-                }
-            }, channel);
+            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), null, actionListener, channel);
             return;
         }
 
@@ -115,18 +105,11 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
-                        groupedActionListener,
-                        null
+                        groupedActionListener
                     );
                 }
             } else {
-                preparePayloadAndInvoke(
-                    action,
-                    mlInput,
-                    new ExecutionContext(0),
-                    new GroupedActionListener<>(tensorActionListener, 1),
-                    null
-                );
+                preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new GroupedActionListener<>(tensorActionListener, 1));
             }
         } catch (Exception e) {
             actionListener.onFailure(e);
@@ -208,7 +191,17 @@ public interface RemoteConnectorExecutor {
         String action,
         MLInput mlInput,
         ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        preparePayloadAndInvoke(action, mlInput, executionContext, actionListener, null, null);
+    }
+
+    default void preparePayloadAndInvoke(
+        String action,
+        MLInput mlInput,
+        ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener,
+        ActionListener<MLTaskResponse> agentListener,
         TransportChannel channel
     ) {
         Connector connector = getConnector();
@@ -271,7 +264,14 @@ public interface RemoteConnectorExecutor {
             if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
             } else if (parameters.containsKey("stream")) {
-                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(channel);
+                String memoryId = parameters.get("memory_id");
+                String parentInteractionId = parameters.get("parent_interaction_id");
+                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(
+                    channel,
+                    agentListener,
+                    memoryId,
+                    parentInteractionId
+                );
                 invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, streamListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
