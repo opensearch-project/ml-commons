@@ -12,12 +12,15 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -26,12 +29,12 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.ResourceAlreadyExistsException;
-import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.ingest.PutPipelineRequest;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -44,6 +47,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
@@ -60,6 +64,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.ClusterAdminClient;
 import org.opensearch.transport.client.IndicesAdminClient;
 
 public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCase {
@@ -94,6 +99,8 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     private ThreadPool threadPool;
     @Mock
     private AdminClient adminClient;
+    @Mock
+    private ClusterAdminClient clusterAdminClient;
     @Mock
     private IndicesAdminClient indicesAdminClient;
 
@@ -131,15 +138,21 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(adminClient.indices()).thenReturn(indicesAdminClient);
 
         // Setup memory storage config
-        memoryStorageConfig = MemoryConfiguration
-            .builder()
-            .indexPrefix("test-memory-index")
-            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
-            .embeddingModelId("test-embedding-model")
-            .llmId("test-llm-model")
-            .dimension(768)
-            .maxInferSize(5)
-            .build();
+        List<MemoryStrategy> strategies = new ArrayList<>();
+        strategies
+            .add(MemoryStrategy.builder().namespace(List.of(SESSION_ID_FIELD)).id("strategy-id1").enabled(true).type("semantic").build());
+        memoryStorageConfig = spy(
+            MemoryConfiguration
+                .builder()
+                .indexPrefix("test-memory-index")
+                .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+                .embeddingModelId("test-embedding-model")
+                .llmId("test-llm-model")
+                .dimension(768)
+                .maxInferSize(5)
+                .strategies(strategies)
+                .build()
+        );
 
         // Setup input
         input = MLCreateMemoryContainerInput
@@ -181,16 +194,47 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertNotNull(action);
     }
 
-    public void testDoExecuteSuccess() throws InterruptedException {
+    public void testDoExecuteWithAgenticMemoryDisabled() throws InterruptedException {
+        // Disable agentic memory feature
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        // Execute
+        action.doExecute(task, request, actionListener);
+
+        // Verify failure response due to feature being disabled
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertNotNull(exception);
+        assertTrue(exception instanceof OpenSearchStatusException);
+        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
+        assertEquals(RestStatus.FORBIDDEN, statusException.status());
+        assertEquals("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled", exception.getMessage());
+    }
+
+    public void testDoExecuteSuccess_LongTermMemory() throws InterruptedException {
+        mockSuccessfulCreatePipeline();
+
+        mockAndRunExecuteMethod(request);
+    }
+
+    private void mockSuccessfulCreatePipeline() {
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            // Create a real CreateIndexResponse that returns true for isAcknowledged
+            AcknowledgedResponse response = new AcknowledgedResponse(true);
+            listener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any(ActionListener.class));
+    }
+
+    private void mockAndRunExecuteMethod(MLCreateMemoryContainerRequest request) {
         // Mock successful model validation
         mockSuccessfulModelValidation();
 
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        mockSuccessfulIndexCreation();
 
         // Mock successful memory container indexing
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
@@ -216,43 +260,37 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
+    public void testDoExecuteSuccess_WorkingMemoryOnly_NullLLMId() throws InterruptedException {
+        when(memoryStorageConfig.getLlmId()).thenReturn(null);
+        mockAndRunExecuteMethod(request);
+    }
+
+    public void testDoExecuteSuccess_WorkingMemoryOnly_EmptyStrategies() throws InterruptedException {
+        when(memoryStorageConfig.getStrategies()).thenReturn(List.of());
+        mockAndRunExecuteMethod(request);
+    }
+
     public void testDoExecuteWithMinimalInput() throws InterruptedException {
         // Create minimal input (no memory storage config)
         MLCreateMemoryContainerInput minimalInput = MLCreateMemoryContainerInput
             .builder()
             .name("minimal-container")
             .tenantId(TENANT_ID)
+            .configuration(MemoryConfiguration.builder().indexPrefix("test").build())
             .build();
         MLCreateMemoryContainerRequest minimalRequest = new MLCreateMemoryContainerRequest(minimalInput);
+        mockAndRunExecuteMethod(minimalRequest);
+    }
 
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        // Mock successful memory data index creation
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, minimalRequest, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
+    public void testDoExecuteWithoutConfiguration() throws InterruptedException {
+        // Create minimal input (no memory storage config)
+        MLCreateMemoryContainerInput minimalInput = MLCreateMemoryContainerInput
+            .builder()
+            .name("minimal-container")
+            .tenantId(TENANT_ID)
+            .build();// If configuration is null, will create a default configuration with system index prefix
+        MLCreateMemoryContainerRequest minimalRequest = new MLCreateMemoryContainerRequest(minimalInput);
+        mockAndRunExecuteMethod(minimalRequest);
     }
 
     public void testDoExecuteWithInvalidLLMModel() throws InterruptedException {
@@ -332,10 +370,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock failed index initialization
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
+            ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onFailure(new RuntimeException("Index initialization failed"));
             return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        }).when(mlIndicesHandler).initMemoryContainerIndex(isA(ActionListener.class));
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -353,10 +391,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock successful index initialization
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
+            ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onResponse(true);
             return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        }).when(mlIndicesHandler).initMemoryContainerIndex(isA(ActionListener.class));
 
         // Mock failed memory container indexing
         CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
@@ -373,27 +411,26 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception.getMessage().contains("Indexing failed"));
     }
 
-    public void testDoExecuteWithMemoryDataIndexCreationFailure() throws InterruptedException {
+    public void testDoExecuteWithMemorySessionIndexCreationFailure() throws InterruptedException {
         // Mock successful model validation
         mockSuccessfulModelValidation();
 
         // Mock successful index initialization
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
+            ActionListener<Boolean> listener = invocation.getArgument(0);
             listener.onResponse(true);
             return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        }).when(mlIndicesHandler).initMemoryContainerIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Create session index failed"));
+            return null;
+        }).when(mlIndicesHandler).createSessionMemoryDataIndex(anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
 
         // Mock successful memory container indexing
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        // Mock failed memory data index creation
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("Data index creation failed"));
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -402,7 +439,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
         assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("Data index creation failed"));
+        assertTrue(exception.getMessage().contains("Create session index failed"));
     }
 
     public void testDoExecuteWithSparseEncodingConfig() throws InterruptedException {
@@ -453,12 +490,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
 
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+        mockSuccessfulIndexCreation();
 
         // Execute
         action.doExecute(task, sparseRequest, actionListener);
@@ -471,158 +503,14 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
-    public void testDoExecuteWithResourceAlreadyExistsException() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        // Mock ResourceAlreadyExistsException for memory data index creation (should be handled gracefully)
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new ResourceAlreadyExistsException("Index already exists"));
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify success response (ResourceAlreadyExistsException should be handled gracefully)
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-    }
-
-    public void testDoExecuteWithCreateIndexNotAcknowledged() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        // Mock create index response not acknowledged
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(false, false, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception instanceof RuntimeException);
-        assertTrue(exception.getMessage().contains("Failed to create memory data index"));
-    }
-
-    public void testDoExecuteWithUpdateMemoryContainerThrowableFailure() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing (first call)
-        CompletableFuture<PutDataObjectResponse> successFuture = CompletableFuture.completedFuture(putDataObjectResponse);
-        // Mock failed memory container update (second call) - using throwable branch
-        CompletableFuture<PutDataObjectResponse> failureFuture = new CompletableFuture<>();
-        failureFuture.completeExceptionally(new RuntimeException("Update throwable failure"));
-
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(successFuture).thenReturn(failureFuture);
-
-        // Mock successful memory data index creation
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("Update throwable failure"));
-    }
-
-    public void testDoExecuteWithUpdateMemoryContainerCatchException() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing (first call)
-        CompletableFuture<PutDataObjectResponse> successFuture = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(successFuture);
-
-        // Mock successful memory data index creation
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Mock exception in updateMemoryContainer by making putDataObjectAsync throw on second call
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class)))
-            .thenReturn(successFuture)
-            .thenThrow(new RuntimeException("Update catch exception"));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("Update catch exception"));
-    }
-
     public void testDoExecuteWithIndexMemoryContainerThrowableFailure() throws InterruptedException {
         // Mock successful model validation
         mockSuccessfulModelValidation();
 
         // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        mockSuccessfulIndexCreation();
+
+        mockSuccessfulCreatePipeline();
 
         // Mock failed memory container indexing with throwable branch
         CompletableFuture<PutDataObjectResponse> failureFuture = new CompletableFuture<>();
@@ -639,73 +527,11 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception.getMessage().contains("Index throwable failure"));
     }
 
-    public void testDoExecuteWithIndexMemoryContainerCatchException() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock exception in indexMemoryContainer catch block
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenThrow(new RuntimeException("Index catch exception"));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("Index catch exception"));
-    }
-
-    public void testDoExecuteWithIndexResponseNotCreated() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock IndexResponse with result other than CREATED (e.g., UPDATED)
-        IndexResponse indexResponse = mock(IndexResponse.class);
-        when(indexResponse.getResult()).thenReturn(DocWriteResponse.Result.UPDATED);
-        when(indexResponse.getId()).thenReturn("test-id");
-
-        PutDataObjectResponse putResponse = mock(PutDataObjectResponse.class);
-        when(putResponse.indexResponse()).thenReturn(indexResponse);
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response due to non-CREATED result
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception instanceof RuntimeException);
-        assertEquals("Failed to create memory container", exception.getMessage());
-    }
-
     public void testDoExecuteWithIndexResponseExceptionInTryBlock() throws InterruptedException {
         // Mock successful model validation
         mockSuccessfulModelValidation();
 
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        mockSuccessfulIndexCreation();
 
         // Mock putDataObjectResponse that throws exception when accessing indexResponse
         PutDataObjectResponse faultyResponse = mock(PutDataObjectResponse.class);
@@ -724,75 +550,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception.getMessage().contains("IndexResponse access exception"));
     }
 
-    public void testDoExecuteWithUpdateMemoryContainerIndexResponseException() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing (first call)
-        CompletableFuture<PutDataObjectResponse> successFuture = CompletableFuture.completedFuture(putDataObjectResponse);
-
-        // Mock update response that throws exception when accessing indexResponse
-        PutDataObjectResponse faultyUpdateResponse = mock(PutDataObjectResponse.class);
-        when(faultyUpdateResponse.indexResponse()).thenThrow(new RuntimeException("Update IndexResponse exception"));
-        CompletableFuture<PutDataObjectResponse> updateFuture = CompletableFuture.completedFuture(faultyUpdateResponse);
-
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(successFuture).thenReturn(updateFuture);
-
-        // Mock successful memory data index creation
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("Update IndexResponse exception"));
-    }
-
-    public void testDoExecuteWithCreateMemoryDataIndexCatchException() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock successful memory container indexing
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        // Mock exception in createMemoryDataIndex catch block
-        doThrow(new RuntimeException("CreateMemoryDataIndex catch exception"))
-            .when(indicesAdminClient)
-            .create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("CreateMemoryDataIndex catch exception"));
-    }
-
     public void testDoExecuteWithInitMemoryContainerIndexCatchException() throws InterruptedException {
         // Mock successful model validation
         mockSuccessfulModelValidation();
@@ -800,7 +557,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         // Mock exception in initMemoryContainerIndexIfAbsent catch block
         doThrow(new RuntimeException("InitMemoryContainerIndex catch exception"))
             .when(mlIndicesHandler)
-            .initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+            .initMemoryContainerIndex(isA(ActionListener.class));
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -810,30 +567,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         Exception exception = exceptionCaptor.getValue();
         assertNotNull(exception);
         assertTrue(exception.getMessage().contains("InitMemoryContainerIndex catch exception"));
-    }
-
-    public void testDoExecuteWithGeneralExceptionInDoExecute() throws InterruptedException {
-        // Mock successful model validation
-        mockSuccessfulModelValidation();
-
-        // Mock successful index initialization
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        // Mock exception during memory container creation by throwing in the try block
-        doThrow(new RuntimeException("General doExecute exception")).when(sdkClient).putDataObjectAsync(any(PutDataObjectRequest.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("General doExecute exception"));
     }
 
     public void testDoExecuteWithEmbeddingModelValidationException() throws InterruptedException {
@@ -865,6 +598,8 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     }
 
     public void testDoExecuteWithOnlyEmbeddingModelValidation() throws InterruptedException {
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
         // Create config with only embedding model (no LLM model)
         MemoryConfiguration embeddingOnlyConfig = MemoryConfiguration
             .builder()
@@ -894,13 +629,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             return null;
         }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
 
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
 
@@ -922,57 +650,9 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
-    public void testDoExecuteWithSemanticStorageDisabled() throws InterruptedException {
-        // Create config with semantic storage disabled
-        MemoryConfiguration nonSemanticConfig = MemoryConfiguration
-            .builder()
-            .indexPrefix("non-semantic-index")
-            .disableHistory(false)
-            .maxInferSize(5)
-            .build();
-
-        MLCreateMemoryContainerInput nonSemanticInput = MLCreateMemoryContainerInput
-            .builder()
-            .name("non-semantic-container")
-            .description("Non-semantic memory container")
-            .configuration(nonSemanticConfig)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest nonSemanticRequest = new MLCreateMemoryContainerRequest(nonSemanticInput);
-
-        // Mock successful operations (no model validation needed)
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, nonSemanticRequest, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-
-        // Verify that model validation was not called
-        verify(mlModelManager, never()).getModel(anyString(), any());
-    }
-
     public void testDoExecuteWithRemoteEmbeddingModel() throws InterruptedException {
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
         // Create config with remote embedding model
         MemoryConfiguration remoteConfig = MemoryConfiguration
             .builder()
@@ -1040,49 +720,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
-    public void testDoExecuteWithNullconfiguration() throws InterruptedException {
-        // Create input with null memory storage config
-        MLCreateMemoryContainerInput nullConfigInput = MLCreateMemoryContainerInput
-            .builder()
-            .name("null-config-container")
-            .description("Null config memory container")
-            .configuration(null)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest nullConfigRequest = new MLCreateMemoryContainerRequest(nullConfigInput);
-
-        // Mock successful operations (no model validation needed for null config)
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, nullConfigRequest, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-
-        // Verify that model validation was not called
-        verify(mlModelManager, never()).getModel(anyString(), any());
-    }
-
     public void testDoExecuteWithTenantValidationFailure() throws InterruptedException {
         // Enable multi-tenancy and provide null tenant ID to trigger validation failure
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
@@ -1130,13 +767,8 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock successful model validation
         mockSuccessfulModelValidation();
-
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
 
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
@@ -1159,280 +791,14 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
-    public void testDoExecuteWithSparseEncodingDefaultIndexName() throws InterruptedException {
-        // Create sparse encoding config without specifying memory index name
-        MemoryConfiguration sparseConfigWithoutIndexName = MemoryConfiguration
-            .builder()
-            .embeddingModelType(FunctionName.SPARSE_ENCODING)
-            .embeddingModelId("sparse-embedding-model")
-            .llmId("test-llm-model")
-            .maxInferSize(5)
-            .build(); // No memoryIndexName specified
-
-        MLCreateMemoryContainerInput sparseInputWithoutIndexName = MLCreateMemoryContainerInput
-            .builder()
-            .name("sparse-default-index-container")
-            .description("Sparse encoding container with default index name")
-            .configuration(sparseConfigWithoutIndexName)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest sparseRequestWithoutIndexName = new MLCreateMemoryContainerRequest(sparseInputWithoutIndexName);
-
-        // Mock successful model validation for sparse encoding
-        MLModel llmModel = mock(MLModel.class);
-        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
-            listener.onResponse(llmModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
-
-        MLModel sparseEmbeddingModel = mock(MLModel.class);
-        when(sparseEmbeddingModel.getAlgorithm()).thenReturn(FunctionName.SPARSE_ENCODING);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
-            listener.onResponse(sparseEmbeddingModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("sparse-embedding-model"), any());
-
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, sparseRequestWithoutIndexName, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-    }
-
-    public void testDoExecuteWithStaticMemoryDefaultIndexName() throws InterruptedException {
-        // Create config with semantic storage disabled to test static memory index generation
-        MemoryConfiguration staticConfigWithoutIndexName = MemoryConfiguration.builder().disableHistory(false).maxInferSize(5).build(); // No
-                                                                                                                                        // memoryIndexName
-                                                                                                                                        // specified,
-                                                                                                                                        // semantic
-                                                                                                                                        // storage
-                                                                                                                                        // disabled
-
-        MLCreateMemoryContainerInput staticInputWithoutIndexName = MLCreateMemoryContainerInput
-            .builder()
-            .name("static-default-index-container")
-            .description("Static memory container with default index name")
-            .configuration(staticConfigWithoutIndexName)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest staticRequestWithoutIndexName = new MLCreateMemoryContainerRequest(staticInputWithoutIndexName);
-
-        // Mock successful operations (no model validation needed for static storage)
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, staticRequestWithoutIndexName, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-
-        // Verify that model validation was not called
-        verify(mlModelManager, never()).getModel(anyString(), any());
-    }
-
-    public void testDoExecuteWithSemanticStorageEnabledButNoEmbeddingModel() throws InterruptedException {
-        // Create config with semantic storage enabled but no embedding model ID or type
-        // Note: The constructor will auto-determine semanticStorageEnabled = false when embeddingModelId is null
-        MemoryConfiguration configWithoutEmbeddingModel = MemoryConfiguration
-            .builder()
-            .indexPrefix("semantic-no-embedding-index")
-            .disableHistory(true) // This will be overridden to false by constructor
-            .embeddingModelId(null) // No embedding model ID
-            .embeddingModelType(null) // No embedding model type
-            .llmId("test-llm-model")
-            .dimension(768)
-            .maxInferSize(5)
-            .build();
-
-        MLCreateMemoryContainerInput inputWithoutEmbeddingModel = MLCreateMemoryContainerInput
-            .builder()
-            .name("semantic-no-embedding-container")
-            .description("Semantic container without embedding model")
-            .configuration(configWithoutEmbeddingModel)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest requestWithoutEmbeddingModel = new MLCreateMemoryContainerRequest(inputWithoutEmbeddingModel);
-
-        // Mock valid LLM model only
-        MLModel llmModel = mock(MLModel.class);
-        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
-            listener.onResponse(llmModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
-
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, requestWithoutEmbeddingModel, actionListener);
-
-        // Verify success response (should pass validation since embedding model ID is null)
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-
-        // Verify that no model validation was called since semantic storage is effectively disabled
-        // when embeddingModelId is null (constructor auto-determines semanticStorageEnabled = false)
-        verify(mlModelManager, never()).getModel(anyString(), any());
-    }
-
-    public void testDoExecuteWithAgenticMemoryDisabled() throws InterruptedException {
-        // Disable agentic memory feature
-        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify failure response due to feature being disabled
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertNotNull(exception);
-        assertTrue(exception instanceof OpenSearchStatusException);
-        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
-        assertEquals(RestStatus.FORBIDDEN, statusException.status());
-        assertEquals("The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled", exception.getMessage());
-    }
-
-    public void testDoExecuteWithSemanticStorageEnabledButNoLlmModel() throws InterruptedException {
-        // Create config with semantic storage enabled but no LLM model ID
-        MemoryConfiguration configWithoutLlmModel = MemoryConfiguration
-            .builder()
-            .indexPrefix("semantic-no-llm-index")
-            .disableHistory(true)
-            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
-            .embeddingModelId("test-embedding-model")
-            .llmId(null) // No LLM model ID
-            .dimension(768)
-            .maxInferSize(5)
-            .build();
-
-        MLCreateMemoryContainerInput inputWithoutLlmModel = MLCreateMemoryContainerInput
-            .builder()
-            .name("semantic-no-llm-container")
-            .description("Semantic container without LLM model")
-            .configuration(configWithoutLlmModel)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest requestWithoutLlmModel = new MLCreateMemoryContainerRequest(inputWithoutLlmModel);
-
-        // Mock valid embedding model only
-        MLModel embeddingModel = mock(MLModel.class);
-        when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
-        doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
-            listener.onResponse(embeddingModel);
-            return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
-
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, requestWithoutLlmModel, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-
-        // Verify that only embedding model validation was called
-        verify(mlModelManager).getModel(eq("test-embedding-model"), any());
-        verify(mlModelManager, never()).getModel(eq("test-llm-model"), any());
-    }
-
     public void testDoExecuteWithNullUserContext() throws InterruptedException {
         // Setup null user context by clearing thread context
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, null);
 
         // Mock successful model validation
         mockSuccessfulModelValidation();
-
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
 
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
@@ -1443,18 +809,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(response);
             return null;
         }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        doAnswer(invocationOnMock -> {
-            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMemoryContainerIndex(any(ActionListener.class));
-
-        doAnswer(invocationOnMock -> {
-            ActionListener<Boolean> listener = invocationOnMock.getArgument(2);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).createWorkingMemoryDataIndex(anyString(), any(MemoryConfiguration.class), any(ActionListener.class));
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -1486,5 +840,43 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(embeddingModel);
             return null;
         }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+    }
+
+    private void mockSuccessfulIndexCreation() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMemoryContainerIndex(isA(ActionListener.class));
+
+        // Mock successful index initialization
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).createWorkingMemoryDataIndex(anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
+
+        // Mock successful index initialization
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        })
+            .when(mlIndicesHandler)
+            .createLongTermMemoryIndex(anyString(), anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
+
+        // Mock successful index initialization
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).createSessionMemoryDataIndex(anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
+
+        // Mock successful index initialization
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).createLongTermMemoryHistoryIndex(anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
     }
 }
