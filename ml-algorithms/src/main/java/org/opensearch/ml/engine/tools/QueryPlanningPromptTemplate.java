@@ -22,7 +22,7 @@ public class QueryPlanningPromptTemplate {
         + "Mechanics:\n"
         + "- Put exact constraints (term, terms, range, exists, prefix, wildcard) in bool.filter (non-scoring). Put full-text relevance (match, match_phrase, multi_match) in bool.must.\n"
         + "- Top N items/products/documents: return top hits (set \"size\": N as an integer) and sort by the relevant metric(s). Do not use aggregations for item lists.\n"
-        + "- Neural retrieval size: set \"k\" ≥ \"size\" (e.g. heuristic, k = max(size*5, 100)).\n"
+        + "- Neural retrieval size: set \"k\" ≥ \"size\" (e.g. heuristic, k = max(size*5, 100) and k<=ef_search).\n"
         + "- Spelling tolerance: match_phrase does NOT support fuzziness; use match or multi_match with \"fuzziness\": \"AUTO\" when tolerant matching is needed.\n"
         + "- Text operators (OR vs AND): default to OR for natural-language queries; to tighten, use minimum_should_match (e.g., \"75%\" requires ~75% of terms). Use AND only when every token is essential; if order/adjacency matters, use match_phrase. (Applies to match/multi_match.)\n"
         + "- Numeric note: use ONLY integers for size and k (e.g., \"size\": 5), not floats (wrong e.g., \"size\": 5.0).\n";
