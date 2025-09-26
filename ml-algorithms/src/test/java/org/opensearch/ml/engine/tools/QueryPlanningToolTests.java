@@ -559,7 +559,9 @@ public class QueryPlanningToolTests {
         // Don't trigger getIndex response for invalid parameters - validation should fail immediately
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         org.mockito.Mockito.verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue().getMessage().contains("Required parameters not found"));
+        assertTrue(
+            captor.getValue().getMessage().contains("Validation error: missing or empty required parameters — index_name, question.")
+        );
     }
 
     @SneakyThrows
