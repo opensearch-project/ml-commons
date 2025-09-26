@@ -103,12 +103,12 @@ POST _plugins/_ml/models/_register
 This API will create following resources:
 
 - Memory indexes:
-    - `test1-session`: store the conversation session data
-    - `test1-short-term-memory`: store the short term memory: conversation messages (`conversation` type), or non-conversation message (`data` type)
-    - `test1-long-term-memory`: store the extracted facts from shor-term memories, only extract facts from  conversation messages (`conversation` type)
-    - `test1-long-term-memory-history`: stores the long term memory events: add/update/delete memory
+    - `test1-memory-session`: store the conversation session data
+    - `test1-memory-working`: store the short term memory: conversation messages (`conversation` type), or non-conversation message (`data` type)
+    - `test1-memory-long-term`: store the extracted facts from shor-term memories, only extract facts from  conversation messages (`conversation` type)
+    - `test1-memory-history`: stores the long term memory events: add/update/delete memory
 - Ingest pipeline:
-    - `test1-long-term-memory-embedding`: this pipeline will use embedding model to convert text into embedding. This pipeline will be configured as default pipeline of `test1-long-term-memory`.
+    - `test1-memory-long-term-embedding`: this pipeline will use embedding model to convert text into embedding. This pipeline will be configured as default pipeline of `test1-long-term-memory`.
 
 You can set optional values
 1. index settings for these 4 memory index. Add `index_settings` to `configuration` when create memory container.
@@ -224,7 +224,7 @@ POST _plugins/_ml/memory_containers/_create
 }
 ```
 
-## 3. Create data short-term memory
+## 3. Create DATA type working memory
 
 `data` short-term memory is to provide option to store non-conversational data in short-term memory.
 
@@ -288,7 +288,7 @@ Search `test1-short-term-memory`, can see such sample response
 }
 ```
 
-## 4. Create conversation short-term memory
+## 4. Create conversation working memory
 
 When add `conversation` memory, and set `"infer": true,`, the workflow will be:
 
