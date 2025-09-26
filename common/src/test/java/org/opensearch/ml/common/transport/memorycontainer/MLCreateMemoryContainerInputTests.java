@@ -77,12 +77,13 @@ public class MLCreateMemoryContainerInputTests {
 
     @Test
     public void testConstructorWithAllParameters() {
-        MLCreateMemoryContainerInput input = new MLCreateMemoryContainerInput(
-            "param-container",
-            "param description",
-            testMemoryStorageConfig,
-            "param-tenant"
-        );
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("param-container")
+            .description("param description")
+            .configuration(testMemoryStorageConfig)
+            .tenantId("param-tenant")
+            .build();
 
         assertEquals("param-container", input.getName());
         assertEquals("param description", input.getDescription());
@@ -92,7 +93,13 @@ public class MLCreateMemoryContainerInputTests {
 
     @Test
     public void testConstructorWithNullOptionalFields() {
-        MLCreateMemoryContainerInput input = new MLCreateMemoryContainerInput("null-optional-container", null, null, null);
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("null-optional-container")
+            .description(null)
+            .configuration(null)
+            .tenantId(null)
+            .build();
 
         assertEquals("null-optional-container", input.getName());
         assertNull(input.getDescription());
@@ -111,12 +118,13 @@ public class MLCreateMemoryContainerInputTests {
 
     @Test(expected = IllegalArgumentException.class)
     public void testConstructorWithNullNameDirectConstructor() {
-        new MLCreateMemoryContainerInput(
-            null, // This should throw IllegalArgumentException
-            "test description",
-            testMemoryStorageConfig,
-            "test-tenant"
-        );
+        MLCreateMemoryContainerInput
+            .builder()
+            .name(null)
+            .description("param description")
+            .configuration(testMemoryStorageConfig)
+            .tenantId("test-tenant")
+            .build();
     }
 
     @Test
