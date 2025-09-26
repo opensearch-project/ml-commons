@@ -30,7 +30,7 @@ public class MemoryContainerConstants {
     public static final String LLM_ID_FIELD = "llm_id";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
     public static final String STRATEGIES_FIELD = "strategies";
-    public static final String STRATEGY_FIELD = "strategy";
+    public static final String STRATEGY_TYPE_FIELD = "type";
     public static final String INDEX_SETTINGS_FIELD = "index_settings";
     public static final String ID_FIELD = "id";
     public static final String ENABLED_FIELD = "enabled";
