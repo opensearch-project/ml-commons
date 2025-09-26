@@ -9,6 +9,7 @@ import static org.opensearch.action.support.clustermanager.ClusterManagerNodeReq
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_FORMAT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
@@ -199,7 +200,7 @@ public class QueryPlanningTool implements WithModelTool {
                 parameters.put(QUERY_FIELDS_FIELD, gson.toJson(parameters.get(QUERY_FIELDS_FIELD)));
             }
 
-            String currentDateTime = getCurrentDateTime("");
+            String currentDateTime = getCurrentDateTime(DEFAULT_DATETIME_FORMAT);
             parameters.put(CURRENT_TIME_FIELD, gson.toJson(currentDateTime));
 
             // async chain: getIndexMapping -> getSampleDoc -> call model
