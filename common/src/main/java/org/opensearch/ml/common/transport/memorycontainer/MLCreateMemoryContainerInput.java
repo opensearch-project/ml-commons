@@ -40,21 +40,6 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     private List<String> backendRoles;
 
     @Builder(toBuilder = true)
-    public MLCreateMemoryContainerInput(String name, String description, MemoryConfiguration configuration, String tenantId) {
-        if (name == null) {
-            throw new IllegalArgumentException("name is null");
-        }
-        this.name = name;
-        this.description = description;
-        if (configuration == null) {
-            this.configuration = MemoryConfiguration.builder().build();
-        } else {
-            this.configuration = configuration;
-        }
-        this.tenantId = tenantId;
-    }
-
-    @Builder(toBuilder = true)
     public MLCreateMemoryContainerInput(
         String name,
         String description,
