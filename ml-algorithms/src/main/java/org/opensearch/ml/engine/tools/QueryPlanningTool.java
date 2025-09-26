@@ -6,9 +6,6 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -24,7 +21,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchException;
@@ -35,17 +31,12 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.cluster.metadata.MappingMetadata;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
-import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
-import org.opensearch.ml.common.transport.model.MLModelSearchAction;
-import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -60,8 +51,6 @@ import lombok.extern.log4j.Log4j2;
 /**
  * This tool supports different types of query planning,
  * llmGenerated, systemSearchTemplates or userSearchTemplates.
- * //TODO only support llmGenerated for now.
- * //TODO to add in systemSearchTemplates or userSearchTemplates when searchTemplatesTool is implemented.
  */
 @Log4j2
 @ToolAnnotation(QueryPlanningTool.TYPE)
@@ -266,13 +255,13 @@ public class QueryPlanningTool implements WithModelTool {
                     try {
                         SearchHit[] hits = searchResponse.getHits().getHits();
                         if (hits == null || hits.length == 0) {
-                            listener.onResponse("");
+                            listener.onResponse(null);
                             return;
                         }
 
                         Map<String, Object> sourceMap = hits[0].getSourceAsMap();
                         if (sourceMap == null || sourceMap.isEmpty()) {
-                            listener.onResponse("");
+                            listener.onResponse(null);
                             return;
                         }
 
@@ -303,16 +292,7 @@ public class QueryPlanningTool implements WithModelTool {
                 }
             };
 
-            // Execute the search request based on index type
-            if (Objects.equals(indexName, ML_CONNECTOR_INDEX)) {
-                client.execute(MLConnectorSearchAction.INSTANCE, searchRequest, searchListener);
-            } else if (Objects.equals(indexName, ML_MODEL_INDEX)) {
-                client.execute(MLModelSearchAction.INSTANCE, searchRequest, searchListener);
-            } else if (Objects.equals(indexName, ML_MODEL_GROUP_INDEX)) {
-                client.execute(MLModelGroupSearchAction.INSTANCE, searchRequest, searchListener);
-            } else {
-                client.search(searchRequest, searchListener);
-            }
+            client.search(searchRequest, searchListener);
         } catch (Exception e) {
             log.error("Failed to get sample document");
             listener.onFailure(new IOException("Failed to get sample document", e));
@@ -323,7 +303,7 @@ public class QueryPlanningTool implements WithModelTool {
         try {
             GetIndexRequest getIndexRequest = new GetIndexRequest()
                 .indices(indexName)
-                .indicesOptions(IndicesOptions.strictExpand()) // This will throw exception if index doesn't exist
+                .indicesOptions(IndicesOptions.strictExpand())
                 .local(false)
                 .clusterManagerNodeTimeout(DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT);
 
@@ -384,8 +364,6 @@ public class QueryPlanningTool implements WithModelTool {
         private Client client;
         private static volatile Factory INSTANCE;
         private static MLFeatureEnabledSetting mlFeatureEnabledSetting;
-        private ClusterService clusterService;
-        private NamedXContentRegistry xContentRegistry;
 
         public static Factory getInstance() {
             if (INSTANCE != null) {
