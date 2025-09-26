@@ -184,8 +184,14 @@ public class ModelAccessControlHelper {
             }, listener::onFailure));
             return;
         }
-        if (!mlFeatureEnabledSetting.isMultiTenancyEnabled() && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user))) {
-            listener.onResponse(true);
+
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+            listener.onResponse(true);  // Multi-tenancy handles access control
+            return;
+        }
+
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+            listener.onResponse(true);  // Admin or security disabled
             return;
         }
         GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest
@@ -199,7 +205,7 @@ public class ModelAccessControlHelper {
             sdkClient.getDataObjectAsync(getModelGroupRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent

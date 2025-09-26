@@ -414,6 +414,49 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertNotNull(modelAccessControlHelper.addUserBackendRolesFilter(user, builder));
     }
 
+    public void test_MultiTenancyEnabled_BypassesValidation() {
+        // Test that when multi-tenancy is enabled, validation is bypassed and returns true
+        User user = User.parse("owner|IT,HR|myTenant");
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, actionListener);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    public void test_MultiTenancyDisabled_ProceedsWithValidation() throws IOException {
+        // Test that when multi-tenancy is disabled, normal validation logic proceeds
+        User user = User.parse("owner|IT,HR|myTenant");
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        // Setup a public model group to ensure validation passes
+        String owner = "owner|IT,HR|myTenant";
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+        setupModelGroup(owner, AccessMode.PUBLIC.getValue(), backendRoles);
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", null, client, sdkClient, latchedActionListener);
+
+        try {
+            latch.await(500, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
     private GetResponse modelGroupBuilder(List<String> backendRoles, String access, String owner) throws IOException {
         MLModelGroup mlModelGroup = MLModelGroup
             .builder()
