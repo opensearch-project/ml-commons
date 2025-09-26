@@ -40,7 +40,7 @@ public class QueryPlanningPromptTemplate {
         """
             NEURAL / SEMANTIC SEARCH
             When to use:
-            - The intent is conceptual/semantic (“about”, “similar to”, long phrases, synonyms), and the mapping has:
+            - The intent is conceptual/semantic (“about”, “similar to”, long phrases, synonyms, multilingual, ambiguous), and the mapping has:
               • type: "semantic", or
               • type: "knn_vector".
             - You also have exact filters (term/range/etc.) but text relevance still matters → add neural on that text field.
