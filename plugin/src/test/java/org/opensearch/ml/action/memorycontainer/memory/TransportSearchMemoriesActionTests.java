@@ -131,7 +131,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
                 MemoryConfiguration
                     .builder()
                     .indexPrefix("test-memory-index")
-                    .semanticStorageEnabled(true)
+                    .disableHistory(true)
                     .embeddingModelType(FunctionName.TEXT_EMBEDDING)
                     .embeddingModelId("embedding-model-123")
                     .dimension(768)
@@ -243,7 +243,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
             .builder()
             .name("test-container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").semanticStorageEnabled(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
             .build();
 
         // Mock search response
@@ -419,7 +419,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
                 MemoryConfiguration
                     .builder()
                     .indexPrefix("test-memory-index")
-                    .semanticStorageEnabled(true)
+                    .disableHistory(true)
                     .embeddingModelType(FunctionName.SPARSE_ENCODING)
                     .embeddingModelId("sparse-model-123")
                     .maxInferSize(10)
@@ -546,7 +546,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         assertEquals("session-1", result1.getSessionId());
         assertEquals("user-1", result1.getUserId());
         assertEquals("agent-1", result1.getAgentId());
-        assertEquals(MemoryType.RAW_MESSAGE, result1.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, result1.getMemoryType());
         assertEquals("user", result1.getRole());
         assertNotNull(result1.getTags());
         assertEquals("value1", result1.getTags().get("key1"));
