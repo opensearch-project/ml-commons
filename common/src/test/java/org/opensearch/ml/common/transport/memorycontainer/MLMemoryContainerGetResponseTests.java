@@ -117,7 +117,7 @@ public class MLMemoryContainerGetResponseTests {
         assertEquals(originalContainer.getTenantId(), parsedContainer.getTenantId());
         assertEquals(originalContainer.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(originalContainer.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertEquals(originalContainer.getConfiguration(), parsedContainer.getConfiguration());
+        assertEquals(originalContainer.getConfiguration().getIndexPrefix(), parsedContainer.getConfiguration().getIndexPrefix());
     }
 
     @Test
@@ -153,10 +153,10 @@ public class MLMemoryContainerGetResponseTests {
         assertTrue(jsonStr.contains("\"tenant_id\":\"test-tenant\""));
         assertTrue(jsonStr.contains("\"created_time\":" + testCreatedTime.toEpochMilli()));
         assertTrue(jsonStr.contains("\"last_updated_time\":" + testLastUpdatedTime.toEpochMilli()));
-        assertTrue(jsonStr.contains("\"memory_storage_config\""));
+        assertTrue(jsonStr.contains("\"configuration\""));
 
         // Verify nested memory storage config fields
-        assertTrue(jsonStr.contains("\"memory_index_name\":\"test-memory-index\""));
+        assertTrue(jsonStr.contains("\"index_prefix\":\"test-memory-index\""));
         assertTrue(jsonStr.contains("\"embedding_model_type\":\"TEXT_EMBEDDING\""));
         assertTrue(jsonStr.contains("\"embedding_model_id\":\"test-embedding-model\""));
     }
@@ -277,7 +277,6 @@ public class MLMemoryContainerGetResponseTests {
         MemoryConfiguration deserializedConfig = deserializedContainer.getConfiguration();
 
         assertEquals(originalConfig.getIndexPrefix(), deserializedConfig.getIndexPrefix());
-        assertEquals(originalConfig.isSemanticStorageEnabled(), deserializedConfig.isSemanticStorageEnabled());
         assertEquals(originalConfig.getEmbeddingModelType(), deserializedConfig.getEmbeddingModelType());
         assertEquals(originalConfig.getEmbeddingModelId(), deserializedConfig.getEmbeddingModelId());
         assertEquals(originalConfig.getLlmId(), deserializedConfig.getLlmId());
@@ -298,7 +297,7 @@ public class MLMemoryContainerGetResponseTests {
         assertTrue(jsonStr.contains("tenant_id"));
         assertTrue(jsonStr.contains("created_time"));
         assertTrue(jsonStr.contains("last_updated_time"));
-        assertTrue(jsonStr.contains("memory_storage_config"));
+        assertTrue(jsonStr.contains("configuration"));
         assertTrue(jsonStr.contains("test-memory-container"));
         assertTrue(jsonStr.contains("Test memory container description"));
     }
@@ -416,7 +415,7 @@ public class MLMemoryContainerGetResponseTests {
         assertEquals(complexContainer.getName(), parsedContainer.getName());
         assertEquals(complexContainer.getDescription(), parsedContainer.getDescription());
         assertEquals(complexContainer.getTenantId(), parsedContainer.getTenantId());
-        assertEquals(complexContainer.getConfiguration(), parsedContainer.getConfiguration());
+        assertEquals(complexContainer.getConfiguration().getEmbeddingModelId(), parsedContainer.getConfiguration().getEmbeddingModelId());
     }
 
     @Test

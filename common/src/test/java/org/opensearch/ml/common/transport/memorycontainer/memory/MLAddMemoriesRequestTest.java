@@ -6,19 +6,23 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
 
 public class MLAddMemoriesRequestTest {
 
@@ -27,13 +31,12 @@ public class MLAddMemoriesRequestTest {
 
     @Before
     public void setUp() {
-        MessageInput message = new MessageInput("user", "Test message content");
+        MessageInput message = MessageInput.builder().role("user").contentText("Test message content").build();
         testInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-123")
-            .sessionId("session-456")
-            .agentId("agent-789")
+            .namespace(Map.of(SESSION_ID_FIELD, "session-456", "agent_id", "agent-789"))
             .infer(true)
             .build();
 
@@ -60,7 +63,7 @@ public class MLAddMemoriesRequestTest {
         assertEquals(request.getMlAddMemoryInput().getMemoryContainerId(), deserialized.getMlAddMemoryInput().getMemoryContainerId());
         assertEquals(request.getMlAddMemoryInput().getSessionId(), deserialized.getMlAddMemoryInput().getSessionId());
         assertEquals(request.getMlAddMemoryInput().getAgentId(), deserialized.getMlAddMemoryInput().getAgentId());
-        assertEquals(request.getMlAddMemoryInput().getInfer(), deserialized.getMlAddMemoryInput().getInfer());
+        assertEquals(request.getMlAddMemoryInput().isInfer(), deserialized.getMlAddMemoryInput().isInfer());
         assertEquals(request.getMlAddMemoryInput().getMessages().size(), deserialized.getMlAddMemoryInput().getMessages().size());
     }
 
@@ -91,20 +94,26 @@ public class MLAddMemoriesRequestTest {
     @Test(expected = IllegalArgumentException.class)
     public void testWithEmptyMessages() {
         // Empty messages list is not allowed - should throw exception
-        MLAddMemoriesInput.builder().messages(Collections.emptyList()).memoryContainerId("container-empty").build();
+        MLAddMemoriesInput
+            .builder()
+            .messages(Collections.emptyList())
+            .memoryContainerId("container-empty")
+            .memoryType(ShortTermMemoryType.CONVERSATION)
+            .infer(true)
+            .build();
     }
 
     @Test
     public void testWithMultipleMessages() throws IOException {
-        MessageInput msg1 = new MessageInput("user", "First message");
-        MessageInput msg2 = new MessageInput("assistant", "Second message");
-        MessageInput msg3 = new MessageInput("user", "Third message");
+        MessageInput msg1 = MessageInput.builder().role("user").contentText("First message").build();
+        MessageInput msg2 = MessageInput.builder().role("assistant").contentText("Second message").build();
+        MessageInput msg3 = MessageInput.builder().role("user").contentText("Third message").build();
 
         MLAddMemoriesInput multiInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(msg1, msg2, msg3))
             .memoryContainerId("container-multi")
-            .sessionId("session-multi")
+            .namespace(Map.of(SESSION_ID_FIELD, "session-multi"))
             .build();
 
         MLAddMemoriesRequest multiRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(multiInput).build();
@@ -124,7 +133,7 @@ public class MLAddMemoriesRequestTest {
 
     @Test
     public void testWithMinimalInput() throws IOException {
-        MessageInput message = new MessageInput(null, "Minimal message");
+        MessageInput message = MessageInput.builder().role("user").contentText("Minimal message").build();
         MLAddMemoriesInput minimalInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
@@ -145,18 +154,17 @@ public class MLAddMemoriesRequestTest {
         assertEquals("container-minimal", deserialized.getMlAddMemoryInput().getMemoryContainerId());
         assertNull(deserialized.getMlAddMemoryInput().getSessionId());
         assertNull(deserialized.getMlAddMemoryInput().getAgentId());
-        assertNull(deserialized.getMlAddMemoryInput().getInfer()); // Null when not set
+        assertFalse(deserialized.getMlAddMemoryInput().isInfer()); // Null when not set
     }
 
     @Test
     public void testWithComplexTags() throws IOException {
-        MessageInput message = new MessageInput("user", "Tagged message");
+        MessageInput message = MessageInput.builder().role("user").contentText("Tagged message").build();
         MLAddMemoriesInput taggedInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-tags")
-            .sessionId("session-tags")
-            .agentId("agent-tags")
+            .namespace(Map.of(SESSION_ID_FIELD, "session-tags", "agent_id", "agent-tags"))
             .tags(java.util.Map.of("category", "technical", "priority", "high", "timestamp", "2024-01-01"))
             .infer(false)
             .build();

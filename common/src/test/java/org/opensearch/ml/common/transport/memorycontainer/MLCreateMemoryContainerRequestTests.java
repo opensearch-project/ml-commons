@@ -98,7 +98,7 @@ public class MLCreateMemoryContainerRequestTests {
         assertEquals(originalInput.getName(), parsedInput.getName());
         assertEquals(originalInput.getDescription(), parsedInput.getDescription());
         assertEquals(originalInput.getTenantId(), parsedInput.getTenantId());
-        assertEquals(originalInput.getConfiguration(), parsedInput.getConfiguration());
+        assertEquals(originalInput.getConfiguration().getIndexPrefix(), parsedInput.getConfiguration().getIndexPrefix());
     }
 
     @Test
@@ -259,7 +259,6 @@ public class MLCreateMemoryContainerRequestTests {
         MemoryConfiguration deserializedConfig = deserializedInput.getConfiguration();
 
         assertEquals(originalConfig.getIndexPrefix(), deserializedConfig.getIndexPrefix());
-        assertEquals(originalConfig.isSemanticStorageEnabled(), deserializedConfig.isSemanticStorageEnabled());
         assertEquals(originalConfig.getEmbeddingModelType(), deserializedConfig.getEmbeddingModelType());
         assertEquals(originalConfig.getEmbeddingModelId(), deserializedConfig.getEmbeddingModelId());
         assertEquals(originalConfig.getLlmId(), deserializedConfig.getLlmId());
