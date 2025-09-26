@@ -9,7 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENABLED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_TYPE_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,7 +67,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
         builder.field(ID_FIELD, id);
         builder.field(ENABLED_FIELD, enabled);
-        builder.field(STRATEGY_FIELD, type);
+        builder.field(STRATEGY_TYPE_FIELD, type);
         builder.field(NAMESPACE_FIELD, namespace);
 
         builder.endObject();
@@ -92,7 +92,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                 case ENABLED_FIELD:
                     enabled = parser.booleanValue();
                     break;
-                case STRATEGY_FIELD:
+                case STRATEGY_TYPE_FIELD:
                     type = parser.text();
                     break;
                 case NAMESPACE_FIELD:

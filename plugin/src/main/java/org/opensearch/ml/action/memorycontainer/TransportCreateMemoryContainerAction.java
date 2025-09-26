@@ -16,7 +16,6 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Locale;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
@@ -155,9 +154,9 @@ public class TransportCreateMemoryContainerAction extends
         String indexPrefix = configuration != null ? configuration.getIndexPrefix() : null;
 
         // Convert to lowercase as OpenSearch doesn't support uppercase in index names
-        final String sessionIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-session";
-        final String workingMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-working-memory";
-        final String longTermMemoryIndexName = indexPrefix.toLowerCase(Locale.ROOT) + "-long-term-memory";
+        final String sessionIndexName = configuration.getSessionIndexName();
+        final String workingMemoryIndexName = configuration.getWorkingMemoryIndexName();
+        final String longTermMemoryIndexName = configuration.getLongMemoryIndexName();
         final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName();
 
         if (configuration.getLlmId() == null || configuration.getStrategies().isEmpty()) {
