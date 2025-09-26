@@ -9,6 +9,8 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
+import java.util.List;
+
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.inject.Inject;
@@ -137,6 +139,12 @@ public class MemoryContainerHelper {
         User owner = mlMemoryContainer.getOwner();
         if (owner != null && owner.getName() != null && owner.getName().equals(user.getName())) {
             return true;
+        }
+
+        List<String> allowedBackendRoles = mlMemoryContainer.getBackendRoles();
+        // Check if user has any of the allowed backend roles
+        if (allowedBackendRoles != null && !allowedBackendRoles.isEmpty() && user.getBackendRoles() != null) {
+            return allowedBackendRoles.stream().anyMatch(role -> user.getBackendRoles().contains(role));
         }
 
         // Check if user has matching backend roles
