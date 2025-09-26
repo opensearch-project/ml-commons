@@ -35,6 +35,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
+import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.rest.RestChannel;
@@ -111,12 +112,12 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         String requestBody = "{\n"
             + "  \"name\": \"test-memory-container\",\n"
             + "  \"description\": \"Test memory container description\",\n"
-            + "  \"memory_storage_config\": {\n"
-            + "    \"memory_index_name\": \"test-memory-index\",\n"
+            + "  \"configuration\": {\n"
+            + "    \"index_prefix\": \"test\",\n"
             + "    \"embedding_model_type\": \"TEXT_EMBEDDING\",\n"
             + "    \"embedding_model_id\": \"test-embedding-model\",\n"
-            + "    \"llm_model_id\": \"test-llm-model\",\n"
-            + "    \"dimension\": 768,\n"
+            + "    \"llm_id\": \"test-llm-model\",\n"
+            + "    \"embedding_dimension\": 768,\n"
             + "    \"max_infer_size\": 8\n"
             + "  }\n"
             + "}";
@@ -130,7 +131,10 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertEquals("test-memory-container", input.getName());
         assertEquals("Test memory container description", input.getDescription());
         assertNotNull(input.getConfiguration());
-        assertEquals("test-memory-index", input.getConfiguration().getMemoryIndexName());
+        assertEquals("test-memory-session", input.getConfiguration().getSessionIndexName());
+        assertEquals("test-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
+        assertEquals("test-memory-history", input.getConfiguration().getLongMemoryHistoryIndexName());
+        assertEquals("test-memory-long-term", input.getConfiguration().getLongMemoryIndexName());
         assertNull(input.getTenantId()); // Multi-tenancy disabled
     }
 
@@ -213,11 +217,11 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         String requestBody = "{\n"
             + "  \"name\": \"complex-container\",\n"
             + "  \"description\": \"Complex container with full config\",\n"
-            + "  \"memory_storage_config\": {\n"
-            + "    \"memory_index_name\": \"complex-memory-index\",\n"
+            + "  \"configuration\": {\n"
+            + "    \"index_prefix\": \"complex-memory-index\",\n"
             + "    \"embedding_model_type\": \"SPARSE_ENCODING\",\n"
             + "    \"embedding_model_id\": \"sparse-model\",\n"
-            + "    \"llm_model_id\": \"complex-llm-model\",\n"
+            + "    \"llm_id\": \"complex-llm-model\",\n"
             + "    \"max_infer_size\": 10\n"
             + "  }\n"
             + "}";
@@ -233,9 +237,9 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertEquals("complex-container", input.getName());
         assertEquals("Complex container with full config", input.getDescription());
         assertNotNull(input.getConfiguration());
-        assertEquals("complex-memory-index", input.getConfiguration().getMemoryIndexName());
+        assertEquals("complex-memory-index-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
         assertEquals("sparse-model", input.getConfiguration().getEmbeddingModelId());
-        assertEquals("complex-llm-model", input.getConfiguration().getLlmModelId());
+        assertEquals("complex-llm-model", input.getConfiguration().getLlmId());
         assertEquals(Integer.valueOf(10), input.getConfiguration().getMaxInferSize());
     }
 
