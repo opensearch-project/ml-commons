@@ -137,7 +137,16 @@ public class QueryPlanningTool implements WithModelTool {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             if (!validate(parameters)) {
                 listener
-                    .onFailure(new IllegalArgumentException("Required parameters not found: {}, {}" + INDEX_NAME_FIELD + QUESTION_FIELD));
+                    .onFailure(
+                        new IllegalArgumentException(
+                            String
+                                .format(
+                                    "Validation error: missing or empty required parameters — %s, %s.",
+                                    INDEX_NAME_FIELD,
+                                    QUESTION_FIELD
+                                )
+                        )
+                    );
                 return;
             }
 
