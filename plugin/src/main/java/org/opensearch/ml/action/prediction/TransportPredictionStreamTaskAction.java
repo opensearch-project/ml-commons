@@ -133,8 +133,12 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
-        // This should never be called for streaming action
-        listener.onFailure(new UnsupportedOperationException("Use doExecute with TransportChannel for streaming requests"));
+        TransportChannel channel = ((MLPredictionTaskRequest) request).getStreamingChannel();
+        if (channel != null) {
+            doExecute(task, request, listener, channel);
+        } else {
+            listener.onFailure(new UnsupportedOperationException("Use doExecute with TransportChannel for streaming requests"));
+        }
     }
 
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener, TransportChannel channel) {

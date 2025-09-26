@@ -28,6 +28,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.utils.ZipUtils;
+import org.opensearch.transport.TransportChannel;
 
 import ai.djl.Application;
 import ai.djl.Device;
@@ -52,7 +53,7 @@ public abstract class DLModelExecute implements MLExecutable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
-    public abstract void execute(Input input, ActionListener<Output> listener);
+    public abstract void execute(Input input, ActionListener<Output> listener, TransportChannel channel);
 
     protected Predictor<float[][], ai.djl.modality.Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();

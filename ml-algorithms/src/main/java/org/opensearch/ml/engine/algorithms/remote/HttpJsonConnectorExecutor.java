@@ -6,9 +6,9 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
-import static org.opensearch.ml.engine.function_calling.OpenaiV1ChatCompletionsFunctionCalling.FINISH_REASON_PATH;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
@@ -18,6 +18,7 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -35,6 +36,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -221,6 +224,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         private StreamPredictActionListener<MLTaskResponse, ?> streamActionListener;
         private final String llmInterface;
         private volatile AtomicBoolean isStreamClosed;
+        private boolean functionCallInProgress = false;
+        private boolean agentExecutionInProgress = false;
+        private String accumulatedToolCallId = null;
+        private String accumulatedToolName = null;
+        private String accumulatedArguments = "";
 
         public HTTPEventSourceListener(StreamPredictActionListener<MLTaskResponse, ?> streamActionListener, String llmInterface) {
             this.streamActionListener = streamActionListener;
@@ -297,21 +305,116 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             }
         }
 
+        // TODO: refactor this further
         private void onOpenAIEvent(String data) {
-            if (data.contentEquals("[DONE]")) {
+            if ("[DONE]".equals(data)) {
+                handleDoneEvent();
+                return;
+            }
+
+            // Process stream chunk
+            try {
+                Map<String, Object> dataMap = gson.fromJson(data, Map.class);
+                processStreamChunk(dataMap);
+            } catch (Exception e) {
+                log.debug("Skipping malformed chunk: {}", data);
+            }
+        }
+
+        private void handleDoneEvent() {
+            if (!agentExecutionInProgress) {
+                sendCompletionResponse(isStreamClosed, streamActionListener);
+            }
+        }
+
+        private void processStreamChunk(Map<String, Object> dataMap) {
+            // Handle stop finish reason
+            String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
+            if ("stop".equals(finishReason)) {
+                agentExecutionInProgress = false;
                 sendCompletionResponse(isStreamClosed, streamActionListener);
                 return;
             }
-            Map<String, Object> dataMap = StringUtils.fromJson(data, "data");
-            String llmFinishReason = JsonPath.read(dataMap, FINISH_REASON_PATH);
-            if (llmFinishReason != null && llmFinishReason.contentEquals("stop")) {
-                sendCompletionResponse(isStreamClosed, streamActionListener);
-                return;
+
+            // Process content
+            String content = extractPath(dataMap, "$.choices[0].delta.content");
+            if (content != null && !content.isEmpty()) {
+                sendContentResponse(content, false, streamActionListener);
             }
-            String deltaContent = JsonPath.read(dataMap, "$.choices[0].delta.content");
-            if (deltaContent != null && !deltaContent.isEmpty()) {
-                log.debug("Streaming content: {}", deltaContent);
-                sendContentResponse(deltaContent, false, streamActionListener);
+
+            // Process tool call
+            List<?> toolCalls = extractPath(dataMap, "$.choices[0].delta.tool_calls");
+            if (toolCalls != null) {
+                accumulateFunctionCall(toolCalls);
+                sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+            }
+
+            // Handle tool_calls finish reason
+            if ("tool_calls".equals(finishReason) && functionCallInProgress) {
+                completeToolCall();
+            }
+        }
+
+        private <T> T extractPath(Map<String, Object> dataMap, String path) {
+            try {
+                return JsonPath.read(dataMap, path);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private void completeToolCall() {
+            agentExecutionInProgress = true;
+            String completeFunctionCall = buildCompleteFunctionCallResponse();
+
+            // Send to client and agent
+            sendContentResponse(completeFunctionCall, false, streamActionListener);
+            Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+            ModelTensorOutput output = createModelTensorOutput(response);
+            streamActionListener.onResponse(new MLTaskResponse(output));
+
+            // Reset state
+            functionCallInProgress = false;
+        }
+
+        private String buildCompleteFunctionCallResponse() {
+            Map<String, Object> function = Map.of("name", accumulatedToolName, "arguments", accumulatedArguments);
+
+            Map<String, Object> toolCall = Map.of("id", accumulatedToolCallId, "type", "function", "function", function);
+
+            Map<String, Object> message = Map.of("tool_calls", List.of(toolCall));
+            Map<String, Object> choice = Map.of("message", message, "finish_reason", "tool_calls");
+            Map<String, Object> response = Map.of("choices", List.of(choice));
+
+            return StringUtils.toJson(response);
+        }
+
+        private ModelTensorOutput createModelTensorOutput(Map<String, Object> responseData) {
+            ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(responseData).build();
+
+            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+
+            return ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        }
+
+        private void accumulateFunctionCall(List<?> toolCalls) {
+            functionCallInProgress = true;
+            for (Object toolCall : toolCalls) {
+                Map<String, Object> tcMap = (Map<String, Object>) toolCall;
+
+                // Extract ID and name from first chunk
+                if (tcMap.containsKey("id")) {
+                    accumulatedToolCallId = (String) tcMap.get("id");
+                }
+                if (tcMap.containsKey("function")) {
+                    Map<String, Object> func = (Map<String, Object>) tcMap.get("function");
+                    if (func.containsKey("name")) {
+                        accumulatedToolName = (String) func.get("name");
+                    }
+                    if (func.containsKey("arguments")) {
+                        accumulatedArguments += (String) func.get("arguments");
+                    }
+                }
             }
         }
     }
