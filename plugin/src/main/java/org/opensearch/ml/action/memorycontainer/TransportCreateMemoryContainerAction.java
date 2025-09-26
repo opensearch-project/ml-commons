@@ -146,6 +146,7 @@ public class TransportCreateMemoryContainerAction extends
             .createdTime(now)
             .lastUpdatedTime(now)
             .configuration(input.getConfiguration())
+            .backendRoles(input.getBackendRoles())
             .build();
     }
 

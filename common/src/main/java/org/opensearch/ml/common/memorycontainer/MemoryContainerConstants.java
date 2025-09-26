@@ -19,6 +19,7 @@ public class MemoryContainerConstants {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // back_end roles as specified by the owner/admin
 
     // Field names for MemoryConfiguration
     public static final String DISABLE_HISTORY_FIELD = "disable_history";
@@ -91,6 +92,7 @@ public class MemoryContainerConstants {
     public static final String WORKING_MEMORIES_PATH = MEMORIES_PATH + "/working";
     public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/_search";
     public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String UPDATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}";
     public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String GET_WORKING_MEMORY_PATH = WORKING_MEMORIES_PATH + "/{" + PARAMETER_WORKING_MEMORY_ID + "}";

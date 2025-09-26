@@ -9,10 +9,13 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -22,16 +25,19 @@ import lombok.Builder;
 import lombok.Data;
 
 @Data
+@Builder
 public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable {
 
     public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String MEMORY_CONFIG_FIELD = "configuration";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles";
 
     private String name;
     private String description;
     private MemoryConfiguration configuration;
     private String tenantId;
+    private List<String> backendRoles;
 
     @Builder(toBuilder = true)
     public MLCreateMemoryContainerInput(String name, String description, MemoryConfiguration configuration, String tenantId) {
@@ -44,6 +50,24 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         this.tenantId = tenantId;
     }
 
+    @Builder(toBuilder = true)
+    public MLCreateMemoryContainerInput(
+        String name,
+        String description,
+        MemoryConfiguration configuration,
+        String tenantId,
+        List<String> backendRoles
+    ) {
+        if (name == null) {
+            throw new IllegalArgumentException("name is null");
+        }
+        this.name = name;
+        this.description = description;
+        this.configuration = configuration;
+        this.tenantId = tenantId;
+        this.backendRoles = backendRoles;
+    }
+
     public MLCreateMemoryContainerInput(StreamInput in) throws IOException {
         this.name = in.readString();
         this.description = in.readOptionalString();
@@ -53,6 +77,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             this.configuration = null;
         }
         this.tenantId = in.readOptionalString();
+        if (in.readBoolean()) {
+            backendRoles = in.readStringList();
+        }
     }
 
     @Override
@@ -66,6 +93,12 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             out.writeBoolean(false);
         }
         out.writeOptionalString(tenantId);
+        if (!CollectionUtils.isEmpty(backendRoles)) {
+            out.writeBoolean(true);
+            out.writeStringCollection(backendRoles);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -81,6 +114,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (!CollectionUtils.isEmpty(backendRoles)) {
+            builder.field(BACKEND_ROLES_FIELD, backendRoles);
+        }
         builder.endObject();
         return builder;
     }
@@ -90,6 +126,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         String description = null;
         MemoryConfiguration configuration = null;
         String tenantId = null;
+        List<String> backendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -109,6 +146,13 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
                     break;
+                case BACKEND_ROLES_FIELD:
+                    backendRoles = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        backendRoles.add(parser.text());
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -121,6 +165,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             .description(description)
             .configuration(configuration)
             .tenantId(tenantId)
+            .backendRoles(backendRoles)
             .build();
     }
 }
