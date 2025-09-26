@@ -18,6 +18,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.transport.client.Client;
 
 public class MemorySearchServiceAdditionalTests {
@@ -29,6 +31,11 @@ public class MemorySearchServiceAdditionalTests {
     private ActionListener<List<FactSearchResult>> listener;
 
     private MemorySearchService memorySearchService;
+
+    @Mock
+    private MemoryStrategy strategy;
+    @Mock
+    private MLAddMemoriesInput input;
 
     @Before
     public void setup() {
@@ -43,7 +50,7 @@ public class MemorySearchServiceAdditionalTests {
         String indexName = "memory-index";
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }

@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -44,7 +43,6 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryI
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
-import org.opensearch.ml.helper.MemoryEmbeddingHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -81,9 +79,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
     @Mock
     private MemoryContainerHelper memoryContainerHelper;
-
-    @Mock
-    private MemoryEmbeddingHelper memoryEmbeddingHelper;
 
     @Mock
     private ThreadPool threadPool;
@@ -125,7 +120,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
                 MemoryConfiguration
                     .builder()
                     .indexPrefix("test-memory-index")
-                    .semanticStorageEnabled(true)
+                    .disableHistory(true)
                     .embeddingModelType(FunctionName.TEXT_EMBEDDING)
                     .embeddingModelId("embedding-model-123")
                     .dimension(768)
@@ -144,8 +139,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
                 connectorAccessControlHelper,
                 mlFeatureEnabledSetting,
                 mlModelManager,
-                memoryContainerHelper,
-                memoryEmbeddingHelper
+                memoryContainerHelper
             )
         );
     }
@@ -200,15 +194,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), any());
 
-        // Mock embedding generation
-        doAnswer(invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(2);
-            Map<String, Float> embedding = new HashMap<>();
-            embedding.put("test", 0.5f);
-            listener.onResponse(embedding);
-            return null;
-        }).when(memoryEmbeddingHelper).generateEmbedding(anyString(), any(), any());
-
         // Mock update operation
         doAnswer(invocation -> {
             UpdateRequest request = invocation.getArgument(0);
@@ -227,7 +212,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
         verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq("update"), any());
         verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(memoryEmbeddingHelper, times(1)).generateEmbedding(eq(newText), any(), any());
         verify(client, times(1)).update(any(UpdateRequest.class), any());
         verify(actionListener, times(1)).onResponse(mockUpdateResponse);
         verify(actionListener, never()).onFailure(any());
@@ -385,7 +369,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
             .builder()
             .name("test-container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").semanticStorageEnabled(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
             .build();
 
         UpdateResponse mockUpdateResponse = mock(UpdateResponse.class);
@@ -443,7 +427,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(containerWithoutSemantic));
         verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(containerWithoutSemantic), eq("update"), any());
         verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(memoryEmbeddingHelper, never()).generateEmbedding(any(), any(), any()); // No embedding generation
         verify(client, times(1)).update(any(UpdateRequest.class), any());
         verify(actionListener, times(1)).onResponse(mockUpdateResponse);
         verify(actionListener, never()).onFailure(any());
@@ -495,13 +478,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), any());
 
-        // Mock embedding generation to fail
-        doAnswer(invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(2);
-            listener.onFailure(embeddingError);
-            return null;
-        }).when(memoryEmbeddingHelper).generateEmbedding(anyString(), any(), any());
-
         // Mock update operation (should still happen without embedding)
         UpdateResponse mockUpdateResponse = mock(UpdateResponse.class);
         doAnswer(invocation -> {
@@ -526,7 +502,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
         verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq("update"), any());
         verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(memoryEmbeddingHelper, times(1)).generateEmbedding(eq(newText), any(), any());
         verify(client, times(1)).update(any(UpdateRequest.class), any()); // Update should still happen without embedding
         verify(actionListener, times(1)).onResponse(mockUpdateResponse); // Should succeed even without embedding
         verify(actionListener, never()).onFailure(any());
@@ -559,7 +534,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
             .builder()
             .name("test-container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").semanticStorageEnabled(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
             .build();
 
         // Mock getMemoryContainer

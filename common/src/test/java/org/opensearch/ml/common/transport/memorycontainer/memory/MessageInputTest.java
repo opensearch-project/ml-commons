@@ -7,7 +7,6 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
@@ -15,7 +14,9 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import java.io.IOException;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -29,13 +30,12 @@ import org.opensearch.ml.common.TestHelper;
 public class MessageInputTest {
 
     private MessageInput messageWithRole;
-    private MessageInput messageWithoutRole;
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
-        messageWithRole = MessageInput.builder().role("user").content("Hello, how are you?").build();
-
-        messageWithoutRole = MessageInput.builder().content("Just a message without role").build();
+        messageWithRole = MessageInput.builder().role("user").contentText("Hello, how are you?").build();
     }
 
     @Test
@@ -47,35 +47,32 @@ public class MessageInputTest {
 
     @Test
     public void testBuilderWithoutRole() {
-        assertNotNull(messageWithoutRole);
-        assertNull(messageWithoutRole.getRole());
-        assertEquals("Just a message without role", messageWithoutRole.getContent());
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Message must have role and content");
+        MessageInput.builder().contentText("Hello, how are you?").build();
     }
 
     @Test
     public void testConstructorWithRole() {
-        MessageInput message = new MessageInput("assistant", "I'm doing well, thank you!");
+        MessageInput message = MessageInput.builder().role("assistant").contentText("I'm doing well, thank you!").build();
         assertEquals("assistant", message.getRole());
         assertEquals("I'm doing well, thank you!", message.getContent());
     }
 
     @Test
-    public void testConstructorWithoutRole() {
-        MessageInput message = new MessageInput(null, "Message content");
-        assertNull(message.getRole());
-        assertEquals("Message content", message.getContent());
-    }
-
-    @Test
     public void testConstructorWithNullContent() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MessageInput("user", null));
-        assertEquals("Content is required", exception.getMessage());
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MessageInput.builder().role("user").build()
+        );
+        assertEquals("Message must have role and content", exception.getMessage());
     }
 
     @Test
     public void testConstructorWithEmptyContent() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MessageInput("user", ""));
-        assertEquals("Content is required", exception.getMessage());
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Message must have role and content");
+        MessageInput.builder().role("user").contentText(null).build();
     }
 
     @Test
@@ -91,35 +88,13 @@ public class MessageInputTest {
     }
 
     @Test
-    public void testStreamInputOutputWithoutRole() throws IOException {
-        // Test without role
-        BytesStreamOutput out = new BytesStreamOutput();
-        messageWithoutRole.writeTo(out);
-        StreamInput in = out.bytes().streamInput();
-        MessageInput deserialized = new MessageInput(in);
-
-        assertNull(deserialized.getRole());
-        assertEquals(messageWithoutRole.getContent(), deserialized.getContent());
-    }
-
-    @Test
     public void testToXContent() throws IOException {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         messageWithRole.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         assertTrue(jsonString.contains("\"role\":\"user\""));
-        assertTrue(jsonString.contains("\"content\":\"Hello, how are you?\""));
-    }
-
-    @Test
-    public void testToXContentWithoutRole() throws IOException {
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        messageWithoutRole.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        assertTrue(!jsonString.contains("\"role\""));
-        assertTrue(jsonString.contains("\"content\":\"Just a message without role\""));
+        assertTrue(jsonString.contains("\"content_text\":\"Hello, how are you?\""));
     }
 
     @Test
@@ -135,21 +110,6 @@ public class MessageInputTest {
 
         assertEquals("user", parsed.getRole());
         assertEquals("Test message", parsed.getContent());
-    }
-
-    @Test
-    public void testParseWithoutRole() throws IOException {
-        String jsonString = "{\"content\":\"Message without role\"}";
-
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
-        parser.nextToken();
-
-        MessageInput parsed = MessageInput.parse(parser);
-
-        assertNull(parsed.getRole());
-        assertEquals("Message without role", parsed.getContent());
     }
 
     @Test
@@ -169,10 +129,10 @@ public class MessageInputTest {
 
     @Test
     public void testSetters() {
-        MessageInput message = new MessageInput(null, "Initial content");
+        MessageInput message = MessageInput.builder().role("user").contentText("Initial content").build();
 
         message.setRole("system");
-        message.setContent("Updated content");
+        message.setContentText("Updated content");
 
         assertEquals("system", message.getRole());
         assertEquals("Updated content", message.getContent());
@@ -180,10 +140,11 @@ public class MessageInputTest {
 
     @Test
     public void testSpecialCharactersInContent() throws IOException {
-        MessageInput specialMessage = new MessageInput(
-            "user",
-            "Content with\n\ttabs,\nnewlines, \"quotes\", 'single quotes', and unicode 🚀✨"
-        );
+        MessageInput specialMessage = MessageInput
+            .builder()
+            .role("user")
+            .contentText("Content with\n\ttabs,\nnewlines, \"quotes\", 'single quotes', and unicode 🚀✨")
+            .build();
 
         // Test serialization round trip
         BytesStreamOutput out = new BytesStreamOutput();
@@ -206,10 +167,10 @@ public class MessageInputTest {
 
     @Test
     public void testRoleValues() throws IOException {
-        String[] roles = { "user", "assistant", "system", "human", "ai", null };
+        String[] roles = { "user", "assistant", "system", "human", "ai" };
 
         for (String role : roles) {
-            MessageInput message = new MessageInput(role, "Test content");
+            MessageInput message = MessageInput.builder().role(role).contentText("Test content").build();
             assertEquals(role, message.getRole());
 
             // Test round trip

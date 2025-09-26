@@ -12,9 +12,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.time.Instant;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -101,11 +103,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         actionRequest = mock(ActionRequest.class);
 
         // Setup test memory container
-        MemoryConfiguration storageConfig = MemoryConfiguration
-            .builder()
-            .indexPrefix(MEMORY_INDEX_NAME)
-            .semanticStorageEnabled(false)
-            .build();
+        MemoryConfiguration storageConfig = MemoryConfiguration.builder().indexPrefix(MEMORY_INDEX_NAME).disableHistory(false).build();
 
         testMemoryContainer = MLMemoryContainer
             .builder()
@@ -121,10 +119,9 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Setup test memory
         testMemory = MLMemory
             .builder()
-            .sessionId("test-session")
+            .namespace(Map.of(SESSION_ID_FIELD, "test-session", "user_id", "test-user"))
             .memory("Test memory content")
-            .memoryType(MemoryType.RAW_MESSAGE)
-            .userId("test-user")
+            .memoryType(MemoryType.SEMANTIC)
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
@@ -204,10 +201,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         String expectedJson = createMemoryJson();
 
         // Verify the memory content matches what was in the JSON
-        assertEquals("test-session", returnedMemory.getSessionId());
+        assertEquals("test-session", returnedMemory.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("Test memory content", returnedMemory.getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, returnedMemory.getMemoryType());
-        assertEquals("test-user", returnedMemory.getUserId());
+        assertEquals(MemoryType.SEMANTIC, returnedMemory.getMemoryType());
+        assertEquals("test-user", returnedMemory.getNamespace().get("user_id"));
         assertNotNull(returnedMemory.getCreatedTime());
         assertNotNull(returnedMemory.getLastUpdatedTime());
         assertTrue(expectedJson.contains("\"session_id\":\"test-session\""));
