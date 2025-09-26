@@ -45,6 +45,7 @@ import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -145,7 +146,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("test-memory-container")
             .description("Test memory container description")
-            .memoryStorageConfig(memoryStorageConfig)
+            .configuration(memoryStorageConfig)
             .tenantId(TENANT_ID)
             .build();
 
@@ -169,7 +170,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             actionFilters,
             client,
             sdkClient,
-            clusterService,
             mlIndicesHandler,
             connectorAccessControlHelper,
             mlFeatureEnabledSetting,
@@ -420,7 +420,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("sparse-memory-container")
             .description("Sparse encoding memory container")
-            .memoryStorageConfig(sparseConfig)
+            .configuration(sparseConfig)
             .tenantId(TENANT_ID)
             .build();
 
@@ -879,7 +879,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("embedding-only-container")
             .description("Embedding only memory container")
-            .memoryStorageConfig(embeddingOnlyConfig)
+            .configuration(embeddingOnlyConfig)
             .tenantId(TENANT_ID)
             .build();
 
@@ -927,7 +927,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MemoryConfiguration nonSemanticConfig = MemoryConfiguration
             .builder()
             .indexPrefix("non-semantic-index")
-            .semanticStorageEnabled(false)
+            .disableHistory(false)
             .maxInferSize(5)
             .build();
 
@@ -935,7 +935,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("non-semantic-container")
             .description("Non-semantic memory container")
-            .memoryStorageConfig(nonSemanticConfig)
+            .configuration(nonSemanticConfig)
             .tenantId(TENANT_ID)
             .build();
 
@@ -988,7 +988,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("remote-memory-container")
             .description("Remote embedding memory container")
-            .memoryStorageConfig(remoteConfig)
+            .configuration(remoteConfig)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1040,13 +1040,13 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
-    public void testDoExecuteWithNullMemoryStorageConfig() throws InterruptedException {
+    public void testDoExecuteWithNullconfiguration() throws InterruptedException {
         // Create input with null memory storage config
         MLCreateMemoryContainerInput nullConfigInput = MLCreateMemoryContainerInput
             .builder()
             .name("null-config-container")
             .description("Null config memory container")
-            .memoryStorageConfig(null)
+            .configuration(null)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1091,7 +1091,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
                 .builder()
                 .name("invalid-tenant-container")
                 .description("Container with invalid tenant")
-                .memoryStorageConfig(memoryStorageConfig)
+                .configuration(memoryStorageConfig)
                 .tenantId(null) // This should trigger tenant validation failure
                 .build();
 
@@ -1122,7 +1122,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("default-index-name-container")
             .description("Container with default index name generation")
-            .memoryStorageConfig(configWithoutIndexName)
+            .configuration(configWithoutIndexName)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1173,7 +1173,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("sparse-default-index-container")
             .description("Sparse encoding container with default index name")
-            .memoryStorageConfig(sparseConfigWithoutIndexName)
+            .configuration(sparseConfigWithoutIndexName)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1226,17 +1226,18 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteWithStaticMemoryDefaultIndexName() throws InterruptedException {
         // Create config with semantic storage disabled to test static memory index generation
-        MemoryConfiguration staticConfigWithoutIndexName = MemoryConfiguration
-            .builder()
-            .semanticStorageEnabled(false)
-            .maxInferSize(5)
-            .build(); // No memoryIndexName specified, semantic storage disabled
+        MemoryConfiguration staticConfigWithoutIndexName = MemoryConfiguration.builder().disableHistory(false).maxInferSize(5).build(); // No
+                                                                                                                                        // memoryIndexName
+                                                                                                                                        // specified,
+                                                                                                                                        // semantic
+                                                                                                                                        // storage
+                                                                                                                                        // disabled
 
         MLCreateMemoryContainerInput staticInputWithoutIndexName = MLCreateMemoryContainerInput
             .builder()
             .name("static-default-index-container")
             .description("Static memory container with default index name")
-            .memoryStorageConfig(staticConfigWithoutIndexName)
+            .configuration(staticConfigWithoutIndexName)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1279,7 +1280,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MemoryConfiguration configWithoutEmbeddingModel = MemoryConfiguration
             .builder()
             .indexPrefix("semantic-no-embedding-index")
-            .semanticStorageEnabled(true) // This will be overridden to false by constructor
+            .disableHistory(true) // This will be overridden to false by constructor
             .embeddingModelId(null) // No embedding model ID
             .embeddingModelType(null) // No embedding model type
             .llmId("test-llm-model")
@@ -1291,7 +1292,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("semantic-no-embedding-container")
             .description("Semantic container without embedding model")
-            .memoryStorageConfig(configWithoutEmbeddingModel)
+            .configuration(configWithoutEmbeddingModel)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1338,56 +1339,6 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         verify(mlModelManager, never()).getModel(anyString(), any());
     }
 
-    public void testDoExecuteWithSemanticStorageEnabledButNullEmbeddingModelId() throws InterruptedException {
-        // Create a config that simulates deserialization scenario where semanticStorageEnabled=true
-        // but embeddingModelId=null (this can happen with StreamInput constructor)
-        MemoryConfiguration mockConfig = mock(MemoryConfiguration.class);
-        when(mockConfig.isSemanticStorageEnabled()).thenReturn(true);
-        when(mockConfig.getLlmId()).thenReturn(null); // No LLM model
-        when(mockConfig.getEmbeddingModelId()).thenReturn(null); // No embedding model ID
-        when(mockConfig.getIndexPrefix()).thenReturn("test-semantic-index");
-
-        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
-            .builder()
-            .name("semantic-container-null-embedding")
-            .description("Semantic container with null embedding model ID")
-            .memoryStorageConfig(mockConfig)
-            .tenantId(TENANT_ID)
-            .build();
-
-        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(input);
-
-        // Mock successful operations
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLIndexIfAbsent(eq(MLIndex.MEMORY_CONTAINER), isA(ActionListener.class));
-
-        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
-        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
-
-        doAnswer(invocation -> {
-            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
-            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
-            listener.onResponse(response);
-            return null;
-        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
-
-        // Execute
-        action.doExecute(task, request, actionListener);
-
-        // Verify success response
-        verify(actionListener).onResponse(responseCaptor.capture());
-        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
-        assertNotNull(response);
-        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
-        assertEquals("created", response.getStatus());
-
-        // Verify that no model validation was called since both LLM and embedding model IDs are null
-        verify(mlModelManager, never()).getModel(anyString(), any());
-    }
-
     public void testDoExecuteWithAgenticMemoryDisabled() throws InterruptedException {
         // Disable agentic memory feature
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
@@ -1410,7 +1361,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MemoryConfiguration configWithoutLlmModel = MemoryConfiguration
             .builder()
             .indexPrefix("semantic-no-llm-index")
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
             .llmId(null) // No LLM model ID
@@ -1422,7 +1373,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("semantic-no-llm-container")
             .description("Semantic container without LLM model")
-            .memoryStorageConfig(configWithoutLlmModel)
+            .configuration(configWithoutLlmModel)
             .tenantId(TENANT_ID)
             .build();
 
@@ -1492,6 +1443,18 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(response);
             return null;
         }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMemoryContainerIndex(any(ActionListener.class));
+
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).createWorkingMemoryDataIndex(anyString(), any(MemoryConfiguration.class), any(ActionListener.class));
 
         // Execute
         action.doExecute(task, request, actionListener);

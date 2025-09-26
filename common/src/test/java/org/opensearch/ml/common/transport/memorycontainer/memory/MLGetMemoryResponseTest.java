@@ -34,7 +34,7 @@ public class MLGetMemoryResponseTest {
         testMemory = MLMemory
             .builder()
             .memory("Test memory content")
-            .memoryType(MemoryType.RAW_MESSAGE)
+            .memoryType(MemoryType.SEMANTIC)
             .role("user")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
@@ -48,7 +48,7 @@ public class MLGetMemoryResponseTest {
         assertNotNull(responseNormal);
         assertNotNull(responseNormal.getMlMemory());
         assertEquals("Test memory content", responseNormal.getMlMemory().getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, responseNormal.getMlMemory().getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, responseNormal.getMlMemory().getMemoryType());
         assertEquals("user", responseNormal.getMlMemory().getRole());
     }
 
@@ -85,7 +85,7 @@ public class MLGetMemoryResponseTest {
         assertNotNull(result);
         assertNotNull(result.getMlMemory());
         assertEquals("Test memory content", result.getMlMemory().getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, result.getMlMemory().getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, result.getMlMemory().getMemoryType());
         assertEquals("user", result.getMlMemory().getRole());
     }
 
@@ -110,7 +110,7 @@ public class MLGetMemoryResponseTest {
 
         assertNotNull(jsonString);
         assertTrue(jsonString.contains("Test memory content"));
-        assertTrue(jsonString.contains("RAW_MESSAGE"));
+        assertTrue(jsonString.contains("SEMANTIC"));
         assertTrue(jsonString.contains("user"));
     }
 }

@@ -22,8 +22,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -55,7 +55,7 @@ public class MemoryProcessingServiceAdditionalTests {
 
     @Test
     public void testExtractFactsFromConversation_NonModelTensorOutput() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("My name is John").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("My name is John").role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 

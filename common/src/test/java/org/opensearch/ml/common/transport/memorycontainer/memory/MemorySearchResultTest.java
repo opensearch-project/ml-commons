@@ -53,7 +53,7 @@ public class MemorySearchResultTest {
             .sessionId("session-456")
             .agentId("agent-789")
             .userId("user-101")
-            .memoryType(MemoryType.RAW_MESSAGE)
+            .memoryType(MemoryType.SEMANTIC)
             .role("user")
             .tags(testTags)
             .createdTime(testCreatedTime)
@@ -88,7 +88,7 @@ public class MemorySearchResultTest {
         assertEquals("session-456", resultWithAllFields.getSessionId());
         assertEquals("agent-789", resultWithAllFields.getAgentId());
         assertEquals("user-101", resultWithAllFields.getUserId());
-        assertEquals(MemoryType.RAW_MESSAGE, resultWithAllFields.getMemoryType());
+        assertEquals(MemoryType.SEMANTIC, resultWithAllFields.getMemoryType());
         assertEquals("user", resultWithAllFields.getRole());
         assertEquals(testTags, resultWithAllFields.getTags());
         assertEquals(testCreatedTime, resultWithAllFields.getCreatedTime());
@@ -217,7 +217,7 @@ public class MemorySearchResultTest {
         assertTrue(jsonString.contains("\"session_id\":\"session-456\""));
         assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
         assertTrue(jsonString.contains("\"user_id\":\"user-101\""));
-        assertTrue(jsonString.contains("\"memory_type\":\"RAW_MESSAGE\""));
+        assertTrue(jsonString.contains("\"memory_type\":\"SEMANTIC\""));
         assertTrue(jsonString.contains("\"role\":\"user\""));
         assertTrue(jsonString.contains("\"topic\":\"machine learning\""));
         assertTrue(jsonString.contains("\"priority\":\"high\""));
@@ -292,7 +292,7 @@ public class MemorySearchResultTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         factResult.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        assertTrue(jsonString.contains("\"memory_type\":\"FACT\""));
+        assertTrue(jsonString.contains("\"memory_type\":\"SEMANTIC\""));
     }
 
     @Test

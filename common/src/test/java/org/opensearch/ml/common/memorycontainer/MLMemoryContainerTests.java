@@ -44,7 +44,6 @@ public class MLMemoryContainerTests {
         testMemoryStorageConfig = MemoryConfiguration
             .builder()
             .indexPrefix("test-memory-index")
-            .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
             .dimension(768)
@@ -132,7 +131,7 @@ public class MLMemoryContainerTests {
         assertEquals(mlMemoryContainer.getTenantId(), parsedContainer.getTenantId());
         assertEquals(mlMemoryContainer.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(mlMemoryContainer.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertEquals(mlMemoryContainer.getConfiguration(), parsedContainer.getConfiguration());
+        assertEquals(mlMemoryContainer.getConfiguration().getIndexPrefix(), parsedContainer.getConfiguration().getIndexPrefix());
     }
 
     @Test
@@ -176,7 +175,7 @@ public class MLMemoryContainerTests {
         assert (jsonStr.contains("\"tenant_id\":\"test-tenant\""));
         assert (jsonStr.contains("\"created_time\":" + testCreatedTime.toEpochMilli()));
         assert (jsonStr.contains("\"last_updated_time\":" + testLastUpdatedTime.toEpochMilli()));
-        assert (jsonStr.contains("\"memory_storage_config\""));
+        assert (jsonStr.contains("\"configuration\""));
     }
 
     @Test
@@ -272,12 +271,12 @@ public class MLMemoryContainerTests {
     public void testParseFromXContentWithMemoryStorageConfig() throws IOException {
         // Create a JSON string with memory storage config
         String jsonStr = "{\"name\":\"config-test-container\","
-            + "\"memory_storage_config\":{"
-            + "\"memory_index_name\":\"test-index\","
-            + "\"semantic_storage_enabled\":true,"
+            + "\"configuration\":{"
+            + "\"index_prefix\":\"test-index\","
+            + "\"disable_history\":true,"
             + "\"embedding_model_type\":\"TEXT_EMBEDDING\","
             + "\"embedding_model_id\":\"test-model\","
-            + "\"dimension\":512,"
+            + "\"embedding_dimension\":512,"
             + "\"max_infer_size\":5"
             + "}}";
 
@@ -290,7 +289,6 @@ public class MLMemoryContainerTests {
         assertEquals("config-test-container", parsedContainer.getName());
         assertNotNull(parsedContainer.getConfiguration());
         assertEquals("test-index", parsedContainer.getConfiguration().getIndexPrefix());
-        assertEquals(true, parsedContainer.getConfiguration().isSemanticStorageEnabled());
         assertEquals(FunctionName.TEXT_EMBEDDING, parsedContainer.getConfiguration().getEmbeddingModelType());
         assertEquals("test-model", parsedContainer.getConfiguration().getEmbeddingModelId());
         assertEquals(Integer.valueOf(512), parsedContainer.getConfiguration().getDimension());

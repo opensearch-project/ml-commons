@@ -129,7 +129,14 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals(inputWithAllFields.getName(), parsedInput.getName());
         assertEquals(inputWithAllFields.getDescription(), parsedInput.getDescription());
-        assertEquals(inputWithAllFields.getConfiguration(), parsedInput.getConfiguration());
+        assertEquals(inputWithAllFields.getConfiguration().getIndexPrefix(), parsedInput.getConfiguration().getIndexPrefix());
+        assertEquals(inputWithAllFields.getConfiguration().getEmbeddingModelId(), parsedInput.getConfiguration().getEmbeddingModelId());
+        assertEquals(inputWithAllFields.getConfiguration().getEmbeddingModelType(), parsedInput.getConfiguration().getEmbeddingModelType());
+        assertEquals(inputWithAllFields.getConfiguration().getDimension(), parsedInput.getConfiguration().getDimension());
+        assertEquals(inputWithAllFields.getConfiguration().getMaxInferSize(), parsedInput.getConfiguration().getMaxInferSize());
+        assertEquals(inputWithAllFields.getConfiguration().getLlmId(), parsedInput.getConfiguration().getLlmId());
+        assertEquals(inputWithAllFields.getConfiguration().isDisableHistory(), parsedInput.getConfiguration().isDisableHistory());
+        assertEquals(inputWithAllFields.getConfiguration().isDisableSession(), parsedInput.getConfiguration().isDisableSession());
         assertEquals(inputWithAllFields.getTenantId(), parsedInput.getTenantId());
     }
 
@@ -160,7 +167,7 @@ public class MLCreateMemoryContainerInputTests {
         assertTrue(jsonStr.contains("\"tenant_id\":\"test-tenant\""));
         assertTrue(jsonStr.contains("\"configuration\""));
         // Verify memory storage config fields are nested
-        assertTrue(jsonStr.contains("\"memory_index_prefix\":\"test-memory-index\""));
+        assertTrue(jsonStr.contains("\"index_prefix\":\"test-memory-index\""));
         assertTrue(jsonStr.contains("\"embedding_model_type\":\"TEXT_EMBEDDING\""));
     }
 
@@ -186,11 +193,11 @@ public class MLCreateMemoryContainerInputTests {
             + "\"description\":\"parsed description\","
             + "\"tenant_id\":\"parsed-tenant\","
             + "\"configuration\":{"
-            + "\"memory_index_prefix\":\"parsed-index\","
+            + "\"index_prefix\":\"parsed-index\","
             + "\"embedding_model_type\":\"TEXT_EMBEDDING\","
             + "\"embedding_model_id\":\"parsed-embedding-model\","
             + "\"llm_id\":\"parsed-llm-model\","
-            + "\"dimension\":512,"
+            + "\"embedding_dimension\":512,"
             + "\"max_infer_size\":7"
             + "}"
             + "}";
@@ -348,7 +355,7 @@ public class MLCreateMemoryContainerInputTests {
             + "\"name\":\"partial-config-container\","
             + "\"description\":\"test with partial config\","
             + "\"configuration\":{"
-            + "\"memory_index_prefix\":\"partial-index\","
+            + "\"index_prefix\":\"partial-index\","
             + "\"llm_id\":\"partial-llm-model\""
             + "}"
             + "}";
@@ -365,7 +372,6 @@ public class MLCreateMemoryContainerInputTests {
         assertEquals("partial-index", parsedInput.getConfiguration().getIndexPrefix());
         assertEquals("partial-llm-model", parsedInput.getConfiguration().getLlmId());
         // Semantic storage should be disabled due to missing embedding config
-        assertFalse(parsedInput.getConfiguration().isSemanticStorageEnabled());
     }
 
     @Test

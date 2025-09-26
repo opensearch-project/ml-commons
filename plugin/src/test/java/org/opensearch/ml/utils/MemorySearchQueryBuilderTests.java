@@ -9,13 +9,18 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 
 public class MemorySearchQueryBuilderTests {
 
@@ -68,7 +73,7 @@ public class MemorySearchQueryBuilderTests {
         String queryText = "AI research topics";
         MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("dense-model-789")
             .dimension(768)
@@ -87,7 +92,7 @@ public class MemorySearchQueryBuilderTests {
         String queryText = "computer vision";
         MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-model-999")
             .build();
@@ -103,7 +108,7 @@ public class MemorySearchQueryBuilderTests {
     @Test
     public void testBuildQueryByStorageTypeWithNonSemanticStorage() throws IOException {
         String queryText = "reinforcement learning";
-        MemoryConfiguration config = MemoryConfiguration.builder().semanticStorageEnabled(false).build();
+        MemoryConfiguration config = MemoryConfiguration.builder().disableHistory(false).build();
 
         XContentBuilder builder = MemorySearchQueryBuilder.buildQueryByStorageType(queryText, config);
         String jsonString = builder.toString();
@@ -132,7 +137,7 @@ public class MemorySearchQueryBuilderTests {
             IllegalArgumentException.class,
             () -> MemoryConfiguration
                 .builder()
-                .semanticStorageEnabled(true)
+                .disableHistory(true)
                 .embeddingModelType(FunctionName.KMEANS) // Unsupported type - will throw during build
                 .embeddingModelId("model-123")
                 .build()
@@ -145,13 +150,19 @@ public class MemorySearchQueryBuilderTests {
         String sessionId = "session-123";
         MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("text-model-456")
             .dimension(384)
             .build();
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(
+                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
+                fact,
+                Map.of(SESSION_ID_FIELD, sessionId),
+                config
+            );
         String jsonString = builder.toString();
 
         // Verify bool query structure
@@ -175,12 +186,18 @@ public class MemorySearchQueryBuilderTests {
         String sessionId = "session-456";
         MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-model-789")
             .build();
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(
+                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
+                fact,
+                Map.of(SESSION_ID_FIELD, sessionId),
+                config
+            );
         String jsonString = builder.toString();
 
         // Verify filters
@@ -197,9 +214,15 @@ public class MemorySearchQueryBuilderTests {
     public void testBuildFactSearchQueryWithNonSemanticStorage() throws IOException {
         String fact = "Lives in San Francisco";
         String sessionId = "session-789";
-        MemoryConfiguration config = MemoryConfiguration.builder().semanticStorageEnabled(false).build();
+        MemoryConfiguration config = MemoryConfiguration.builder().disableHistory(false).build();
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(
+                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
+                fact,
+                Map.of(SESSION_ID_FIELD, sessionId),
+                config
+            );
         String jsonString = builder.toString();
 
         // Verify filters
@@ -217,7 +240,13 @@ public class MemorySearchQueryBuilderTests {
         String fact = "Has a PhD in Computer Science";
         String sessionId = "session-999";
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, null);
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(
+                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
+                fact,
+                Map.of(SESSION_ID_FIELD, sessionId),
+                MemoryConfiguration.builder().llmId("llm_id1").embeddingModelId("embedding_model1").build()
+            );
         String jsonString = builder.toString();
 
         // Verify filters
@@ -238,7 +267,7 @@ public class MemorySearchQueryBuilderTests {
             IllegalArgumentException.class,
             () -> MemoryConfiguration
                 .builder()
-                .semanticStorageEnabled(true)
+                .disableHistory(true)
                 .embeddingModelType(FunctionName.LINEAR_REGRESSION) // Unsupported type - will throw during build
                 .embeddingModelId("model-test")
                 .build()
@@ -272,13 +301,19 @@ public class MemorySearchQueryBuilderTests {
         String sessionId = "sess-123";
         MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("model-123")
             .dimension(768)  // Add required dimension for TEXT_EMBEDDING
             .build();
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(
+                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
+                fact,
+                Map.of(SESSION_ID_FIELD, sessionId),
+                config
+            );
         String jsonString = builder.toString();
 
         // Verify the query doesn't have a "query" wrapper (as per comment in code)

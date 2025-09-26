@@ -97,15 +97,15 @@ public class MLMemory implements ToXContentObject, Writeable {
         out.writeString(memory);
         out.writeEnum(memoryType);
         out.writeOptionalString(role);
-        if (tags != null && !tags.isEmpty()) {
-            out.writeBoolean(true);
-            out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
-        } else {
-            out.writeBoolean(false);
-        }
         if (namespace != null && !namespace.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (tags != null && !tags.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
         }
