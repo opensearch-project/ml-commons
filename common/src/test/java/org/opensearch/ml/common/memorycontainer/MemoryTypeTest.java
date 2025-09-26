@@ -17,33 +17,28 @@ public class MemoryTypeTest {
     @Test
     public void testEnumValues() {
         // Test all enum values exist
-        assertEquals(2, MemoryType.values().length);
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.valueOf("RAW_MESSAGE"));
-        assertEquals(MemoryType.SEMANTIC, MemoryType.valueOf("FACT"));
+        assertEquals(1, MemoryType.values().length);
+        assertEquals(MemoryType.SEMANTIC, MemoryType.valueOf("SEMANTIC"));
     }
 
     @Test
     public void testGetValue() {
-        assertEquals("RAW_MESSAGE", MemoryType.RAW_MESSAGE.getValue());
-        assertEquals("FACT", MemoryType.SEMANTIC.getValue());
+        assertEquals("SEMANTIC", MemoryType.SEMANTIC.getValue());
     }
 
     @Test
     public void testToString() {
-        assertEquals("RAW_MESSAGE", MemoryType.RAW_MESSAGE.toString());
-        assertEquals("FACT", MemoryType.SEMANTIC.toString());
+        assertEquals("SEMANTIC", MemoryType.SEMANTIC.toString());
     }
 
     @Test
     public void testFromString_ValidValues() {
         // Test exact match
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("RAW_MESSAGE"));
-        assertEquals(MemoryType.SEMANTIC, MemoryType.fromString("FACT"));
+        assertEquals(MemoryType.SEMANTIC, MemoryType.fromString("SEMANTIC"));
 
         // Test case insensitive
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("raw_message"));
-        assertEquals(MemoryType.SEMANTIC, MemoryType.fromString("FaCt"));
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("Raw_Message"));
+        assertEquals(MemoryType.SEMANTIC, MemoryType.fromString("semantic"));
+        assertEquals(MemoryType.SEMANTIC, MemoryType.fromString("SeMANtIC"));
     }
 
     @Test

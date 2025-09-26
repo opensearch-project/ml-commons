@@ -54,7 +54,6 @@ public class MemoryOperationsService {
         Map<String, String> namespace,
         User user,
         MLAddMemoriesInput input,
-        MemoryConfiguration configuration,
         ActionListener<List<MemoryResult>> listener
     ) {
         String longTermMemoryIndex = memoryConfig.getLongMemoryIndexName();
