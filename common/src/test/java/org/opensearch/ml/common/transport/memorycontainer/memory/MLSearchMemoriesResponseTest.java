@@ -50,7 +50,7 @@ public class MLSearchMemoriesResponseTest {
                     .score(0.95f)
                     .sessionId("session-123")
                     .userId("user-456")
-                    .memoryType(MemoryType.RAW_MESSAGE)
+                    .memoryType(MemoryType.SEMANTIC)
                     .role("assistant")
                     .tags(tags)
                     .createdTime(Instant.now())

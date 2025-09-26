@@ -93,10 +93,6 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             }
         }
 
-        if (infer && memoryType != ShortTermMemoryType.CONVERSATION) {
-            throw new IllegalArgumentException("Infer is only supported for conversation memory");
-        }
-
         if (memoryContainerId == null) {
             throw new IllegalArgumentException("No memory container id provided");
         }
@@ -247,7 +243,6 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         String binaryData = null;
         Map<String, Object> structuredData = null;
         Map<String, String> namespace = null;
-        Map<String, String> longTermMemoryNamespace = null;
         boolean infer = false;
         Map<String, String> metadata = null;
         Map<String, String> tags = null;
@@ -310,10 +305,10 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     }
 
     public String getSessionId() {
-        return namespace.get(SESSION_ID_FIELD);
+        return namespace == null ? null : namespace.get(SESSION_ID_FIELD);
     }
 
     public String getAgentId() {
-        return namespace.get(AGENT_ID_FIELD);
+        return namespace == null ? null : namespace.get(AGENT_ID_FIELD);
     }
 }

@@ -297,7 +297,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                 strategyNameSpace,
                                 user,
                                 input,
-                                memoryConfig,
                                 ActionListener.wrap(operationResults -> {
                                     List<MemoryResult> allResults = new ArrayList<>(operationResults);
                                     MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
@@ -320,7 +319,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                             strategyNameSpace,
                             user,
                             input,
-                            memoryConfig,
                             ActionListener.wrap(operationResults -> {
                                 List<MemoryResult> allResults = new ArrayList<>(operationResults);
                                 MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
