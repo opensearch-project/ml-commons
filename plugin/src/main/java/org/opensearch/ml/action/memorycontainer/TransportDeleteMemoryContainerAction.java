@@ -15,6 +15,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -105,7 +106,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
     }
 
     private void deleteMemoryContainer(String memoryContainerId, String tenantId, ActionListener<DeleteResponse> listener) {
-        try {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest
                 .builder()
                 .index(ML_MEMORY_CONTAINER_INDEX)
