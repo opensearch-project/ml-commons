@@ -182,6 +182,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
                 new Interaction(
                     "0",
                     Instant.now(),
+                    Instant.now(),
                     "1",
                     "question",
                     "",
@@ -274,6 +275,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             .of(
                 new Interaction(
                     "0",
+                    Instant.now(),
                     Instant.now(),
                     "1",
                     "question",
@@ -369,6 +371,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
                 new Interaction(
                     "0",
                     Instant.now(),
+                    Instant.now(),
                     "1",
                     "question",
                     "",
@@ -462,6 +465,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             .of(
                 new Interaction(
                     "0",
+                    Instant.now(),
                     Instant.now(),
                     "1",
                     "question",
@@ -595,7 +599,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
-        List<Interaction> chatHistory = List.of(new Interaction("0", Instant.now(), "1", null, null, null, null, null));
+        List<Interaction> chatHistory = List.of(new Interaction("0", Instant.now(), Instant.now(), "1", null, null, null, null, null));
         doAnswer(invocation -> {
             ((ActionListener<List<Interaction>>) invocation.getArguments()[2]).onResponse(chatHistory);
             return null;
@@ -674,6 +678,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
                 new Interaction(
                     "0",
                     Instant.now(),
+                    Instant.now(),
                     "1",
                     "question",
                     "",
@@ -744,6 +749,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             .of(
                 new Interaction(
                     "0",
+                    Instant.now(),
                     Instant.now(),
                     "1",
                     "question",
@@ -824,6 +830,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             .of(
                 new Interaction(
                     "0",
+                    Instant.now(),
                     Instant.now(),
                     "1",
                     "question",
