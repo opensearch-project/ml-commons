@@ -312,7 +312,7 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_AGENTIC_SEARCH_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_search_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_search_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE =
         "The QueryPlanningTool tool for Agentic Search is not enabled. To enable, please update the setting "
             + ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey();
