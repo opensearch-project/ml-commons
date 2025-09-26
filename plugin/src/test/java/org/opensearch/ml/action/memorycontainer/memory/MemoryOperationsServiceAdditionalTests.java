@@ -8,14 +8,17 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -25,21 +28,17 @@ import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
-import org.opensearch.ml.helper.MemoryEmbeddingHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryOperationsServiceAdditionalTests {
 
     @Mock
     private Client client;
-
-    @Mock
-    private MemoryEmbeddingHelper memoryEmbeddingHelper;
 
     @Mock
     private ActionListener<List<MemoryResult>> operationsListener;
@@ -49,7 +48,7 @@ public class MemoryOperationsServiceAdditionalTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memoryOperationsService = new MemoryOperationsService(client, memoryEmbeddingHelper);
+        memoryOperationsService = new MemoryOperationsService(client);
     }
 
     @Test
@@ -67,7 +66,7 @@ public class MemoryOperationsServiceAdditionalTests {
         when(input.getTags()).thenReturn(new HashMap<>());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
+        when(storageConfig.isDisableHistory()).thenReturn(false);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(true);
@@ -80,9 +79,10 @@ public class MemoryOperationsServiceAdditionalTests {
             return null;
         }).when(client).bulk(any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        Map<String, String> namespace = Map.of(SESSION_ID_FIELD, sessionId);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(client, times(2)).bulk(any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
@@ -101,7 +101,8 @@ public class MemoryOperationsServiceAdditionalTests {
         List<org.opensearch.action.index.IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, input, indexName, sessionId, user, now, indexRequests, memoryInfos);
+        Map<String, String> strategyNameSpace = Map.of(SESSION_ID_FIELD, sessionId);
+        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, strategyNameSpace, user, indexRequests, memoryInfos);
 
         assert indexRequests.size() == 1;
         assert memoryInfos.size() == 1;

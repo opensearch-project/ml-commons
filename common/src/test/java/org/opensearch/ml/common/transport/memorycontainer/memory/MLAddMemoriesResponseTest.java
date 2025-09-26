@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
@@ -116,7 +117,7 @@ public class MLAddMemoriesResponseTest {
         responseWithResults.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
-        assertTrue(jsonString.contains("\"results\":["));
+        assertFalse(jsonString.contains("\"results\":["));
         assertTrue(jsonString.contains("\"id\":\"mem-1\""));
         assertTrue(jsonString.contains("\"text\":\"User's name is John\""));
         assertTrue(jsonString.contains("\"event\":\"ADD\""));
@@ -133,7 +134,7 @@ public class MLAddMemoriesResponseTest {
         responseEmpty.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
-        assertTrue(jsonString.contains("\"results\":[]"));
+        assertFalse(jsonString.contains("\"results\":[]"));
         assertTrue(jsonString.contains("\"session_id\":\"session-empty\""));
     }
 
@@ -237,7 +238,7 @@ public class MLAddMemoriesResponseTest {
 
     @Test
     public void testConstructorWithNullResults() {
-        MLAddMemoriesResponse response = new MLAddMemoriesResponse(null, "session-null");
+        MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().sessionId("session-null").build();
         assertNotNull(response.getResults());
         assertEquals(0, response.getResults().size());
         assertEquals("session-null", response.getSessionId());

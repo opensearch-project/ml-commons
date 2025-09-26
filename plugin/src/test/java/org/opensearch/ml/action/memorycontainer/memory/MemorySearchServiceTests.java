@@ -27,6 +27,8 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.transport.client.Client;
 
 public class MemorySearchServiceTests {
@@ -36,6 +38,11 @@ public class MemorySearchServiceTests {
 
     @Mock
     private ActionListener<List<FactSearchResult>> listener;
+
+    @Mock
+    MLAddMemoriesInput input;
+    @Mock
+    MemoryStrategy strategy;
 
     private MemorySearchService memorySearchService;
 
@@ -52,7 +59,7 @@ public class MemorySearchServiceTests {
         String indexName = "memory-index";
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }
@@ -64,7 +71,7 @@ public class MemorySearchServiceTests {
         String indexName = "memory-index";
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }
@@ -85,7 +92,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(client).search(any(), any());
     }
@@ -108,7 +115,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(client).search(any(), any());
         verify(listener).onResponse(any(List.class));
@@ -131,7 +138,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(client).search(any(), any());
         verify(listener).onResponse(any(List.class));
@@ -155,7 +162,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         // Should be called 2 times (limited by maxInferSize)
         verify(client, times(2)).search(any(), any());
@@ -179,7 +186,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(client, times(3)).search(any(), any()); // Limited by maxInferSize
         verify(listener).onResponse(any(List.class));
@@ -202,7 +209,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(client).search(any(), any());
         verify(listener).onResponse(any(List.class));
@@ -223,7 +230,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         // The method continues processing even when individual searches fail, so it returns empty results
         verify(listener).onResponse(any(List.class));
@@ -236,7 +243,7 @@ public class MemorySearchServiceTests {
         String indexName = "memory-index";
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }
@@ -277,7 +284,7 @@ public class MemorySearchServiceTests {
             return null;
         }).when(client).search(any(), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(client).search(any(), any());
         verify(listener).onResponse(any(List.class));

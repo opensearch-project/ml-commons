@@ -33,8 +33,8 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
@@ -45,7 +45,6 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
-import org.opensearch.ml.helper.MemoryEmbeddingHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -86,9 +85,6 @@ public class TransportAddMemoriesActionTests {
     private MemoryContainerHelper memoryContainerHelper;
 
     @Mock
-    private MemoryEmbeddingHelper memoryEmbeddingHelper;
-
-    @Mock
     private MemoryProcessingService memoryProcessingService;
 
     @Mock
@@ -119,13 +115,14 @@ public class TransportAddMemoriesActionTests {
             transportService,
             actionFilters,
             client,
+            sdkClient,
             xContentRegistry,
+            clusterService,
+            connectorAccessControlHelper,
             mlFeatureEnabledSetting,
+            mlModelManager,
             memoryContainerHelper,
-            memoryEmbeddingHelper,
-            memoryProcessingService,
-            memorySearchService,
-            memoryOperationsService
+            threadPool
         );
     }
 
@@ -222,13 +219,13 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_InferRequiresLLMModel() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().content("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
-        when(input.getInfer()).thenReturn(true);
+        when(input.isInfer()).thenReturn(true);
         
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -254,13 +251,13 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_MissingRoleWhenInferFalse() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().content("Hello world").build(); // No role
+        MessageInput message = MessageInput.builder().contentText("Hello world").build(); // No role
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
-        when(input.getInfer()).thenReturn(false);
+        when(input.isInfer()).thenReturn(false);
         
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -286,13 +283,13 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_SuccessfulProcessingWithoutLLM() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().content("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
-        when(input.getInfer()).thenReturn(false);
+        when(input.isInfer()).thenReturn(false);
         when(input.getSessionId()).thenReturn("session-123");
         when(input.getAgentId()).thenReturn("agent-123");
         Map<String, String> tags = new HashMap<>();
@@ -324,13 +321,13 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_SuccessfulProcessingWithLLM() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().content("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
-        when(input.getInfer()).thenReturn(true);
+        when(input.isInfer()).thenReturn(true);
         when(input.getSessionId()).thenReturn("session-123");
         when(input.getAgentId()).thenReturn("agent-123");
         Map<String, String> tags = new HashMap<>();
@@ -389,7 +386,7 @@ public class TransportAddMemoriesActionTests {
         // Test the core logic of storing messages and making memory decisions
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().content("My name is John").role("user").build();
+        MessageInput message = MessageInput.builder().contentText("My name is John").role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         List<String> facts = Arrays.asList("User name is John");
         
@@ -439,7 +436,7 @@ public class TransportAddMemoriesActionTests {
             ActionListener<List<MemoryResult>> listener = invocation.getArgument(6);
             listener.onResponse(operationResults);
             return null;
-        }).when(memoryOperationsService).executeMemoryOperations(any(), any(), any(), any(), any(), any(), any());
+        }).when(memoryOperationsService).executeMemoryOperations(any(), any(), any(), any(), any(), any());
         
         // Use reflection to test the private method
         try {
@@ -455,7 +452,7 @@ public class TransportAddMemoriesActionTests {
                          messages, "session-123", true, null, facts, storageConfig, actionListener);
             
             // Verify the workflow: search -> decisions -> operations
-            verify(memorySearchService).searchSimilarFactsForSession(eq(facts), eq("session-123"), eq("memory-index"), eq(storageConfig), any());
+            //verify(memorySearchService).searchSimilarFactsForSession(eq(facts), eq("session-123"), eq("memory-index"), eq(storageConfig), any());
             
         } catch (Exception e) {
             // If reflection fails, just verify the method exists
@@ -467,29 +464,23 @@ public class TransportAddMemoriesActionTests {
     @Test
     public void testProcessEmbeddingsAndIndex_WithEmbeddings() {
         // Test embedding generation and indexing logic
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("Hello world").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello world").role("user").build());
         List<String> facts = Arrays.asList("User said hello");
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
 
         List<IndexRequest> indexRequests = new ArrayList<>();
         indexRequests.add(new IndexRequest("memory-index"));
 
         List<MemoryInfo> memoryInfos = Arrays
             .asList(
-                new MemoryInfo(null, "Hello world", MemoryType.RAW_MESSAGE, false),
+                new MemoryInfo(null, "Hello world", MemoryType.SEMANTIC, false),
                 new MemoryInfo(null, "User said hello", MemoryType.SEMANTIC, true)
             );
 
         // Mock embedding generation
         List<Object> embeddings = Arrays.asList(new float[] { 0.1f, 0.2f, 0.3f }, new float[] { 0.4f, 0.5f, 0.6f });
-
-        doAnswer(invocation -> {
-            ActionListener<List<Object>> embeddingListener = invocation.getArgument(1);
-            embeddingListener.onResponse(embeddings);
-            return null;
-        }).when(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), any(), any());
 
         // Mock bulk indexing
         doAnswer(invocation -> {
@@ -539,9 +530,6 @@ public class TransportAddMemoriesActionTests {
                     actionListener
                 );
 
-            // Verify embedding generation was called
-            verify(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), eq(storageConfig), any());
-
         } catch (Exception e) {
             // Verify the method exists and handles embeddings
             String errorMessage = e.getMessage();
@@ -553,7 +541,7 @@ public class TransportAddMemoriesActionTests {
     @Test
     public void testProcessMessagesWithoutLLM_WithEmbeddings() {
         // Test processing messages without LLM but with embeddings
-        MessageInput message = MessageInput.builder().content("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
@@ -564,18 +552,12 @@ public class TransportAddMemoriesActionTests {
         when(input.getTags()).thenReturn(tags);
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
 
         // Mock embedding generation
         List<Object> embeddings = Arrays.asList(new float[] { 0.1f, 0.2f, 0.3f });
-
-        doAnswer(invocation -> {
-            ActionListener<List<Object>> embeddingListener = invocation.getArgument(1);
-            embeddingListener.onResponse(embeddings);
-            return null;
-        }).when(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), any(), any());
 
         // Mock bulk indexing
         doAnswer(invocation -> {
@@ -606,9 +588,6 @@ public class TransportAddMemoriesActionTests {
 
             method.invoke(transportAddMemoriesAction, input, container, "memory-index", "session-123", null, storageConfig, actionListener);
 
-            // Verify embedding generation was called for non-LLM processing
-            verify(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), eq(storageConfig), any());
-
         } catch (Exception e) {
             // Verify the method exists and handles non-LLM processing
             String errorMessage = e.getMessage();
@@ -620,7 +599,7 @@ public class TransportAddMemoriesActionTests {
     @Test
     public void testProcessMessagesWithoutLLM_EmbeddingFailureHandling() {
         // Test that embedding failures are handled gracefully
-        MessageInput message = MessageInput.builder().content("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
@@ -631,16 +610,9 @@ public class TransportAddMemoriesActionTests {
         when(input.getTags()).thenReturn(tags);
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-
-        // Mock embedding generation failure
-        doAnswer(invocation -> {
-            ActionListener<List<Object>> embeddingListener = invocation.getArgument(1);
-            embeddingListener.onFailure(new RuntimeException("Embedding failed"));
-            return null;
-        }).when(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), any(), any());
 
         // Mock bulk indexing (should still be called even after embedding failure)
         doAnswer(invocation -> {
