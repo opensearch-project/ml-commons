@@ -76,6 +76,15 @@
       }
     },
     "owner": USER_MAPPING_PLACEHOLDER,
+    "backend_roles": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
     "tenant_id": {
       "type": "keyword"
     }
