@@ -20,6 +20,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_NAME_FIELD;
@@ -27,11 +28,14 @@ import static org.opensearch.ml.engine.tools.QueryPlanningTool.LLM_GENERATED_TYP
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_FIELDS_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUESTION_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.SAMPLE_DOCUMENT_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SYSTEM_PROMPT_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.TEMPLATE_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_PROMPT_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_SEARCH_TEMPLATES_TYPE_FIELD;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -49,10 +53,13 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptResponse;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.DeprecationHandler;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.script.StoredScriptSource;
@@ -62,10 +69,12 @@ import org.opensearch.transport.client.ClusterAdminClient;
 import org.opensearch.transport.client.IndicesAdminClient;
 
 import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Units test for QueryPlanningTools
  */
+@Log4j2
 public class QueryPlanningToolTests {
 
     @Mock
@@ -95,12 +104,20 @@ public class QueryPlanningToolTests {
     private ArgumentCaptor<ActionListener<GetIndexResponse>> actionListenerCaptor;
     private GetIndexResponse getIndexResponse;
     private MappingMetadata mapping;
+    private String mockedSearchResponseString;
 
     @Before
     @SneakyThrows
     public void setup() {
         MockitoAnnotations.openMocks(this);
         MLModelTool.Factory.getInstance().init(client);
+
+        // Load the search response JSON file like SearchIndexToolTests does
+        try (InputStream searchResponseIns = SearchIndexTool.class.getResourceAsStream("retrieval_tool_search_response.json")) {
+            if (searchResponseIns != null) {
+                mockedSearchResponseString = new String(searchResponseIns.readAllBytes());
+            }
+        }
 
         // Mock the client chain for async operations
         when(client.admin()).thenReturn(adminClient);
@@ -110,45 +127,32 @@ public class QueryPlanningToolTests {
         // Mock the MLFeatureEnabledSetting to return true for agentic search
         when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
-        // Mock the cluster admin client for stored scripts
-        doAnswer(invocation -> {
-            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
-            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
-            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
-            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
-            when(storedScriptSource.getSource()).thenReturn("test");
-            actionListener.onResponse(getStoredScriptResponse);
-            return null;
-        }).when(clusterAdminClient).getStoredScript(any(), any());
-
-        // Mock the search operation for getSampleDocAsync - return empty results to trigger empty string response
-        // Use the same simple approach as SearchIndexToolTests
-        String emptySearchResponseJson =
-            "{\"took\":1,\"timed_out\":false,\"_shards\":{\"total\":1,\"successful\":1,\"skipped\":0,\"failed\":0},\"hits\":{\"total\":{\"value\":0,\"relation\":\"eq\"},\"max_score\":null,\"hits\":[]}}";
-        org.opensearch.action.search.SearchResponse emptySearchResponse = org.opensearch.action.search.SearchResponse
-            .fromXContent(
-                org.opensearch.common.xcontent.json.JsonXContent.jsonXContent
-                    .createParser(
-                        org.opensearch.core.xcontent.NamedXContentRegistry.EMPTY,
-                        org.opensearch.core.xcontent.DeprecationHandler.IGNORE_DEPRECATIONS,
-                        emptySearchResponseJson
-                    )
-            );
-
-        doAnswer(invocation -> {
-            ActionListener<org.opensearch.action.search.SearchResponse> searchListener = invocation.getArgument(1);
-            searchListener.onResponse(emptySearchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
         // Initialize the factory with mocked dependencies
         factory = QueryPlanningTool.Factory.getInstance();
         factory.init(client, mlFeatureEnabledSetting);
 
         validParams = new HashMap<>();
-        validParams.put(SYSTEM_PROMPT_FIELD, "test prompt");
+        validParams.put(SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
         emptyParams = Collections.emptyMap();
 
+    }
+
+    @SneakyThrows
+    public void mockSampleDoc() throws IOException {
+        // Mock the search operation for getSampleDocAsync - use the same approach as SearchIndexToolTests
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+    }
+
+    public void mockGetIndexMapping() {
         // Mock the getIndex operation for getIndexMappingAsync (following IndexMappingToolTests pattern)
         @SuppressWarnings("unchecked")
         ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
@@ -173,8 +177,11 @@ public class QueryPlanningToolTests {
         assertEquals(QueryPlanningTool.TYPE, tool.getName());
     }
 
+    @SneakyThrows
     @Test
     public void testCreateWithInvalidSearchTemplatesDescription() throws IllegalArgumentException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         Map<String, Object> params = new HashMap<>();
         params.put("generation_type", USER_SEARCH_TEMPLATES_TYPE_FIELD);
         params.put(MODEL_ID_FIELD, "test_model_id");
@@ -189,8 +196,11 @@ public class QueryPlanningToolTests {
         assertEquals("search_templates field entries must have a template_description", exception.getMessage());
     }
 
+    @SneakyThrows
     @Test
     public void testCreateWithInvalidSearchTemplatesID() throws IllegalArgumentException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         Map<String, Object> params = new HashMap<>();
         params.put("generation_type", USER_SEARCH_TEMPLATES_TYPE_FIELD);
         params.put(MODEL_ID_FIELD, "test_model_id");
@@ -205,8 +215,11 @@ public class QueryPlanningToolTests {
         assertEquals("search_templates field entries must have a template_id", exception.getMessage());
     }
 
+    @SneakyThrows
     @Test
     public void testRun() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
 
         // Mock the query generation tool
@@ -239,9 +252,23 @@ public class QueryPlanningToolTests {
         assertEquals(matchQueryString, result);
     }
 
+    @SneakyThrows
     @Test
     public void testRunWithUserProvidedSearchTemplates() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+
+        // Mock the cluster admin client for stored scripts
+        doAnswer(invocation -> {
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
+            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
+            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
+            when(storedScriptSource.getSource()).thenReturn("test");
+            actionListener.onResponse(getStoredScriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(), any());
 
         // Stub template selection and query planning responses
         doAnswer(invocation -> {
@@ -275,8 +302,11 @@ public class QueryPlanningToolTests {
         assertEquals(matchQueryString, future.get());
     }
 
+    @SneakyThrows
     @Test
     public void testRunWithDefaultSearchTemplate() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
 
         // Stub template selection and query planning responses
@@ -309,8 +339,11 @@ public class QueryPlanningToolTests {
         verify(queryGenerationTool, times(1)).run(any(), any());
     }
 
+    @SneakyThrows
     @Test
     public void testRimWithUserProvidedSearchTemplatesAndNoLMMTemplateChoice() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
 
         // Use the common mock from setup method - no need to override
@@ -348,8 +381,11 @@ public class QueryPlanningToolTests {
         verify(queryGenerationTool, times(2)).run(any(), any());
     }
 
+    @SneakyThrows
     @Test
     public void testRun_PredictionReturnsList_ThrowsIllegalArgumentException() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         thrown.expect(ExecutionException.class);
         thrown.expectCause(org.hamcrest.Matchers.isA(IllegalArgumentException.class));
         thrown
@@ -372,8 +408,11 @@ public class QueryPlanningToolTests {
         future.get();
     }
 
+    @SneakyThrows
     @Test
     public void testRun_PredictionReturnsNull_ReturnDefaultQuery() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
             listener.onResponse(null);
@@ -394,8 +433,11 @@ public class QueryPlanningToolTests {
         assertEquals(defaultQueryString, future.get());
     }
 
+    @SneakyThrows
     @Test
     public void testRun_PredictionReturnsEmpty_ReturnDefaultQuery() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
             listener.onResponse("");
@@ -416,9 +458,11 @@ public class QueryPlanningToolTests {
         assertEquals(defaultQueryString, future.get());
     }
 
+    @SneakyThrows
     @Test
     public void testRun_PredictionReturnsNullString_ReturnDefaultQuery() throws ExecutionException, InterruptedException {
-        // Mock the async calls
+        mockSampleDoc();
+        mockGetIndexMapping();
 
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
@@ -471,10 +515,12 @@ public class QueryPlanningToolTests {
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
+    @SneakyThrows
     @Test
     public void testRunWithNoPrompt() {
         // Mock the async calls
-
+        mockSampleDoc();
+        mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "some query");
@@ -499,8 +545,11 @@ public class QueryPlanningToolTests {
         assertNotNull(capturedParams.get(SYSTEM_PROMPT_FIELD));
     }
 
+    @SneakyThrows
     @Test
     public void testRunWithInvalidParameters() {
+        mockSampleDoc();
+        mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
         @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
@@ -513,10 +562,12 @@ public class QueryPlanningToolTests {
         assertTrue(captor.getValue().getMessage().contains("Required parameters not found"));
     }
 
+    @SneakyThrows
     @Test
     public void testRunModelReturnsNull() {
         // Mock the async calls
-
+        mockSampleDoc();
+        mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "some query");
@@ -547,8 +598,11 @@ public class QueryPlanningToolTests {
         assertEquals("NewName", tool.getName());
     }
 
+    @SneakyThrows
     @Test
     public void testFactoryCreateWithEmptyType() {
+        mockSampleDoc();
+        mockGetIndexMapping();
         Map<String, Object> map = new HashMap<>();
         map.put(MODEL_ID_FIELD, "modelId");
         Tool tool = factory.create(map);
@@ -570,10 +624,12 @@ public class QueryPlanningToolTests {
         );
     }
 
+    @SneakyThrows
     @Test
     public void testAllParameterProcessing() {
         // Mock the async calls
-
+        mockSampleDoc();
+        mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
@@ -616,10 +672,12 @@ public class QueryPlanningToolTests {
         assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
     }
 
+    @SneakyThrows
     @Test
     public void testAllParameterProcessing_WithUserSearchTemplates() {
         // Mock the async calls
-
+        mockSampleDoc();
+        mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
@@ -664,10 +722,12 @@ public class QueryPlanningToolTests {
         assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
     }
 
+    @SneakyThrows
     @Test
     public void testUserPromptParameterProcessing() {
         // Mock the async calls
-
+        mockSampleDoc();
+        mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
@@ -810,6 +870,7 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testRunWithNonExistentIndex() throws InterruptedException {
+
         doAnswer(invocation -> {
             org.opensearch.core.action.ActionListener<org.opensearch.action.admin.indices.get.GetIndexResponse> listener = invocation
                 .getArgument(1);
@@ -836,6 +897,104 @@ public class QueryPlanningToolTests {
             assertTrue(e.getCause() instanceof IllegalArgumentException);
             assertTrue(e.getCause().getMessage().contains("Index does not exist or is not available"));
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void testGetSampleDocTruncation() throws ExecutionException, InterruptedException {
+        mockGetIndexMapping();
+        // Create a search response with a very large document that should be truncated
+        String largeContent = "This is a very long document content that exceeds the maximum truncation limit of 250 characters. "
+            + "It contains multiple sentences and should be truncated when processed by the getSampleDocAsync method. "
+            + "The truncation should add the prefix trucates' to indicate that the content has been shortened. "
+            + "This test verifies that the truncation logic works correctly and prevents extremely large documents "
+            + "from being included in the query planning process. The content should be cut off at exactly 250 characters "
+            + "and prefixed with the truncation marker to maintain readability while keeping the response size manageable.";
+
+        String largeSearchResponseJson = "{\n"
+            + "  \"took\": 1,\n"
+            + "  \"timed_out\": false,\n"
+            + "  \"_shards\": {\n"
+            + "    \"total\": 1,\n"
+            + "    \"successful\": 1,\n"
+            + "    \"skipped\": 0,\n"
+            + "    \"failed\": 0\n"
+            + "  },\n"
+            + "  \"hits\": {\n"
+            + "    \"total\": {\n"
+            + "      \"value\": 1,\n"
+            + "      \"relation\": \"eq\"\n"
+            + "    },\n"
+            + "    \"max_score\": 1.0,\n"
+            + "    \"hits\": [\n"
+            + "      {\n"
+            + "        \"_index\": \"testIndex\",\n"
+            + "        \"_id\": \"1\",\n"
+            + "        \"_score\": 1.0,\n"
+            + "        \"_source\": {\n"
+            + "          \"title\": \"Sample Document\",\n"
+            + "          \"content\": \""
+            + largeContent
+            + "\",\n"
+            + "          \"short_field\": \"short\"\n"
+            + "        }\n"
+            + "      }\n"
+            + "    ]\n"
+            + "  }\n"
+            + "}";
+
+        // Override the search response for this test only
+        SearchResponse largeSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, largeSearchResponseJson)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(largeSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        // Mock queryGenerationTool.run() to capture parameters and return success
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            // Return success immediately to complete the test
+            modelListener.onResponse("test query");
+            return null;
+        }).when(queryGenerationTool).run(paramsCaptor.capture(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "test query");
+        parameters.put(INDEX_NAME_FIELD, "testIndex");
+
+        tool.run(parameters, listener);
+
+        // Manually trigger the getIndex response
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        // Wait for completion
+        String result = future.get();
+
+        // Verify the final result (should be the LLM response)
+        assertEquals("test query", result);
+
+        // Verify the captured parameters contain truncated content
+        Map<String, String> capturedParams = paramsCaptor.getValue();
+        String sampleDoc = capturedParams.get(SAMPLE_DOCUMENT_FIELD);
+
+        assertNotNull("Sample document should not be null", sampleDoc);
+        assertTrue("Sample document should contain truncated content", sampleDoc.contains("[truncated]"));
+        assertTrue(
+            "Sample document should contain short field without truncation",
+            sampleDoc.contains("\\\"short_field\\\":\\\"short\\\"")      // double-encoded form
+        );
     }
 
 }
