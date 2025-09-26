@@ -186,7 +186,7 @@ public class MLCreateConnectorInputTests {
                 .addAllBackendRoles(false)
                 .build();
         });
-        assertEquals("MCP Connector credential is null or empty list", exception.getMessage());
+        assertEquals("Connector credential is null or empty list", exception.getMessage());
     }
 
     @Test
@@ -206,7 +206,7 @@ public class MLCreateConnectorInputTests {
                 .addAllBackendRoles(false)
                 .build();
         });
-        assertEquals("MCP Connector credential is null or empty list", exception.getMessage());
+        assertEquals("Connector credential is null or empty list", exception.getMessage());
     }
 
     @Test

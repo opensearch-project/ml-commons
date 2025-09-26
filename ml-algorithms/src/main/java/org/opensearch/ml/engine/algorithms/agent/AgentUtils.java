@@ -762,16 +762,18 @@ public class AgentUtils {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                } else if (connector instanceof McpStreamableHttpConnector) {
+                    toolListener.onResponse(mcpToolSpecs);
+                    return;
+                }
+                if (connector instanceof McpStreamableHttpConnector) {
                     McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-                } else {
-                    log.error("Unsupported connector type for connector: " + connectorId);
-                    mcpToolSpecs = Collections.emptyList();
+                    toolListener.onResponse(mcpToolSpecs);
+                    return;
                 }
-
-                toolListener.onResponse(mcpToolSpecs);
+                log.error("Unsupported connector type for connector: " + connectorId);
+                toolListener.onResponse(Collections.emptyList());
             } catch (Exception e) {
                 log.error("Failed to get tools from connector: " + connectorId, e);
                 toolListener.onResponse(Collections.emptyList());

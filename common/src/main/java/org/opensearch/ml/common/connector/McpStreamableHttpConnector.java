@@ -20,7 +20,6 @@ import static org.opensearch.ml.common.CommonValue.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.URL_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
@@ -37,7 +36,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -193,6 +191,7 @@ public class McpStreamableHttpConnector implements Connector {
     }
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
+        // TODO: Change this to return empty MAP in all createDecryptedHeaders functions across connectors
         if (headers == null) {
             return null;
         }
@@ -276,7 +275,6 @@ public class McpStreamableHttpConnector implements Connector {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        Version streamOutputVersion = out.getVersion();
         out.writeString(protocol);
         out.writeOptionalString(name);
         out.writeOptionalString(version);
@@ -318,13 +316,11 @@ public class McpStreamableHttpConnector implements Connector {
         } else {
             out.writeBoolean(false);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_3_1_0)) {
-            if (parameters != null) {
-                out.writeBoolean(true);
-                out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
-            } else {
-                out.writeBoolean(false);
-            }
+        if (parameters != null) {
+            out.writeBoolean(true);
+            out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
         }
     }
 
