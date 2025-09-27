@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_HISTORY_FIELD;
@@ -24,6 +25,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGIES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USE_SYSTEM_INDEX_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,6 +70,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private boolean disableHistory = false;
     @Builder.Default
     private boolean disableSession = false;
+    @Builder.Default
+    private boolean useSystemIndex = false;
     private String tenantId;
 
     public MemoryConfiguration(
@@ -81,13 +85,14 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Map<String, Map<String, Object>> indexSettings,
         boolean disableHistory,
         boolean disableSession,
+        boolean useSystemIndex,
         String tenantId
     ) {
         // Validate first
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
 
         // Assign values after validation
-        this.indexPrefix = indexPrefix == null ? ".ml-plugin" : indexPrefix;
+        this.indexPrefix = indexPrefix == null ? "" : indexPrefix;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;
@@ -103,6 +108,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
         this.disableHistory = disableHistory;
         this.disableSession = disableSession;
+        this.useSystemIndex = useSystemIndex;
         this.tenantId = tenantId;
     }
 
@@ -122,6 +128,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
         this.disableHistory = input.readBoolean();
         this.disableSession = input.readBoolean();
+        this.useSystemIndex = input.readBoolean();
         this.tenantId = input.readOptionalString();
     }
 
@@ -147,6 +154,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
         out.writeBoolean(disableHistory);
         out.writeBoolean(disableSession);
+        out.writeBoolean(useSystemIndex);
         out.writeOptionalString(tenantId);
     }
 
@@ -187,6 +195,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
         builder.field(DISABLE_HISTORY_FIELD, disableHistory);
         builder.field(DISABLE_SESSION_FIELD, disableSession);
+        builder.field(USE_SYSTEM_INDEX_FIELD, useSystemIndex);
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -205,6 +214,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
         boolean disableHistory = false;
         boolean disableSession = false;
+        boolean useSystemIndex = false;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -246,6 +256,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case DISABLE_SESSION_FIELD:
                     disableSession = parser.booleanValue();
                     break;
+                case USE_SYSTEM_INDEX_FIELD:
+                    useSystemIndex = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -265,24 +278,29 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .indexSettings(indexSettings)
             .disableHistory(disableHistory)
             .disableSession(disableSession)
+            .useSystemIndex(useSystemIndex)
             .tenantId(tenantId)
             .build();
     }
 
     public String getSessionIndexName() {
-        return indexPrefix + "-memory-session";
+        String indexName = indexPrefix + "-memory-session";
+        return useSystemIndex ? ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + indexName : indexName;
     }
 
     public String getWorkingMemoryIndexName() {
-        return indexPrefix + "-memory-working";
+        String indexName = indexPrefix + "-memory-working";
+        return useSystemIndex ? ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + indexName : indexName;
     }
 
     public String getLongMemoryIndexName() {
-        return indexPrefix + "-memory-long-term";
+        String indexName = indexPrefix + "-memory-long-term";
+        return useSystemIndex ? ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + indexName : indexName;
     }
 
     public String getLongMemoryHistoryIndexName() {
-        return indexPrefix + "-memory-history";
+        String indexName = indexPrefix + "-memory-history";
+        return useSystemIndex ? ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + indexName : indexName;
     }
 
     public Map<String, Object> getMemoryIndexMapping(String indexName) {
