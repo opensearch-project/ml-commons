@@ -19,11 +19,11 @@ import com.google.common.collect.ImmutableList;
  */
 public class RestMLSearchMemoryContainerAction extends AbstractMLSearchAction<MLMemoryContainer> {
     private static final String ML_SEARCH_MODEL_GROUP_ACTION = "ml_search_memory_container_action";
-    private static final String SEARCH_MODEL_GROUP_PATH = ML_BASE_URI + "/memory_containers/_search";
+    private static final String SEARCH_MEMORY_CONTAINER_PATH = ML_BASE_URI + "/memory_containers/_search";
 
     public RestMLSearchMemoryContainerAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         super(
-            ImmutableList.of(SEARCH_MODEL_GROUP_PATH),
+            ImmutableList.of(SEARCH_MEMORY_CONTAINER_PATH),
             ML_MEMORY_CONTAINER_INDEX,
             MLMemoryContainer.class,
             MLMemoryContainerSearchAction.INSTANCE,
