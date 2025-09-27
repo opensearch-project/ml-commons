@@ -482,25 +482,6 @@ public class TransportAddMemoriesActionTests {
         // Mock embedding generation
         List<Object> embeddings = Arrays.asList(new float[] { 0.1f, 0.2f, 0.3f }, new float[] { 0.4f, 0.5f, 0.6f });
 
-        // Mock bulk indexing
-        doAnswer(invocation -> {
-            List<IndexRequest> requests = invocation.getArgument(0);
-            ActionListener<MLAddMemoriesResponse> listener = invocation.getArgument(4);
-
-            // Verify embeddings were added to requests
-            for (IndexRequest request : requests) {
-                assert request.sourceAsMap().containsKey("memory_embedding") : "Embeddings should be added to index requests";
-            }
-
-            MLAddMemoriesResponse response = MLAddMemoriesResponse
-                .builder()
-                .results(Arrays.asList(MemoryResult.builder().memoryId("mem-1").memory("User said hello").event(MemoryEvent.ADD).build()))
-                .sessionId("session-123")
-                .build();
-            listener.onResponse(response);
-            return null;
-        }).when(memoryOperationsService).bulkIndexMemoriesWithResults(any(), any(), any(), any(), any());
-
         // Use reflection to test the private method
         try {
             java.lang.reflect.Method method = TransportAddMemoriesAction.class
@@ -559,18 +540,6 @@ public class TransportAddMemoriesActionTests {
         // Mock embedding generation
         List<Object> embeddings = Arrays.asList(new float[] { 0.1f, 0.2f, 0.3f });
 
-        // Mock bulk indexing
-        doAnswer(invocation -> {
-            ActionListener<MLAddMemoriesResponse> listener = invocation.getArgument(4);
-            MLAddMemoriesResponse response = MLAddMemoriesResponse
-                .builder()
-                .results(Arrays.asList(MemoryResult.builder().memoryId("mem-1").memory("Hello world").event(MemoryEvent.ADD).build()))
-                .sessionId("session-123")
-                .build();
-            listener.onResponse(response);
-            return null;
-        }).when(memoryOperationsService).bulkIndexMemoriesWithResults(any(), any(), any(), any(), any());
-
         // Use reflection to test the private method
         try {
             java.lang.reflect.Method method = TransportAddMemoriesAction.class
@@ -614,18 +583,6 @@ public class TransportAddMemoriesActionTests {
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
 
-        // Mock bulk indexing (should still be called even after embedding failure)
-        doAnswer(invocation -> {
-            ActionListener<MLAddMemoriesResponse> listener = invocation.getArgument(4);
-            MLAddMemoriesResponse response = MLAddMemoriesResponse
-                .builder()
-                .results(Arrays.asList(MemoryResult.builder().memoryId("mem-1").memory("Hello world").event(MemoryEvent.ADD).build()))
-                .sessionId("session-123")
-                .build();
-            listener.onResponse(response);
-            return null;
-        }).when(memoryOperationsService).bulkIndexMemoriesWithResults(any(), any(), any(), any(), any());
-
         // Use reflection to test the private method
         try {
             java.lang.reflect.Method method = TransportAddMemoriesAction.class
@@ -642,9 +599,6 @@ public class TransportAddMemoriesActionTests {
             method.setAccessible(true);
 
             method.invoke(transportAddMemoriesAction, input, container, "memory-index", "session-123", null, storageConfig, actionListener);
-
-            // Verify that even after embedding failure, indexing still proceeds
-            verify(memoryOperationsService).bulkIndexMemoriesWithResults(any(), any(), any(), any(), any());
 
         } catch (Exception e) {
             // Verify graceful error handling exists

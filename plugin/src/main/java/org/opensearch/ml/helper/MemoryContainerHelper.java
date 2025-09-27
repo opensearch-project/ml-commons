@@ -8,9 +8,12 @@ package org.opensearch.ml.helper;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 
 import java.util.List;
 
+import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BulkRequest;
@@ -27,15 +30,22 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.NestedQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.transport.client.Client;
 
@@ -238,5 +248,30 @@ public class MemoryContainerHelper {
         } else {
             client.bulk(bulkRequest, listener);
         }
+    }
+
+    public boolean isAdminUser(User user) {
+        return user == null || (!CollectionUtils.isEmpty(user.getRoles()) && user.getRoles().contains("all_access"));
+    }
+
+    public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
+        BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+        boolQueryBuilder.should(QueryBuilders.termsQuery(BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
+
+        TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery("owner.name.keyword", user.getName());
+        NestedQueryBuilder nestedOwnerQuery = QueryBuilders.nestedQuery(OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
+        boolQueryBuilder.should(nestedOwnerQuery);
+        QueryBuilder query = searchSourceBuilder.query();
+        if (query == null) {
+            searchSourceBuilder.query(boolQueryBuilder);
+        } else if (query instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) query).filter(boolQueryBuilder);
+        } else {
+            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
+            rewriteQuery.must(query);
+            rewriteQuery.filter(boolQueryBuilder);
+            searchSourceBuilder.query(rewriteQuery);
+        }
+        return searchSourceBuilder;
     }
 }
