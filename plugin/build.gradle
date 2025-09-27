@@ -407,6 +407,7 @@ check.dependsOn jacocoTestCoverageVerification
 configurations.all {
     exclude group: "org.jetbrains", module: "annotations"
     exclude group: "com.google.guava", module: "failureaccess"
+    exclude group: "com.google.errorprone", module: "error_prone_annotations"
     resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
