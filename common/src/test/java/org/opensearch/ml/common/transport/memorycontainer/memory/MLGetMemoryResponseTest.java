@@ -46,10 +46,10 @@ public class MLGetMemoryResponseTest {
     @Test
     public void testBuilderNormal() {
         assertNotNull(responseNormal);
-        assertNotNull(responseNormal.getMlMemory());
-        assertEquals("Test memory content", responseNormal.getMlMemory().getMemory());
-        assertEquals(MemoryType.SEMANTIC, responseNormal.getMlMemory().getMemoryType());
-        assertEquals("user", responseNormal.getMlMemory().getRole());
+        assertNotNull(responseNormal.getLongTermMemory());
+        assertEquals("Test memory content", responseNormal.getLongTermMemory().getMemory());
+        assertEquals(MemoryType.SEMANTIC, responseNormal.getLongTermMemory().getMemoryType());
+        assertEquals("user", responseNormal.getLongTermMemory().getRole());
     }
 
     @Test
@@ -59,10 +59,10 @@ public class MLGetMemoryResponseTest {
         StreamInput in = out.bytes().streamInput();
         MLGetMemoryResponse deserialized = new MLGetMemoryResponse(in);
 
-        assertNotNull(deserialized.getMlMemory());
-        assertEquals(responseNormal.getMlMemory().getMemory(), deserialized.getMlMemory().getMemory());
-        assertEquals(responseNormal.getMlMemory().getMemoryType(), deserialized.getMlMemory().getMemoryType());
-        assertEquals(responseNormal.getMlMemory().getRole(), deserialized.getMlMemory().getRole());
+        assertNotNull(deserialized.getLongTermMemory());
+        assertEquals(responseNormal.getLongTermMemory().getMemory(), deserialized.getLongTermMemory().getMemory());
+        assertEquals(responseNormal.getLongTermMemory().getMemoryType(), deserialized.getLongTermMemory().getMemoryType());
+        assertEquals(responseNormal.getLongTermMemory().getRole(), deserialized.getLongTermMemory().getRole());
     }
 
     @Test
@@ -83,10 +83,10 @@ public class MLGetMemoryResponseTest {
 
         MLGetMemoryResponse result = MLGetMemoryResponse.fromActionResponse(mockResponse);
         assertNotNull(result);
-        assertNotNull(result.getMlMemory());
-        assertEquals("Test memory content", result.getMlMemory().getMemory());
-        assertEquals(MemoryType.SEMANTIC, result.getMlMemory().getMemoryType());
-        assertEquals("user", result.getMlMemory().getRole());
+        assertNotNull(result.getLongTermMemory());
+        assertEquals("Test memory content", result.getLongTermMemory().getMemory());
+        assertEquals(MemoryType.SEMANTIC, result.getLongTermMemory().getMemoryType());
+        assertEquals("user", result.getLongTermMemory().getRole());
     }
 
     @Test(expected = UncheckedIOException.class)
