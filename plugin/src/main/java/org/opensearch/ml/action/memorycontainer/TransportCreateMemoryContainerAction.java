@@ -225,7 +225,10 @@ public class TransportCreateMemoryContainerAction extends
                 createTextEmbeddingPipeline(pipelineName, memoryConfig, ActionListener.wrap(success -> {
                     log.info("Successfully created text embedding pipeline: {}", indexName + "-embedding");
                     mlIndicesHandler.createLongTermMemoryIndex(pipelineName, indexName, memoryConfig, listener);
-                }, e -> { log.error("Failed to create text embedding pipeline", e); }));
+                }, e -> {
+                    log.error("Failed to create text embedding pipeline", e);
+                    listener.onFailure(e);
+                }));
             } else {
                 mlIndicesHandler.createLongTermMemoryIndex(null, indexName, memoryConfig, listener);
             }
