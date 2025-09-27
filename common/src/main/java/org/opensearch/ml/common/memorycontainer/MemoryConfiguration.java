@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -56,6 +57,7 @@ import lombok.Setter;
 @EqualsAndHashCode
 public class MemoryConfiguration implements ToXContentObject, Writeable {
 
+    public static final Set<String> VALID_MEMORY_TYPES = Set.of("session", "working", "long-term", "history");
     private String indexPrefix;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
@@ -281,6 +283,14 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .useSystemIndex(useSystemIndex)
             .tenantId(tenantId)
             .build();
+    }
+
+    public String getIndexName(String memoryType) {
+        if (memoryType == null || !VALID_MEMORY_TYPES.contains(memoryType)) {
+            return null;
+        }
+        String indexName = indexPrefix + "-memory-" + memoryType;
+        return useSystemIndex ? ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + indexName : indexName;
     }
 
     public String getSessionIndexName() {
