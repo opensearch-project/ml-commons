@@ -22,7 +22,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
 
 public class MLAddMemoriesRequestTest {
 
@@ -98,7 +98,7 @@ public class MLAddMemoriesRequestTest {
             .builder()
             .messages(Collections.emptyList())
             .memoryContainerId("container-empty")
-            .memoryType(ShortTermMemoryType.CONVERSATION)
+            .memoryType(WorkingMemoryType.CONVERSATIONAL)
             .infer(true)
             .build();
     }
