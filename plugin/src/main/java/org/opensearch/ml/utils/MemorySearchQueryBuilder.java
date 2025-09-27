@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
 import java.io.IOException;
 import java.util.Map;
@@ -123,6 +124,7 @@ public class MemorySearchQueryBuilder {
         MemoryStrategy strategy,
         String fact,
         Map<String, String> namespace,
+        String ownerId,
         MemoryConfiguration memoryConfig
     ) {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
@@ -133,6 +135,9 @@ public class MemorySearchQueryBuilder {
                 throw new IllegalArgumentException("Namespace does not contain key: " + key);
             }
             boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_FIELD + "." + key, namespace.get(key)));
+        }
+        if (ownerId != null) {
+            boolQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, ownerId));
         }
         boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_SIZE_FIELD, strategy.getNamespace().size()));
         boolQuery.filter(QueryBuilders.termQuery(MEMORY_TYPE_FIELD, MemoryType.SEMANTIC.getValue()));
