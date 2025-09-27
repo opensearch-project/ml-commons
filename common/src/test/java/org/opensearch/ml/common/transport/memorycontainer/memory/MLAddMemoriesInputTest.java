@@ -32,7 +32,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.memorycontainer.ShortTermMemoryType;
+import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
 
 public class MLAddMemoriesInputTest {
 
@@ -72,7 +72,7 @@ public class MLAddMemoriesInputTest {
         inputWithAllFields = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .memoryType(ShortTermMemoryType.CONVERSATION)
+            .memoryType(WorkingMemoryType.CONVERSATIONAL)
             .messages(testMessages)
             .binaryData("test binary data")
             .structuredData(structuredData)
@@ -93,7 +93,7 @@ public class MLAddMemoriesInputTest {
         inputNoOptionals = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-999")
-            .memoryType(ShortTermMemoryType.CONVERSATION)
+            .memoryType(WorkingMemoryType.CONVERSATIONAL)
             .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Test message").build()))
             .namespace(Map.of(SESSION_ID_FIELD, "session-456", "agent_id", "agent-789"))
             .infer(true)
@@ -185,14 +185,14 @@ public class MLAddMemoriesInputTest {
         // Test null memoryContainerId
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput(null, ShortTermMemoryType.CONVERSATION, testMessages, null, null, null, false, null, null)
+            () -> new MLAddMemoriesInput(null, WorkingMemoryType.CONVERSATIONAL, testMessages, null, null, null, false, null, null)
         );
         assertEquals("No memory container id provided", exception.getMessage());
 
         // Test null messages with infer=true
         exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput("container-1", ShortTermMemoryType.CONVERSATION, null, null, null, null, true, null, null)
+            () -> new MLAddMemoriesInput("container-1", WorkingMemoryType.CONVERSATIONAL, null, null, null, null, true, null, null)
         );
         assertEquals("No messages provided when inferring memory", exception.getMessage());
 
@@ -201,7 +201,7 @@ public class MLAddMemoriesInputTest {
             IllegalArgumentException.class,
             () -> new MLAddMemoriesInput(
                 "container-1",
-                ShortTermMemoryType.CONVERSATION,
+                WorkingMemoryType.CONVERSATIONAL,
                 new ArrayList<>(),
                 null,
                 null,
@@ -216,7 +216,7 @@ public class MLAddMemoriesInputTest {
         // Test valid case - null messages with infer=false should pass
         MLAddMemoriesInput validInput = new MLAddMemoriesInput(
             "container-1",
-            ShortTermMemoryType.CONVERSATION,
+            WorkingMemoryType.CONVERSATIONAL,
             null,
             null,
             null,
