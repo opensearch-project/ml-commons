@@ -15,6 +15,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
@@ -72,7 +73,7 @@ public class TransportGetWorkingMemoryAction extends HandledTransportAction<MLGe
 
             // Get the working memory document
             GetRequest getRequest = new GetRequest(workingMemoryIndex, workingMemoryId);
-            client.get(getRequest, ActionListener.wrap(getResponse -> {
+            ActionListener<GetResponse> getResponseActionListener = ActionListener.wrap(getResponse -> {
                 if (!getResponse.isExists()) {
                     actionListener.onFailure(new OpenSearchStatusException("Working memory not found", RestStatus.NOT_FOUND));
                     return;
@@ -86,7 +87,8 @@ public class TransportGetWorkingMemoryAction extends HandledTransportAction<MLGe
                     log.error("Failed to parse working memory", e);
                     actionListener.onFailure(e);
                 }
-            }, actionListener::onFailure));
+            }, actionListener::onFailure);
+            memoryContainerHelper.getData(configuration, getRequest, getResponseActionListener);
         }, actionListener::onFailure));
     }
 
