@@ -20,9 +20,8 @@ import static org.opensearch.ml.common.CommonValue.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.URL_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 
 import java.io.IOException;
@@ -37,7 +36,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -59,8 +57,8 @@ import lombok.extern.log4j.Log4j2;
 @NoArgsConstructor
 @EqualsAndHashCode
 @Getter
-@org.opensearch.ml.common.annotation.Connector(MCP_SSE)
-public class McpConnector implements Connector {
+@org.opensearch.ml.common.annotation.Connector(MCP_STREAMABLE_HTTP)
+public class McpStreamableHttpConnector implements Connector {
 
     protected String name;
     protected String description;
@@ -93,7 +91,7 @@ public class McpConnector implements Connector {
     protected Map<String, String> headers;
 
     @Builder
-    public McpConnector(
+    public McpStreamableHttpConnector(
         String name,
         String description,
         String version,
@@ -124,7 +122,7 @@ public class McpConnector implements Connector {
         this.parameters = parameters;
     }
 
-    public McpConnector(String protocol, XContentParser parser) throws IOException {
+    public McpStreamableHttpConnector(String protocol, XContentParser parser) throws IOException {
         this.protocol = protocol;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -193,6 +191,7 @@ public class McpConnector implements Connector {
     }
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
+        // TODO: Change this to return empty MAP in all createDecryptedHeaders functions across connectors
         if (headers == null) {
             return null;
         }
@@ -227,19 +226,18 @@ public class McpConnector implements Connector {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-            return new McpConnector(streamInput);
+            return new McpStreamableHttpConnector(streamInput);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public McpConnector(StreamInput input) throws IOException {
+    public McpStreamableHttpConnector(StreamInput input) throws IOException {
         this.protocol = input.readString();
         parseFromStream(input);
     }
 
     private void parseFromStream(StreamInput input) throws IOException {
-        Version streamInputVersion = input.getVersion();
         this.name = input.readOptionalString();
         this.version = input.readOptionalString();
         this.description = input.readOptionalString();
@@ -263,10 +261,8 @@ public class McpConnector implements Connector {
         if (input.readBoolean()) {
             this.headers = input.readMap(s -> s.readString(), s -> s.readString());
         }
-        if (streamInputVersion.onOrAfter(VERSION_3_1_0)) {
-            if (input.readBoolean()) {
-                this.parameters = input.readMap(s -> s.readString(), s -> s.readString());
-            }
+        if (input.readBoolean()) {
+            this.parameters = input.readMap(s -> s.readString(), s -> s.readString());
         }
     }
 
@@ -279,7 +275,6 @@ public class McpConnector implements Connector {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        Version streamOutputVersion = out.getVersion();
         out.writeString(protocol);
         out.writeOptionalString(name);
         out.writeOptionalString(version);
@@ -321,13 +316,11 @@ public class McpConnector implements Connector {
         } else {
             out.writeBoolean(false);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_3_1_0)) {
-            if (parameters != null) {
-                out.writeBoolean(true);
-                out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
-            } else {
-                out.writeBoolean(false);
-            }
+        if (parameters != null) {
+            out.writeBoolean(true);
+            out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
         }
     }
 
