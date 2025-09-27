@@ -58,6 +58,8 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
+import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.transport.client.Client;
@@ -745,6 +747,43 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
+    public void testScratchpad_E2E_Flow() {
+        // Add new scratchpad tools to the tool factories
+        Tool.Factory writeFactory = new WriteToScratchPadTool.Factory();
+        Tool.Factory readFactory = new ReadFromScratchPadTool.Factory();
+        toolFactories = new HashMap<>(toolFactories);
+        toolFactories.put("WriteToScratchPadTool", writeFactory);
+        toolFactories.put("ReadFromScratchPadTool", readFactory);
+        mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
+
+        // 1. First LLM call reads from empty scratchpad
+        // 2. Second LLM call writes "first note" to scratchpad
+        // 3. Third LLM call gives the final answer
+        Mockito
+            .doAnswer(getLLMAnswer(ImmutableMap.of("action", "ReadFromScratchPadTool")))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("action", "WriteToScratchPadTool", "action_input", "{\"notes\":\"first note\"}")))
+            .doAnswer(getLLMAnswer(ImmutableMap.of("final_answer", "Final Answer")))
+            .when(client)
+            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        MLAgent mlAgent = createMLAgentWithScratchpadTools();
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id_for_scratchpad_test");
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Also verify the final response to the user
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        Map<String, Object> finalResponse = (Map<String, Object>) modelTensorOutput
+            .getMlModelOutputs()
+            .get(1)
+            .getMlModelTensors()
+            .get(0)
+            .getDataAsMap();
+        assertEquals("Final Answer", finalResponse.get("response"));
+    }
+
+    @Test
     public void testToolConfig() {
         // Mock tool validation to return false.
         when(firstTool.validate(any())).thenReturn(true);
@@ -1103,6 +1142,20 @@ public class MLChatAgentRunnerTest {
         String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
         Assert.assertEquals("You are a helpful assistant.", systemPrompt);
         Assert.assertFalse(systemPrompt.contains(DEFAULT_DATETIME_PREFIX));
+    }
+
+    private MLAgent createMLAgentWithScratchpadTools() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec writeToolSpec = MLToolSpec.builder().type("WriteToScratchPadTool").build();
+        MLToolSpec readToolSpec = MLToolSpec.builder().type("ReadFromScratchPadTool").build();
+        return MLAgent
+            .builder()
+            .name("TestScratchpadAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .tools(Arrays.asList(writeToolSpec, readToolSpec))
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .build();
     }
 
     @Test

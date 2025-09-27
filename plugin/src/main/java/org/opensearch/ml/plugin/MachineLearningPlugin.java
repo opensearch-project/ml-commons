@@ -267,8 +267,10 @@ import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
+import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
+import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -782,6 +784,8 @@ public class MachineLearningPlugin extends Plugin
         VisualizationsTool.Factory.getInstance().init(client);
         ConnectorTool.Factory.getInstance().init(client);
         QueryPlanningTool.Factory.getInstance().init(client, mlFeatureEnabledSetting);
+        WriteToScratchPadTool.Factory.getInstance().init();
+        ReadFromScratchPadTool.Factory.getInstance().init();
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(IndexInsightTool.TYPE, IndexInsightTool.Factory.getInstance());
@@ -793,6 +797,8 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(ConnectorTool.TYPE, ConnectorTool.Factory.getInstance());
         toolFactories.put(QueryPlanningTool.TYPE, QueryPlanningTool.Factory.getInstance());
+        toolFactories.put(WriteToScratchPadTool.TYPE, WriteToScratchPadTool.Factory.getInstance());
+        toolFactories.put(ReadFromScratchPadTool.TYPE, ReadFromScratchPadTool.Factory.getInstance());
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
