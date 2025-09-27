@@ -6,12 +6,13 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import org.opensearch.action.ActionType;
+import org.opensearch.action.search.SearchResponse;
 
-public class MLSearchMemoriesAction extends ActionType<MLSearchMemoriesResponse> {
+public class MLSearchMemoriesAction extends ActionType<SearchResponse> {
     public static final MLSearchMemoriesAction INSTANCE = new MLSearchMemoriesAction();
     public static final String NAME = "cluster:admin/opensearch/ml/memory_containers/memories/search";
 
     private MLSearchMemoriesAction() {
-        super(NAME, MLSearchMemoriesResponse::new);
+        super(NAME, SearchResponse::new);
     }
 }
