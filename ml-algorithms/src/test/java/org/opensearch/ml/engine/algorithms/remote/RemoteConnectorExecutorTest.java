@@ -134,7 +134,7 @@ public class RemoteConnectorExecutorTest {
         Exception exception = Assert
             .assertThrows(
                 IllegalArgumentException.class,
-                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
@@ -154,7 +154,7 @@ public class RemoteConnectorExecutorTest {
         String actionType = inputDataSet.getActionType().toString();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
 
-        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null);
         Mockito
             .verify(executor, times(1))
             .invokeRemoteService(any(), any(), any(), argThat(argument -> argument.contains("You are a ${parameters.role}")), any(), any());
@@ -177,7 +177,7 @@ public class RemoteConnectorExecutorTest {
         Exception exception = Assert
             .assertThrows(
                 IllegalArgumentException.class,
-                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
@@ -209,7 +209,7 @@ public class RemoteConnectorExecutorTest {
         Exception exception = Assert
             .assertThrows(
                 IllegalArgumentException.class,
-                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
@@ -234,7 +234,7 @@ public class RemoteConnectorExecutorTest {
             .inputDataset(inputDataSet)
             .build();
 
-        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null);
         verify(actionListener).onFailure(argThat(e -> e instanceof IOException && e.getMessage().contains("UT test IOException")));
     }
 

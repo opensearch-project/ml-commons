@@ -229,6 +229,52 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_WithStreamParameter_OpenAI() {
+        String requestBody = "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        Assert
+            .assertEquals(
+                "{\"model\":\"gpt-3.5-turbo\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello world\"}],\"stream\":true}",
+                payload
+            );
+    }
+
+    @Test
+    public void createPayload_WithoutStreamParameter() {
+        String requestBody = "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        Assert.assertEquals("{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello world\"}]}", payload);
+    }
+
+    @Test
+    public void createPayload_WithStreamParameter_UnsupportedInterface() {
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "invalid/interface");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        Assert.assertEquals("{\"input\": \"Hello world\"}", payload);
+    }
+
+    @Test
     public void parseResponse_modelTensorJson() throws IOException {
         HttpConnector connector = createHttpConnector();
 

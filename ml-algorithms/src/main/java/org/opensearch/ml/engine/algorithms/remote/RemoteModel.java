@@ -35,6 +35,7 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.script.ScriptService;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -71,7 +72,7 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+    public void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
         if (!isModelReady()) {
             actionListener
                 .onFailure(
@@ -85,7 +86,7 @@ public class RemoteModel implements Predictable {
                 actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
             }
             actionType = actionType == null ? ActionType.PREDICT : actionType;
-            connectorExecutor.executeAction(actionType.toString(), mlInput, actionListener);
+            connectorExecutor.executeAction(actionType.toString(), mlInput, actionListener, channel);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
             actionListener.onFailure(e);

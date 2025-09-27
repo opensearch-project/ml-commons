@@ -48,7 +48,8 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED
+                    MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -73,6 +74,7 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.mcp_connector_enabled", true)
             .put("plugins.ml_commons.agentic_search_enabled", true)
             .put("plugins.ml_commons.agentic_memory_enabled", true)
+            .put("plugins.ml_commons.stream_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -92,6 +94,7 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isMcpConnectorEnabled());
         assertTrue(setting.isAgenticSearchEnabled());
         assertTrue(setting.isAgenticMemoryEnabled());
+        assertTrue(setting.isStreamEnabled());
     }
 
     @Test
@@ -113,6 +116,7 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.mcp_connector_enabled", false)
             .put("plugins.ml_commons.agentic_search_enabled", false)
             .put("plugins.ml_commons.agentic_memory_enabled", false)
+            .put("plugins.ml_commons.stream_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -132,6 +136,7 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isMcpConnectorEnabled());
         assertFalse(setting.isAgenticSearchEnabled());
         assertFalse(setting.isAgenticMemoryEnabled());
+        assertFalse(setting.isStreamEnabled());
     }
 
     @Test
