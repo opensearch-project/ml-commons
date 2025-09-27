@@ -194,7 +194,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         assertNotNull(capturedResponse);
 
         // Verify the memory content in the response matches the JSON that was returned
-        MLMemory returnedMemory = capturedResponse.getMlMemory();
+        MLMemory returnedMemory = capturedResponse.getLongTermMemory();
         assertNotNull(returnedMemory);
 
         // Get the expected JSON content that was actually returned by the mock
