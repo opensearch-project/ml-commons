@@ -35,7 +35,7 @@ public class ReadFromScratchPadTool implements Tool {
     public ReadFromScratchPadTool() {
         this.attributes = new HashMap<>();
         attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
-        attributes.put(STRICT_FIELD, false);
+        attributes.put(STRICT_FIELD, true);
     }
 
     @Override
@@ -94,7 +94,6 @@ public class ReadFromScratchPadTool implements Tool {
                 existing_notes += "\n" + persistent_notes;
             }
         }
-        parameters.put(SCRATCHPAD_NOTES_KEY, existing_notes);
         listener.onResponse((T) ("Notes from scratchpad: " + existing_notes));
     }
 

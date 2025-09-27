@@ -20,6 +20,7 @@ public class WriteToScratchPadTool implements Tool {
     public static final String TYPE = "WriteToScratchPadTool";
     public static final String SCRATCHPAD_NOTES_KEY = "_scratchpad_notes";
     public static final String NOTES_KEY = "notes";
+    public static final String INCLUDE_HISTORY_KEY = "include_history";
     public static final String STRICT_FIELD = "strict";
     private static final String DEFAULT_DESCRIPTION =
         "Save research plans, findings, and progress updates to a persistent scratchpad for the current conversation.";
@@ -35,7 +36,7 @@ public class WriteToScratchPadTool implements Tool {
     public WriteToScratchPadTool() {
         this.attributes = new HashMap<>();
         attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
-        attributes.put(STRICT_FIELD, false);
+        attributes.put(STRICT_FIELD, true);
     }
 
     @Override
@@ -88,6 +89,10 @@ public class WriteToScratchPadTool implements Tool {
         // This tool's core logic for state management will be handled by the agent runner,
         // which manages the scratchpad for the entire conversation. This class defines the tool's interface.
         String current_notes = parameters.get(NOTES_KEY);
+
+        final boolean include_history = parameters.containsKey(INCLUDE_HISTORY_KEY)
+            && Boolean.parseBoolean(parameters.get(INCLUDE_HISTORY_KEY));
+
         if (current_notes == null || current_notes.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Parameter 'notes' is required for WriteToScratchPadTool."));
             return;
@@ -97,7 +102,11 @@ public class WriteToScratchPadTool implements Tool {
         parameters.put(SCRATCHPAD_NOTES_KEY, existing_notes + "\n" + current_notes);
         // The agent runner will intercept this call to update the persistent scratchpad.
         // This response is what the LLM will see as the observation.
-        listener.onResponse((T) ("Wrote to scratchpad: " + current_notes));
+        if (include_history) {
+            listener.onResponse((T) ("Wrote to scratchpad: " + parameters.get(SCRATCHPAD_NOTES_KEY)));
+        } else {
+            listener.onResponse((T) ("Wrote to scratchpad: " + current_notes));
+        }
     }
 
     public static class Factory implements Tool.Factory<WriteToScratchPadTool> {
