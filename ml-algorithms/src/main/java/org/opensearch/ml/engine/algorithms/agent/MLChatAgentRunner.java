@@ -34,6 +34,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutpu
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.SUMMARY_PROMPT_TEMPLATE;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
@@ -125,9 +126,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String SUMMARIZE_WHEN_MAX_ITERATION = "summarize_when_max_iteration";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
+    private static final String MAX_ITERATIONS_SUMMARY_MESSAGE = MAX_ITERATIONS_MESSAGE + ". Here's a summary of the steps taken:\n\n%s";
 
     private Client client;
     private Settings settings;
@@ -322,7 +325,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         StringBuilder scratchpadBuilder = new StringBuilder();
         List<String> interactions = new CopyOnWriteArrayList<>();
-
         StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
@@ -414,7 +416,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             lastThought,
                             maxIterations,
-                            tools
+                            tools,
+                            tmpParameters,
+                            llm,
+                            tenantId
                         );
                         return;
                     }
@@ -513,7 +518,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             lastThought,
                             maxIterations,
-                            tools
+                            tools,
+                            tmpParameters,
+                            llm,
+                            tenantId
                         );
                         return;
                     }
@@ -885,11 +893,75 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Object> additionalInfo,
         AtomicReference<String> lastThought,
         int maxIterations,
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        LLMSpec llmSpec,
+        String tenantId
+    ) {
+        boolean shouldSummarize = Boolean.parseBoolean(parameters.getOrDefault(SUMMARIZE_WHEN_MAX_ITERATION, "false"));
+
+        if (shouldSummarize && !traceTensors.isEmpty()) {
+            generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
+                String summaryResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
+                AtomicReference<String> summaryThought = new AtomicReference<>(summaryResponse);
+                sendTraditionalMaxIterationsResponse(
+                    sessionId,
+                    listener,
+                    question,
+                    parentInteractionId,
+                    verbose,
+                    traceDisabled,
+                    traceTensors,
+                    conversationIndexMemory,
+                    traceNumber,
+                    additionalInfo,
+                    summaryThought,
+                    0,
+                    tools
+                );
+            }, e -> { log.warn("Failed to generate LLM summary", e); }));
+        } else {
+            sendTraditionalMaxIterationsResponse(
+                sessionId,
+                listener,
+                question,
+                parentInteractionId,
+                verbose,
+                traceDisabled,
+                traceTensors,
+                conversationIndexMemory,
+                traceNumber,
+                additionalInfo,
+                lastThought,
+                maxIterations,
+                tools
+            );
+        }
+    }
+
+    private void sendTraditionalMaxIterationsResponse(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> traceTensors,
+        ConversationIndexMemory conversationIndexMemory,
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        AtomicReference<String> lastThought,
+        int maxIterations,
         Map<String, Tool> tools
     ) {
-        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
-            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
-            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        String incompleteResponse;
+        if (maxIterations == 0) {
+            incompleteResponse = lastThought.get();
+        } else {
+            incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+                ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+                : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        }
         sendFinalAnswer(
             sessionId,
             listener,
@@ -904,6 +976,70 @@ public class MLChatAgentRunner implements MLAgentRunner {
             incompleteResponse
         );
         cleanUpResource(tools);
+    }
+
+    void generateLLMSummary(List<ModelTensors> stepsSummary, LLMSpec llmSpec, String tenantId, ActionListener<String> listener) {
+        if (stepsSummary == null || stepsSummary.isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("Steps summary cannot be null or empty"));
+            return;
+        }
+
+        try {
+            Map<String, String> summaryParams = new HashMap<>();
+            if (llmSpec.getParameters() != null) {
+                summaryParams.putAll(llmSpec.getParameters());
+            }
+
+            // Convert ModelTensors to strings before joining
+            List<String> stepStrings = new ArrayList<>();
+            for (ModelTensors tensor : stepsSummary) {
+                stepStrings.add(outputToOutputString(tensor));
+            }
+            String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
+            summaryParams.put("inputs", summaryPrompt);
+            summaryParams.put(PROMPT, summaryPrompt);
+            summaryParams.putIfAbsent("stop", gson.toJson(new String[] { "\n\n", "```" }));
+
+            ActionRequest request = new MLPredictionTaskRequest(
+                llmSpec.getModelId(),
+                RemoteInferenceMLInput
+                    .builder()
+                    .algorithm(FunctionName.REMOTE)
+                    .inputDataset(RemoteInferenceInputDataSet.builder().parameters(summaryParams).build())
+                    .build(),
+                null,
+                tenantId
+            );
+            client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
+                String summary = extractSummaryFromResponse(response);
+                if (summary != null) {
+                    listener.onResponse(summary);
+                } else {
+                    listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
+                }
+            }, listener::onFailure));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    public String extractSummaryFromResponse(MLTaskResponse response) {
+        try {
+            String outputString = outputToOutputString(response.getOutput());
+            if (outputString != null && !outputString.trim().isEmpty()) {
+                Map<String, Object> dataMap = gson.fromJson(outputString, Map.class);
+                if (dataMap.containsKey("response")) {
+                    String summary = String.valueOf(dataMap.get("response"));
+                    if (summary != null && !summary.trim().isEmpty() && !"null".equals(summary)) {
+                        return summary.trim();
+                    }
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to extract summary from response", e);
+            return null;
+        }
     }
 
     private void saveMessage(
