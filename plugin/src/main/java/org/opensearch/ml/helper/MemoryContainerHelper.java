@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
 import java.util.List;
 
@@ -48,6 +49,7 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -262,6 +264,20 @@ public class MemoryContainerHelper {
         }
     }
 
+    public void searchData(
+        MemoryConfiguration configuration,
+        SearchDataObjectRequest searchRequest,
+        ActionListener<SearchResponse> listener
+    ) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
+            }
+        } else {
+            sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
+        }
+    }
+
     public void indexData(MemoryConfiguration configuration, IndexRequest indexRequest, ActionListener<IndexResponse> listener) {
         if (configuration.isUseSystemIndex()) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -313,6 +329,24 @@ public class MemoryContainerHelper {
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery("owner.name.keyword", user.getName());
         NestedQueryBuilder nestedOwnerQuery = QueryBuilders.nestedQuery(OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
         boolQueryBuilder.should(nestedOwnerQuery);
+        QueryBuilder query = searchSourceBuilder.query();
+        if (query == null) {
+            searchSourceBuilder.query(boolQueryBuilder);
+        } else if (query instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) query).filter(boolQueryBuilder);
+        } else {
+            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
+            rewriteQuery.must(query);
+            rewriteQuery.filter(boolQueryBuilder);
+            searchSourceBuilder.query(rewriteQuery);
+        }
+        return searchSourceBuilder;
+    }
+
+    public SearchSourceBuilder addOwnerIdFilter(User user, SearchSourceBuilder searchSourceBuilder) {
+        BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+        boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
+
         QueryBuilder query = searchSourceBuilder.query();
         if (query == null) {
             searchSourceBuilder.query(boolQueryBuilder);
