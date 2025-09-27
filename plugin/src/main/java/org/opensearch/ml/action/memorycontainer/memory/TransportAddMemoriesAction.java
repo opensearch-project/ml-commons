@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
@@ -22,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
@@ -97,8 +99,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         // Initialize services
         this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
-        this.memorySearchService = new MemorySearchService(client);
-        this.memoryOperationsService = new MemoryOperationsService(client);
+        this.memorySearchService = new MemorySearchService(memoryContainerHelper);
+        this.memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
         this.threadPool = threadPool;
     }
 
@@ -110,7 +112,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
 
         User user = RestActionUtils.getUserContext(client);
+        String ownerId = user != null ? user.getName() : null;
         MLAddMemoriesInput input = request.getMlAddMemoryInput();
+        input.setOwnerId(ownerId);
 
         if (input == null) {
             actionListener.onFailure(new IllegalArgumentException("Memory input is required"));
@@ -154,11 +158,13 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
                 String summary = messages.get(0).getContentText();
-                indexRequest.source(Map.of(SUMMARY_FIELD, summary, NAMESPACE_FIELD, input.getNamespace()));
-                client.index(indexRequest, ActionListener.wrap(r -> {
+                indexRequest
+                    .source(Map.of(OWNER_ID_FIELD, input.getOwnerId(), SUMMARY_FIELD, summary, NAMESPACE_FIELD, input.getNamespace()));
+                ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                     input.getNamespace().put(SESSION_ID_FIELD, r.getId());
                     processAndIndexMemory(input, container, user, actionListener);
-                }, e -> actionListener.onFailure(e)));
+                }, e -> actionListener.onFailure(e));
+                memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
             } else {
                 processAndIndexMemory(input, container, user, actionListener);
             }
@@ -188,7 +194,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             String workingMemoryIndex = container.getConfiguration().getWorkingMemoryIndexName();
             IndexRequest indexRequest = createWorkingMemoryRequest(workingMemoryIndex, input);
 
-            client.index(indexRequest, ActionListener.wrap(r -> {
+            ActionListener<IndexResponse> responseActionListener = ActionListener.wrap(r -> {
                 List<MemoryResult> allResults = new ArrayList<>();
                 // allResults.add(MemoryResult.builder().memoryId(r.getId()).build());
                 MLAddMemoriesResponse response = MLAddMemoriesResponse
@@ -206,8 +212,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         }));
                     });
                 }
-            }, actionListener::onFailure));
-
+            }, actionListener::onFailure);
+            memoryContainerHelper.indexData(memoryConfig, indexRequest, responseActionListener);
         } catch (Exception e) {
             log.error("Failed to add memory", e);
             actionListener.onFailure(e);
@@ -220,7 +226,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         try {
             XContentBuilder builder = XContentFactory.jsonBuilder();
             // Add memory content from input object
-            mlAddMemoriesInput.toXContentWithTimeStamp(builder, ToXContent.EMPTY_PARAMS);
+            mlAddMemoriesInput.toXContent(builder, ToXContent.EMPTY_PARAMS, true);
 
             indexRequest.source(builder);
             return indexRequest;
