@@ -332,7 +332,6 @@ import org.opensearch.ml.rest.RestMLDeleteMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
-import org.opensearch.ml.rest.RestMLDeleteWorkingMemoryAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
@@ -347,7 +346,6 @@ import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
-import org.opensearch.ml.rest.RestMLGetWorkingMemoryAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLPredictionStreamAction;
@@ -1029,8 +1027,8 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
         RestMLGetMemoryAction restMLGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
-        RestMLGetWorkingMemoryAction restMLGetWorkingMemoryAction = new RestMLGetWorkingMemoryAction(mlFeatureEnabledSetting);
-        RestMLDeleteWorkingMemoryAction restMLDeleteWorkingMemoryAction = new RestMLDeleteWorkingMemoryAction(mlFeatureEnabledSetting);
+        // RestMLGetWorkingMemoryAction restMLGetWorkingMemoryAction = new RestMLGetWorkingMemoryAction(mlFeatureEnabledSetting);
+        // RestMLDeleteWorkingMemoryAction restMLDeleteWorkingMemoryAction = new RestMLDeleteWorkingMemoryAction(mlFeatureEnabledSetting);
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
@@ -1106,8 +1104,8 @@ public class MachineLearningPlugin extends Plugin
                 restMLDeleteMemoryAction,
                 restMLUpdateMemoryAction,
                 restMLGetMemoryAction,
-                restMLGetWorkingMemoryAction,
-                restMLDeleteWorkingMemoryAction,
+                // restMLGetWorkingMemoryAction,
+                // restMLDeleteWorkingMemoryAction,
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,
