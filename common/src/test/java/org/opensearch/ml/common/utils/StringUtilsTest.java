@@ -141,6 +141,18 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void getParameterMapWithNullInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(null);
+        Assert.assertTrue(parameterMap.isEmpty());
+    }
+
+    @Test
+    public void getParameterMapWithEmptyInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(Map.of());
+        Assert.assertTrue(parameterMap.isEmpty());
+    }
+
+    @Test
     public void getInterfaceMap() {
         final Set<String> allowedInterfaceFieldNameList = new HashSet<>(Arrays.asList("input", "output"));
         Map<String, Object> parameters = new HashMap<>();

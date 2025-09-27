@@ -195,6 +195,8 @@ public class StringUtils {
     @SuppressWarnings("removal")
     public static Map<String, String> getParameterMap(Map<String, ?> parameterObjs) {
         Map<String, String> parameters = new HashMap<>();
+        if (parameterObjs == null)
+            return parameters;
         for (String key : parameterObjs.keySet()) {
             Object value = parameterObjs.get(key);
             try {
