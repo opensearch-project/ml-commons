@@ -206,5 +206,18 @@ PUT /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/session/N2CDip
 ```
 ## 5.3 Delete memory by type and id
 ```
-DELETE /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/session/{{id}}
+DELETE /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/{{type}}/{{id}}
+```
+
+## 5.4 Search memories by type
+```
+DELETE /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/{{type}}/_search
+
+# Example
+GET _plugins/_ml/memory_containers/{{mem_container_id}}/memories/session/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
 ```
