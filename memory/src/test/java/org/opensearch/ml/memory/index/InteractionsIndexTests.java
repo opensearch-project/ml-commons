@@ -128,6 +128,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interaction = new Interaction(
             "iid",
             Instant.ofEpochMilli(1234),
+            Instant.ofEpochMilli(1234),
             "cid",
             "inp",
             "pt",
@@ -515,10 +516,50 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
     public void testGetAll_Recursion() {
         List<Interaction> interactions = List
             .of(
-                new Interaction("iid1", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta")),
-                new Interaction("iid2", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta")),
-                new Interaction("iid3", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta")),
-                new Interaction("iid4", Instant.now(), "cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta"))
+                new Interaction(
+                    "iid1",
+                    Instant.now(),
+                    Instant.now(),
+                    "cid",
+                    "inp",
+                    "pt",
+                    "rsp",
+                    "ogn",
+                    Collections.singletonMap("meta", "some meta")
+                ),
+                new Interaction(
+                    "iid2",
+                    Instant.now(),
+                    Instant.now(),
+                    "cid",
+                    "inp",
+                    "pt",
+                    "rsp",
+                    "ogn",
+                    Collections.singletonMap("meta", "some meta")
+                ),
+                new Interaction(
+                    "iid3",
+                    Instant.now(),
+                    Instant.now(),
+                    "cid",
+                    "inp",
+                    "pt",
+                    "rsp",
+                    "ogn",
+                    Collections.singletonMap("meta", "some meta")
+                ),
+                new Interaction(
+                    "iid4",
+                    Instant.now(),
+                    Instant.now(),
+                    "cid",
+                    "inp",
+                    "pt",
+                    "rsp",
+                    "ogn",
+                    Collections.singletonMap("meta", "some meta")
+                )
             );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);

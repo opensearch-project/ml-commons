@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.conversation.ConversationalIndexConstants
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -91,8 +92,9 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
         when(this.clusterService.getClusterSettings())
             .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
         String interactionId = "test_interaction_id";
-        Map<String, Object> updateContent = Map
-            .of(INTERACTIONS_ADDITIONAL_INFO_FIELD, Map.of("feedback", "thumbs up!"), INTERACTIONS_RESPONSE_FIELD, "response");
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put(INTERACTIONS_ADDITIONAL_INFO_FIELD, Map.of("feedback", "thumbs up!"));
+        updateContent.put(INTERACTIONS_RESPONSE_FIELD, "response");
         when(updateRequest.getInteractionId()).thenReturn(interactionId);
         when(updateRequest.getUpdateContent()).thenReturn(updateContent);
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
@@ -115,6 +117,11 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
         }).when(cmHandler).updateInteraction(any(String.class), any(Map.class), isA(ActionListener.class));
 
         updateInteractionTransportAction.doExecute(task, updateRequest, actionListener);
+
+        ArgumentCaptor<Map<String, Object>> updateContentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(cmHandler).updateInteraction(any(String.class), updateContentCaptor.capture(), isA(ActionListener.class));
+        Map<String, Object> capturedUpdateContent = updateContentCaptor.getValue();
+        assertTrue(capturedUpdateContent.containsKey("updated_time"));
         verify(actionListener).onResponse(updateResponse);
     }
 

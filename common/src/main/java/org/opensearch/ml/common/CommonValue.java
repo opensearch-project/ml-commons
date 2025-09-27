@@ -89,6 +89,8 @@ public class CommonValue {
     public static final Version VERSION_2_19_0 = Version.fromString("2.19.0");
     public static final Version VERSION_3_0_0 = Version.fromString("3.0.0");
     public static final Version VERSION_3_1_0 = Version.fromString("3.1.0");
+    public static final Version VERSION_3_2_0 = Version.fromString("3.2.0");
+    public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";
@@ -115,7 +117,9 @@ public class CommonValue {
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
     public static final String MCP_DEFAULT_SSE_ENDPOINT = "/sse";
-    public static final String SSE_ENDPOINT_FILED = "sse_endpoint";
+    public static final String SSE_ENDPOINT_FIELD = "sse_endpoint";
+    public static final String MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT = "/mcp/";
+    public static final String ENDPOINT_FIELD = "endpoint";
 
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
