@@ -9,6 +9,8 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -97,6 +99,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Map<String, String> headers
     ) {
         if (!dryRun && !updateConnector) {
+
             if (name == null) {
                 throw new IllegalArgumentException("Connector name is null");
             }
@@ -106,13 +109,17 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             if (protocol == null) {
                 throw new IllegalArgumentException("Connector protocol is null");
             }
-            if (credential == null || credential.isEmpty()) {
+            boolean isMcpConnector = (protocol.equals(MCP_SSE) || protocol.equals(MCP_STREAMABLE_HTTP));
+            if ((credential == null || credential.isEmpty()) && !isMcpConnector) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
             }
             if (actions != null) {
                 for (ConnectorAction action : actions) {
                     action.validatePrePostProcessFunctions(parameters);
                 }
+            }
+            if ((url == null || url.isBlank()) && isMcpConnector) {
+                throw new IllegalArgumentException("MCP Connector url is null or blank");
             }
         }
         this.name = name;

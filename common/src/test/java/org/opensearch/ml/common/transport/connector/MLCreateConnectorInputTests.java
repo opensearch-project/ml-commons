@@ -10,6 +10,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -208,6 +210,98 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
+    public void constructorMLCreateConnectorInput_McpSseWithNullCredential_ShouldNotThrow() {
+        // MCP SSE connectors should be allowed to have null credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_SSE)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_SSE, connector.getProtocol());
+        assertNull(connector.getCredential());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithEmptyCredential_ShouldNotThrow() {
+        // MCP SSE connectors should be allowed to have empty credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_SSE)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_SSE, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithNullCredential_ShouldNotThrow() {
+        // MCP Streamable HTTP connectors should be allowed to have null credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol());
+        assertNull(connector.getCredential());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithEmptyCredential_ShouldNotThrow() {
+        // MCP Streamable HTTP connectors should be allowed to have empty credentials
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(MCP_STREAMABLE_HTTP)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+            .addAllBackendRoles(false)
+            .url("https://test.com") // Add valid URL for MCP connector
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(MCP_STREAMABLE_HTTP, connector.getProtocol());
+        assertTrue(connector.getCredential().isEmpty());
+    }
+
+    @Test
     public void testToXContent_FullFields() throws Exception {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -373,6 +467,65 @@ public class MLCreateConnectorInputTests {
         // No exception for missing mandatory fields when dryRun is true
         assertTrue(input.isDryRun());
         assertNull(input.getName()); // Name is not set, but no exception due to dryRun
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithNullUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_SSE, null);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithBlankUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_SSE, "   ");
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithNullUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_STREAMABLE_HTTP, null);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithBlankUrl_ShouldThrowException() {
+        testMcpUrlValidation(MCP_STREAMABLE_HTTP, "   ");
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpSseWithValidUrl_ShouldNotThrowException() {
+        testMcpValidUrl(MCP_SSE);
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_McpStreamableHttpWithValidUrl_ShouldNotThrowException() {
+        testMcpValidUrl(MCP_STREAMABLE_HTTP);
+    }
+
+    private void testMcpUrlValidation(String protocol, String url) {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(protocol)
+                .credential(null) // MCP connectors allow null credential
+                .url(url)
+                .build();
+        });
+        assertEquals("MCP Connector url is null or blank", exception.getMessage());
+    }
+
+    private void testMcpValidUrl(String protocol) {
+        MLCreateConnectorInput connector = MLCreateConnectorInput
+            .builder()
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(protocol)
+            .credential(null)
+            .url("https://test.com")
+            .build();
+
+        assertNotNull(connector);
+        assertEquals(protocol, connector.getProtocol());
+        assertEquals("https://test.com", connector.getUrl());
     }
 
     // Helper method to create XContentParser from a JSON string
