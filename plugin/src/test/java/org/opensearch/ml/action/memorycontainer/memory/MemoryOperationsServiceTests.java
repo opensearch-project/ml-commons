@@ -29,7 +29,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -39,6 +38,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesIn
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryOperationsServiceTests {
@@ -56,6 +56,8 @@ public class MemoryOperationsServiceTests {
 
     private MemoryConfiguration memoryConfig;
     private Map<String, String> namespace;
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
 
     @Before
     public void setup() {
@@ -126,44 +128,6 @@ public class MemoryOperationsServiceTests {
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
         verify(client, times(2)).bulk(any(), any());
-    }
-
-    @Test
-    public void testBulkIndexMemoriesWithResults_EmptyRequests() {
-        List<IndexRequest> indexRequests = Arrays.asList();
-        List<MemoryInfo> memoryInfos = Arrays.asList();
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-
-        memoryOperationsService.bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, responseListener);
-
-        verify(responseListener).onFailure(any(IllegalStateException.class));
-    }
-
-    @Test
-    public void testBulkIndexMemoriesWithResults_SuccessfulIndexing() {
-        IndexRequest indexRequest = mock(IndexRequest.class);
-        List<IndexRequest> indexRequests = Arrays.asList(indexRequest);
-
-        MemoryInfo memoryInfo = new MemoryInfo(null, "Test content", null, true);
-        List<MemoryInfo> memoryInfos = Arrays.asList(memoryInfo);
-
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-
-        // Mock index response
-        IndexResponse indexResponse = mock(IndexResponse.class);
-        when(indexResponse.getId()).thenReturn("generated-id-123");
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            listener.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        memoryOperationsService.bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, responseListener);
-
-        verify(client).index(any(), any());
     }
 
     @Test
@@ -401,28 +365,4 @@ public class MemoryOperationsServiceTests {
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
     }
 
-    @Test
-    public void testBulkIndexMemoriesWithResults_IndexingFailure() {
-        IndexRequest indexRequest = mock(IndexRequest.class);
-        List<IndexRequest> indexRequests = Arrays.asList(indexRequest);
-
-        MemoryInfo memoryInfo = new MemoryInfo(null, "Test content", null, true);
-        List<MemoryInfo> memoryInfos = Arrays.asList(memoryInfo);
-
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-
-        Exception indexException = new RuntimeException("Index failed");
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            listener.onFailure(indexException);
-            return null;
-        }).when(client).index(any(), any());
-
-        memoryOperationsService.bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, responseListener);
-
-        verify(client).index(any(), any());
-        verify(responseListener).onFailure(indexException);
-    }
 }
