@@ -19,8 +19,8 @@ import org.opensearch.ml.common.utils.StringUtils;
 public class ReadFromScratchPadTool implements Tool {
     public static final String TYPE = "ReadFromScratchPadTool";
     public static final String STRICT_FIELD = "strict";
-    public static final String NOTES_KEY = "notes";
     public static final String SCRATCHPAD_NOTES_KEY = "_scratchpad_notes";
+    public static final String NOTES_KEY = "notes";
     public static final String PERSISTENT_NOTES_KEY = "persistent_notes";
     private static final String DEFAULT_DESCRIPTION =
         "Retrieve previous research work and notes from the persistent scratchpad for the current conversation.";

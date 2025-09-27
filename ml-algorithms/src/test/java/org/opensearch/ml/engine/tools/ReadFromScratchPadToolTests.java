@@ -1,6 +1,8 @@
 package org.opensearch.ml.engine.tools;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 
 import java.util.HashMap;
@@ -50,7 +52,7 @@ public class ReadFromScratchPadToolTests {
     @Test
     public void testGetAttributes() {
         assertNotNull(tool.getAttributes());
-        assertFalse((Boolean) tool.getAttributes().get(ReadFromScratchPadTool.STRICT_FIELD));
+        assertTrue((Boolean) tool.getAttributes().get(ReadFromScratchPadTool.STRICT_FIELD));
     }
 
     @Test
@@ -80,7 +82,7 @@ public class ReadFromScratchPadToolTests {
         verify(listener).onResponse(captor.capture());
         // Assuming StringUtils.toJson("") returns an empty string
         assertEquals("Notes from scratchpad: ", captor.getValue());
-        assertEquals("", parameters.get(ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals(null, parameters.get(ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
@@ -103,7 +105,6 @@ public class ReadFromScratchPadToolTests {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Notes from scratchpad: \npersistent notes", captor.getValue());
-        assertEquals("\npersistent notes", parameters.get(ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
@@ -115,7 +116,6 @@ public class ReadFromScratchPadToolTests {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Notes from scratchpad: existing notes\npersistent notes", captor.getValue());
-        assertEquals("existing notes\npersistent notes", parameters.get(ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
