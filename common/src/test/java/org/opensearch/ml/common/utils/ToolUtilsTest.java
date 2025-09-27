@@ -19,6 +19,7 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class ToolUtilsTest {
 
@@ -342,5 +343,52 @@ public class ToolUtilsTest {
         assertEquals(2, result.size());
         assertEquals("value1", result.get("param1"));
         assertEquals("value2", result.get("param2"));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithMap() {
+        Map<String, Object> mapOutput = Map.of("key1", "value1", "key2", "value2");
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(mapOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        assertEquals(mapOutput, result.getDataAsMap());
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithList() {
+        List<String> listOutput = List.of("item1", "item2", "item3");
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(listOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of("output", listOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithJsonString() {
+        String jsonOutput = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(jsonOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        assertTrue(result.getDataAsMap().containsKey("key1"));
+        assertTrue(result.getDataAsMap().containsKey("key2"));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithNonJsonString() {
+        String stringOutput = "simple string output";
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(stringOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of("output", stringOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
     }
 }
