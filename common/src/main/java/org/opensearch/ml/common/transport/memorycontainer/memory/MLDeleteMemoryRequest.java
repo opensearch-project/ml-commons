@@ -25,17 +25,20 @@ import lombok.Getter;
 @Getter
 public class MLDeleteMemoryRequest extends ActionRequest {
     private final String memoryContainerId;
+    private final String memoryType;
     private final String memoryId;
 
     @Builder
-    public MLDeleteMemoryRequest(String memoryContainerId, String memoryId) {
+    public MLDeleteMemoryRequest(String memoryContainerId, String memoryType, String memoryId) {
         this.memoryContainerId = memoryContainerId;
+        this.memoryType = memoryType;
         this.memoryId = memoryId;
     }
 
     public MLDeleteMemoryRequest(StreamInput input) throws IOException {
         super(input);
         this.memoryContainerId = input.readString();
+        this.memoryType = input.readString();
         this.memoryId = input.readString();
     }
 
@@ -43,6 +46,7 @@ public class MLDeleteMemoryRequest extends ActionRequest {
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(memoryContainerId);
+        output.writeString(memoryType);
         output.writeString(memoryId);
     }
 
@@ -52,6 +56,10 @@ public class MLDeleteMemoryRequest extends ActionRequest {
 
         if (this.memoryContainerId == null) {
             exception = addValidationError("Memory container id can't be null", exception);
+        }
+
+        if (this.memoryType == null) {
+            exception = addValidationError("Memory type can't be null", exception);
         }
 
         if (this.memoryId == null) {

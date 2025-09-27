@@ -180,3 +180,31 @@ DELETE _plugins/_ml/memory_containers/{{mem_container_id}}/memories/working/{{wo
 ## 4.2 Delete memory history
 ```
 ```
+# 5. General API
+
+Unified API to support four types of memory data
+1. session
+2. working
+3. long-term
+4. history (doesn't support update)
+
+## 5.1 Get memory by type and id
+```
+GET /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/{{type}}/{{id}}
+```
+## 5.2 Update memory by type and id
+```
+PUT /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/{{type}}/{{id}}
+
+# example
+PUT /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/session/N2CDipkB2Mtr6INFFcX8
+{
+  "additional_info": {
+    "key1": "value1"
+  }
+}
+```
+## 5.3 Delete memory by type and id
+```
+DELETE /_plugins/_ml/memory_containers/{{mem_container_id}}/memories/session/{{id}}
+```

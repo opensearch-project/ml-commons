@@ -17,7 +17,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.memories.MLWorkingMemory;
+import org.opensearch.ml.common.memorycontainer.MLWorkingMemory;
 
 import lombok.Builder;
 import lombok.Getter;

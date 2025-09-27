@@ -31,17 +31,20 @@ import lombok.experimental.FieldDefaults;
 public class MLGetMemoryRequest extends ActionRequest {
 
     String memoryContainerId;
+    String memoryType;
     String memoryId;
 
     @Builder
-    public MLGetMemoryRequest(String memoryContainerId, String memoryId) {
+    public MLGetMemoryRequest(String memoryContainerId, String memoryType, String memoryId) {
         this.memoryContainerId = memoryContainerId;
+        this.memoryType = memoryType;
         this.memoryId = memoryId;
     }
 
     public MLGetMemoryRequest(StreamInput in) throws IOException {
         super(in);
         this.memoryContainerId = in.readString();
+        this.memoryType = in.readString();
         this.memoryId = in.readString();
     }
 
@@ -49,6 +52,7 @@ public class MLGetMemoryRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.memoryContainerId);
+        out.writeString(this.memoryType);
         out.writeString(this.memoryId);
     }
 
@@ -58,6 +62,9 @@ public class MLGetMemoryRequest extends ActionRequest {
 
         if (this.memoryContainerId == null || this.memoryId == null) {
             exception = addValidationError("memoryContainerId and memoryId id can not be null", exception);
+        }
+        if (this.memoryType == null) {
+            exception = addValidationError("Memory type can not be null", exception);
         }
 
         return exception;

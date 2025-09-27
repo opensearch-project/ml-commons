@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
@@ -14,6 +16,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -158,8 +161,23 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
                 String summary = messages.get(0).getContentText();
+                Instant now = Instant.now();
                 indexRequest
-                    .source(Map.of(OWNER_ID_FIELD, input.getOwnerId(), SUMMARY_FIELD, summary, NAMESPACE_FIELD, input.getNamespace()));
+                    .source(
+                        Map
+                            .of(
+                                OWNER_ID_FIELD,
+                                input.getOwnerId(),
+                                SUMMARY_FIELD,
+                                summary,
+                                NAMESPACE_FIELD,
+                                input.getNamespace(),
+                                CREATED_TIME_FIELD,
+                                now.getEpochSecond(),
+                                LAST_UPDATED_TIME_FIELD,
+                                now.getEpochSecond()
+                            )
+                    );
                 ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                     input.getNamespace().put(SESSION_ID_FIELD, r.getId());
                     processAndIndexMemory(input, container, user, actionListener);

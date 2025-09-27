@@ -20,6 +20,9 @@
     "additional_info": {
       "type": "flat_object"
     },
+    "namespace": {
+      "type": "flat_object"
+    },
     "owner": USER_MAPPING_PLACEHOLDER,
     "tenant_id": {
       "type": "keyword"
