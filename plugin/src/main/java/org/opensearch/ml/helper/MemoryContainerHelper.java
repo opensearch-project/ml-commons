@@ -18,12 +18,16 @@ import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -173,16 +177,35 @@ public class MemoryContainerHelper {
         return false;
     }
 
+    public boolean checkMemoryAccess(User user, String ownerId) {
+        // If security is disabled (user is null), allow access
+        if (user == null) {
+            return true;
+        }
+
+        // If user is admin (has all_access role), allow access
+        if (user.getRoles() != null && user.getRoles().contains("all_access")) {
+            return true;
+        }
+
+        // Check if user is the owner
+        String userName = user.getName();
+        if (userName.equals(ownerId)) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Get memory index name from container
      * 
      * @param container the memory container
      * @return the memory index name or null if not configured
      */
-    public String getMemoryIndexName(MLMemoryContainer container) {
+    public String getMemoryIndexName(MLMemoryContainer container, String memoryType) {
         MemoryConfiguration config = container.getConfiguration();
-        if (config != null && config.getIndexPrefix() != null) {
-            return config.getIndexPrefix();
+        if (config != null) {
+            return config.getIndexName(memoryType);
         }
         return null;
     }
@@ -196,7 +219,16 @@ public class MemoryContainerHelper {
      * @return true if valid, false if validation failed (listener will be notified)
      */
     public boolean validateMemoryIndexExists(MLMemoryContainer container, String actionName, ActionListener<?> listener) {
-        String indexName = getMemoryIndexName(container);
+        return true;
+    }
+
+    public boolean validateMemoryIndexExists(
+        MLMemoryContainer container,
+        String memoryType,
+        String actionName,
+        ActionListener<?> listener
+    ) {
+        String indexName = getMemoryIndexName(container, memoryType);
         if (indexName == null || indexName.isEmpty()) {
             listener
                 .onFailure(
@@ -237,6 +269,26 @@ public class MemoryContainerHelper {
             }
         } else {
             client.index(indexRequest, listener);
+        }
+    }
+
+    public void updateData(MemoryConfiguration configuration, UpdateRequest updateRequest, ActionListener<UpdateResponse> listener) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.update(updateRequest, listener);
+        }
+    }
+
+    public void deleteData(MemoryConfiguration configuration, DeleteRequest deleteRequest, ActionListener<DeleteResponse> listener) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.delete(deleteRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.delete(deleteRequest, listener);
         }
     }
 
