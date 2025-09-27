@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 3
+    "schema_version": 4
   },
   "properties": {
     "name": {
@@ -81,6 +81,9 @@
     "last_updated_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
+    },
+    "all_shared_principals": {
+      "type": "keyword"
     }
   }
 }

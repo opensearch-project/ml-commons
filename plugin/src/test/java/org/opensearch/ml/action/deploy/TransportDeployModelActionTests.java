@@ -174,10 +174,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(threadPool.executor(anyString())).thenReturn(executorService);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(true);
 
@@ -355,10 +355,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
@@ -411,10 +411,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(anyString(), any(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
@@ -789,10 +789,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
 
         // Mock access control to return false (no access)
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), anyString(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         ActionListener<MLDeployModelResponse> listener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(null, mlDeployModelRequest, listener);

@@ -5,13 +5,16 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doAnswer;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -31,68 +34,68 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
 public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
+
     @Mock
     Client client;
+    @Mock
     SdkClient sdkClient;
 
     @Mock
     NamedXContentRegistry namedXContentRegistry;
-
     @Mock
     TransportService transportService;
-
     @Mock
     ActionFilters actionFilters;
 
-    SearchRequest searchRequest;
-
-    SearchResponse searchResponse;
-
     SearchSourceBuilder searchSourceBuilder;
-
-    MLSearchActionRequest mlSearchActionRequest;
-
     @Mock
     FetchSourceContext fetchSourceContext;
 
     @Mock
     ActionListener<SearchResponse> actionListener;
-
     @Mock
     ThreadPool threadPool;
-
     @Mock
     ClusterService clusterService;
+
     SearchModelGroupTransportAction searchModelGroupTransportAction;
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     ThreadContext threadContext;
 
     @Before
-    public void setup() {
+    @Override
+    public void setUp() throws Exception {
+        super.setUp();
         MockitoAnnotations.openMocks(this);
-        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+
         searchModelGroupTransportAction = new SearchModelGroupTransportAction(
             transportService,
             actionFilters,
@@ -111,23 +114,31 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
 
         searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(fetchSourceContext);
-        searchRequest = new SearchRequest(new String[0], searchSourceBuilder);
-        mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         when(fetchSourceContext.includes()).thenReturn(new String[] {});
         when(fetchSourceContext.excludes()).thenReturn(new String[] {});
 
-        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0L, TotalHits.Relation.EQUAL_TO), Float.NaN);
-        InternalSearchResponse internalSearchResponse = new InternalSearchResponse(
-            searchHits,
-            InternalAggregations.EMPTY,
-            null,
-            null,
-            false,
-            null,
-            0
-        );
-        searchResponse = new SearchResponse(
-            internalSearchResponse,
+        // By default, do not skip access control
+        when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
+        // Simplify the merged query for tests
+        when(modelAccessControlHelper.mergeWithAccessFilter(any(QueryBuilder.class), any(Set.class)))
+            .thenAnswer(inv -> QueryBuilders.termQuery("dummy", "value"));
+    }
+
+    @Override
+    public void tearDown() throws Exception {
+        try {
+            ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        } finally {
+            super.tearDown();
+        }
+    }
+
+    /** Helper: empty SDK response that can be converted to SearchResponse by the utils wrapper */
+    private SearchDataObjectResponse emptySearchDataObjectResponse() {
+        SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0L, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        InternalSearchResponse internal = new InternalSearchResponse(hits, InternalAggregations.EMPTY, null, null, false, null, 0);
+        SearchResponse osSearchResponse = new SearchResponse(
+            internal,
             null,
             0,
             0,
@@ -138,68 +149,93 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
             null
         );
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+        SearchDataObjectResponse sdkResp = mock(SearchDataObjectResponse.class);
+        try {
+            when(sdkResp.searchResponse()).thenReturn(osSearchResponse);
+        } catch (Throwable ignore) {}
+        return sdkResp;
     }
 
     @Test
-    public void test_DoExecute() {
-        when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
-        searchModelGroupTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+    public void test_DoExecute_success_callsSdkClient_andAddsBackendRoleFilter() {
+        MLSearchActionRequest mlReq = new MLSearchActionRequest(new SearchRequest(new String[0], searchSourceBuilder), "tenant-x");
+
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        searchModelGroupTransportAction.doExecute(null, mlReq, actionListener);
+
+        future.complete(emptySearchDataObjectResponse());
 
         verify(modelAccessControlHelper).addUserBackendRolesFilter(any(), any());
-        verify(client).search(any(), any());
+        verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
+        verify(actionListener).onResponse(any(SearchResponse.class));
     }
 
     @Test
-    public void test_DoExecute_Exception() throws InterruptedException {
+    public void test_DoExecute_exception_propagatesFailure() {
+        MLSearchActionRequest mlReq = new MLSearchActionRequest(new SearchRequest(new String[0], searchSourceBuilder), "tenant-x");
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("search failed"));
-            return null;
-        }).when(client).search(any(), any());
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
 
-        when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
-        searchModelGroupTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+        searchModelGroupTransportAction.doExecute(null, mlReq, actionListener);
+
+        future.completeExceptionally(new RuntimeException("search failed"));
 
         verify(modelAccessControlHelper).addUserBackendRolesFilter(any(), any());
-        verify(client).search(any(), any());
+        verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
         verify(actionListener).onFailure(any(RuntimeException.class));
     }
 
     @Test
-    public void test_skipModelAccessControlTrue() {
+    public void test_skipModelAccessControlTrue_stillCallsSdkClient() {
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
-        searchModelGroupTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
 
-        verify(client).search(any(), any());
+        MLSearchActionRequest mlReq = new MLSearchActionRequest(
+                new SearchRequest(new String[0], searchSourceBuilder),
+                "tenant-x"
+        );
+
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        searchModelGroupTransportAction.doExecute(null, mlReq, actionListener);
+        future.complete(emptySearchDataObjectResponse());
+
+        verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
+        verify(actionListener).onResponse(any(SearchResponse.class));
     }
 
     @Test
-    public void test_ThreadContextError() {
-        when(modelAccessControlHelper.skipModelAccessControl(any())).thenThrow(new RuntimeException("thread context error"));
+    public void test_ThreadContextError_wrappedWithMessage() {
+        when(modelAccessControlHelper.skipModelAccessControl(any()))
+                .thenThrow(new RuntimeException("thread context error"));
 
-        searchModelGroupTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to search", argumentCaptor.getValue().getMessage());
+        MLSearchActionRequest mlReq = new MLSearchActionRequest(
+                new SearchRequest(new String[0], searchSourceBuilder),
+                "tenant-x"
+        );
+
+        searchModelGroupTransportAction.doExecute(null, mlReq, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertEquals("Fail to search", captor.getValue().getMessage());
     }
 
     @Test
-    public void testDoExecute_MultiTenancyEnabled_TenantFilteringNotEnabled() throws InterruptedException {
+    public void testDoExecute_MultiTenancyEnabled_TenantFilteringNotEnabled() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
-        SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
+        sourceBuilder.query(QueryBuilders.termQuery("field", "value"));
+        SearchRequest request =
+                new SearchRequest("my_index").source(sourceBuilder);
 
-        mlSearchActionRequest = new MLSearchActionRequest(request, null);
+        MLSearchActionRequest mlReq = new MLSearchActionRequest(request, null);
 
-        searchModelGroupTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+        searchModelGroupTransportAction.doExecute(null, mlReq, actionListener);
 
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(captor.capture());
@@ -209,21 +245,101 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testDoExecute_MultiTenancyEnabled_TenantFilteringEnabled() throws InterruptedException {
+    public void testDoExecute_MultiTenancyEnabled_TenantFilteringEnabled() {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
-        SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
-        mlSearchActionRequest = new MLSearchActionRequest(request, "123456");
+        sourceBuilder.query(QueryBuilders.termQuery("field", "value"));
+        SearchRequest request =
+                new SearchRequest("my_index").source(sourceBuilder);
+        MLSearchActionRequest mlReq = new MLSearchActionRequest(request, "123456");
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
 
-        searchModelGroupTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+        searchModelGroupTransportAction.doExecute(null, mlReq, actionListener);
+        future.complete(emptySearchDataObjectResponse());
+
+        verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testResourceSharingEnabled_successPath_filtersByAccessibleIds_andCallsSdkClient() {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        SearchSourceBuilder ssb = new SearchSourceBuilder();
+        SearchRequest sr = new SearchRequest(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, ssb);
+        MLSearchActionRequest req = new MLSearchActionRequest(sr, "tenant-1");
+
+        searchModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        verify(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        rscListenerCaptor.getValue().onResponse(Set.of("idA", "idB"));
+        future.complete(emptySearchDataObjectResponse());
+
+        verify(modelAccessControlHelper, atLeastOnce()).mergeWithAccessFilter(any(), eq(Set.of("idA", "idB")));
+
+        ArgumentCaptor<SearchDataObjectRequest> sreq = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        verify(sdkClient).searchDataObjectAsync(sreq.capture());
+        SearchDataObjectRequest sent = sreq.getValue();
+
+        // Adjust these getters if your SDK uses record-style accessors
+        assertArrayEquals(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, sent.indices());
+        assertEquals("tenant-1", sent.tenantId());
+
+        verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testResourceSharingEnabled_failSafePath_usesEmptySet_andCallsSdkClient() {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        SearchRequest sr = new SearchRequest(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, new SearchSourceBuilder());
+        MLSearchActionRequest req = new MLSearchActionRequest(sr, "tenant-2");
+
+        searchModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        // Simulate failure -> deny-all (empty set)
+        verify(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        rscListenerCaptor.getValue().onFailure(new RuntimeException("boom"));
+
+        future.complete(emptySearchDataObjectResponse());
+
+        verify(modelAccessControlHelper, atLeastOnce()).mergeWithAccessFilter(any(), eq(Collections.emptySet()));
+
+        verify(sdkClient).searchDataObjectAsync(any(SearchDataObjectRequest.class));
+        verify(actionListener).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testThreadContext_isRestored_afterExecution() {
+        String key = "test-header";
+        threadContext.putHeader(key, "original");
+
+        SearchRequest sr = new SearchRequest(new String[] { CommonValue.ML_MODEL_GROUP_INDEX }, new SearchSourceBuilder());
+        MLSearchActionRequest req = new MLSearchActionRequest(sr, "tenant-4");
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+
+        CompletableFuture<SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(SearchDataObjectRequest.class))).thenReturn(future);
+
+        searchModelGroupTransportAction.doExecute(null, req, actionListener);
+        future.complete(emptySearchDataObjectResponse());
+
+        assertEquals("original", threadContext.getHeader(key));
         verify(actionListener).onResponse(any(SearchResponse.class));
     }
 }

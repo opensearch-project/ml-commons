@@ -22,6 +22,8 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
 
+    compileOnly group: 'org.opensearch', name:'opensearch-security-spi', version:"${opensearch_build}"
+
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     compileOnly group: 'org.json', name: 'json', version: '20231013'

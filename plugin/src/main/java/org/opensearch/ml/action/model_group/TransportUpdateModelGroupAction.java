@@ -35,6 +35,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
@@ -146,12 +147,23 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                         mlModelGroup.getTenantId(),
                                         wrappedListener
                                     )) {
-                                    if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                                        validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                                    } else {
-                                        validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                    // NOTE all sharing and revoking must happen through share API exposed by security plugin
+                                    // client == null -> feature is disabled, follow old route
+                                    if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() == null) {
+                                        // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
+                                        // be stored in model-group index)
+                                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                            validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                        } else {
+                                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                        }
+
                                     }
+                                    // For backwards compatibility we still allow storing backend_roles
+                                    // data in ml_model_group
+                                    // index
                                     updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml connector {}", r.id(), e);
