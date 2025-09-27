@@ -21,6 +21,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATET
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
@@ -1897,5 +1898,16 @@ public class AgentUtilsTest extends MLStaticMockBase {
         Assert.assertEquals("", output.get(TOOL_CALL_ID));
         Assert.assertTrue(output.containsKey(FINAL_ANSWER));
         Assert.assertTrue(output.get(FINAL_ANSWER).contains("[]"));
+    }
+
+    @Test
+    public void testFunctionCallingFactory_BedrockConverseInterface() {
+        FunctionCalling genericFunctionCalling = FunctionCallingFactory.create(LLM_INTERFACE_BEDROCK_CONVERSE);
+        FunctionCalling specificFunctionCalling = FunctionCallingFactory.create(LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE);
+
+        Assert.assertNotNull("Generic bedrock/converse interface should create function calling instance", genericFunctionCalling);
+        Assert.assertNotNull("Specific bedrock/converse/claude interface should create function calling instance", specificFunctionCalling);
+        Assert.assertEquals("Both interfaces should return the same type",
+            genericFunctionCalling.getClass(), specificFunctionCalling.getClass());
     }
 }
