@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_BEFORE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import java.util.Map;
 
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.WriteRequest;
@@ -32,20 +34,19 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
-import org.opensearch.transport.client.Client;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MemoryOperationsService {
 
-    private final Client client;
+    private final MemoryContainerHelper memoryContainerHelper;
 
-    public MemoryOperationsService(Client client) {
-        this.client = client;
+    public MemoryOperationsService(MemoryContainerHelper memoryContainerHelper) {
+        this.memoryContainerHelper = memoryContainerHelper;
     }
 
     public void executeMemoryOperations(
@@ -71,6 +72,7 @@ public class MemoryOperationsService {
                 case ADD:
                     MLMemory newMemory = MLMemory
                         .builder()
+                        .ownerId(input.getOwnerId())
                         .memory(decision.getText())
                         .memoryType(MemoryType.SEMANTIC)
                         .namespace(namespace)
@@ -84,6 +86,7 @@ public class MemoryOperationsService {
 
                     MemoryResult memoryResult = MemoryResult
                         .builder()
+                        .ownerId(input.getOwnerId())
                         .memoryId(null)
                         .memory(decision.getText())
                         .event(MemoryEvent.ADD)
@@ -101,6 +104,7 @@ public class MemoryOperationsService {
                     updateRequests.add(updateRequest);
                     memoryResult = MemoryResult
                         .builder()
+                        .ownerId(input.getOwnerId())
                         .memoryId(decision.getId())
                         .memory(decision.getText())
                         .event(MemoryEvent.UPDATE)
@@ -115,6 +119,7 @@ public class MemoryOperationsService {
 
                     memoryResult = MemoryResult
                         .builder()
+                        .ownerId(input.getOwnerId())
                         .memoryId(decision.getId())
                         .memory(decision.getText())
                         .event(MemoryEvent.DELETE)
@@ -148,7 +153,7 @@ public class MemoryOperationsService {
             return;
         }
 
-        client.bulk(bulkRequest, ActionListener.wrap(bulkResponse -> {
+        ActionListener<BulkResponse> bulkResponseActionListener = ActionListener.wrap(bulkResponse -> {
             if (bulkResponse.hasFailures()) {
                 log.error("Bulk memory operations had failures: {}", bulkResponse.buildFailureMessage());
             }
@@ -174,7 +179,7 @@ public class MemoryOperationsService {
             for (MemoryResult memoryResult : results) {
                 bulkHistoryRequest.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
             }
-            client.bulk(bulkHistoryRequest, ActionListener.wrap(bulkHistoryResponse -> {
+            ActionListener<BulkResponse> bulkHistoryResponseListener = ActionListener.wrap(bulkHistoryResponse -> {
                 if (bulkHistoryResponse.hasFailures()) {
                     log.error("Bulk memory history operations had failures: {}", bulkHistoryResponse.buildFailureMessage());
                 }
@@ -182,15 +187,20 @@ public class MemoryOperationsService {
             }, e -> {
                 log.error("Failed to execute memory history operations", e);
                 listener.onFailure(e);
-            }));
+            });
+            memoryContainerHelper.bulkIngestData(memoryConfig, bulkHistoryRequest, bulkHistoryResponseListener);
         }, e -> {
             log.error("Failed to execute memory operations", e);
             listener.onFailure(e);
-        }));
+        });
+        memoryContainerHelper.bulkIngestData(memoryConfig, bulkRequest, bulkResponseActionListener);
     }
 
     private Map<String, Object> createMemoryHistory(MemoryResult memoryResult) {
         Map<String, Object> history = new HashMap<>();
+        if (memoryResult.getOwnerId() != null) {
+            history.put(OWNER_ID_FIELD, memoryResult.getOwnerId());
+        }
         history.put(MEMORY_ID_FIELD, memoryResult.getMemoryId());
         history.put(MEMORY_ACTION_FIELD, memoryResult.getEvent().getValue());
         if (memoryResult.getOldMemory() != null) {
@@ -201,22 +211,6 @@ public class MemoryOperationsService {
         }
         history.put(CREATED_TIME_FIELD, Instant.now());// TODO: support other fields like namespace
         return history;
-    }
-
-    public void bulkIndexMemoriesWithResults(
-        List<IndexRequest> indexRequests,
-        List<MemoryInfo> memoryInfos,
-        String sessionId,
-        String indexName,
-        ActionListener<MLAddMemoriesResponse> actionListener
-    ) {
-        if (indexRequests.isEmpty()) {
-            log.warn("No memories to index");
-            actionListener.onFailure(new IllegalStateException("No memories to index"));
-            return;
-        }
-
-        indexMemoriesSequentiallyWithResults(indexRequests, memoryInfos, 0, sessionId, indexName, new ArrayList<>(), actionListener);
     }
 
     public void createFactMemoriesFromList(
@@ -247,45 +241,4 @@ public class MemoryOperationsService {
         }
     }
 
-    private void indexMemoriesSequentiallyWithResults(
-        List<IndexRequest> indexRequests,
-        List<MemoryInfo> memoryInfos,
-        int currentIndex,
-        String sessionId,
-        String indexName,
-        List<MemoryResult> results,
-        ActionListener<MLAddMemoriesResponse> actionListener
-    ) {
-        if (currentIndex >= indexRequests.size()) {
-            log.debug("Successfully indexed {} memories in index {}", indexRequests.size(), indexName);
-            MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(results).sessionId(sessionId).build();
-            actionListener.onResponse(response);
-            return;
-        }
-
-        IndexRequest currentRequest = indexRequests.get(currentIndex);
-        client.index(currentRequest, ActionListener.wrap(indexResponse -> {
-            String memoryId = indexResponse.getId();
-
-            MemoryInfo info = memoryInfos.get(currentIndex);
-            info.setMemoryId(memoryId);
-
-            if (info.isIncludeInResponse()) {
-                results
-                    .add(
-                        MemoryResult.builder().memoryId(memoryId).memory(info.getContent()).event(MemoryEvent.ADD).oldMemory(null).build()
-                    );
-            }
-
-            indexMemoriesSequentiallyWithResults(
-                indexRequests,
-                memoryInfos,
-                currentIndex + 1,
-                sessionId,
-                indexName,
-                results,
-                actionListener
-            );
-        }, actionListener::onFailure));
-    }
 }

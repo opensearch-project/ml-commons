@@ -24,6 +24,7 @@ public class MemoryContainerConstants {
     // Field names for MemoryConfiguration
     public static final String DISABLE_HISTORY_FIELD = "disable_history";
     public static final String DISABLE_SESSION_FIELD = "disable_session";
+    public static final String USE_SYSTEM_INDEX_FIELD = "use_system_index";
     public static final String MEMORY_INDEX_PREFIX_FIELD = "index_prefix";
     public static final String EMBEDDING_MODEL_TYPE_FIELD = "embedding_model_type";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
@@ -46,6 +47,7 @@ public class MemoryContainerConstants {
     public static final String LONG_TERM_MEMORY_HISTORY_INDEX = "long_term_memory_history_index";
 
     // Memory data index field names
+    public static final String OWNER_ID_FIELD = "owner_id";
     public static final String USER_ID_FIELD = "user_id";
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String SESSION_ID_FIELD = "session_id";
