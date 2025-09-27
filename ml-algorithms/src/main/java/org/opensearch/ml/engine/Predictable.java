@@ -14,6 +14,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.transport.TransportChannel;
 
 /**
  * This is machine learning algorithms predict interface.
@@ -41,6 +42,10 @@ public interface Predictable {
     }
 
     default void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        asyncPredict(mlInput, actionListener, null);
+    }
+
+    default void asyncPredict(MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
         actionListener.onFailure(new IllegalStateException(METHOD_NOT_IMPLEMENTED_ERROR_MSG));
     }
 

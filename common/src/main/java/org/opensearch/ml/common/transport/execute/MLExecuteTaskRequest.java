@@ -22,18 +22,26 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.transport.MLTaskRequest;
+import org.opensearch.transport.TransportChannel;
 
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class MLExecuteTaskRequest extends MLTaskRequest {
+
+    @Getter
+    @Setter
+    @NonFinal
+    private transient TransportChannel streamingChannel;
 
     FunctionName functionName;
     Input input;

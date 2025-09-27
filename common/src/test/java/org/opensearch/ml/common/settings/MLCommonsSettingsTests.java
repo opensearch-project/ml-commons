@@ -102,4 +102,9 @@ public class MLCommonsSettingsTests {
             "The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled";
         assertEquals(expectedMessage, MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE);
     }
+
+    @Test
+    public void testStreamDisabledByDefault() {
+        assertFalse(MLCommonsSettings.ML_COMMONS_STREAM_ENABLED.getDefault(null));
+    }
 }

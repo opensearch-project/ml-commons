@@ -96,6 +96,7 @@ import org.opensearch.ml.action.controller.UndeployControllerTransportAction;
 import org.opensearch.ml.action.controller.UpdateControllerTransportAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
+import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
@@ -127,6 +128,7 @@ import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
 import org.opensearch.ml.action.models.UpdateModelTransportAction;
+import org.opensearch.ml.action.prediction.TransportPredictionStreamTaskAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
@@ -193,6 +195,7 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerAction;
 import org.opensearch.ml.common.transport.controller.MLUpdateControllerAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
@@ -224,6 +227,7 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -322,6 +326,7 @@ import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
+import org.opensearch.ml.rest.RestMLExecuteStreamAction;
 import org.opensearch.ml.rest.RestMLGetAgentAction;
 import org.opensearch.ml.rest.RestMLGetConfigAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
@@ -336,6 +341,7 @@ import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLPredictionStreamAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLPutIndexInsightConfigAction;
 import org.opensearch.ml.rest.RestMLRegisterAgentAction;
@@ -446,8 +452,10 @@ public class MachineLearningPlugin extends Plugin
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
+    public static final String STREAM_EXECUTE_THREAD_POOL = "opensearch_ml_execute_stream";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+    public static final String STREAM_PREDICT_THREAD_POOL = "opensearch_ml_predict_stream";
     public static final String REMOTE_PREDICT_THREAD_POOL = "opensearch_ml_predict_remote";
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
@@ -507,7 +515,9 @@ public class MachineLearningPlugin extends Plugin
             .of(
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
+                new ActionHandler<>(MLExecuteStreamTaskAction.INSTANCE, TransportExecuteStreamTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
+                new ActionHandler<>(MLPredictionStreamTaskAction.INSTANCE, TransportPredictionStreamTaskAction.class),
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
                 new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, TransportTrainAndPredictionTaskAction.class),
                 new ActionHandler<>(MLModelGetAction.INSTANCE, GetModelTransportAction.class),
@@ -926,7 +936,13 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
+        RestMLPredictionStreamAction restMLPredictionStreamAction = new RestMLPredictionStreamAction(
+            mlModelManager,
+            mlFeatureEnabledSetting,
+            clusterService
+        );
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
+        RestMLExecuteStreamAction restMlExecuteStreamAction = new RestMLExecuteStreamAction(mlFeatureEnabledSetting, clusterService);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction(mlFeatureEnabledSetting);
@@ -1021,7 +1037,9 @@ public class MachineLearningPlugin extends Plugin
                 restMLStatsAction,
                 restMLTrainingAction,
                 restMLPredictionAction,
+                restMLPredictionStreamAction,
                 restMLExecuteAction,
+                restMlExecuteStreamAction,
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
                 restMLDeleteModelAction,
@@ -1166,6 +1184,22 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder streamPredictThreadPool = new FixedExecutorBuilder(
+            settings,
+            STREAM_PREDICT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + STREAM_PREDICT_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder streamExecuteThreadPool = new FixedExecutorBuilder(
+            settings,
+            STREAM_EXECUTE_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 10,
+            1000000,
+            ML_THREAD_POOL_PREFIX + STREAM_EXECUTE_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -1177,7 +1211,9 @@ public class MachineLearningPlugin extends Plugin
                 predictThreadPool,
                 remotePredictThreadPool,
                 batchIngestThreadPool,
-                sdkClientThreadPool
+                sdkClientThreadPool,
+                streamPredictThreadPool,
+                streamExecuteThreadPool
             );
     }
 
@@ -1267,7 +1303,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
-                MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL
+                MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
+                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
             );
         return settings;
     }
