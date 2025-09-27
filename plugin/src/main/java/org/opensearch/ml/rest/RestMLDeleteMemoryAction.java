@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DELETE_MEMORY_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
@@ -68,8 +69,9 @@ public class RestMLDeleteMemoryAction extends BaseRestHandler {
     @VisibleForTesting
     MLDeleteMemoryRequest getRequest(RestRequest request) {
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
+        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
 
-        return MLDeleteMemoryRequest.builder().memoryContainerId(memoryContainerId).memoryId(memoryId).build();
+        return MLDeleteMemoryRequest.builder().memoryContainerId(memoryContainerId).memoryType(memoryType).memoryId(memoryId).build();
     }
 }
