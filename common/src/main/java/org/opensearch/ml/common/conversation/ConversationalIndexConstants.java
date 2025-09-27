@@ -60,6 +60,8 @@ public class ConversationalIndexConstants {
     public final static String INTERACTIONS_ADDITIONAL_INFO_FIELD = "additional_info";
     /** Name of the interaction field for the timestamp */
     public final static String INTERACTIONS_CREATE_TIME_FIELD = "create_time";
+    /** Name of the interaction field for the updated timestamp */
+    public final static String INTERACTIONS_UPDATED_TIME_FIELD = "updated_time";
     /** Name of the interaction id */
     public final static String PARENT_INTERACTIONS_ID_FIELD = "parent_message_id";
     /** The trace number of an interaction */
