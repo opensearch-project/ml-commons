@@ -3,18 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.httpclient;
+package org.opensearch.ml.common.httpclient;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.opensearch.common.util.concurrent.ThreadContextAccess;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -24,19 +23,15 @@ import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
-        try {
-            return AccessController
-                .doPrivileged(
-                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient
-                        .builder()
-                        .connectionTimeout(connectionTimeout)
-                        .readTimeout(readTimeout)
-                        .maxConcurrency(maxConnections)
-                        .build()
-                );
-        } catch (PrivilegedActionException e) {
-            return null;
-        }
+        return ThreadContextAccess
+            .doPrivileged(
+                () -> NettyNioAsyncHttpClient
+                    .builder()
+                    .connectionTimeout(connectionTimeout)
+                    .readTimeout(readTimeout)
+                    .maxConcurrency(maxConnections)
+                    .build()
+            );
     }
 
     /**
@@ -50,7 +45,7 @@ public class MLHttpClientFactory {
     public static void validate(String protocol, String host, int port, AtomicBoolean connectorPrivateIpEnabled)
         throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
-            log.error("Remote inference protocol is not http or https: " + protocol);
+            log.error("Remote inference protocol is not http or https: {}", protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
         }
         // When port is not specified, the default port is -1, and we need to set it to 80 or 443 based on protocol.
@@ -62,7 +57,7 @@ public class MLHttpClientFactory {
             }
         }
         if (port < 0 || port > 65536) {
-            log.error("Remote inference port out of range: " + port);
+            log.error("Remote inference port out of range: {}", port);
             throw new IllegalArgumentException("Port out of range: " + port);
         }
         validateIp(host, connectorPrivateIpEnabled);
@@ -71,7 +66,7 @@ public class MLHttpClientFactory {
     private static void validateIp(String hostName, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if ((connectorPrivateIpEnabled == null || !connectorPrivateIpEnabled.get()) && hasPrivateIpAddress(addresses)) {
-            log.error("Remote inference host name has private ip address: " + hostName);
+            log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
     }
@@ -83,35 +78,53 @@ public class MLHttpClientFactory {
                 if (bytes.length != 4) {
                     return true;
                 } else {
-                    int firstOctets = bytes[0] & 0xff;
-                    int firstInOctal = parseWithOctal(String.valueOf(firstOctets));
-                    int firstInHex = Integer.parseInt(String.valueOf(firstOctets), 16);
-                    if (firstInOctal == 127 || firstInHex == 127) {
-                        return bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 1;
-                    } else if (firstInOctal == 10 || firstInHex == 10) {
+                    // case 127.0.0.1
+                    boolean isLocalHost = eqCheckValue(bytes[0], 127)
+                        && eqCheckValue(bytes[1], 0)
+                        && eqCheckValue(bytes[2], 0)
+                        && eqCheckValue(bytes[3], 1);
+                    if (isLocalHost) {
                         return true;
-                    } else if (firstInOctal == 172 || firstInHex == 172) {
-                        int secondOctets = bytes[1] & 0xff;
-                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
-                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
-                        return (secondInOctal >= 16 && secondInOctal <= 32) || (secondInHex >= 16 && secondInHex <= 32);
-                    } else if (firstInOctal == 192 || firstInHex == 192) {
-                        int secondOctets = bytes[1] & 0xff;
-                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
-                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
-                        return secondInOctal == 168 || secondInHex == 168;
                     }
+                    // case 10.x.x.x
+                    return eqCheckValue(bytes[0], 10) ||
+                    // case 172.16.x.x - 172.31.x.x
+                        (eqCheckValue(bytes[0], 172) && rangeCheckValue(bytes[1])) ||
+                        // case 192.168.x.x
+                        (eqCheckValue(bytes[0], 192) && eqCheckValue(bytes[1], 168)) ||
+                        // case 169.254.x.x
+                        (eqCheckValue(bytes[0], 169) && eqCheckValue(bytes[1], 254));
                 }
             }
         }
         return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
     }
 
-    private static int parseWithOctal(String input) {
+    private static boolean eqCheckValue(byte input, int targetValue) {
+        int original = input & 0xff;
+        return original == targetValue || parseWithRadix(original, 8) == targetValue || parseWithRadix(original, 16) == targetValue;
+    }
+
+    private static boolean rangeCheckValue(byte input) {
+        int original = input & 0xff;
+        if (original >= 16 && original <= 31) {
+            return true;
+        } else {
+            int octalValue = parseWithRadix(original, 8);
+            if (octalValue >= 16 && octalValue <= 31) {
+                return true;
+            } else {
+                int hexValue = parseWithRadix(original, 16);
+                return hexValue >= 16 && hexValue <= 31;
+            }
+        }
+    }
+
+    private static int parseWithRadix(int input, int radix) {
         try {
-            return Integer.parseInt(input, 8);
+            return Integer.parseInt(String.valueOf(input), radix);
         } catch (NumberFormatException e) {
-            return Integer.parseInt(input);
+            return input;
         }
     }
 }
