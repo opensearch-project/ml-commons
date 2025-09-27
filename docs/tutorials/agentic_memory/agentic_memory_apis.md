@@ -10,6 +10,9 @@ POST _plugins/_ml/memory_containers/_create
     "embedding_model_type": "TEXT_EMBEDDING",
     "embedding_model_id": "{{embed_model}}",
     "embedding_dimension": 1024,
+    "disable_history": false,
+    "disable_session": false,
+    "use_system_index": false,
     "llm_id": "{{llm}}",
     "strategies": [
       {
@@ -49,9 +52,7 @@ POST _plugins/_ml/memory_containers/_create
         }
       }
     }
-  },
-  "enable_history": true,
-  "enable_session_tracking": true
+  }
 }
 ```
 ## 1.2 Get memory container
@@ -75,8 +76,17 @@ DELETE _plugins/_ml/memory_containers/{{mem_container_id}}
 ```
 ## 1.5 Search memory container
 ```
-
+GET _plugins/_ml/memory_containers/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
 ```
+Result all model groups which
+- one of `backend_roles` can match user's backend roles
+- `owner.name` equals user's name
+
 
 # 2. Working Memory
 ## 2.1 Add memory
