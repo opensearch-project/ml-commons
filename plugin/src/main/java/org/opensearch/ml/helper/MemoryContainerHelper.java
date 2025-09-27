@@ -13,6 +13,14 @@ import java.util.List;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -190,5 +198,45 @@ public class MemoryContainerHelper {
             return false;
         }
         return true;
+    }
+
+    public void getData(MemoryConfiguration configuration, GetRequest getRequest, ActionListener<GetResponse> listener) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.get(getRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.get(getRequest, listener);
+        }
+    }
+
+    public void searchData(MemoryConfiguration configuration, SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.search(searchRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.search(searchRequest, listener);
+        }
+    }
+
+    public void indexData(MemoryConfiguration configuration, IndexRequest indexRequest, ActionListener<IndexResponse> listener) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.index(indexRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.index(indexRequest, listener);
+        }
+    }
+
+    public void bulkIngestData(MemoryConfiguration configuration, BulkRequest bulkRequest, ActionListener<BulkResponse> listener) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.bulk(bulkRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.bulk(bulkRequest, listener);
+        }
     }
 }

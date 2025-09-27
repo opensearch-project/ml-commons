@@ -47,6 +47,9 @@
         "disable_session": {
           "type": "boolean"
         },
+        "use_system_index": {
+          "type": "boolean"
+        },
         "max_infer_size": {
           "type": "integer"
         },

@@ -25,6 +25,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
@@ -206,6 +207,7 @@ public class MLIndicesHandler {
 
             // Common fields for all index types
             // Use keyword type for ID fields that need exact matching
+            properties.put(OWNER_ID_FIELD, Map.of("type", "keyword"));
             properties.put(NAMESPACE_FIELD, Map.of("type", "flat_object"));
             properties.put(NAMESPACE_SIZE_FIELD, Map.of("type", "integer"));
             properties.put(MEMORY_FIELD, Map.of("type", "text")); // Keep as text for full-text search

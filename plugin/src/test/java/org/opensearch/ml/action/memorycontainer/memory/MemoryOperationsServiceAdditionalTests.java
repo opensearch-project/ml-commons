@@ -48,7 +48,7 @@ public class MemoryOperationsServiceAdditionalTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memoryOperationsService = new MemoryOperationsService(client);
+        memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
     }
 
     @Test

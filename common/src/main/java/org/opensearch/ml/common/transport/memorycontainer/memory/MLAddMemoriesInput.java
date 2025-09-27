@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
@@ -60,6 +61,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private boolean infer;
     private Map<String, String> metadata;
     private Map<String, String> tags;
+    private String ownerId;
 
     public MLAddMemoriesInput(
         String memoryContainerId,
@@ -70,7 +72,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> namespace,
         boolean infer,
         Map<String, String> metadata,
-        Map<String, String> tags
+        Map<String, String> tags,
+        String ownerId
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
@@ -83,6 +86,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         this.infer = infer; // default infer is false
         this.metadata = metadata;
         this.tags = tags;
+        this.ownerId = ownerId;
         validate();
     }
 
@@ -168,41 +172,10 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
-        builder.startObject();
-        if (memoryContainerId != null) {
-            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
-        }
-        builder.field(MEMORY_TYPE_FIELD, memoryType);
-        if (messages != null && messages.size() > 0) {
-            builder.startArray(MESSAGES_FIELD);
-            for (MessageInput message : messages) {
-                message.toXContent(builder, params);
-            }
-            builder.endArray();
-        }
-
-        if (binaryData != null) {
-            builder.field(BINARY_DATA_FIELD, binaryData);
-        }
-        if (structuredData != null) {
-            builder.field(STRUCTURED_DATA_FIELD, structuredData);
-        }
-        if (namespace != null && !namespace.isEmpty()) {
-            builder.field(NAMESPACE_FIELD, namespace);
-        }
-        builder.field(INFER_FIELD, infer);
-        if (metadata != null && !metadata.isEmpty()) {
-            builder.field(METADATA_FIELD, metadata);
-        }
-        if (tags != null && !tags.isEmpty()) {
-            builder.field(TAGS_FIELD, tags);
-        }
-        builder.endObject();
-        return builder;
+        return toXContent(builder, params, false);
     }
 
-    public XContentBuilder toXContentWithTimeStamp(XContentBuilder builder, ToXContent.Params params) throws IOException {
-        Instant now = Instant.now();
+    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params, boolean withTimeStamp) throws IOException {
         builder.startObject();
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
@@ -231,8 +204,14 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
         }
-        builder.field(CREATED_TIME_FIELD, now.toEpochMilli());
-        builder.field(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+        if (ownerId != null) {
+            builder.field(OWNER_ID_FIELD, ownerId);
+        }
+        if (withTimeStamp) {
+            Instant now = Instant.now();
+            builder.field(CREATED_TIME_FIELD, now.toEpochMilli());
+            builder.field(LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+        }
         builder.endObject();
         return builder;
     }

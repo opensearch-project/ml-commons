@@ -60,7 +60,7 @@ public class MemorySearchServiceTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memorySearchService = new MemorySearchService(client);
+        memorySearchService = new MemorySearchService(client, memoryContainerHelper);
         sessionId = "session-123";
         List<MessageInput> messages = new ArrayList<>();
         messages.add(MessageInput.builder().role("user").contentText("hello, I'm bob. I like swimming").build());
