@@ -24,6 +24,8 @@ public class CommonValue {
     /** The field name containing the tenant id */
     public static final String TENANT_ID_FIELD = "tenant_id";
 
+    public static final String ERROR_FIELD = "error";
+
     public static final String MASTER_KEY = "master_key";
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
