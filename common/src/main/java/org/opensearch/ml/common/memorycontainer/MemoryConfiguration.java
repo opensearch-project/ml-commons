@@ -73,7 +73,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     @Builder.Default
     private boolean disableSession = false;
     @Builder.Default
-    private boolean useSystemIndex = false;
+    private boolean useSystemIndex = true;
     private String tenantId;
 
     public MemoryConfiguration(
@@ -216,7 +216,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
         boolean disableHistory = false;
         boolean disableSession = false;
-        boolean useSystemIndex = false;
+        boolean useSystemIndex = true;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
