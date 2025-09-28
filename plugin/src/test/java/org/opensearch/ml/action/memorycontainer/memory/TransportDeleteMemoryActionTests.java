@@ -133,8 +133,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_Success() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         DeleteResponse mockDeleteResponse = mock(DeleteResponse.class);
 
@@ -149,10 +150,10 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
 
         // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq("delete"), any())).thenReturn(true);
+        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), any(), eq("delete"), any())).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(mockContainer)).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
 
         // Mock delete operation
         doAnswer(invocation -> {
@@ -170,7 +171,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq("delete"), any());
+        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
         verify(client, times(1)).delete(any(DeleteRequest.class), any());
         verify(actionListener, times(1)).onResponse(mockDeleteResponse);
         verify(actionListener, never()).onFailure(any());
@@ -180,8 +181,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_GetContainerFailure() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         Exception expectedError = new RuntimeException("Container not found");
 
@@ -207,8 +209,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_AccessDenied() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
@@ -226,7 +229,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, never()).validateMemoryIndexExists(any(), any(), any());
+        verify(memoryContainerHelper, never()).validateMemoryIndexExists(any(), any(), any(), any());
         verify(client, never()).delete(any(), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -242,8 +245,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_MemoryIndexNotExists() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
@@ -256,7 +260,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
 
         // Mock validateMemoryIndexExists to return false
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq("delete"), any())).thenReturn(false);
+        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), any(), eq("delete"), any())).thenReturn(false);
 
         // Act
         transportDeleteMemoryAction.doExecute(task, deleteRequest, actionListener);
@@ -264,8 +268,8 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq("delete"), any());
-        verify(memoryContainerHelper, never()).getMemoryIndexName(any());
+        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
+        verify(memoryContainerHelper, never()).getMemoryIndexName(any(), any());
         verify(client, never()).delete(any(), any());
         // validateMemoryIndexExists handles the error response
     }
@@ -274,8 +278,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_DeleteFailure() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         Exception deleteError = new RuntimeException("Delete failed");
 
@@ -290,10 +295,10 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
 
         // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq("delete"), any())).thenReturn(true);
+        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), any(), eq("delete"), any())).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(mockContainer)).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
 
         // Mock delete operation to fail
         doAnswer(invocation -> {
@@ -308,7 +313,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq("delete"), any());
+        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
         verify(client, times(1)).delete(any(DeleteRequest.class), any());
         verify(actionListener, times(1)).onFailure(deleteError);
         verify(actionListener, never()).onResponse(any());
@@ -318,8 +323,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_ExceptionDuringDelete() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         RuntimeException unexpectedError = new RuntimeException("Unexpected error");
 
@@ -334,10 +340,10 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
 
         // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq("delete"), any())).thenReturn(true);
+        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any())).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(mockContainer)).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
 
         // Mock client.delete to throw exception
         doThrow(unexpectedError).when(client).delete(any(DeleteRequest.class), any());
@@ -348,7 +354,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq("delete"), any());
+        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
         verify(client, times(1)).delete(any(), any());
         verify(actionListener, times(1)).onFailure(unexpectedError);
         verify(actionListener, never()).onResponse(any());
@@ -358,8 +364,9 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_NullContainer() {
         // Arrange
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         // Mock getMemoryContainer to return null container
         doAnswer(invocation -> {
@@ -388,12 +395,14 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testFromActionRequest() {
         // Test that MLDeleteMemoryRequest.fromActionRequest works correctly
         String memoryContainerId = "container-123";
+        String memoryType = "conversation";
         String memoryId = "memory-456";
-        MLDeleteMemoryRequest originalRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryId);
+        MLDeleteMemoryRequest originalRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
         MLDeleteMemoryRequest convertedRequest = MLDeleteMemoryRequest.fromActionRequest(originalRequest);
 
         assertEquals(memoryContainerId, convertedRequest.getMemoryContainerId());
+        assertEquals(memoryType, convertedRequest.getMemoryType());
         assertEquals(memoryId, convertedRequest.getMemoryId());
     }
 }
