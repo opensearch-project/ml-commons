@@ -36,19 +36,25 @@ public class MLAddMemoriesResponseTest {
     public void setUp() {
         testResults = Arrays
             .asList(
-                MemoryResult.builder().memoryId("mem-1").memory("User's name is John").event(MemoryEvent.ADD).build(),
+                MemoryResult.builder().memoryId("mem-1").memory("User's name is John").event(MemoryEvent.ADD).ownerId("owner-1").build(),
                 MemoryResult
                     .builder()
                     .memoryId("mem-2")
                     .memory("Lives in San Francisco")
                     .event(MemoryEvent.UPDATE)
                     .oldMemory("Lives in Boston")
+                    .ownerId("owner-1")
                     .build(),
-                MemoryResult.builder().memoryId("mem-3").memory("Works at TechCorp").event(MemoryEvent.NONE).build()
+                MemoryResult.builder().memoryId("mem-3").memory("Works at TechCorp").event(MemoryEvent.NONE).ownerId("owner-1").build()
             );
 
         // Response with results
-        responseWithResults = MLAddMemoriesResponse.builder().results(testResults).sessionId("session-123").build();
+        responseWithResults = MLAddMemoriesResponse
+            .builder()
+            .results(testResults)
+            .sessionId("session-123")
+            .workingMemoryId("working-123")
+            .build();
 
         // Empty response
         responseEmpty = MLAddMemoriesResponse.builder().results(new ArrayList<>()).sessionId("session-empty").build();
@@ -63,6 +69,7 @@ public class MLAddMemoriesResponseTest {
         assertEquals(testResults, responseWithResults.getResults());
         assertEquals(3, responseWithResults.getResults().size());
         assertEquals("session-123", responseWithResults.getSessionId());
+        assertEquals("working-123", responseWithResults.getWorkingMemoryId());
     }
 
     @Test
@@ -95,8 +102,10 @@ public class MLAddMemoriesResponseTest {
             assertEquals(original.getMemory(), deser.getMemory());
             assertEquals(original.getEvent(), deser.getEvent());
             assertEquals(original.getOldMemory(), deser.getOldMemory());
+            assertEquals(original.getOwnerId(), deser.getOwnerId());
         }
         assertEquals(responseWithResults.getSessionId(), deserialized.getSessionId());
+        assertEquals(responseWithResults.getWorkingMemoryId(), deserialized.getWorkingMemoryId());
     }
 
     @Test
@@ -126,6 +135,7 @@ public class MLAddMemoriesResponseTest {
         assertTrue(jsonString.contains("\"event\":\"UPDATE\""));
         assertTrue(jsonString.contains("\"old_memory\":\"Lives in Boston\""));
         assertTrue(jsonString.contains("\"session_id\":\"session-123\""));
+        assertTrue(jsonString.contains("\"working_memory_id\":\"working-123\""));
     }
 
     @Test
@@ -150,13 +160,18 @@ public class MLAddMemoriesResponseTest {
     public void testDifferentEventTypes() throws IOException {
         List<MemoryResult> mixedResults = Arrays
             .asList(
-                new MemoryResult("add-1", "New fact", MemoryEvent.ADD, null),
-                new MemoryResult("update-1", "Updated fact", MemoryEvent.UPDATE, "Old fact"),
-                new MemoryResult("delete-1", "Deleted fact", MemoryEvent.DELETE, null),
-                new MemoryResult("none-1", "Unchanged fact", MemoryEvent.NONE, null)
+                new MemoryResult("add-1", "New fact", MemoryEvent.ADD, null, "owner-1"),
+                new MemoryResult("update-1", "Updated fact", MemoryEvent.UPDATE, "Old fact", "owner-1"),
+                new MemoryResult("delete-1", "Deleted fact", MemoryEvent.DELETE, null, "owner-1"),
+                new MemoryResult("none-1", "Unchanged fact", MemoryEvent.NONE, null, "owner-1")
             );
 
-        MLAddMemoriesResponse mixedResponse = MLAddMemoriesResponse.builder().results(mixedResults).sessionId("session-mixed").build();
+        MLAddMemoriesResponse mixedResponse = MLAddMemoriesResponse
+            .builder()
+            .results(mixedResults)
+            .sessionId("session-mixed")
+            .workingMemoryId("working-mixed")
+            .build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
@@ -169,6 +184,8 @@ public class MLAddMemoriesResponseTest {
         assertEquals(MemoryEvent.UPDATE, deserialized.getResults().get(1).getEvent());
         assertEquals(MemoryEvent.DELETE, deserialized.getResults().get(2).getEvent());
         assertEquals(MemoryEvent.NONE, deserialized.getResults().get(3).getEvent());
+        assertEquals("session-mixed", deserialized.getSessionId());
+        assertEquals("working-mixed", deserialized.getWorkingMemoryId());
     }
 
     @Test
@@ -184,6 +201,7 @@ public class MLAddMemoriesResponseTest {
                         .memory("Memory content " + i)
                         .event(i % 2 == 0 ? MemoryEvent.ADD : MemoryEvent.UPDATE)
                         .oldMemory(i % 2 == 0 ? null : "Old memory " + i)
+                        .ownerId("owner-" + (i % 5))
                         .build()
                 );
         }
@@ -209,6 +227,7 @@ public class MLAddMemoriesResponseTest {
                     .memoryId("mem-special-🚀")
                     .memory("Memory with\n\ttabs and \"quotes\"")
                     .event(MemoryEvent.ADD)
+                    .ownerId("owner-special")
                     .build(),
                 MemoryResult
                     .builder()
@@ -216,6 +235,7 @@ public class MLAddMemoriesResponseTest {
                     .memory("Memory with unicode characters")
                     .event(MemoryEvent.UPDATE)
                     .oldMemory("Old memory with 'single quotes'")
+                    .ownerId("owner-unicode")
                     .build()
             );
 
