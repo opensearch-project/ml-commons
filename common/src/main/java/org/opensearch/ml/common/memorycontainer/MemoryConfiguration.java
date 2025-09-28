@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_HISTORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DISABLE_SESSION_FIELD;
@@ -94,7 +95,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
 
         // Assign values after validation
-        this.indexPrefix = indexPrefix == null ? "" : indexPrefix;
+        this.indexPrefix = indexPrefix == null ? DEFAULT_MEMORY_INDEX_PREFIX : indexPrefix;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;

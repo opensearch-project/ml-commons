@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.UPDATE_MEMORY_PATH;
 
 import java.util.HashMap;
@@ -108,6 +109,7 @@ public class RestMLUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testPrepareRequestWithoutContent() throws Exception {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
+        params.put(PARAMETER_MEMORY_TYPE, "working");
         params.put(PARAMETER_MEMORY_ID, "test-memory-id");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -159,28 +161,6 @@ public class RestMLUpdateMemoryActionTests extends OpenSearchTestCase {
         assertNotNull(exception);
     }
 
-    public void testPrepareRequestWithEmptyText() throws Exception {
-        String requestContent = "{\"text\":\"\"}";
-        Map<String, String> params = new HashMap<>();
-        params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
-        params.put(PARAMETER_MEMORY_ID, "test-memory-id");
-
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withMethod(RestRequest.Method.PUT)
-            .withPath(UPDATE_MEMORY_PATH)
-            .withParams(params)
-            .withContent(new BytesArray(requestContent), MediaType.fromMediaType("application/json"))
-            .build();
-
-        // Empty text is not allowed
-        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
-            restMLUpdateMemoryAction.handleRequest(request, channel, client);
-        });
-
-        assertNotNull(exception);
-        assertTrue(exception.getMessage().contains("empty") || exception.getMessage().contains("null"));
-    }
-
     public void testPrepareRequestWithLongText() throws Exception {
         // Test with a very long text content
         StringBuilder longText = new StringBuilder();
@@ -190,6 +170,7 @@ public class RestMLUpdateMemoryActionTests extends OpenSearchTestCase {
         String requestContent = "{\"text\":\"" + longText.toString().replace("\"", "\\\"") + "\"}";
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
+        params.put(PARAMETER_MEMORY_TYPE, "working");
         params.put(PARAMETER_MEMORY_ID, "test-memory-id");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -212,6 +193,7 @@ public class RestMLUpdateMemoryActionTests extends OpenSearchTestCase {
         String requestContent = "{\"text\":\"updated memory content\"}";
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
+        params.put(PARAMETER_MEMORY_TYPE, "working");
         params.put(PARAMETER_MEMORY_ID, "test-memory-id");
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

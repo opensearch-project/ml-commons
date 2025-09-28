@@ -120,14 +120,14 @@ public class MemoryOperationsServiceTests {
         when(bulkItemResponse.getId()).thenReturn("generated-id-123");
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client, times(2)).bulk(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
     }
 
     @Test
@@ -175,14 +175,14 @@ public class MemoryOperationsServiceTests {
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client, times(2)).bulk(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
@@ -206,14 +206,14 @@ public class MemoryOperationsServiceTests {
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client, times(2)).bulk(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
@@ -281,10 +281,10 @@ public class MemoryOperationsServiceTests {
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { addItem });
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
@@ -320,14 +320,14 @@ public class MemoryOperationsServiceTests {
         Exception bulkException = new RuntimeException("Bulk operation failed");
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onFailure(bulkException);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(memoryContainerHelper).bulkIngestData(any(), any(), any());
         verify(operationsListener).onFailure(bulkException);
     }
 

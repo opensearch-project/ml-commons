@@ -69,7 +69,11 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         this.tenantId = tenantId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
-        this.configuration = configuration;
+        if (configuration == null) {
+            this.configuration = MemoryConfiguration.builder().build();
+        } else {
+            this.configuration = configuration;
+        }
         this.backendRoles = backendRoles;
     }
 
