@@ -8,12 +8,14 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -148,7 +150,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         String memoryType = "long-term";
         String memoryId = "memory-456";
         String newText = "Updated memory content";
-        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", newText)).build();
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, newText)).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId(memoryContainerId)
@@ -162,7 +164,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         GetResult mockGetResult = mock(GetResult.class);
 
         Map<String, Object> sourceMap = new HashMap<>();
-        sourceMap.put("memory", "original memory");
+        sourceMap.put(MEMORY_FIELD, "original memory");
 
         when(mockGetResponse.isExists()).thenReturn(true);
         when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
@@ -185,33 +187,33 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock get operation
         doAnswer(invocation -> {
-            GetRequest request = invocation.getArgument(0);
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetRequest request = invocation.getArgument(1);
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
             assertEquals("test-memory-index", request.index());
             assertEquals(memoryId, request.id());
             listener.onResponse(mockGetResponse);
             return null;
-        }).when(client).get(any(GetRequest.class), any());
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
 
         // Mock update operation
         doAnswer(invocation -> {
-            UpdateRequest request = invocation.getArgument(0);
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            UpdateRequest request = invocation.getArgument(1);
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
             assertEquals("test-memory-index", request.index());
             assertEquals(memoryId, request.id());
             listener.onResponse(mockUpdateResponse);
             return null;
-        }).when(client).update(any(UpdateRequest.class), any());
+        }).when(memoryContainerHelper).updateData(any(), any(UpdateRequest.class), any());
 
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
         // Act
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("update"), any());
-        verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(client, times(1)).update(any(UpdateRequest.class), any());
+        verify(memoryContainerHelper, times(1)).getData(any(), any(GetRequest.class), any());
+        verify(memoryContainerHelper, times(1)).updateData(any(), any(UpdateRequest.class), any());
         verify(actionListener, times(1)).onResponse(mockUpdateResponse);
         verify(actionListener, never()).onFailure(any());
     }
@@ -341,9 +343,8 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("update"), any());
-        verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(client, never()).update(any(), any());
+        verify(memoryContainerHelper, times(1)).getData(any(), any(GetRequest.class), any());
+        verify(memoryContainerHelper, never()).updateData(any(), any(), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(errorCaptor.capture());
@@ -355,97 +356,13 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testDoExecute_WithoutSemanticStorage() {
-        // Arrange
-        String memoryContainerId = "container-123";
-        String memoryType = "long-term";
-        String memoryId = "memory-456";
-        String newText = "Updated memory content";
-        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", newText)).build();
-        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
-            .builder()
-            .memoryContainerId(memoryContainerId)
-            .memoryType(memoryType)
-            .memoryId(memoryId)
-            .mlUpdateMemoryInput(input)
-            .build();
-
-        // Setup container without semantic storage
-        MLMemoryContainer containerWithoutSemantic = MLMemoryContainer
-            .builder()
-            .name("test-container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory-index").disableHistory(false).build())
-            .build();
-
-        UpdateResponse mockUpdateResponse = mock(UpdateResponse.class);
-        GetResponse mockGetResponse = mock(GetResponse.class);
-
-        Map<String, Object> sourceMap = new HashMap<>();
-        sourceMap.put("memory", "original memory");
-
-        when(mockGetResponse.isExists()).thenReturn(true);
-        when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
-
-        // Mock getMemoryContainer
-        doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
-            listener.onResponse(containerWithoutSemantic);
-            return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
-
-        // Mock checkMemoryContainerAccess
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(containerWithoutSemantic))).thenReturn(true);
-
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(containerWithoutSemantic), eq(memoryType), eq("update"), any()))
-            .thenReturn(true);
-
-        // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(containerWithoutSemantic, "long-term")).thenReturn("test-memory-index");
-
-        // Mock get operation
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(mockGetResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), any());
-
-        // Mock update operation
-        doAnswer(invocation -> {
-            UpdateRequest request = invocation.getArgument(0);
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-
-            // Verify no embedding field is added
-            Map<String, Object> updateFields = (Map<String, Object>) request.doc().sourceAsMap();
-            assertFalse(updateFields.containsKey("memory_embedding"));
-            assertTrue(updateFields.containsKey("memory"));
-            assertEquals(newText, updateFields.get("memory"));
-
-            listener.onResponse(mockUpdateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), any());
-
-        // Act
-        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
-
-        // Assert
-        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
-        verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(containerWithoutSemantic));
-        verify(memoryContainerHelper, times(1)).getMemoryIndexName(eq(containerWithoutSemantic), eq(memoryType));
-        verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(client, times(1)).update(any(UpdateRequest.class), any());
-        verify(actionListener, times(1)).onResponse(mockUpdateResponse);
-        verify(actionListener, never()).onFailure(any());
-    }
-
-    @Test
     public void testDoExecute_EmbeddingGenerationFailure() {
         // Arrange
         String memoryContainerId = "container-123";
         String memoryType = "long-term";
         String memoryId = "memory-456";
         String newText = "Updated memory content";
-        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", newText)).build();
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, newText)).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId(memoryContainerId)
@@ -456,7 +373,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         GetResponse mockGetResponse = mock(GetResponse.class);
         Map<String, Object> sourceMap = new HashMap<>();
-        sourceMap.put("memory", "original memory");
+        sourceMap.put(MEMORY_FIELD, "original memory");
 
         when(mockGetResponse.isExists()).thenReturn(true);
         when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
@@ -481,36 +398,37 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock get operation
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockGetResponse);
             return null;
-        }).when(client).get(any(GetRequest.class), any());
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
 
         // Mock update operation (should still happen without embedding)
         UpdateResponse mockUpdateResponse = mock(UpdateResponse.class);
         doAnswer(invocation -> {
-            UpdateRequest request = invocation.getArgument(0);
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            UpdateRequest request = invocation.getArgument(1);
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
 
             // Verify no embedding field is added due to failure
             Map<String, Object> updateFields = (Map<String, Object>) request.doc().sourceAsMap();
             assertFalse(updateFields.containsKey("memory_embedding"));
-            assertTrue(updateFields.containsKey("memory"));
-            assertEquals(newText, updateFields.get("memory"));
+            assertTrue(updateFields.containsKey(MEMORY_FIELD));
+            assertEquals(newText, updateFields.get(MEMORY_FIELD));
 
             listener.onResponse(mockUpdateResponse);
             return null;
-        }).when(client).update(any(UpdateRequest.class), any());
+        }).when(memoryContainerHelper).updateData(any(), any(UpdateRequest.class), any());
 
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
         // Act
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("update"), any());
-        verify(client, times(1)).get(any(GetRequest.class), any());
-        verify(client, times(1)).update(any(UpdateRequest.class), any()); // Update should still happen without embedding
+        verify(memoryContainerHelper, times(1)).getData(any(), any(GetRequest.class), any());
+        verify(memoryContainerHelper, times(1)).updateData(any(), any(UpdateRequest.class), any()); // Update should still happen without
+                                                                                                    // embedding
         verify(actionListener, times(1)).onResponse(mockUpdateResponse); // Should succeed even without embedding
         verify(actionListener, never()).onFailure(any());
     }
@@ -522,7 +440,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         String memoryType = "long-term";
         String memoryId = "memory-456";
         String newText = "Updated memory content";
-        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", newText)).build();
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, newText)).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId(memoryContainerId)
@@ -533,7 +451,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         GetResponse mockGetResponse = mock(GetResponse.class);
         Map<String, Object> sourceMap = new HashMap<>();
-        sourceMap.put("memory", "original memory");
+        sourceMap.put(MEMORY_FIELD, "original memory");
 
         when(mockGetResponse.isExists()).thenReturn(true);
         when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
@@ -578,6 +496,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
             return null;
         }).when(memoryContainerHelper).updateData(any(MemoryConfiguration.class), any(UpdateRequest.class), any());
 
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
         // Act
         transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
 

@@ -12,7 +12,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_BEFORE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -177,7 +180,8 @@ public class MemoryOperationsService {
 
             BulkRequest bulkHistoryRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             for (MemoryResult memoryResult : results) {
-                bulkHistoryRequest.add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult)));
+                bulkHistoryRequest
+                    .add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult, namespace, input)));
             }
             ActionListener<BulkResponse> bulkHistoryResponseListener = ActionListener.wrap(bulkHistoryResponse -> {
                 if (bulkHistoryResponse.hasFailures()) {
@@ -196,7 +200,7 @@ public class MemoryOperationsService {
         memoryContainerHelper.bulkIngestData(memoryConfig, bulkRequest, bulkResponseActionListener);
     }
 
-    private Map<String, Object> createMemoryHistory(MemoryResult memoryResult) {
+    private Map<String, Object> createMemoryHistory(MemoryResult memoryResult, Map<String, String> namespace, MLAddMemoriesInput input) {
         Map<String, Object> history = new HashMap<>();
         if (memoryResult.getOwnerId() != null) {
             history.put(OWNER_ID_FIELD, memoryResult.getOwnerId());
@@ -204,12 +208,19 @@ public class MemoryOperationsService {
         history.put(MEMORY_ID_FIELD, memoryResult.getMemoryId());
         history.put(MEMORY_ACTION_FIELD, memoryResult.getEvent().getValue());
         if (memoryResult.getOldMemory() != null) {
-            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));// TODO: support other fields like namespace
+            history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));
         }
         if (memoryResult.getMemory() != null) {
-            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));// TODO: support other fields like namespace
+            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));
         }
-        history.put(CREATED_TIME_FIELD, Instant.now());// TODO: support other fields like namespace
+        history.put(CREATED_TIME_FIELD, Instant.now().toEpochMilli());
+        if (namespace != null && namespace.size() > 0) {
+            history.put(NAMESPACE_FIELD, namespace);
+            history.put(NAMESPACE_SIZE_FIELD, namespace.size());
+        }
+        if (input.getTags() != null) {
+            history.put(TAGS_FIELD, input.getTags());
+        }
         return history;
     }
 
