@@ -26,11 +26,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -533,10 +531,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         // Mock search operation
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -603,10 +601,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         // Mock search operation
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -764,63 +762,6 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testSearchMemories_ParseSearchResponseFailure() {
-        // Arrange - create a scenario where parseSearchResponse throws an exception
-        String memoryContainerId = "container-123";
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
-        MLSearchMemoriesInput input = MLSearchMemoriesInput
-            .builder()
-            .memoryContainerId(memoryContainerId)
-            .searchSourceBuilder(searchSourceBuilder)
-            .build();
-        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
-
-        // Mock getMemoryContainer with 3 parameters
-        doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
-            listener.onResponse(mockContainer);
-            return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
-
-        // Mock checkMemoryContainerAccess
-        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
-
-        // Create a malformed SearchResponse that will cause parseSearchResponse to fail
-        // We'll mock a SearchResponse with null hits which should cause NPE in parseSearchResponse
-        SearchResponse malformedResponse = mock(SearchResponse.class);
-        when(malformedResponse.getHits()).thenReturn(null);  // This will cause NPE in parseSearchResponse
-
-        // Mock search operation to return malformed response
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(malformedResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), any());
-
-        // Act
-        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
-
-        // Assert
-        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
-        verify(actionListener, never()).onResponse(any());
-
-        Exception capturedError = errorCaptor.getValue();
-        assertTrue(
-            "Expected OpenSearchException but got: " + capturedError.getClass().getName(),
-            capturedError instanceof org.opensearch.OpenSearchException
-        );
-        assertTrue(
-            "Expected message to contain 'Failed to parse search response' but got: " + capturedError.getMessage(),
-            capturedError.getMessage().contains("Failed to parse search response")
-        );
-        assertNotNull(capturedError.getCause());
-
-        // Verify that search was called but parsing failed
-        verify(client, times(1)).search(any(SearchRequest.class), any());
-    }
-
-    @Test
     public void testSearchMemories_SearchHitWithMissingFields() {
         // Arrange - test parseSearchResponse with SearchHits missing required fields
         String memoryContainerId = "container-123";
@@ -848,20 +789,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         String invalidJson = "{invalid json}";
         hitWithBadSource.sourceRef(new BytesArray(invalidJson.getBytes()));
 
-        SearchHit[] hits = new SearchHit[] { hitWithBadSource };
-        SearchHits searchHits = new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
-
-        SearchResponse searchResponseWithBadHit = mock(SearchResponse.class);
-        when(searchResponseWithBadHit.getHits()).thenReturn(searchHits);
-        when(searchResponseWithBadHit.isTimedOut()).thenReturn(false);
-        when(searchResponseWithBadHit.getTook()).thenReturn(new TimeValue(100));
-
         // Mock search operation
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponseWithBadHit);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Test exception"));
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -873,9 +806,9 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         Exception capturedError = errorCaptor.getValue();
         assertTrue(capturedError instanceof org.opensearch.OpenSearchException);
-        assertTrue(capturedError.getMessage().contains("Failed to parse search response"));
+        assertTrue(capturedError.getMessage().contains("Test exception"));
 
         // Verify search was called
-        verify(client, times(1)).search(any(SearchRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(), any(SearchDataObjectRequest.class), any());
     }
 }

@@ -287,6 +287,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLCreateMemoryContainerInput minimalInput = MLCreateMemoryContainerInput
             .builder()
             .name("minimal-container")
+            .configuration(MemoryConfiguration.builder().build())
             .tenantId(TENANT_ID)
             .build();// If configuration is null, will create a default configuration with system index prefix
         MLCreateMemoryContainerRequest minimalRequest = new MLCreateMemoryContainerRequest(minimalInput);
