@@ -13,6 +13,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -87,7 +88,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
         ModelAccessControlHelper modelAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings,
-        StreamTransportService streamTransportService
+        @Nullable StreamTransportService streamTransportService
     ) {
         super(MLPredictionStreamTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
@@ -108,13 +109,17 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> enableAutomaticDeployment = it);
 
-        streamTransportService
-            .registerRequestHandler(
-                MLPredictionStreamTaskAction.NAME,
-                STREAM_PREDICT_THREAD_POOL,
-                MLPredictionTaskRequest::new,
-                this::messageReceived
-            );
+        if (streamTransportService != null) {
+            streamTransportService
+                .registerRequestHandler(
+                    MLPredictionStreamTaskAction.NAME,
+                    STREAM_PREDICT_THREAD_POOL,
+                    MLPredictionTaskRequest::new,
+                    this::messageReceived
+                );
+        } else {
+            log.warn("StreamTransportService is not available.");
+        }
     }
 
     public static StreamTransportService getStreamTransportService() {
