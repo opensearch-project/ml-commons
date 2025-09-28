@@ -5,15 +5,20 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
@@ -27,6 +32,7 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -48,11 +54,14 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -93,7 +102,14 @@ public class RemoteConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -107,6 +123,7 @@ public class RemoteConnectorExecutorTest {
     }
 
     private AwsConnectorExecutor getExecutor(Connector connector) {
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         ThreadContext threadContext = new ThreadContext(settings);
@@ -341,5 +358,38 @@ public class RemoteConnectorExecutorTest {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    @Test
+    public void executeAction_WithTransportChannel() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "test input"))
+            .actionType(PREDICT)
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+
+        ActionListener<MLTaskResponse> streamActionListener = mock(ActionListener.class);
+        TransportChannel channel = mock(TransportChannel.class);
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<Tuple<Integer, ModelTensors>> listener = invocation.getArgument(3);
+            ModelTensors mockTensors = mock(ModelTensors.class);
+            listener.onResponse(new Tuple<>(200, mockTensors));
+            return null;
+        }).when(executor).preparePayloadAndInvoke(any(), any(), any(), any(), any());
+        executor.executeAction(PREDICT.name(), mlInput, streamActionListener, channel);
+
+        verify(executor, times(1))
+            .preparePayloadAndInvoke(eq(PREDICT.name()), eq(mlInput), any(ExecutionContext.class), any(ActionListener.class), eq(channel));
+
+        ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
+        verify(streamActionListener, times(1)).onResponse(responseCaptor.capture());
+        assertNotNull(responseCaptor.getValue());
+        assertTrue(responseCaptor.getValue().getOutput() instanceof ModelTensorOutput);
     }
 }

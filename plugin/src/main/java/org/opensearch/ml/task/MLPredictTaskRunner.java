@@ -168,7 +168,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     channel.completeStream();
                     streamResponse.close();
                 } catch (Exception e) {
-                    streamResponse.cancel("Test error", e);
+                    streamResponse.cancel("Stream error", e);
                 }
             }
 

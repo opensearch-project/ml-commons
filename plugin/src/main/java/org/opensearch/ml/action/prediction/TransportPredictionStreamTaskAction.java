@@ -7,7 +7,6 @@ package org.opensearch.ml.action.prediction;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_PREDICT_THREAD_POOL;
-import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -73,6 +72,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public static StreamTransportService streamTransportService;
+    private static StreamTransportService streamTransportServiceInstance;
 
     @Inject
     public TransportPredictionStreamTaskAction(
@@ -99,7 +99,10 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.streamTransportService = streamTransportService;
+        if (streamTransportServiceInstance == null) {
+            streamTransportServiceInstance = streamTransportService;
+        }
+        this.streamTransportService = streamTransportServiceInstance;
         enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
             .getClusterSettings()
@@ -112,6 +115,10 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                 MLPredictionTaskRequest::new,
                 this::messageReceived
             );
+    }
+
+    public static StreamTransportService getStreamTransportService() {
+        return streamTransportService;
     }
 
     public void messageReceived(MLPredictionTaskRequest request, TransportChannel channel, Task task) {
@@ -151,9 +158,10 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                     modelCacheHelper.setModelInfo(modelId, mlModel);
                     FunctionName functionName = mlModel.getAlgorithm();
                     if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                        throw new UnsupportedOperationException("Streaming is not supported for local model.");
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
+                    // Validate user access to model group
                     modelAccessControlHelper
                         .validateModelGroupAccess(
                             userInfo,
@@ -163,6 +171,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                             client,
                             sdkClient,
                             ActionListener.wrap(access -> {
+                                // Check if user has access
                                 if (!access) {
                                     wrappedListener
                                         .onFailure(
@@ -172,12 +181,14 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                                             )
                                         );
                                 } else {
+                                    // Check if model is enabled
                                     if (modelCacheHelper.getIsModelEnabled(modelId) != null
                                         && !modelCacheHelper.getIsModelEnabled(modelId)) {
                                         wrappedListener
                                             .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
                                     } else {
                                         if (FunctionName.isDLModel(functionName)) {
+                                            // Check model-level rate limit
                                             if (modelCacheHelper.getRateLimiter(modelId) != null
                                                 && !modelCacheHelper.getRateLimiter(modelId).request()) {
                                                 wrappedListener
@@ -187,6 +198,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                                                             RestStatus.TOO_MANY_REQUESTS
                                                         )
                                                     );
+                                                // Check user-level rate limit
                                             } else if (userInfo != null
                                                 && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
                                                 && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
@@ -198,6 +210,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                                                         )
                                                     );
                                             } else {
+                                                // DL models don't support streaming
                                                 wrappedListener
                                                     .onFailure(
                                                         new OpenSearchStatusException(
@@ -207,6 +220,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                                                     );
                                             }
                                         } else {
+                                            // Execute predict stream for non-DL models
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                             executePredictStream(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }

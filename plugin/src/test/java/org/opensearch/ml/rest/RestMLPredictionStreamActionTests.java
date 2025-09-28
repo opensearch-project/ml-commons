@@ -7,10 +7,13 @@ package org.opensearch.ml.rest;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -71,6 +74,18 @@ public class RestMLPredictionStreamActionTests {
     }
 
     @Test
+    public void testPrepareRequestWhenStreamDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(false);
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> restAction.prepareRequest(request, null)
+        );
+        assertEquals(STREAM_DISABLED_ERR_MSG, exception.getMessage());
+    }
+
+    @Test
     public void testGetRequestSuccessWithRemoteModel() throws IOException {
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
@@ -85,6 +100,20 @@ public class RestMLPredictionStreamActionTests {
         assertNotNull(result.getMlInput());
         verify(mlFeatureEnabledSetting).isRemoteInferenceEnabled();
         verify(mlFeatureEnabledSetting).isMultiTenancyEnabled();
+    }
+
+    @Test
+    public void testGetRequestWithRemoteModelDisabled() throws IOException {
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict");
+        BytesReference content = request.content();
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            restAction.getRequest("test-model", "REMOTE", request, content);
+        });
+        assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, exception.getMessage());
     }
 
     private FakeRestRequest createFakeRestRequestWithValidContent(String path) throws IOException {

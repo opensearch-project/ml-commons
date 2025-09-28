@@ -6,16 +6,20 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
@@ -32,7 +36,6 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -55,6 +58,7 @@ import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -102,9 +106,16 @@ public class AwsConnectorExecutorTest {
             new ModelTensor("tensor2", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap)
         );
 
+    @Mock
+    AwsConnector awsConnector;
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(awsConnector.getAccessKey()).thenReturn("test_access_key");
+        when(awsConnector.getSecretKey()).thenReturn("test_secret_key");
+        when(awsConnector.getSessionToken()).thenReturn("test_session_token");
+        when(awsConnector.getRegion()).thenReturn("us-east-1");
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         when(scriptService.compile(any(), any()))
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
@@ -140,7 +151,14 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -168,7 +186,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
         assertEquals(
             "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
@@ -187,7 +205,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -226,7 +251,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
         Connector connector = AwsConnector
@@ -263,8 +295,8 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
 
-        Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any(), null);
+        verify(actionListener, times(0)).onFailure(any());
+        verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any(), any());
     }
 
     @Test
@@ -278,7 +310,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -316,7 +355,7 @@ public class AwsConnectorExecutorTest {
             );
 
         ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
-        Mockito.verify(actionListener, times(1)).onResponse(responseCaptor.capture());
+        verify(actionListener, times(1)).onResponse(responseCaptor.capture());
         for (int idx = 0; idx < 3; idx++) {
             assert ((ModelTensorOutput) responseCaptor.getValue().getOutput())
                 .getMlModelOutputs()
@@ -338,7 +377,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -379,7 +425,7 @@ public class AwsConnectorExecutorTest {
             );
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionCaptor.getValue().getMessage());
     }
@@ -395,7 +441,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -436,7 +489,7 @@ public class AwsConnectorExecutorTest {
             );
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionCaptor.getValue().getMessage());
         assert exceptionCaptor.getValue().getSuppressed().length == 1;
@@ -454,7 +507,14 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -485,7 +545,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
     }
 
@@ -499,7 +559,14 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
         Connector connector = AwsConnector
@@ -527,7 +594,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
     }
 
@@ -542,7 +609,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -568,7 +642,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
         assert "no PREDICT action found".equals(exceptionArgumentCaptor.getValue().getMessage());
     }
@@ -586,7 +660,14 @@ public class AwsConnectorExecutorTest {
             )
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -626,7 +707,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -665,7 +753,14 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -705,7 +800,14 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
         // execute with retry disabled
@@ -739,8 +841,8 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
 
-        Mockito.verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
-        Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         // execute with retry enabled
         ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT);
@@ -763,13 +865,13 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
 
-        Mockito.verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
-        Mockito.verify(actionListener, times(0)).onFailure(any());
+        verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(0)).onFailure(any());
     }
 
     @Test
     public void testGetRetryBackoffPolicy() {
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
 
         ConnectorClientConfig.ConnectorClientConfigBuilder configBuilder = ConnectorClientConfig
             .builder()
@@ -804,7 +906,7 @@ public class AwsConnectorExecutorTest {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
         ExecutorService executorService = mock(ExecutorService.class);
 
         doAnswer(new Answer() {
@@ -838,9 +940,9 @@ public class AwsConnectorExecutorTest {
         }).when(executorService).execute(any());
 
         executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
-        Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(actionListener, times(1)).onResponse(any());
-        Mockito.verify(executor, times(11)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(0)).onFailure(any());
+        verify(actionListener, times(1)).onResponse(any());
+        verify(executor, times(11)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -851,7 +953,7 @@ public class AwsConnectorExecutorTest {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, 5, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
         ExecutorService executorService = mock(ExecutorService.class);
 
         doAnswer(new Answer() {
@@ -885,9 +987,9 @@ public class AwsConnectorExecutorTest {
         }).when(executorService).execute(any());
 
         executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
-        Mockito.verify(actionListener, times(1)).onFailure(any());
-        Mockito.verify(actionListener, times(0)).onResponse(any());
-        Mockito.verify(executor, times(6)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(1)).onFailure(any());
+        verify(actionListener, times(0)).onResponse(any());
+        verify(executor, times(6)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -898,7 +1000,7 @@ public class AwsConnectorExecutorTest {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
         ExecutorService executorService = mock(ExecutorService.class);
 
         doAnswer(new Answer() {
@@ -934,12 +1036,42 @@ public class AwsConnectorExecutorTest {
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
 
         executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
-        Mockito.verify(actionListener, times(0)).onResponse(any());
-        Mockito.verify(executor, times(3)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        verify(actionListener, times(0)).onResponse(any());
+        verify(executor, times(3)).invokeRemoteService(any(), any(), any(), any(), any(), any());
         assert exceptionArgumentCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionArgumentCaptor.getValue().getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[0].getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[1].getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_ValidInterface() {
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(awsConnector);
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map.of("_llm_interface", "bedrock/converse/claude", "model", "claude-v2", "inputs", "test input");
+        String payload = "test payload";
+        ExecutionContext executionContext = new ExecutionContext(123);
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+        verify(actionListener, never()).onFailure(any());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_WithException() {
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(awsConnector);
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map.of("llm_interface", "invalid_interface", "model", "claude-v2", "inputs", "test input");
+        String payload = "test payload";
+        ExecutionContext executionContext = new ExecutionContext(123);
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof MLException);
+        assertEquals("Fail to execute streaming", captor.getValue().getMessage());
     }
 }
