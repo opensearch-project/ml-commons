@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -126,11 +127,11 @@ public class MemorySearchServiceTests {
             ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
             searchListener.onFailure(searchException);
             return null;
-        }).when(client).search(any(), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
-        verify(client).search(any(), any());
+        verify(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
     }
 
     @Test
@@ -150,14 +151,14 @@ public class MemorySearchServiceTests {
         when(searchResponse.getHits()).thenReturn(hits);
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
             searchListener.onResponse(searchResponse);
             return null;
-        }).when(client).search(any(), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
-        verify(client, times(3)).search(any(), any()); // Limited by maxInferSize
+        verify(memoryContainerHelper, times(3)).searchData(any(), any(SearchRequest.class), any()); // Limited by maxInferSize
         verify(listener).onResponse(any(List.class));
     }
 
