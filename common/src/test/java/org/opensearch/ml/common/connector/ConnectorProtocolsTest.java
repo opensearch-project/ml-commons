@@ -17,14 +17,14 @@ public class ConnectorProtocolsTest {
     @Test
     public void validateProtocol_Null() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector protocol is null. Please use one of [aws_sigv4, http, mcp_sse]");
+        exceptionRule.expectMessage("Connector protocol is null. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
         ConnectorProtocols.validateProtocol(null);
     }
 
     @Test
     public void validateProtocol_WrongValue() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
         ConnectorProtocols.validateProtocol("abc");
     }
 }
