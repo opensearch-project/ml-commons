@@ -271,14 +271,14 @@ public class MemoryContainerHelperTests {
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
-        assertEquals("custom-memory-index", helper.getMemoryIndexName(container));
+        assertEquals("custom-memory-index-memory-session", helper.getMemoryIndexName(container, "session"));
     }
 
     @Test
     public void testGetMemoryIndexNameWithoutConfig() {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
-        assertNull(helper.getMemoryIndexName(container));
+        assertNull(helper.getMemoryIndexName(container, "session"));
     }
 
     @Test
@@ -287,7 +287,7 @@ public class MemoryContainerHelperTests {
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
-        assertNull(helper.getMemoryIndexName(container));
+        assertNull(helper.getMemoryIndexName(container, "wrong_value"));
     }
 
     @Test
@@ -297,7 +297,8 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
-        boolean result = helper.validateMemoryIndexExists(container, "test-action", mockListener);
+        String memoryType = "session";
+        boolean result = helper.validateMemoryIndexExists(container, memoryType, "test-action", mockListener);
 
         assertTrue(result);
         verify(mockListener, never()).onFailure(any());
@@ -308,7 +309,7 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
-        boolean result = helper.validateMemoryIndexExists(container, "test-action", mockListener);
+        boolean result = helper.validateMemoryIndexExists(container, "session", "test-action", mockListener);
 
         assertFalse(result);
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -326,7 +327,7 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
-        boolean result = helper.validateMemoryIndexExists(container, "another-action", mockListener);
+        boolean result = helper.validateMemoryIndexExists(container, "wrong_value", "another-action", mockListener);
 
         assertFalse(result);
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);

@@ -220,10 +220,6 @@ public class MemoryContainerHelper {
      * @param listener action listener to notify on failure
      * @return true if valid, false if validation failed (listener will be notified)
      */
-    public boolean validateMemoryIndexExists(MLMemoryContainer container, String actionName, ActionListener<?> listener) {
-        return true;
-    }
-
     public boolean validateMemoryIndexExists(
         MLMemoryContainer container,
         String memoryType,

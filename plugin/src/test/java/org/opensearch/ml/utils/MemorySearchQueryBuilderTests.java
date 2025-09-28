@@ -147,6 +147,7 @@ public class MemorySearchQueryBuilderTests {
                 MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
                 fact,
                 Map.of(SESSION_ID_FIELD, sessionId),
+                null, // ownerId
                 config
             );
         String jsonString = builder.toString();
@@ -169,6 +170,7 @@ public class MemorySearchQueryBuilderTests {
                 MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
                 fact,
                 Map.of(SESSION_ID_FIELD, sessionId),
+                null, // ownerId
                 MemoryConfiguration
                     .builder()
                     .llmId("llm_id1")
