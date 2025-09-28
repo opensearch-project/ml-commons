@@ -95,9 +95,6 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
             }
 
             // Validate and get memory index name
-            // if (!memoryContainerHelper.validateMemoryIndexExists(container, memoryType, "update", actionListener)) {
-            // return;
-            // }
             String memoryIndexName = memoryContainerHelper.getMemoryIndexName(container, memoryType);
             if (memoryIndexName == null) {
                 actionListener.onFailure(new OpenSearchStatusException("Memory index not found", RestStatus.NOT_FOUND));

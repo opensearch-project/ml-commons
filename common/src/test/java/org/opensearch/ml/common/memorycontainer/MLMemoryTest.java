@@ -60,7 +60,6 @@ public class MLMemoryTest {
             .namespace(Map.of(SESSION_ID_FIELD, "session-123", "user_id", "user-456", "agent_id", "agent-789"))
             .memory("This is a test memory content")
             .memoryType(MemoryType.SEMANTIC)
-            .role("user")
             .tags(testTags)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -86,7 +85,6 @@ public class MLMemoryTest {
         assertEquals(MemoryType.SEMANTIC, memoryWithAllFields.getMemoryType());
         assertEquals("user-456", memoryWithAllFields.getNamespace().get("user_id"));
         assertEquals("agent-789", memoryWithAllFields.getNamespace().get("agent_id"));
-        assertEquals("user", memoryWithAllFields.getRole());
         assertEquals(testTags, memoryWithAllFields.getTags());
         assertEquals(testCreatedTime, memoryWithAllFields.getCreatedTime());
         assertEquals(testUpdatedTime, memoryWithAllFields.getLastUpdatedTime());
@@ -101,7 +99,6 @@ public class MLMemoryTest {
         assertEquals(MemoryType.SEMANTIC, memoryMinimal.getMemoryType());
         assertNull(memoryMinimal.getNamespace().get("user_id"));
         assertNull(memoryMinimal.getNamespace().get("agent_id"));
-        assertNull(memoryMinimal.getRole());
         assertNull(memoryMinimal.getTags());
         assertEquals(testCreatedTime, memoryMinimal.getCreatedTime());
         assertEquals(testUpdatedTime, memoryMinimal.getLastUpdatedTime());
@@ -121,7 +118,6 @@ public class MLMemoryTest {
         assertEquals(memoryWithAllFields.getMemoryType(), deserialized.getMemoryType());
         assertEquals(memoryWithAllFields.getNamespace().get("user_id"), deserialized.getNamespace().get("user_id"));
         assertEquals(memoryWithAllFields.getNamespace().get("agent_id"), deserialized.getNamespace().get("agent_id"));
-        assertEquals(memoryWithAllFields.getRole(), deserialized.getRole());
         assertEquals(memoryWithAllFields.getTags(), deserialized.getTags());
         assertEquals(memoryWithAllFields.getCreatedTime(), deserialized.getCreatedTime());
         assertEquals(memoryWithAllFields.getLastUpdatedTime(), deserialized.getLastUpdatedTime());
@@ -142,7 +138,6 @@ public class MLMemoryTest {
         assertEquals(memoryMinimal.getMemoryType(), deserialized.getMemoryType());
         assertNull(deserialized.getNamespace().get("user_id"));
         assertNull(deserialized.getNamespace().get("agent_id"));
-        assertNull(deserialized.getRole());
         assertNull(deserialized.getTags());
         assertEquals(memoryMinimal.getCreatedTime(), deserialized.getCreatedTime());
         assertEquals(memoryMinimal.getLastUpdatedTime(), deserialized.getLastUpdatedTime());
@@ -181,7 +176,6 @@ public class MLMemoryTest {
         assertTrue(jsonString.contains("\"memory_type\":\"SEMANTIC\""));
         assertTrue(jsonString.contains("\"user_id\":\"user-456\""));
         assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
-        assertTrue(jsonString.contains("\"role\":\"user\""));
         assertTrue(jsonString.contains("\"topic\":\"machine learning\""));
         assertTrue(jsonString.contains("\"priority\":\"high\""));
         assertTrue(jsonString.contains("\"created_time\":" + testCreatedTime.toEpochMilli()));
@@ -234,7 +228,6 @@ public class MLMemoryTest {
         assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
         assertEquals("user-456", parsed.getNamespace().get("user_id"));
         assertEquals("agent-789", parsed.getNamespace().get("agent_id"));
-        assertEquals("user", parsed.getRole());
         assertEquals(2, parsed.getTags().size());
         assertEquals("machine learning", parsed.getTags().get("topic"));
         assertEquals("high", parsed.getTags().get("priority"));
@@ -268,7 +261,6 @@ public class MLMemoryTest {
         assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
         assertNull(parsed.getNamespace().get("user_id"));
         assertNull(parsed.getNamespace().get("agent_id"));
-        assertNull(parsed.getRole());
         assertNull(parsed.getTags());
         assertEquals(testCreatedTime.toEpochMilli(), parsed.getCreatedTime().toEpochMilli());
         assertEquals(testUpdatedTime.toEpochMilli(), parsed.getLastUpdatedTime().toEpochMilli());
@@ -310,7 +302,6 @@ public class MLMemoryTest {
         assertEquals("SEMANTIC", indexMap.get("memory_type"));
         assertEquals("user-456", namespace.get("user_id"));
         assertEquals("agent-789", namespace.get("agent_id"));
-        assertEquals("user", indexMap.get("role"));
         assertEquals(testTags, indexMap.get("tags"));
         assertEquals(testCreatedTime.toEpochMilli(), indexMap.get("created_time"));
         assertEquals(testUpdatedTime.toEpochMilli(), indexMap.get("last_updated_time"));
@@ -354,7 +345,6 @@ public class MLMemoryTest {
         memory.setMemoryType(MemoryType.SEMANTIC);
         memory.getNamespace().put("user_id", "new-user");
         memory.getNamespace().put("agent_id", "new-agent");
-        memory.setRole("assistant");
         memory.setTags(testTags);
         memory.setMemoryEmbedding(sparseEmbedding);
 
@@ -363,7 +353,6 @@ public class MLMemoryTest {
         assertEquals(MemoryType.SEMANTIC, memory.getMemoryType());
         assertEquals("new-user", memory.getNamespace().get("user_id"));
         assertEquals("new-agent", memory.getNamespace().get("agent_id"));
-        assertEquals("assistant", memory.getRole());
         assertEquals(testTags, memory.getTags());
         assertEquals(sparseEmbedding, memory.getMemoryEmbedding());
     }
@@ -376,7 +365,6 @@ public class MLMemoryTest {
             .namespace(Map.of(SESSION_ID_FIELD, "session-123", "user_id", "user-456", "agent_id", "agent-789"))
             .memory("This is a test memory content")
             .memoryType(MemoryType.SEMANTIC)
-            .role("user")
             .tags(testTags)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -400,7 +388,6 @@ public class MLMemoryTest {
         assertEquals(memoryNoEmbedding.getMemoryType(), parsed.getMemoryType());
         assertEquals(memoryNoEmbedding.getNamespace().get("user_id"), parsed.getNamespace().get("user_id"));
         assertEquals(memoryNoEmbedding.getNamespace().get("agent_id"), parsed.getNamespace().get("agent_id"));
-        assertEquals(memoryNoEmbedding.getRole(), parsed.getRole());
         assertEquals(memoryNoEmbedding.getTags(), parsed.getTags());
         assertEquals(memoryNoEmbedding.getCreatedTime().toEpochMilli(), parsed.getCreatedTime().toEpochMilli());
         assertEquals(memoryNoEmbedding.getLastUpdatedTime().toEpochMilli(), parsed.getLastUpdatedTime().toEpochMilli());
@@ -417,7 +404,6 @@ public class MLMemoryTest {
             .namespace(Map.of(SESSION_ID_FIELD, "session-with-special-chars-🚀"))
             .memory("Memory with\n\ttabs and\nnewlines and \"quotes\"")
             .memoryType(MemoryType.SEMANTIC)
-            .role("user/assistant")
             .tags(specialTags)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -436,7 +422,6 @@ public class MLMemoryTest {
 
         assertEquals(specialMemory.getNamespace().get(SESSION_ID_FIELD), parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(specialMemory.getMemory(), parsed.getMemory());
-        assertEquals(specialMemory.getRole(), parsed.getRole());
         assertEquals(specialMemory.getTags(), parsed.getTags());
     }
 }
