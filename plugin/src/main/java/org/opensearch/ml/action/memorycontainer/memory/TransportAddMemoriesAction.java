@@ -115,7 +115,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
 
         User user = RestActionUtils.getUserContext(client);
-        String ownerId = user != null ? user.getName() : null;
+        String ownerId = memoryContainerHelper.getOwnerId(user);
         MLAddMemoriesInput input = request.getMlAddMemoryInput();
         input.setOwnerId(ownerId);
 
@@ -225,9 +225,14 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
                 if (infer) {
                     threadPool.executor(TRAIN_THREAD_POOL).execute(() -> {
-                        extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
-                            log.error("Failed to extract longTermMemory id from memory container", e);
-                        }));
+                        try {
+                            extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
+                                log.error("Failed to extract longTermMemory id from memory container", e);
+                                memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, input, e);
+                            }));
+                        } catch (Exception e) {
+                            memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, input, e);
+                        }
                     });
                 }
             }, actionListener::onFailure);
