@@ -122,7 +122,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 }
 
                 // Prepare the update
-                Map<String, Object> updateFields = constructUpateFields(updateRequest.getMlUpdateMemoryInput(), memoryType);
+                Map<String, Object> updateFields = constructUpdateFields(updateRequest.getMlUpdateMemoryInput(), memoryType);
                 UpdateRequest updateMemoryRequest = new UpdateRequest(memoryIndexName, memoryId).doc(updateFields);
 
                 memoryContainerHelper.updateData(container.getConfiguration(), updateMemoryRequest, actionListener);
@@ -133,7 +133,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }, actionListener::onFailure));
     }
 
-    public Map<String, Object> constructUpateFields(MLUpdateMemoryInput input, String memoryType) {
+    public Map<String, Object> constructUpdateFields(MLUpdateMemoryInput input, String memoryType) {
         Map<String, Object> updateFields = new HashMap<>();
         Map<String, Object> updateContent = input.getUpdateContent();
         switch (memoryType) {

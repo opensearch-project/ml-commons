@@ -130,7 +130,6 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
 
             if (!memoryContainerHelper.isAdminUser(user)) {
                 memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
-                log.debug("Filtering result by {}", user.getName());
             }
 
             SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest

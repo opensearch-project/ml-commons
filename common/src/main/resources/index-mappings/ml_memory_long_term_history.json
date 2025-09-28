@@ -12,6 +12,15 @@
     "action": {
       "type": "keyword"
     },
+    "namespace": {
+      "type": "flat_object"
+    },
+    "tags": {
+      "type": "flat_object"
+    },
+    "error": {
+      "type": "text"
+    },
     "before": {
       "type": "object",
       "properties": {
