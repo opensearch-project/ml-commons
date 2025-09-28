@@ -40,7 +40,7 @@ public class MLGetMemoryResponseTest {
             .lastUpdatedTime(Instant.now())
             .build();
 
-        responseNormal = MLGetMemoryResponse.builder().mlMemory(testMemory).build();
+        responseNormal = MLGetMemoryResponse.builder().longTermMemory(testMemory).build();
     }
 
     @Test
@@ -77,7 +77,15 @@ public class MLGetMemoryResponseTest {
         ActionResponse mockResponse = new ActionResponse() {
             @Override
             public void writeTo(StreamOutput out) throws IOException {
+                // Write session (false)
+                out.writeBoolean(false);
+                // Write workingMemory (false)
+                out.writeBoolean(false);
+                // Write longTermMemory (true)
+                out.writeBoolean(true);
                 testMemory.writeTo(out);
+                // Write memoryHistory (false)
+                out.writeBoolean(false);
             }
         };
 
