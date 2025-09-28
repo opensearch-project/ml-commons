@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ERROR_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
@@ -45,6 +46,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
     private MLMemory after;
     private Instant createdTime;
     private String tenantId;
+    private String error;
 
     public MLMemoryHistory(
         String ownerId,
@@ -53,7 +55,8 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         MLMemory before,
         MLMemory after,
         Instant createdTime,
-        String tenantId
+        String tenantId,
+        String error
     ) {
         this.ownerId = ownerId;
         this.memoryId = memoryId;
@@ -62,12 +65,15 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         this.after = after;
         this.createdTime = createdTime;
         this.tenantId = tenantId;
+        this.error = error;
     }
 
     public MLMemoryHistory(StreamInput in) throws IOException {
         this.ownerId = in.readOptionalString();
         this.memoryId = in.readOptionalString();
-        this.action = in.readEnum(MemoryEvent.class);
+        if (in.readBoolean()) {
+            this.action = in.readEnum(MemoryEvent.class);
+        }
         if (in.readBoolean()) {
             this.before = new MLMemory(in);
         }
@@ -76,13 +82,19 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         this.createdTime = in.readOptionalInstant();
         this.tenantId = in.readOptionalString();
+        this.error = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(ownerId);
         out.writeOptionalString(memoryId);
-        out.writeEnum(action);
+        if (action != null) {
+            out.writeBoolean(true);
+            out.writeEnum(action);
+        } else {
+            out.writeBoolean(false);
+        }
         if (before != null) {
             out.writeBoolean(true);
             before.writeTo(out);
@@ -97,6 +109,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalString(tenantId);
+        out.writeOptionalString(error);
     }
 
     @Override
@@ -108,7 +121,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         if (memoryId != null) {
             builder.field(MEMORY_ID_FIELD, memoryId);
         }
-        builder.field(MEMORY_ACTION_FIELD, action);
+        if (action != null) {
+            builder.field(MEMORY_ACTION_FIELD, action);
+        }
         if (before != null) {
             builder.field(MEMORY_BEFORE_FIELD, before);
         }
@@ -120,6 +135,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
+        }
+        if (error != null) {
+            builder.field(ERROR_FIELD, error);
         }
         builder.endObject();
         return builder;
@@ -133,6 +151,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         MLMemory after = null;
         Instant createdTime = null;
         String tenantId = null;
+        String error = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -161,6 +180,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
                     break;
+                case ERROR_FIELD:
+                    error = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -176,6 +198,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
             .after(after)
             .createdTime(createdTime)
             .tenantId(tenantId)
+            .error(error)
             .build();
     }
 

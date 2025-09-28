@@ -356,4 +356,8 @@ public class MemoryContainerHelper {
         }
         return searchSourceBuilder;
     }
+
+    public String getOwnerId(User user) {
+        return user != null ? user.getName() : null;
+    }
 }
