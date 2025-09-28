@@ -49,10 +49,7 @@ public class MLUpdateMemoryInput implements ToXContentObject, Writeable {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        builder.map(updateContent);
-        builder.endObject();
-        return builder;
+        return builder.map(updateContent);
     }
 
     public static MLUpdateMemoryInput parse(XContentParser parser) throws IOException {
