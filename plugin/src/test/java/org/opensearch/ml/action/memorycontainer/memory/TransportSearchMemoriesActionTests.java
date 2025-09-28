@@ -37,21 +37,20 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesRequest;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesResponse;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MemorySearchResult;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -76,9 +75,6 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
-    private NamedXContentRegistry xContentRegistry;
-
-    @Mock
     private MemoryContainerHelper memoryContainerHelper;
 
     @Mock
@@ -90,7 +86,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     private Task task;
 
     @Mock
-    private ActionListener<MLSearchMemoriesResponse> actionListener;
+    private ActionListener<SearchResponse> actionListener;
 
     private TransportSearchMemoriesAction transportSearchMemoriesAction;
 
@@ -148,7 +144,6 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
                 client,
                 connectorAccessControlHelper,
                 mlFeatureEnabledSetting,
-                xContentRegistry,
                 memoryContainerHelper
             )
         );
@@ -159,7 +154,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Arrange
         String memoryContainerId = "container-123";
         String query = "machine learning concepts";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query(query).build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", query));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock search response
@@ -200,17 +200,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         // Mock search operation
         doAnswer(invocation -> {
-            SearchRequest request = invocation.getArgument(0);
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-
-            // Verify search request
-            assertEquals("test-memory-index", request.indices()[0]);
-            assertNotNull(request.source());
-            // Note: Size limit has been removed in the actual implementation
-
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -218,17 +211,17 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(client, times(1)).search(any(SearchRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
-        ArgumentCaptor<MLSearchMemoriesResponse> responseCaptor = ArgumentCaptor.forClass(MLSearchMemoriesResponse.class);
+        ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
         verify(actionListener, never()).onFailure(any());
 
-        MLSearchMemoriesResponse response = responseCaptor.getValue();
+        SearchResponse response = responseCaptor.getValue();
         assertNotNull(response);
-        assertEquals(1, response.getHits().size());
-        assertEquals("memory-123", response.getHits().get(0).getMemoryId());
-        assertEquals(0.95f, response.getHits().get(0).getScore(), 0.001);
+        assertEquals(1, response.getHits().getHits().length);
+        assertEquals("memory-123", response.getHits().getHits()[0].getId());
+        assertEquals(0.95f, response.getHits().getHits()[0].getScore(), 0.001);
     }
 
     @Test
@@ -236,7 +229,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Arrange
         String memoryContainerId = "container-123";
         String query = "machine learning";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query(query).build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", query));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Setup container without semantic storage
@@ -266,16 +264,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         // Mock search operation
         doAnswer(invocation -> {
-            SearchRequest request = invocation.getArgument(0);
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-
-            // Verify it uses match query for non-semantic search
-            assertNotNull(request.source());
-            assertNotNull(request.source().query());
-
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -283,22 +275,27 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(containerWithoutSemantic));
-        verify(client, times(1)).search(any(SearchRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
-        ArgumentCaptor<MLSearchMemoriesResponse> responseCaptor = ArgumentCaptor.forClass(MLSearchMemoriesResponse.class);
+        ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
         verify(actionListener, never()).onFailure(any());
 
-        MLSearchMemoriesResponse response = responseCaptor.getValue();
+        SearchResponse response = responseCaptor.getValue();
         assertNotNull(response);
-        assertEquals(0, response.getHits().size());
+        assertEquals(0, response.getHits().getHits().length);
     }
 
     @Test
     public void testDoExecute_GetContainerFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         Exception expectedError = new RuntimeException("Container not found");
@@ -316,7 +313,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, never()).checkMemoryContainerAccess(any(), any());
-        verify(client, never()).search(any(), any());
+        verify(memoryContainerHelper, never()).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
         verify(actionListener, times(1)).onFailure(expectedError);
         verify(actionListener, never()).onResponse(any());
     }
@@ -325,7 +322,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     public void testDoExecute_AccessDenied() {
         // Arrange
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock getMemoryContainer with 3 parameters (memoryContainerId, tenantId, listener)
@@ -344,7 +346,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(client, never()).search(any(), any());
+        verify(memoryContainerHelper, never()).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(errorCaptor.capture());
@@ -359,7 +361,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     public void testDoExecute_SearchFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         Exception searchError = new RuntimeException("Search failed");
@@ -378,10 +385,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         // Mock search operation to fail
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onFailure(searchError);
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -389,7 +396,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(client, times(1)).search(any(SearchRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(errorCaptor.capture());
@@ -408,7 +415,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Arrange
         String memoryContainerId = "container-123";
         String query = "test query";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query(query).build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", query));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Setup container with sparse encoding
@@ -447,16 +459,10 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
 
         // Mock search operation
         doAnswer(invocation -> {
-            SearchRequest request = invocation.getArgument(0);
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-
-            // Verify search request for sparse encoding
-            assertEquals("test-memory-index", request.indices()[0]);
-            // Note: Size limit has been removed in the actual implementation
-
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(client).search(any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -464,9 +470,9 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(sparseContainer));
-        verify(client, times(1)).search(any(SearchRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
 
-        ArgumentCaptor<MLSearchMemoriesResponse> responseCaptor = ArgumentCaptor.forClass(MLSearchMemoriesResponse.class);
+        ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
         verify(actionListener, never()).onFailure(any());
     }
@@ -476,7 +482,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Arrange
         String memoryContainerId = "container-123";
         String query = "test query";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query(query).build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", query));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock search response with multiple results
@@ -531,39 +542,45 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
 
         // Assert
-        ArgumentCaptor<MLSearchMemoriesResponse> responseCaptor = ArgumentCaptor.forClass(MLSearchMemoriesResponse.class);
+        ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
 
-        MLSearchMemoriesResponse response = responseCaptor.getValue();
+        SearchResponse response = responseCaptor.getValue();
         assertNotNull(response);
-        assertEquals(2, response.getHits().size());
+        assertEquals(2, response.getHits().getHits().length);
 
         // Verify first result
-        MemorySearchResult result1 = response.getHits().get(0);
-        assertEquals("memory-1", result1.getMemoryId());
-        assertEquals("First memory", result1.getMemory());
-        assertEquals(0.9f, result1.getScore(), 0.001);
-        assertEquals("session-1", result1.getSessionId());
-        assertEquals("user-1", result1.getUserId());
-        assertEquals("agent-1", result1.getAgentId());
-        assertEquals(MemoryType.SEMANTIC, result1.getMemoryType());
-        assertEquals("user", result1.getRole());
-        assertNotNull(result1.getTags());
-        assertEquals("value1", result1.getTags().get("key1"));
+        hit1 = response.getHits().getHits()[0];
+        assertEquals("memory-1", hit1.getId());
+        assertEquals(0.9f, hit1.getScore(), 0.001);
+        Map<String, Object> source1 = hit1.getSourceAsMap();
+        assertEquals("First memory", source1.get("memory"));
+        assertEquals("session-1", source1.get("session_id"));
+        assertEquals("user-1", source1.get("user_id"));
+        assertEquals("agent-1", source1.get("agent_id"));
+        assertEquals("RAW_MESSAGE", source1.get("memory_type"));
+        assertEquals("user", source1.get("role"));
 
         // Verify second result
-        MemorySearchResult result2 = response.getHits().get(1);
-        assertEquals("memory-2", result2.getMemoryId());
-        assertEquals("Second memory", result2.getMemory());
-        assertEquals(0.8f, result2.getScore(), 0.001);
-        assertEquals(MemoryType.SEMANTIC, result2.getMemoryType());
+        hit2 = response.getHits().getHits()[1];
+        assertEquals("memory-2", hit2.getId());
+        assertEquals(0.8f, hit2.getScore(), 0.001);
+        Map<String, Object> source2 = hit2.getSourceAsMap();
+        assertEquals("Second memory", source2.get("memory"));
+        assertEquals("session-2", source2.get("session_id"));
+        assertEquals("FACT", source2.get("memory_type"));
     }
 
     @Test
     public void testDoExecute_TimedOut() {
         // Arrange
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock search response with timeout
@@ -595,13 +612,13 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
 
         // Assert
-        ArgumentCaptor<MLSearchMemoriesResponse> responseCaptor = ArgumentCaptor.forClass(MLSearchMemoriesResponse.class);
+        ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
 
-        MLSearchMemoriesResponse response = responseCaptor.getValue();
+        SearchResponse response = responseCaptor.getValue();
         assertNotNull(response);
         assertTrue(response.isTimedOut());
-        assertEquals(0, response.getHits().size());
+        assertEquals(0, response.getHits().getHits().length);
     }
 
     @Test
@@ -629,7 +646,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_BlankMemoryContainerId() {
         // Arrange - test with blank (empty string) memory container ID
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId("").query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId("")
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Act
@@ -652,7 +674,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_NullMemoryContainerId() {
         // Arrange - test with null memory container ID
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(null).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(null)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Act
@@ -676,7 +703,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     public void testDoExecute_MultiTenancyEnabledWithNullTenantId() {
         // Arrange - when multi-tenancy is enabled, null tenant ID should fail
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest
             .builder()
             .mlSearchMemoriesInput(input)
@@ -706,7 +738,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_WhitespaceOnlyMemoryContainerId() {
         // Arrange - test with whitespace-only memory container ID
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId("   ").query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId("   ")
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Act
@@ -730,7 +767,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     public void testSearchMemories_ParseSearchResponseFailure() {
         // Arrange - create a scenario where parseSearchResponse throws an exception
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock getMemoryContainer with 3 parameters
@@ -782,7 +824,12 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
     public void testSearchMemories_SearchHitWithMissingFields() {
         // Arrange - test parseSearchResponse with SearchHits missing required fields
         String memoryContainerId = "container-123";
-        MLSearchMemoriesInput input = MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query("test query").build();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock getMemoryContainer

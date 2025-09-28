@@ -33,12 +33,16 @@ import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryOperationsServiceAdditionalTests {
 
     @Mock
     private Client client;
+
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
 
     @Mock
     private ActionListener<List<MemoryResult>> operationsListener;
@@ -74,15 +78,15 @@ public class MemoryOperationsServiceAdditionalTests {
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         Map<String, String> namespace = Map.of(SESSION_ID_FIELD, sessionId);
         memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
 
-        verify(client, times(2)).bulk(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
