@@ -80,6 +80,7 @@ public class MLAddMemoriesInputTest {
             .namespace(namespace)
             .infer(true)
             .tags(testTags)
+            .ownerId("owner-123")
             .build();
 
         // Minimal input (only required fields)
@@ -87,6 +88,7 @@ public class MLAddMemoriesInputTest {
             .builder()
             .memoryContainerId("container-123")
             .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Single message").build()))
+            .ownerId("owner-minimal")
             .build();
 
         // Input without optional fields
@@ -98,6 +100,7 @@ public class MLAddMemoriesInputTest {
             .namespace(Map.of(SESSION_ID_FIELD, "session-456", "agent_id", "agent-789"))
             .infer(true)
             .tags(testTags)
+            .ownerId("owner-999")
             .build();
     }
 
@@ -111,6 +114,7 @@ public class MLAddMemoriesInputTest {
         assertEquals("agent-789", inputWithAllFields.getAgentId());
         assertEquals(Boolean.TRUE, inputWithAllFields.isInfer());
         assertEquals(testTags, inputWithAllFields.getTags());
+        assertEquals("owner-123", inputWithAllFields.getOwnerId());
     }
 
     @Test
@@ -122,6 +126,7 @@ public class MLAddMemoriesInputTest {
         assertNull(inputMinimal.getAgentId());
         assertFalse(inputMinimal.isInfer());
         assertNull(inputMinimal.getTags());
+        assertEquals("owner-minimal", inputMinimal.getOwnerId());
     }
 
     @Test
@@ -144,6 +149,7 @@ public class MLAddMemoriesInputTest {
         assertEquals(inputWithAllFields.getAgentId(), deserialized.getAgentId());
         assertEquals(inputWithAllFields.isInfer(), deserialized.isInfer());
         assertEquals(inputWithAllFields.getTags(), deserialized.getTags());
+        // Note: ownerId is not serialized in the current implementation
     }
 
     @Test
@@ -160,6 +166,7 @@ public class MLAddMemoriesInputTest {
         assertNull(deserialized.getAgentId());
         assertFalse(deserialized.isInfer());
         assertNull(deserialized.getTags());
+        // Note: ownerId is not serialized in the current implementation
     }
 
     @Test
@@ -170,6 +177,7 @@ public class MLAddMemoriesInputTest {
             .memoryContainerId("container-123")
             .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Test").build()))
             .tags(new HashMap<>())
+            .ownerId("owner-empty-tags")
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
@@ -185,14 +193,36 @@ public class MLAddMemoriesInputTest {
         // Test null memoryContainerId
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput(null, WorkingMemoryType.CONVERSATIONAL, testMessages, null, null, null, false, null, null)
+            () -> new MLAddMemoriesInput(
+                null,
+                WorkingMemoryType.CONVERSATIONAL,
+                testMessages,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                "owner-1"
+            )
         );
         assertEquals("No memory container id provided", exception.getMessage());
 
         // Test null messages with infer=true
         exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput("container-1", WorkingMemoryType.CONVERSATIONAL, null, null, null, null, true, null, null)
+            () -> new MLAddMemoriesInput(
+                "container-1",
+                WorkingMemoryType.CONVERSATIONAL,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                "owner-1"
+            )
         );
         assertEquals("No messages provided when inferring memory", exception.getMessage());
 
@@ -208,7 +238,8 @@ public class MLAddMemoriesInputTest {
                 null,
                 true,
                 null,
-                null
+                null,
+                "owner-1"
             )
         );
         assertEquals("No messages provided when inferring memory", exception.getMessage());
@@ -223,7 +254,8 @@ public class MLAddMemoriesInputTest {
             null,
             false,
             null,
-            null
+            null,
+            "owner-1"
         );
         assertNotNull(validInput);
     }
@@ -242,6 +274,7 @@ public class MLAddMemoriesInputTest {
         assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
         assertTrue(jsonString.contains("\"infer\":true"));
         assertTrue(jsonString.contains("\"topic\":\"greeting\""));
+        assertTrue(jsonString.contains("\"owner_id\":\"owner-123\""));
     }
 
     @Test
@@ -257,6 +290,7 @@ public class MLAddMemoriesInputTest {
         assertTrue(!jsonString.contains("\"agent_id\""));
         assertTrue(jsonString.contains("\"infer\":false"));
         assertTrue(!jsonString.contains("\"tags\""));
+        assertTrue(jsonString.contains("\"owner_id\":\"owner-minimal\""));
     }
 
     @Test
@@ -338,18 +372,21 @@ public class MLAddMemoriesInputTest {
             .builder()
             .memoryContainerId("container-123")
             .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Initial").build()))
+            .ownerId("owner-setters")
             .build();
 
         input.setMemoryContainerId("new-container");
         input.setNamespace(Map.of(SESSION_ID_FIELD, "new-session", "agent_id", "new-agent"));
         input.setInfer(true);
         input.setTags(testTags);
+        input.setOwnerId("new-owner");
 
         assertEquals("new-container", input.getMemoryContainerId());
         assertEquals("new-session", input.getSessionId());
         assertEquals("new-agent", input.getAgentId());
         assertEquals(Boolean.TRUE, input.isInfer());
         assertEquals(testTags, input.getTags());
+        assertEquals("new-owner", input.getOwnerId());
     }
 
     @Test
@@ -361,7 +398,12 @@ public class MLAddMemoriesInputTest {
         }
 
         // Should succeed with large number of messages
-        MLAddMemoriesInput input = MLAddMemoriesInput.builder().memoryContainerId("container-1").messages(manyMessages).build();
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-1")
+            .messages(manyMessages)
+            .ownerId("owner-large")
+            .build();
         assertEquals(1000, input.getMessages().size());
     }
 
@@ -382,6 +424,7 @@ public class MLAddMemoriesInputTest {
             .messages(specialMessages)
             .namespace(Map.of(SESSION_ID_FIELD, "session-🔥"))
             .tags(specialTags)
+            .ownerId("owner-special")
             .build();
 
         // Test serialization round trip
