@@ -78,53 +78,24 @@ public class MLHttpClientFactory {
                 if (bytes.length != 4) {
                     return true;
                 } else {
-                    // case 127.0.0.1
-                    boolean isLocalHost = eqCheckValue(bytes[0], 127)
-                        && eqCheckValue(bytes[1], 0)
-                        && eqCheckValue(bytes[2], 0)
-                        && eqCheckValue(bytes[3], 1);
-                    if (isLocalHost) {
+                    if (isPrivateIPv4(bytes)) {
                         return true;
                     }
-                    // case 10.x.x.x
-                    return eqCheckValue(bytes[0], 10) ||
-                    // case 172.16.x.x - 172.31.x.x
-                        (eqCheckValue(bytes[0], 172) && rangeCheckValue(bytes[1])) ||
-                        // case 192.168.x.x
-                        (eqCheckValue(bytes[0], 192) && eqCheckValue(bytes[1], 168)) ||
-                        // case 169.254.x.x
-                        (eqCheckValue(bytes[0], 169) && eqCheckValue(bytes[1], 254));
                 }
             }
         }
         return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
     }
 
-    private static boolean eqCheckValue(byte input, int targetValue) {
-        int original = input & 0xff;
-        return original == targetValue || parseWithRadix(original, 8) == targetValue || parseWithRadix(original, 16) == targetValue;
-    }
+    private static boolean isPrivateIPv4(byte[] bytes) {
+        int first = bytes[0] & 0xff;
+        int second = bytes[1] & 0xff;
 
-    private static boolean rangeCheckValue(byte input) {
-        int original = input & 0xff;
-        if (original >= 16 && original <= 31) {
-            return true;
-        } else {
-            int octalValue = parseWithRadix(original, 8);
-            if (octalValue >= 16 && octalValue <= 31) {
-                return true;
-            } else {
-                int hexValue = parseWithRadix(original, 16);
-                return hexValue >= 16 && hexValue <= 31;
-            }
-        }
-    }
-
-    private static int parseWithRadix(int input, int radix) {
-        try {
-            return Integer.parseInt(String.valueOf(input), radix);
-        } catch (NumberFormatException e) {
-            return input;
-        }
+        // 127.0.0.1, 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x
+        return (first == 127 && second == 0)
+            || (first == 10)
+            || (first == 172 && second >= 16 && second <= 31)
+            || (first == 192 && second == 168)
+            || (first == 169 && second == 254);
     }
 }
