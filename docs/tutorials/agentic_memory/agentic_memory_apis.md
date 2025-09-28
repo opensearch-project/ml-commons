@@ -10,9 +10,9 @@ POST _plugins/_ml/memory_containers/_create
     "embedding_model_type": "TEXT_EMBEDDING",
     "embedding_model_id": "{{embed_model}}",
     "embedding_dimension": 1024,
-    "disable_history": false,
-    "disable_session": false,
-    "use_system_index": false,
+    "disable_history": false, // default is false
+    "disable_session": false, // default is false
+    "use_system_index": true, // default is true
     "llm_id": "{{llm}}",
     "strategies": [
       {
@@ -153,6 +153,19 @@ Sample response
 ```
 ## 2.3 Search working memory
 ```
+GET _plugins/_ml/memory_containers/{{mem_container_id}}/memories/working/_search
+{
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    {
+      "created_time": {
+        "order": "asc"
+      }
+    }
+  ]
+}
 ```
 
 ## 2.4 Delete working memory
