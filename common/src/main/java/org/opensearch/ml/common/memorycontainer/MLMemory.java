@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
@@ -45,8 +44,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     private String memory;
     private MemoryType memoryType;
 
-    // Optional fields
-    private String role;
     private Map<String, String> namespace;
     private Map<String, String> tags;
 
@@ -62,7 +59,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     public MLMemory(
         String memory,
         MemoryType memoryType,
-        String role,
         Map<String, String> namespace,
         Map<String, String> tags,
         Instant createdTime,
@@ -72,7 +68,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     ) {
         this.memory = memory;
         this.memoryType = memoryType;
-        this.role = role;
         this.namespace = namespace;
         this.tags = tags;
         this.createdTime = createdTime;
@@ -84,7 +79,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     public MLMemory(StreamInput in) throws IOException {
         this.memory = in.readString();
         this.memoryType = in.readEnum(MemoryType.class);
-        this.role = in.readOptionalString();
         if (in.readBoolean()) {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
@@ -101,7 +95,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(memory);
         out.writeEnum(memoryType);
-        out.writeOptionalString(role);
         if (namespace != null && !namespace.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
@@ -126,9 +119,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         builder.field(MEMORY_FIELD, memory);
         builder.field(MEMORY_TYPE_FIELD, memoryType.getValue());
 
-        if (role != null) {
-            builder.field(ROLE_FIELD, role);
-        }
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
         }
@@ -154,7 +144,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     public static MLMemory parse(XContentParser parser) throws IOException {
         String memory = null;
         MemoryType memoryType = null;
-        String role = null;
         Map<String, String> namespace = null;
         Map<String, String> tags = null;
         Instant createdTime = null;
@@ -173,9 +162,6 @@ public class MLMemory implements ToXContentObject, Writeable {
                     break;
                 case MEMORY_TYPE_FIELD:
                     memoryType = MemoryType.fromString(parser.text());
-                    break;
-                case ROLE_FIELD:
-                    role = parser.text();
                     break;
                 case TAGS_FIELD:
                     tags = StringUtils.getParameterMap(parser.map());
@@ -207,7 +193,6 @@ public class MLMemory implements ToXContentObject, Writeable {
             .builder()
             .memory(memory)
             .memoryType(memoryType)
-            .role(role)
             .namespace(namespace)
             .tags(tags)
             .createdTime(createdTime)
@@ -236,9 +221,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         // Use mutable map for optional fields
         Map<String, Object> result = new java.util.HashMap<>(map);
 
-        if (role != null) {
-            result.put(ROLE_FIELD, role);
-        }
         if (namespace != null && !namespace.isEmpty()) {
             result.put(NAMESPACE_FIELD, namespace);
             result.put(NAMESPACE_SIZE_FIELD, namespace.size());

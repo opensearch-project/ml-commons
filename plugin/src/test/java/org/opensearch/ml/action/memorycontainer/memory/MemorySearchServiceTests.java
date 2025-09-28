@@ -37,6 +37,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.transport.client.Client;
@@ -45,6 +46,9 @@ public class MemorySearchServiceTests {
 
     @Mock
     private Client client;
+
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
 
     @Mock
     private ActionListener<List<FactSearchResult>> listener;
@@ -60,7 +64,7 @@ public class MemorySearchServiceTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memorySearchService = new MemorySearchService(client, memoryContainerHelper);
+        memorySearchService = new MemorySearchService(memoryContainerHelper);
         sessionId = "session-123";
         List<MessageInput> messages = new ArrayList<>();
         messages.add(MessageInput.builder().role("user").contentText("hello, I'm bob. I like swimming").build());
