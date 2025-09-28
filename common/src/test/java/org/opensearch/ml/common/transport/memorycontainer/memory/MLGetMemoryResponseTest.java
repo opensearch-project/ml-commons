@@ -35,7 +35,6 @@ public class MLGetMemoryResponseTest {
             .builder()
             .memory("Test memory content")
             .memoryType(MemoryType.SEMANTIC)
-            .role("user")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
@@ -49,7 +48,6 @@ public class MLGetMemoryResponseTest {
         assertNotNull(responseNormal.getLongTermMemory());
         assertEquals("Test memory content", responseNormal.getLongTermMemory().getMemory());
         assertEquals(MemoryType.SEMANTIC, responseNormal.getLongTermMemory().getMemoryType());
-        assertEquals("user", responseNormal.getLongTermMemory().getRole());
     }
 
     @Test
@@ -62,7 +60,6 @@ public class MLGetMemoryResponseTest {
         assertNotNull(deserialized.getLongTermMemory());
         assertEquals(responseNormal.getLongTermMemory().getMemory(), deserialized.getLongTermMemory().getMemory());
         assertEquals(responseNormal.getLongTermMemory().getMemoryType(), deserialized.getLongTermMemory().getMemoryType());
-        assertEquals(responseNormal.getLongTermMemory().getRole(), deserialized.getLongTermMemory().getRole());
     }
 
     @Test
@@ -94,7 +91,6 @@ public class MLGetMemoryResponseTest {
         assertNotNull(result.getLongTermMemory());
         assertEquals("Test memory content", result.getLongTermMemory().getMemory());
         assertEquals(MemoryType.SEMANTIC, result.getLongTermMemory().getMemoryType());
-        assertEquals("user", result.getLongTermMemory().getRole());
     }
 
     @Test(expected = UncheckedIOException.class)
@@ -119,6 +115,5 @@ public class MLGetMemoryResponseTest {
         assertNotNull(jsonString);
         assertTrue(jsonString.contains("Test memory content"));
         assertTrue(jsonString.contains("SEMANTIC"));
-        assertTrue(jsonString.contains("user"));
     }
 }

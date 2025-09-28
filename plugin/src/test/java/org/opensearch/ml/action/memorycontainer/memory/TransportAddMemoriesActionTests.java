@@ -208,7 +208,7 @@ public class TransportAddMemoriesActionTests {
         }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(container)).thenReturn(null);
+        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn(null);
         
         transportAddMemoriesAction.doExecute(task, request, actionListener);
         
@@ -240,7 +240,7 @@ public class TransportAddMemoriesActionTests {
         }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(container)).thenReturn("memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn("memory-index");
         
         transportAddMemoriesAction.doExecute(task, request, actionListener);
         
@@ -272,7 +272,7 @@ public class TransportAddMemoriesActionTests {
         }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(container)).thenReturn("memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn("memory-index");
         
         transportAddMemoriesAction.doExecute(task, request, actionListener);
         
@@ -309,7 +309,7 @@ public class TransportAddMemoriesActionTests {
         }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(container)).thenReturn("memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn("memory-index");
         
         transportAddMemoriesAction.doExecute(task, request, actionListener);
         
@@ -350,7 +350,7 @@ public class TransportAddMemoriesActionTests {
         }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
         
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(container)).thenReturn("memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn("memory-index");
         
         transportAddMemoriesAction.doExecute(task, request, actionListener);
         
