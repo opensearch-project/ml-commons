@@ -127,15 +127,33 @@ public class McpToolsHelper {
             ActionListener<List<McpToolRegisterInput>> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<SearchResponse> actionListener = ActionListener.wrap(r -> {
                 List<McpToolRegisterInput> mcpTools = new ArrayList<>();
+                List<IOException> errors = new ArrayList<>();
+
                 Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                     try {
                         McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                         mcpTools.add(mcpTool);
                     } catch (IOException e) {
-                        listener.onFailure(e);
+                        errors.add(e); // Collect the error instead of calling listener.onFailure
                     }
                 });
-                restoreListener.onResponse(mcpTools);
+
+                if (!errors.isEmpty()) {
+                    // Create a composite exception with all errors
+                    String errorMessage = String
+                        .format("Failed to parse %d out of %d MCP tools", errors.size(), r.getHits().getHits().length);
+                    OpenSearchException compositeException = new OpenSearchException(errorMessage);
+
+                    // Add all errors as suppressed exceptions
+                    for (IOException error : errors) {
+                        compositeException.addSuppressed(error);
+                    }
+
+                    log.error("Multiple parsing errors occurred: {}", errorMessage);
+                    restoreListener.onFailure(compositeException);
+                } else {
+                    restoreListener.onResponse(mcpTools);
+                }
             }, e -> {
                 String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
                 log.error(errMsg, e);
@@ -159,15 +177,32 @@ public class McpToolsHelper {
     private ActionListener<SearchResponse> createSearchResponseListener(ActionListener<List<McpToolRegisterInput>> listener) {
         return ActionListener.wrap(r -> {
             List<McpToolRegisterInput> mcpTools = new ArrayList<>();
+            List<IOException> errors = new ArrayList<>();
+
             Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                 try {
                     McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                     mcpTools.add(mcpTool);
                 } catch (IOException e) {
-                    listener.onFailure(e);
+                    errors.add(e);
                 }
             });
-            listener.onResponse(mcpTools);
+
+            if (!errors.isEmpty()) {
+                // Create a composite exception with all errors
+                String errorMessage = String.format("Failed to parse %d out of %d MCP tools", errors.size(), r.getHits().getHits().length);
+                OpenSearchException compositeException = new OpenSearchException(errorMessage);
+
+                // Add all errors as suppressed exceptions
+                for (IOException error : errors) {
+                    compositeException.addSuppressed(error);
+                }
+
+                log.error("Multiple parsing errors occurred: {}", errorMessage);
+                listener.onFailure(compositeException);
+            } else {
+                listener.onResponse(mcpTools);
+            }
         }, e -> {
             String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
             log.error(errMsg, e);
@@ -178,6 +213,7 @@ public class McpToolsHelper {
     public void searchToolsWithPrimaryTermAndSeqNo(List<String> toolNames, ActionListener<SearchResponse> listener) {
         SearchRequest searchRequest = buildSearchRequest(toolNames);
         searchRequest.source().seqNoAndPrimaryTerm(true);
+        searchRequest.source().size(MAX_TOOL_NUMBER);
         client.search(searchRequest, listener);
     }
 
@@ -187,16 +223,34 @@ public class McpToolsHelper {
                 .runBefore(listener, context::restore);
             ActionListener<SearchResponse> actionListener = ActionListener.wrap(r -> {
                 Map<String, Tuple<McpToolRegisterInput, Long>> mcpTools = new HashMap<>();
+                List<IOException> errors = new ArrayList<>();
+
                 Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                     long version = x.getVersion();
                     try {
                         McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                         mcpTools.put(mcpTool.getName(), Tuple.tuple(mcpTool, version));
                     } catch (IOException e) {
-                        restoreListener.onFailure(e);
+                        errors.add(e); // Collect the error instead of calling restoreListener.onFailure
                     }
                 });
-                restoreListener.onResponse(mcpTools);
+
+                if (!errors.isEmpty()) {
+                    // Create a composite exception with all errors
+                    String errorMessage = String
+                        .format("Failed to parse %d out of %d MCP tools", errors.size(), r.getHits().getHits().length);
+                    OpenSearchException compositeException = new OpenSearchException(errorMessage);
+
+                    // Add all errors as suppressed exceptions
+                    for (IOException error : errors) {
+                        compositeException.addSuppressed(error);
+                    }
+
+                    log.error("Multiple parsing errors occurred: {}", errorMessage);
+                    restoreListener.onFailure(compositeException);
+                } else {
+                    restoreListener.onResponse(mcpTools);
+                }
             }, e -> {
                 String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
                 log.error(errMsg, e);
@@ -231,6 +285,7 @@ public class McpToolsHelper {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(queryBuilder);
         searchRequest.source(searchSourceBuilder);
+        searchRequest.source().size(MAX_TOOL_NUMBER);
         return searchRequest;
     }
 

@@ -63,7 +63,7 @@ public class McpStatelessServerHolder {
                     .prompts(false)           // We don't support prompts
                     .build();
 
-                log.info("Building MCP server without pre-loaded tools (dynamic loading)...");
+                log.info("Building MCP server ...");
                 mcpStatelessAsyncServer = McpServer
                     .async(mcpStatelessServerTransportProvider)
                     .serverInfo("OpenSearch-MCP-Stateless-Server", "0.1.0")

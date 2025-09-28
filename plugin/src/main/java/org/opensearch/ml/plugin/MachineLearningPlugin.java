@@ -198,7 +198,6 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightConfigPutAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
-import org.opensearch.ml.common.transport.mcpserver.action.*;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpServerAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;

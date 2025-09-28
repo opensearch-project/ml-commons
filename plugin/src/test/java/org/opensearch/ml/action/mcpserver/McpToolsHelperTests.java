@@ -188,7 +188,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         setupMalformedJsonResponse();
         ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllToolsWithVersion(actionListener);
-        verifyIOException(actionListener);
+        verifyCompositeIOException(actionListener);
     }
 
     @Test
@@ -223,7 +223,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         setupMalformedJsonResponse();
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllTools(actionListener);
-        verifyIOException(actionListener);
+        verifyCompositeIOException(actionListener);
     }
 
     @Test
@@ -231,7 +231,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         setupMalformedJsonResponse();
         ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
-        verifyIOException(actionListener);
+        verifyCompositeIOException(actionListener);
     }
 
     // ==================== TOOL SPECIFICATION TESTS ====================
@@ -345,11 +345,24 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
     }
 
-    private void verifyIOException(ActionListener<?> actionListener) {
+    private void verifyCompositeIOException(ActionListener<?> actionListener) {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue() instanceof IOException);
+
+        Exception exception = argumentCaptor.getValue();
+        assertTrue(
+            "Expected OpenSearchException but got: " + exception.getClass().getSimpleName(),
+            exception instanceof OpenSearchException
+        );
+
+        OpenSearchException openSearchException = (OpenSearchException) exception;
+        assertTrue("Expected error message to contain 'Failed to parse'", openSearchException.getMessage().contains("Failed to parse"));
+
+        // Verify that the original IOException is suppressed
+        Throwable[] suppressed = openSearchException.getSuppressed();
+        assertEquals("Expected exactly one suppressed exception", 1, suppressed.length);
+        assertTrue("Expected suppressed exception to be IOException", suppressed[0] instanceof IOException);
     }
 
 }
