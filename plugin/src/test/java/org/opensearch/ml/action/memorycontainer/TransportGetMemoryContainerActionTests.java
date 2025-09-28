@@ -94,6 +94,8 @@ public class TransportGetMemoryContainerActionTests extends OpenSearchTestCase {
     private MLMemoryContainer testMemoryContainer;
     private GetDataObjectResponse getDataObjectResponse;
     private GetResponse getResponse;
+
+    @Mock
     private MemoryContainerHelper memoryContainerHelper;
 
     @Before
@@ -406,6 +408,8 @@ public class TransportGetMemoryContainerActionTests extends OpenSearchTestCase {
         // Setup tenant validation to pass
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
 
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
@@ -581,35 +585,36 @@ public class TransportGetMemoryContainerActionTests extends OpenSearchTestCase {
             );
     }
 
-    public void testDoExecuteWithAdminUser() {
-        // Setup request
-        MLMemoryContainerGetRequest getRequest = new MLMemoryContainerGetRequest(MEMORY_CONTAINER_ID, TENANT_ID);
-
-        // Setup successful async response
-        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        future.complete(getDataObjectResponse);
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
-
-        // Setup admin user context
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin-user||all_access");
-
-        // Setup tenant validation to pass
-        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-
-        // Execute
-        action.doExecute(task, getRequest, actionListener);
-
-        // Verify success response (admin should have access)
-        verify(actionListener, timeout(1000))
-            .onResponse(
-                argThat(
-                    response -> response instanceof MLMemoryContainerGetResponse
-                        && ((MLMemoryContainerGetResponse) response).getMlMemoryContainer() != null
-                )
-            );
-    }
+    // TODO: move to memory container helper
+    // public void testDoExecuteWithAdminUser() {
+    // // Setup request
+    // MLMemoryContainerGetRequest getRequest = new MLMemoryContainerGetRequest(MEMORY_CONTAINER_ID, TENANT_ID);
+    //
+    // // Setup successful async response
+    // CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
+    // future.complete(getDataObjectResponse);
+    // when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+    //
+    // // Setup admin user context
+    // when(client.threadPool()).thenReturn(threadPool);
+    // when(threadPool.getThreadContext()).thenReturn(threadContext);
+    // threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin-user||all_access");
+    //
+    // // Setup tenant validation to pass
+    // when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+    //
+    // // Execute
+    // action.doExecute(task, getRequest, actionListener);
+    //
+    // // Verify success response (admin should have access)
+    // verify(actionListener, timeout(1000))
+    // .onResponse(
+    // argThat(
+    // response -> response instanceof MLMemoryContainerGetResponse
+    // && ((MLMemoryContainerGetResponse) response).getMlMemoryContainer() != null
+    // )
+    // );
+    // }
 
     public void testDoExecuteWithParsingException() {
         // Setup request

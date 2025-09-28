@@ -39,6 +39,7 @@ public class MemoryContainerConstants {
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
+    public static final String DEFAULT_MEMORY_INDEX_PREFIX = "default";
 
     // Memory index setting key
     public static final String SESSION_INDEX = "session_index";

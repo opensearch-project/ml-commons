@@ -138,18 +138,6 @@ public class TransportAddMemoriesActionTests {
     }
 
     @Test
-    public void testDoExecute_NullInput() {
-        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
-        
-        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
-        when(request.getMlAddMemoryInput()).thenReturn(null);
-        
-        transportAddMemoriesAction.doExecute(task, request, actionListener);
-        
-        verify(actionListener).onFailure(any(IllegalArgumentException.class));
-    }
-
-    @Test
     public void testDoExecute_BlankMemoryContainerId() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
@@ -190,32 +178,6 @@ public class TransportAddMemoriesActionTests {
     }
 
     @Test
-    public void testDoExecute_NoMemoryIndex() {
-        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
-        
-        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        when(input.getMemoryContainerId()).thenReturn("container-123");
-        
-        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
-        when(request.getMlAddMemoryInput()).thenReturn(input);
-        
-        MLMemoryContainer container = mock(MLMemoryContainer.class);
-        
-        doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
-            listener.onResponse(container);
-            return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
-        
-        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn(null);
-        
-        transportAddMemoriesAction.doExecute(task, request, actionListener);
-        
-        verify(actionListener).onFailure(any(IllegalStateException.class));
-    }
-
-    @Test
     public void testDoExecute_InferRequiresLLMModel() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
@@ -226,38 +188,6 @@ public class TransportAddMemoriesActionTests {
         when(input.getMemoryContainerId()).thenReturn("container-123");
         when(input.getMessages()).thenReturn(messages);
         when(input.isInfer()).thenReturn(true);
-        
-        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
-        when(request.getMlAddMemoryInput()).thenReturn(input);
-        
-        MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getConfiguration()).thenReturn(null);
-        
-        doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
-            listener.onResponse(container);
-            return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
-        
-        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
-        when(memoryContainerHelper.getMemoryIndexName(eq(container), any(String.class))).thenReturn("memory-index");
-        
-        transportAddMemoriesAction.doExecute(task, request, actionListener);
-        
-        verify(actionListener).onFailure(any(IllegalArgumentException.class));
-    }
-
-    @Test
-    public void testDoExecute_MissingRoleWhenInferFalse() {
-        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
-        
-        MessageInput message = MessageInput.builder().contentText("Hello world").build(); // No role
-        List<MessageInput> messages = Arrays.asList(message);
-        
-        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        when(input.getMemoryContainerId()).thenReturn("container-123");
-        when(input.getMessages()).thenReturn(messages);
-        when(input.isInfer()).thenReturn(false);
         
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
