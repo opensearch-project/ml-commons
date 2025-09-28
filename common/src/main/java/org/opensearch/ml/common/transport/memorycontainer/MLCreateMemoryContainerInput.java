@@ -52,7 +52,11 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         }
         this.name = name;
         this.description = description;
-        this.configuration = configuration;
+        if (configuration == null) {
+            this.configuration = MemoryConfiguration.builder().build();
+        } else {
+            this.configuration = configuration;
+        }
         this.tenantId = tenantId;
         this.backendRoles = backendRoles;
     }

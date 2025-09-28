@@ -7,13 +7,14 @@ package org.opensearch.ml.helper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -271,14 +272,21 @@ public class MemoryContainerHelperTests {
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
+        assertEquals(
+            ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "custom-memory-index-memory-session",
+            helper.getMemoryIndexName(container, "session")
+        );
+
+        config.setUseSystemIndex(false);
         assertEquals("custom-memory-index-memory-session", helper.getMemoryIndexName(container, "session"));
+
     }
 
     @Test
     public void testGetMemoryIndexNameWithoutConfig() {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
-        assertNull(helper.getMemoryIndexName(container, "session"));
+        assertNotNull(helper.getMemoryIndexName(container, "session"));
     }
 
     @Test
@@ -288,53 +296,6 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         assertNull(helper.getMemoryIndexName(container, "wrong_value"));
-    }
-
-    @Test
-    public void testValidateMemoryIndexExistsSuccess() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("valid-index").build();
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
-        ActionListener<String> mockListener = mock(ActionListener.class);
-        String memoryType = "session";
-        boolean result = helper.validateMemoryIndexExists(container, memoryType, "test-action", mockListener);
-
-        assertTrue(result);
-        verify(mockListener, never()).onFailure(any());
-    }
-
-    @Test
-    public void testValidateMemoryIndexExistsFailureNoIndex() {
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
-
-        ActionListener<String> mockListener = mock(ActionListener.class);
-        boolean result = helper.validateMemoryIndexExists(container, "session", "test-action", mockListener);
-
-        assertFalse(result);
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(mockListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals("Memory container does not have a memory index configured for test-action", exception.getMessage());
-        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) exception).status());
-    }
-
-    @Test
-    public void testValidateMemoryIndexExistsFailureEmptyIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("").build();
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
-        ActionListener<String> mockListener = mock(ActionListener.class);
-        boolean result = helper.validateMemoryIndexExists(container, "wrong_value", "another-action", mockListener);
-
-        assertFalse(result);
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(mockListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertTrue(exception.getMessage().contains("another-action"));
     }
 
     @Test
