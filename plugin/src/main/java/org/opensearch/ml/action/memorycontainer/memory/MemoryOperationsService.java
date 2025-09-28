@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.opensearch.ml.common.CommonValue.ERROR_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesIn
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.utils.MLExceptionUtils;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -198,6 +200,35 @@ public class MemoryOperationsService {
             listener.onFailure(e);
         });
         memoryContainerHelper.bulkIngestData(memoryConfig, bulkRequest, bulkResponseActionListener);
+    }
+
+    public void writeErrorToMemoryHistory(MemoryConfiguration configuration, MLAddMemoriesInput input, Exception exception) {
+        Map<String, Object> errorMemoryHistory = createErrorMemoryHistory(input, exception);
+        IndexRequest indexRequest = new IndexRequest(configuration.getLongMemoryHistoryIndexName());
+        indexRequest.source(errorMemoryHistory);
+        memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {
+            log.debug("Successfully indexed error memory history");
+        }, e -> { log.error("Failed to index error memory history", e); }));
+    }
+
+    public Map<String, Object> createErrorMemoryHistory(MLAddMemoriesInput input, Exception exception) {
+        Map<String, Object> history = new HashMap<>();
+        String ownerId = input.getOwnerId();
+        Map<String, String> namespace = input.getNamespace();
+        Map<String, String> tags = input.getTags();
+        if (ownerId == null) {
+            history.put(OWNER_ID_FIELD, ownerId);
+        }
+        history.put(CREATED_TIME_FIELD, Instant.now().toEpochMilli());
+        if (namespace != null && namespace.size() > 0) {
+            history.put(NAMESPACE_FIELD, namespace);
+            history.put(NAMESPACE_SIZE_FIELD, namespace.size());
+        }
+        if (tags != null) {
+            history.put(TAGS_FIELD, tags);
+        }
+        history.put(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(exception));
+        return history;
     }
 
     private Map<String, Object> createMemoryHistory(MemoryResult memoryResult, Map<String, String> namespace, MLAddMemoriesInput input) {
