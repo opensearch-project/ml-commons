@@ -7,7 +7,6 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -147,12 +146,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class))).thenReturn(true);
 
-        // Setup memory index validation to pass
-        when(
-            memoryContainerHelper
-                .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class))
-        ).thenReturn(true);
-
         // Setup memory index name
         when(memoryContainerHelper.getMemoryIndexName(any(MLMemoryContainer.class), any(String.class))).thenReturn(MEMORY_INDEX_NAME);
     }
@@ -191,8 +184,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper)
-            .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
         verify(memoryContainerHelper)
             .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
@@ -269,12 +260,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class))).thenReturn(true);
 
-        // Setup memory index validation to pass
-        when(
-            memoryContainerHelper
-                .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class))
-        ).thenReturn(true);
-
         // Setup memory index name
         when(memoryContainerHelper.getMemoryIndexName(any(MLMemoryContainer.class), any(String.class))).thenReturn(MEMORY_INDEX_NAME);
 
@@ -298,10 +283,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Verify access control was checked
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-
-        // Verify memory index validation was called
-        verify(memoryContainerHelper)
-            .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class));
 
         // Verify memory index name was retrieved
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
@@ -342,8 +323,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper)
-            .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
         verify(memoryContainerHelper)
             .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
@@ -387,8 +366,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper)
-            .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
         verify(memoryContainerHelper)
             .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
@@ -428,8 +405,6 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper)
-            .validateMemoryIndexExists(any(MLMemoryContainer.class), anyString(), any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
         verify(memoryContainerHelper)
             .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));

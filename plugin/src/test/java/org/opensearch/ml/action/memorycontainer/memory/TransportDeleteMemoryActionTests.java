@@ -17,6 +17,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,6 +28,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -146,24 +150,33 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
 
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        when(mockGetResponse.isExists()).thenReturn(true);
+        Map<String, Object> map = new HashMap<>();
+        when(mockGetResponse.getSourceAsMap()).thenReturn(map);
+        // Mock delete operation to fail
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(), any());
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
         // Mock checkMemoryContainerAccess (user is null from RestActionUtils.getUserContext)
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
-
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), any(), eq("delete"), any())).thenReturn(true);
 
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
 
         // Mock delete operation
         doAnswer(invocation -> {
-            DeleteRequest request = invocation.getArgument(0);
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            assertEquals("test-memory-index", request.index());
+            DeleteRequest request = invocation.getArgument(1);
+            ActionListener<DeleteResponse> listener = invocation.getArgument(2);
             assertEquals(memoryId, request.id());
             listener.onResponse(mockDeleteResponse);
             return null;
-        }).when(client).delete(any(DeleteRequest.class), any());
+        }).when(memoryContainerHelper).deleteData(any(), any(DeleteRequest.class), any());
 
         // Act
         transportDeleteMemoryAction.doExecute(task, deleteRequest, actionListener);
@@ -171,8 +184,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
-        verify(client, times(1)).delete(any(DeleteRequest.class), any());
+        verify(memoryContainerHelper, times(1)).deleteData(any(), any(DeleteRequest.class), any());
         verify(actionListener, times(1)).onResponse(mockDeleteResponse);
         verify(actionListener, never()).onFailure(any());
     }
@@ -229,7 +241,6 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, never()).validateMemoryIndexExists(any(), any(), any(), any());
         verify(client, never()).delete(any(), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -258,9 +269,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
 
         // Mock checkMemoryContainerAccess (user is null from RestActionUtils.getUserContext)
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
-
-        // Mock validateMemoryIndexExists to return false
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), any(), eq("delete"), any())).thenReturn(false);
+        when(memoryContainerHelper.getMemoryIndexName(any(), any())).thenReturn(null);
 
         // Act
         transportDeleteMemoryAction.doExecute(task, deleteRequest, actionListener);
@@ -268,21 +277,19 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
-        verify(memoryContainerHelper, never()).getMemoryIndexName(any(), any());
-        verify(client, never()).delete(any(), any());
+        verify(memoryContainerHelper, times(1)).getMemoryIndexName(any(), any());
+        verify(memoryContainerHelper, never()).getData(any(), any(), any());
+        verify(memoryContainerHelper, never()).deleteData(any(), any(), any());
         // validateMemoryIndexExists handles the error response
     }
 
     @Test
-    public void testDoExecute_DeleteFailure() {
+    public void testDoExecute_DeleteFailue_MemoryNotExists() {
         // Arrange
         String memoryContainerId = "container-123";
         String memoryType = "conversation";
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
-
-        Exception deleteError = new RuntimeException("Delete failed");
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
@@ -294,18 +301,17 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Mock checkMemoryContainerAccess (user is null from RestActionUtils.getUserContext)
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
 
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), any(), eq("delete"), any())).thenReturn(true);
-
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
 
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        when(mockGetResponse.isExists()).thenReturn(false);
         // Mock delete operation to fail
         doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onFailure(deleteError);
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
             return null;
-        }).when(client).delete(any(DeleteRequest.class), any());
+        }).when(memoryContainerHelper).getData(any(), any(), any());
 
         // Act
         transportDeleteMemoryAction.doExecute(task, deleteRequest, actionListener);
@@ -313,21 +319,22 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
-        verify(client, times(1)).delete(any(DeleteRequest.class), any());
-        verify(actionListener, times(1)).onFailure(deleteError);
+        verify(memoryContainerHelper, times(1)).getData(any(), any(), any());
+        verify(memoryContainerHelper, never()).deleteData(any(), any(), any());
         verify(actionListener, never()).onResponse(any());
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        Exception capturedError = captor.getValue();
+        assertEquals("Memory not found", capturedError.getMessage());
     }
 
     @Test
-    public void testDoExecute_ExceptionDuringDelete() {
+    public void testDoExecute_ExceptionDuringDelete_NoAccess() {
         // Arrange
         String memoryContainerId = "container-123";
         String memoryType = "conversation";
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
-
-        RuntimeException unexpectedError = new RuntimeException("Unexpected error");
 
         // Mock getMemoryContainer
         doAnswer(invocation -> {
@@ -339,14 +346,24 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Mock checkMemoryContainerAccess (user is null from RestActionUtils.getUserContext)
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
 
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any())).thenReturn(true);
-
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
 
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        when(mockGetResponse.isExists()).thenReturn(true);
+        Map<String, Object> map = new HashMap<>();
+        when(mockGetResponse.getSourceAsMap()).thenReturn(map);
+        // Mock delete operation to fail
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(), any());
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(false);
+
         // Mock client.delete to throw exception
-        doThrow(unexpectedError).when(client).delete(any(DeleteRequest.class), any());
+        // doThrow(unexpectedError).when(memoryContainerHelper).deleteData(any(), any(DeleteRequest.class), any());
 
         // Act
         transportDeleteMemoryAction.doExecute(task, deleteRequest, actionListener);
@@ -354,10 +371,63 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("delete"), any());
-        verify(client, times(1)).delete(any(), any());
-        verify(actionListener, times(1)).onFailure(unexpectedError);
+        verify(memoryContainerHelper, never()).deleteData(any(), any(), any());
         verify(actionListener, never()).onResponse(any());
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        Exception capturedError = captor.getValue();
+        assertEquals("User doesn't have permissions to delete this memory", capturedError.getMessage());
+    }
+
+    @Test
+    public void testDoExecute_ExceptionDuringDelete_FailedToDelete() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        String memoryType = "conversation";
+        String memoryId = "memory-456";
+        MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+
+        // Mock checkMemoryContainerAccess (user is null from RestActionUtils.getUserContext)
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock getMemoryIndexName
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
+
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        when(mockGetResponse.isExists()).thenReturn(true);
+        Map<String, Object> map = new HashMap<>();
+        when(mockGetResponse.getSourceAsMap()).thenReturn(map);
+        // Mock delete operation to fail
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(), any());
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock client.delete to throw exception
+        doThrow(new RuntimeException("test exception")).when(memoryContainerHelper).deleteData(any(), any(DeleteRequest.class), any());
+
+        // Act
+        transportDeleteMemoryAction.doExecute(task, deleteRequest, actionListener);
+
+        // Assert
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
+        verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
+        verify(memoryContainerHelper, times(1)).deleteData(any(), any(), any());
+        verify(actionListener, never()).onResponse(any());
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(captor.capture());
+        Exception capturedError = captor.getValue();
+        assertEquals("test exception", capturedError.getMessage());
     }
 
     @Test

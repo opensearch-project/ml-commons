@@ -212,34 +212,6 @@ public class MemoryContainerHelper {
         return null;
     }
 
-    /**
-     * Validate container has memory index configured
-     * 
-     * @param container the memory container
-     * @param actionName the action being performed (for error messages)
-     * @param listener action listener to notify on failure
-     * @return true if valid, false if validation failed (listener will be notified)
-     */
-    public boolean validateMemoryIndexExists(
-        MLMemoryContainer container,
-        String memoryType,
-        String actionName,
-        ActionListener<?> listener
-    ) {
-        String indexName = getMemoryIndexName(container, memoryType);
-        if (indexName == null || indexName.isEmpty()) {
-            listener
-                .onFailure(
-                    new OpenSearchStatusException(
-                        "Memory container does not have a memory index configured for " + actionName,
-                        RestStatus.BAD_REQUEST
-                    )
-                );
-            return false;
-        }
-        return true;
-    }
-
     public void getData(MemoryConfiguration configuration, GetRequest getRequest, ActionListener<GetResponse> listener) {
         if (configuration.isUseSystemIndex()) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -249,6 +221,17 @@ public class MemoryContainerHelper {
             client.get(getRequest, listener);
         }
     }
+
+    // public void getData(MemoryConfiguration configuration, GetDataObjectRequest getRequest, ActionListener<GetResponse> listener) {
+    // if (configuration.isUseSystemIndex()) {
+    // try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+    // sdkClient.getDataObjectAsync(getRequest).whenComplete(SdkClientUtils.wrapGetCompletion(ActionListener.runBefore(listener,
+    // context::restore)));
+    // }
+    // } else {
+    // sdkClient.getDataObjectAsync(getRequest).whenComplete(SdkClientUtils.wrapGetCompletion(listener));
+    // }
+    // }
 
     public void searchData(MemoryConfiguration configuration, SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         if (configuration.isUseSystemIndex()) {
@@ -267,7 +250,9 @@ public class MemoryContainerHelper {
     ) {
         if (configuration.isUseSystemIndex()) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
+                sdkClient
+                    .searchDataObjectAsync(searchRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.runBefore(listener, context::restore)));
             }
         } else {
             sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
