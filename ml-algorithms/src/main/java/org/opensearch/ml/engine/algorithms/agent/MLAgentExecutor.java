@@ -321,22 +321,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         createdMemory
                                                                     ),
                                                                     ex -> {
-                                                                        log
-                                                                            .warn(
-                                                                                "Failed to create memory for existing conversation, proceeding without memory",
-                                                                                ex
-                                                                            );
-                                                                        executeAgent(
-                                                                            inputDataSet,
-                                                                            mlTask,
-                                                                            isAsync,
-                                                                            memoryId,
-                                                                            mlAgent,
-                                                                            outputs,
-                                                                            modelTensors,
-                                                                            listener,
-                                                                            null
-                                                                        );
+                                                                        log.error("Failed to find memory with memory_id: {}", memoryId, ex);
+                                                                        listener.onFailure(ex);
                                                                     }
                                                                 )
                                                         );
