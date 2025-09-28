@@ -131,10 +131,10 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertEquals("test-memory-container", input.getName());
         assertEquals("Test memory container description", input.getDescription());
         assertNotNull(input.getConfiguration());
-        assertEquals("test-memory-session", input.getConfiguration().getSessionIndexName());
-        assertEquals("test-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
-        assertEquals("test-memory-history", input.getConfiguration().getLongMemoryHistoryIndexName());
-        assertEquals("test-memory-long-term", input.getConfiguration().getLongMemoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-session", input.getConfiguration().getSessionIndexName());
+        assertEquals(".plugins-ml-am-test-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-history", input.getConfiguration().getLongMemoryHistoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-long-term", input.getConfiguration().getLongMemoryIndexName());
         assertNull(input.getTenantId()); // Multi-tenancy disabled
     }
 
@@ -237,7 +237,7 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertEquals("complex-container", input.getName());
         assertEquals("Complex container with full config", input.getDescription());
         assertNotNull(input.getConfiguration());
-        assertEquals("complex-memory-index-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
+        assertEquals(".plugins-ml-am-complex-memory-index-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
         assertEquals("sparse-model", input.getConfiguration().getEmbeddingModelId());
         assertEquals("complex-llm-model", input.getConfiguration().getLlmId());
         assertEquals(Integer.valueOf(10), input.getConfiguration().getMaxInferSize());

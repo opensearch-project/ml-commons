@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.util.HashMap;
@@ -94,7 +95,7 @@ public class RestMLGetMemoryActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.GET, route.getMethod());
-        assertEquals("/_plugins/_ml/memory_containers/{memory_container_id}/memories/{memory_id}", route.getPath());
+        assertEquals("/_plugins/_ml/memory_containers/{memory_container_id}/memories/{memory_type}/{memory_id}", route.getPath());
     }
 
     @Test
@@ -136,6 +137,7 @@ public class RestMLGetMemoryActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequest(String memoryContainerId, String memoryId) {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, memoryContainerId);
+        params.put(PARAMETER_MEMORY_TYPE, "working");
         params.put(PARAMETER_MEMORY_ID, memoryId);
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
