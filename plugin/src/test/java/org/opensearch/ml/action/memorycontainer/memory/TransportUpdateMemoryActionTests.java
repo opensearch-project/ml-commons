@@ -179,9 +179,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("update"), any())).thenReturn(true);
-
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(mockContainer, "long-term")).thenReturn("test-memory-index");
 
@@ -283,7 +280,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
-        verify(memoryContainerHelper, never()).validateMemoryIndexExists(any(), any(), any(), any());
         verify(client, never()).get(any(), any());
         verify(client, never()).update(any(), any());
 
@@ -323,9 +319,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
-
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("update"), any())).thenReturn(true);
 
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(mockContainer, "long-term")).thenReturn("test-memory-index");
@@ -389,9 +382,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
-
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(mockContainer), eq(memoryType), eq("update"), any())).thenReturn(true);
 
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(mockContainer, "long-term")).thenReturn("test-memory-index");
@@ -474,10 +464,6 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
 
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(containerWithoutSemantic))).thenReturn(true);
-
-        // Mock validateMemoryIndexExists
-        when(memoryContainerHelper.validateMemoryIndexExists(eq(containerWithoutSemantic), eq(memoryType), eq("update"), any()))
-            .thenReturn(true);
 
         // Mock getMemoryIndexName
         when(memoryContainerHelper.getMemoryIndexName(containerWithoutSemantic, "long-term")).thenReturn("test-memory-index");
