@@ -377,12 +377,12 @@ public final class MLCommonsSettings {
 
     // Feature flag for global tenant id in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_TENANT_ID = Setting
-        .simpleString("plugins.ml-commons." + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_GLOBAL_TENANT_ID_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 
     // Feature flag for global resource cache TTL in multi-tenancy enabled cluster
     public static final Setting<String> REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL = Setting
         .simpleString(
-            "plugins.ml-commons." + REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY,
+            "plugins.ml_commons." + REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL_KEY,
             Setting.Property.NodeScope,
             Setting.Property.Final
         );
