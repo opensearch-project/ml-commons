@@ -15,6 +15,9 @@
     "namespace": {
       "type": "flat_object"
     },
+    "namespace_size": {
+      "type": "integer"
+    },
     "tags": {
       "type": "flat_object"
     },

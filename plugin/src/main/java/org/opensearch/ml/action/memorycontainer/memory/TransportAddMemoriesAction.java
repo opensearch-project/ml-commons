@@ -29,7 +29,6 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -51,9 +50,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRe
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
-import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
-import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -70,7 +67,6 @@ import lombok.extern.log4j.Log4j2;
 public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemoriesRequest, MLAddMemoriesResponse> {
 
     final Client client;
-    final NamedXContentRegistry xContentRegistry;
     final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     final MemoryContainerHelper memoryContainerHelper;
 
@@ -87,16 +83,12 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         Client client,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
-        ClusterService clusterService,
-        ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLModelManager mlModelManager,
         MemoryContainerHelper memoryContainerHelper,
         ThreadPool threadPool
     ) {
         super(MLAddMemoriesAction.NAME, transportService, actionFilters, MLAddMemoriesRequest::new);
         this.client = client;
-        this.xContentRegistry = xContentRegistry;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.memoryContainerHelper = memoryContainerHelper;
 
@@ -160,29 +152,32 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             if (!userProvidedSessionId && input.getMemoryType() == WorkingMemoryType.CONVERSATIONAL && !configuration.isDisableSession()) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
-                String summary = messages.get(0).getContentText();
-                Instant now = Instant.now();
-                indexRequest
-                    .source(
-                        Map
-                            .of(
-                                OWNER_ID_FIELD,
-                                input.getOwnerId(),
-                                SUMMARY_FIELD,
-                                summary,
-                                NAMESPACE_FIELD,
-                                input.getNamespace(),
-                                CREATED_TIME_FIELD,
-                                now.getEpochSecond(),
-                                LAST_UPDATED_TIME_FIELD,
-                                now.getEpochSecond()
-                            )
-                    );
-                ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
-                    input.getNamespace().put(SESSION_ID_FIELD, r.getId());
-                    processAndIndexMemory(input, container, user, actionListener);
-                }, e -> actionListener.onFailure(e));
-                memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
+                ActionListener<String> summaryListener = ActionListener.wrap(summary -> {
+                    Instant now = Instant.now();
+                    indexRequest
+                        .source(
+                            Map
+                                .of(
+                                    OWNER_ID_FIELD,
+                                    input.getOwnerId(),
+                                    SUMMARY_FIELD,
+                                    summary,
+                                    NAMESPACE_FIELD,
+                                    input.getNamespace(),
+                                    CREATED_TIME_FIELD,
+                                    now.getEpochSecond(),
+                                    LAST_UPDATED_TIME_FIELD,
+                                    now.getEpochSecond()
+                                )
+                        );
+                    ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
+                        input.getNamespace().put(SESSION_ID_FIELD, r.getId());
+                        processAndIndexMemory(input, container, user, actionListener);
+                    }, e -> actionListener.onFailure(e));
+                    memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
+                }, exception -> actionListener.onFailure(exception));
+
+                memoryProcessingService.summarizeMessages(messages, summaryListener);
             } else {
                 processAndIndexMemory(input, container, user, actionListener);
             }
@@ -198,8 +193,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
-            List<MessageInput> messages = input.getMessages();
-
             boolean infer = input.isInfer();
             MemoryConfiguration memoryConfig = container.getConfiguration();
             boolean hasLlmModel = memoryConfig != null && memoryConfig.getLlmId() != null;
@@ -228,10 +221,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         try {
                             extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
                                 log.error("Failed to extract longTermMemory id from memory container", e);
-                                memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, input, e);
                             }));
                         } catch (Exception e) {
-                            memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, input, e);
+                            memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, null, input, e);
                         }
                     });
                 }
@@ -281,6 +273,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
                         log.error("Failed to extract facts with LLM", e);
+                        memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, strategyNameSpace, input, e);
                         actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
                     }));
                 }

@@ -67,6 +67,9 @@
     "namespace": {
       "type": "flat_object"
     },
+    "namespace_size": {
+      "type": "integer"
+    },
     "metadata": {
       "type": "flat_object"
     },
