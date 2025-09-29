@@ -364,7 +364,7 @@ public class TransportAddMemoriesActionTests {
             ActionListener<List<MemoryResult>> listener = invocation.getArgument(6);
             listener.onResponse(operationResults);
             return null;
-        }).when(memoryOperationsService).executeMemoryOperations(any(), any(), any(), any(), any(), any());
+        }).when(memoryOperationsService).executeMemoryOperations(any(), any(), any(), any(), any(), any(), any());
         
         // Use reflection to test the private method
         try {
