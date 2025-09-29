@@ -30,6 +30,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
@@ -48,11 +49,13 @@ public class MemoryOperationsServiceAdditionalTests {
     private ActionListener<List<MemoryResult>> operationsListener;
 
     private MemoryOperationsService memoryOperationsService;
+    private MemoryStrategy strategy;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
+        strategy = MemoryStrategy.builder().type("semantic").enabled(true).id("strategy-123").build();
     }
 
     @Test
@@ -84,7 +87,7 @@ public class MemoryOperationsServiceAdditionalTests {
         }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
         Map<String, String> namespace = Map.of(SESSION_ID_FIELD, sessionId);
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
@@ -106,7 +109,8 @@ public class MemoryOperationsServiceAdditionalTests {
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
         Map<String, String> strategyNameSpace = Map.of(SESSION_ID_FIELD, sessionId);
-        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, strategyNameSpace, user, indexRequests, memoryInfos);
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, strategyNameSpace, user, strategy, indexRequests, memoryInfos);
 
         assert indexRequests.size() == 1;
         assert memoryInfos.size() == 1;
