@@ -39,6 +39,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
@@ -261,11 +262,13 @@ public class MemoryProcessingService {
                 .ofNullable(strategy.getStrategyConfig().get("llm_result_path"))
                 .map(Object::toString)
                 .orElse(DEFAULT_LLM_RESULT_PATH);
-            Optional<String> llmResult = Optional.ofNullable(JsonPath.read(dataMap, llmResultPath)).map(Object::toString);
-            if (llmResult.isPresent()) {
-                try (
-                    XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult.get())
-                ) {
+            Object filterdResult = JsonPath.read(dataMap, llmResultPath);
+            String llmResult = null;
+            if (filterdResult != null) {
+                llmResult = StringUtils.toJson(filterdResult);
+            }
+            if (llmResult != null) {
+                try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                         String fieldName = parser.currentName();

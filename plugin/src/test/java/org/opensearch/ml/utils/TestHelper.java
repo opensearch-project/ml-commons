@@ -722,4 +722,13 @@ public class TestHelper {
             SearchResponse.Clusters.EMPTY
         );
     }
+
+    public static List<Map<String, Object>> createTestContent(String input) {
+        List<Map<String, Object>> content = new ArrayList<>();
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "text");
+        message.put("text", input);
+        content.add(message);
+        return content;
+    }
 }
