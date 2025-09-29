@@ -13,48 +13,13 @@
       "type": "keyword"
     },
     "messages": {
-      "type": "object",
+      "type": "nested",
       "properties": {
         "role": {
           "type": "keyword"
         },
-        "content_text": {
-          "type": "text"
-        },
         "content": {
-          "type": "nested",
-          "properties": {
-            "type": {
-              "type": "keyword"
-            },
-            "text": {
-              "type": "text"
-            },
-            "image": {
-              "type": "object",
-              "properties": {
-                "format": {
-                  "type": "keyword"
-                },
-                "source": {
-                  "type": "object",
-                  "properties": {
-                    "bytes": {
-                      "type": "binary"
-                    }
-                  }
-                }
-              }
-            },
-            "image_url": {
-              "type": "object",
-              "properties": {
-                "url": {
-                  "type": "keyword"
-                }
-              }
-            }
-          }
+          "type": "flat_object"
         }
       }
     },

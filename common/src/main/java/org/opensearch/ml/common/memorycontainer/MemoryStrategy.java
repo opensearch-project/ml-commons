@@ -41,9 +41,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     private boolean enabled;
     private String type;
     private List<String> namespace;
-    private Map<String, String> strategyConfig;
+    private Map<String, Object> strategyConfig;
 
-    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace, Map<String, String> strategyConfig) {
+    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
         this.id = id;
         this.enabled = enabled;
         this.type = type;
@@ -57,7 +57,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         this.type = input.readString();
         this.namespace = input.readStringList();
         if (input.readBoolean()) {
-            this.strategyConfig = input.readMap(StreamInput::readString, StreamInput::readString);
+            this.strategyConfig = input.readMap();
         }
     }
 
@@ -69,7 +69,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         out.writeStringCollection(namespace);
         if (!strategyConfig.isEmpty()) {
             out.writeBoolean(true);
-            out.writeMap(strategyConfig, StreamOutput::writeString, StreamOutput::writeString);
+            out.writeMap(strategyConfig);
         } else {
             out.writeBoolean(false);
         }
@@ -96,7 +96,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         boolean enabled = true;  // Default to true
         String type = null;
         List<String> namespace = null;
-        Map<String, String> strategyConfig = new HashMap<>();
+        Map<String, Object> strategyConfig = new HashMap<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -121,7 +121,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                     }
                     break;
                 case STRATEGY_CONFIG_FIELD:
-                    strategyConfig.putAll(parser.mapStrings());
+                    strategyConfig.putAll(parser.map());
                     break;
                 default:
                     parser.skipChildren();
