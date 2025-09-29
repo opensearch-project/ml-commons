@@ -24,6 +24,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -45,11 +46,14 @@ public class MemoryProcessingServiceAdditionalTests {
     @Mock
     private ActionListener<List<MemoryDecision>> decisionsListener;
 
+    private MemoryStrategy memoryStrategy;
+
     private MemoryProcessingService memoryProcessingService;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
     }
 
@@ -68,7 +72,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
