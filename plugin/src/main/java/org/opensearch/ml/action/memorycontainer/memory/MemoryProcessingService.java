@@ -11,10 +11,12 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PERSONAL_INFORMATION_ORGANIZER_PROMPT;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -39,11 +41,14 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.transport.client.Client;
 
+import com.jayway.jsonpath.JsonPath;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MemoryProcessingService {
 
+    public static final String DEFAULT_LLM_RESULT_PATH = "$.content[0].text";
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
 
@@ -95,15 +100,20 @@ public class MemoryProcessingService {
         try {
             XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
             messagesBuilder.startArray();
-
+            Map<String, Object> strategyConfig = strategy.getStrategyConfig();
+            if (strategyConfig.containsKey("system_prompt_message")) {
+                Object systemPromptMsg = strategyConfig.get("system_prompt_message");
+                if (systemPromptMsg != null && systemPromptMsg instanceof Map) {
+                    messagesBuilder.map((Map) systemPromptMsg);
+                }
+            }
             for (MessageInput message : messages) {
                 message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
-            Map<String, Object> strategyConfig = strategy.getStrategyConfig();
-            if (strategyConfig.containsKey("user_prompt")) {
-                Object userPrompt = strategyConfig.get("user_prompt");
-                if (userPrompt != null && userPrompt instanceof Map) {
-                    messagesBuilder.map((Map) userPrompt);
+            if (strategyConfig.containsKey("user_prompt_message")) {
+                Object userPromptMsg = strategyConfig.get("user_prompt_message");
+                if (userPromptMsg != null && userPromptMsg instanceof Map) {
+                    messagesBuilder.map((Map) userPromptMsg);
                 }
             } else { // Add default user prompt
                 List<Map<String, Object>> content = new ArrayList<>();
@@ -134,7 +144,7 @@ public class MemoryProcessingService {
             try {
                 log.debug("Received LLM response, parsing facts...");
                 MLOutput mlOutput = response.getOutput();
-                List<String> facts = parseFactsFromLLMResponse(mlOutput);
+                List<String> facts = parseFactsFromLLMResponse(strategy, mlOutput);
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
@@ -225,7 +235,7 @@ public class MemoryProcessingService {
         }
     }
 
-    private List<String> parseFactsFromLLMResponse(MLOutput mlOutput) {
+    private List<String> parseFactsFromLLMResponse(MemoryStrategy strategy, MLOutput mlOutput) {
         List<String> facts = new ArrayList<>();
 
         if (!(mlOutput instanceof ModelTensorOutput)) {
@@ -247,40 +257,32 @@ public class MemoryProcessingService {
 
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
-            if (dataMap != null && dataMap.containsKey("content")) {
-                try {
-                    List<?> contentList = (List<?>) dataMap.get("content");
-                    if (contentList != null && !contentList.isEmpty()) {
-                        Map<String, ?> contentItem = (Map<String, ?>) contentList.get(0);
-                        if (contentItem != null && contentItem.containsKey("text")) {
-                            String responseStr = String.valueOf(contentItem.get("text"));
-
-                            try (
-                                XContentParser parser = jsonXContent
-                                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseStr)
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-
-                                while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                                    String fieldName = parser.currentName();
-                                    if ("facts".equals(fieldName)) {
-                                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
-                                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                                            String fact = parser.text();
-                                            facts.add(fact);
-                                        }
-                                    } else {
-                                        parser.skipChildren();
-                                    }
-                                }
+            String llmResultPath = Optional
+                .ofNullable(strategy.getStrategyConfig().get("llm_result_path"))
+                .map(Object::toString)
+                .orElse(DEFAULT_LLM_RESULT_PATH);
+            Optional<String> llmResult = Optional.ofNullable(JsonPath.read(dataMap, llmResultPath)).map(Object::toString);
+            if (llmResult.isPresent()) {
+                try (
+                    XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult.get())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                        String fieldName = parser.currentName();
+                        if ("facts".equals(fieldName)) {
+                            ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
+                            while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                                String fact = parser.text();
+                                facts.add(fact);
                             }
+                        } else {
+                            parser.skipChildren();
                         }
                     }
-                } catch (Exception e) {
+                } catch (IOException e) {
                     log.error("Failed to extract content from dataMap", e);
                     throw new IllegalArgumentException("Failed to extract content from LLM response", e);
                 }
-                break;
             }
         }
 
