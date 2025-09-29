@@ -48,7 +48,7 @@ public class MessageInput implements ToXContentObject, Writeable {
     public MessageInput(StreamInput in) throws IOException {
         this.role = in.readOptionalString();
         if (in.readBoolean()) {
-            in.readList(StreamInput::readMap);
+            this.content = in.readList(StreamInput::readMap);
         }
     }
 

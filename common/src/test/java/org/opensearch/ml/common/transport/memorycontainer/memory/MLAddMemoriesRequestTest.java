@@ -10,6 +10,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.TestHelper.createTestContent;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.io.IOException;
@@ -31,7 +32,7 @@ public class MLAddMemoriesRequestTest {
 
     @Before
     public void setUp() {
-        MessageInput message = MessageInput.builder().role("user").contentText("Test message content").build();
+        MessageInput message = MessageInput.builder().role("user").content(createTestContent("Test message content")).build();
         testInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
@@ -105,9 +106,9 @@ public class MLAddMemoriesRequestTest {
 
     @Test
     public void testWithMultipleMessages() throws IOException {
-        MessageInput msg1 = MessageInput.builder().role("user").contentText("First message").build();
-        MessageInput msg2 = MessageInput.builder().role("assistant").contentText("Second message").build();
-        MessageInput msg3 = MessageInput.builder().role("user").contentText("Third message").build();
+        MessageInput msg1 = MessageInput.builder().role("user").content(createTestContent("First message")).build();
+        MessageInput msg2 = MessageInput.builder().role("assistant").content(createTestContent("Second message")).build();
+        MessageInput msg3 = MessageInput.builder().role("user").content(createTestContent("Third message")).build();
 
         MLAddMemoriesInput multiInput = MLAddMemoriesInput
             .builder()
@@ -126,14 +127,14 @@ public class MLAddMemoriesRequestTest {
         MLAddMemoriesRequest deserialized = new MLAddMemoriesRequest(in);
 
         assertEquals(3, deserialized.getMlAddMemoryInput().getMessages().size());
-        assertEquals("First message", deserialized.getMlAddMemoryInput().getMessages().get(0).getContent());
-        assertEquals("Second message", deserialized.getMlAddMemoryInput().getMessages().get(1).getContent());
-        assertEquals("Third message", deserialized.getMlAddMemoryInput().getMessages().get(2).getContent());
+        assertEquals("First message", deserialized.getMlAddMemoryInput().getMessages().get(0).getContent().get(0).get("text"));
+        assertEquals("Second message", deserialized.getMlAddMemoryInput().getMessages().get(1).getContent().get(0).get("text"));
+        assertEquals("Third message", deserialized.getMlAddMemoryInput().getMessages().get(2).getContent().get(0).get("text"));
     }
 
     @Test
     public void testWithMinimalInput() throws IOException {
-        MessageInput message = MessageInput.builder().role("user").contentText("Minimal message").build();
+        MessageInput message = MessageInput.builder().role("user").content(createTestContent("Minimal message")).build();
         MLAddMemoriesInput minimalInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))
@@ -159,7 +160,7 @@ public class MLAddMemoriesRequestTest {
 
     @Test
     public void testWithComplexTags() throws IOException {
-        MessageInput message = MessageInput.builder().role("user").contentText("Tagged message").build();
+        MessageInput message = MessageInput.builder().role("user").content(createTestContent("Tagged message")).build();
         MLAddMemoriesInput taggedInput = MLAddMemoriesInput
             .builder()
             .messages(Arrays.asList(message))

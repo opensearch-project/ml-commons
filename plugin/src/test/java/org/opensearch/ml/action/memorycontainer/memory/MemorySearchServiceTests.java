@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,7 +69,7 @@ public class MemorySearchServiceTests {
         memorySearchService = new MemorySearchService(memoryContainerHelper);
         sessionId = "session-123";
         List<MessageInput> messages = new ArrayList<>();
-        messages.add(MessageInput.builder().role("user").contentText("hello, I'm bob. I like swimming").build());
+        messages.add(MessageInput.builder().role("user").content(createTestContent("hello, I'm bob. I like swimming")).build());
         input = spy(
             MLAddMemoriesInput
                 .builder()

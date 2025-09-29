@@ -6,6 +6,10 @@
 package org.opensearch.ml.common;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -56,5 +60,14 @@ public class TestHelper {
 
     public static String xContentBuilderToString(XContentBuilder builder) {
         return BytesReference.bytes(builder).utf8ToString();
+    }
+
+    public static List<Map<String, Object>> createTestContent(String input) {
+        List<Map<String, Object>> content = new ArrayList<>();
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "text");
+        message.put("text", input);
+        content.add(message);
+        return content;
     }
 }
