@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -59,7 +60,8 @@ public class MemoryProcessingServiceAdditionalTests {
 
     @Test
     public void testExtractFactsFromConversation_NonModelTensorOutput() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("My name is John").role("user").build());
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("My name is John")).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -178,7 +179,7 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_InferRequiresLLMModel() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
@@ -210,7 +211,7 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_SuccessfulProcessingWithoutLLM() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
@@ -248,7 +249,7 @@ public class TransportAddMemoriesActionTests {
     public void testDoExecute_SuccessfulProcessingWithLLM() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
@@ -313,7 +314,7 @@ public class TransportAddMemoriesActionTests {
         // Test the core logic of storing messages and making memory decisions
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         
-        MessageInput message = MessageInput.builder().contentText("My name is John").role("user").build();
+        MessageInput message = MessageInput.builder().content(createTestContent("My name is John")).role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
         List<String> facts = Arrays.asList("User name is John");
         
@@ -391,7 +392,7 @@ public class TransportAddMemoriesActionTests {
     @Test
     public void testProcessEmbeddingsAndIndex_WithEmbeddings() {
         // Test embedding generation and indexing logic
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello world").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Hello world")).role("user").build());
         List<String> facts = Arrays.asList("User said hello");
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
@@ -449,7 +450,7 @@ public class TransportAddMemoriesActionTests {
     @Test
     public void testProcessMessagesWithoutLLM_WithEmbeddings() {
         // Test processing messages without LLM but with embeddings
-        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
@@ -495,7 +496,7 @@ public class TransportAddMemoriesActionTests {
     @Test
     public void testProcessMessagesWithoutLLM_EmbeddingFailureHandling() {
         // Test that embedding failures are handled gracefully
-        MessageInput message = MessageInput.builder().contentText("Hello world").role("user").build();
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello world")).role("user").build();
         List<MessageInput> messages = Arrays.asList(message);
 
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
