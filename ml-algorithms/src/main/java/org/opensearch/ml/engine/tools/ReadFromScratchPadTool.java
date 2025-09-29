@@ -7,7 +7,9 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
@@ -22,8 +24,7 @@ public class ReadFromScratchPadTool implements Tool {
     public static final String SCRATCHPAD_NOTES_KEY = "_scratchpad_notes";
     public static final String NOTES_KEY = "notes";
     public static final String PERSISTENT_NOTES_KEY = "persistent_notes";
-    private static final String DEFAULT_DESCRIPTION =
-        "Retrieve previous research work and notes from the persistent scratchpad for the current conversation.";
+    private static final String DEFAULT_DESCRIPTION = "Retrieve previous research work and notes from the persistent scratchpad.";
 
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\"properties\":{}}";
 
@@ -83,18 +84,49 @@ public class ReadFromScratchPadTool implements Tool {
         return true;
     }
 
+    /**
+     * Executes the ReadFromScratchPadTool.
+     * This tool retrieves notes from the persistent scratchpad for the current conversation.
+     * The scratchpad notes are stored as a List<String> in the parameters map under
+     * the SCRATCHPAD_NOTES_KEY. The tool handles both existing List<String> format
+     * and legacy JSON string format for backward compatibility. It also supports
+     * adding persistent notes that are not already in the scratchpad.
+     *
+     * @param parameters A map containing tool-specific parameters. Expected to contain:
+     *                   - {@code SCRATCHPAD_NOTES_KEY} (optional): Existing notes as List<String> or JSON string
+     *                   - {@code PERSISTENT_NOTES_KEY} (optional): Additional note to add if not already present
+     * @param listener The action listener to report the result of the tool execution.
+     *                 On success, returns formatted notes from the scratchpad or "Scratchpad is empty."
+     */
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        // The agent runner will intercept this call and substitute this placeholder
-        // with the actual content from the persistent scratchpad.
-        String existing_notes = StringUtils.toJson(parameters.getOrDefault(SCRATCHPAD_NOTES_KEY, ""));
-        String persistent_notes = parameters.getOrDefault(PERSISTENT_NOTES_KEY, "");
-        if (persistent_notes != null && !persistent_notes.isEmpty()) {
-            if (!existing_notes.contains(persistent_notes)) {
-                existing_notes += "\n" + persistent_notes;
-            }
+        // Handle both List<String> and String (JSON) formats for existing notes
+        List<String> notes;
+        Map rawParameters = parameters;
+        Object existingNotes = rawParameters.get(SCRATCHPAD_NOTES_KEY);
+        if (existingNotes instanceof List) {
+            notes = new ArrayList<>((List<String>) existingNotes);
+        } else if (existingNotes instanceof String) {
+            List<String> parsedNotes = StringUtils.parseStringArrayToList((String) existingNotes);
+            notes = parsedNotes != null ? new ArrayList<>(parsedNotes) : new ArrayList<>();
+        } else {
+            notes = new ArrayList<>();
         }
-        listener.onResponse((T) ("Notes from scratchpad: " + existing_notes));
+
+        String persistentNotes = parameters.getOrDefault(PERSISTENT_NOTES_KEY, "");
+
+        if (persistentNotes != null && !persistentNotes.isEmpty() && !notes.contains(persistentNotes)) {
+            notes.add(persistentNotes);
+        }
+
+        rawParameters.put(SCRATCHPAD_NOTES_KEY, notes);
+
+        if (notes.isEmpty()) {
+            listener.onResponse((T) "Scratchpad is empty.");
+        } else {
+            String formattedNotes = "- " + String.join("\n- ", notes);
+            listener.onResponse((T) ("Notes from scratchpad:\n" + formattedNotes));
+        }
     }
 
     public static class Factory implements Tool.Factory<ReadFromScratchPadTool> {
@@ -131,7 +163,7 @@ public class ReadFromScratchPadTool implements Tool {
 
         @Override
         public Map<String, Object> getDefaultAttributes() {
-            return Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+            return Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
         }
     }
 }

@@ -7,7 +7,9 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
@@ -22,8 +24,7 @@ public class WriteToScratchPadTool implements Tool {
     public static final String NOTES_KEY = "notes";
     public static final String INCLUDE_HISTORY_KEY = "include_history";
     public static final String STRICT_FIELD = "strict";
-    private static final String DEFAULT_DESCRIPTION =
-        "Save research plans, findings, and progress updates to a persistent scratchpad for the current conversation.";
+    private static final String DEFAULT_DESCRIPTION = "Save research plans, findings, and progress updates to a persistent scratchpad.";
 
     public static final String DEFAULT_INPUT_SCHEMA =
         "{\"type\":\"object\",\"properties\":{\"notes\":{\"type\":\"string\",\"description\":\"The notes to be saved to the scratchpad.\"}},\"required\":[\"notes\"]}";
@@ -84,28 +85,53 @@ public class WriteToScratchPadTool implements Tool {
         return parameters != null && parameters.containsKey(NOTES_KEY);
     }
 
+    /**
+     * Executes the WriteToScratchPadTool.
+     * This tool saves notes to the persistent scratchpad for the current conversation.
+     * The scratchpad notes are stored as a List<String> in the parameters map under
+     * the SCRATCHPAD_NOTES_KEY. The tool handles both existing List<String> format
+     * and legacy JSON string format for backward compatibility.
+     *
+     * @param parameters A map containing tool-specific parameters. Expected to contain:
+     *                   - {@code NOTES_KEY} (required): The note to be saved
+     *                   - {@code INCLUDE_HISTORY_KEY} (optional): Boolean string to include full history in response
+     *                   - {@code SCRATCHPAD_NOTES_KEY} (optional): Existing notes as List<String> or JSON string
+     * @param listener The action listener to report the result of the tool execution.
+     *                 On success, returns either a simple confirmation or full scratchpad content.
+     */
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        // This tool's core logic for state management will be handled by the agent runner,
-        // which manages the scratchpad for the entire conversation. This class defines the tool's interface.
-        String current_notes = parameters.get(NOTES_KEY);
+        String currentNote = parameters.get(NOTES_KEY);
 
-        final boolean include_history = parameters.containsKey(INCLUDE_HISTORY_KEY)
+        final boolean includeHistory = parameters.containsKey(INCLUDE_HISTORY_KEY)
             && Boolean.parseBoolean(parameters.get(INCLUDE_HISTORY_KEY));
 
-        if (current_notes == null || current_notes.isEmpty()) {
+        if (currentNote == null || currentNote.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Parameter 'notes' is required for WriteToScratchPadTool."));
             return;
         }
 
-        String existing_notes = StringUtils.toJson(parameters.getOrDefault(SCRATCHPAD_NOTES_KEY, ""));
-        parameters.put(SCRATCHPAD_NOTES_KEY, existing_notes + "\n" + current_notes);
-        // The agent runner will intercept this call to update the persistent scratchpad.
-        // This response is what the LLM will see as the observation.
-        if (include_history) {
-            listener.onResponse((T) ("Wrote to scratchpad: " + parameters.get(SCRATCHPAD_NOTES_KEY)));
+        // Handle both List<String> and String (JSON) formats for existing notes
+        List<String> notes;
+        Map rawParameters = parameters;
+        Object existingNotes = rawParameters.get(SCRATCHPAD_NOTES_KEY);
+        if (existingNotes instanceof List) {
+            notes = new ArrayList<>((List<String>) existingNotes);
+        } else if (existingNotes instanceof String) {
+            List<String> parsedNotes = StringUtils.parseStringArrayToList((String) existingNotes);
+            notes = parsedNotes != null ? new ArrayList<>(parsedNotes) : new ArrayList<>();
         } else {
-            listener.onResponse((T) ("Wrote to scratchpad: " + current_notes));
+            notes = new ArrayList<>();
+        }
+
+        notes.add(currentNote);
+        rawParameters.put(SCRATCHPAD_NOTES_KEY, notes);
+
+        if (includeHistory) {
+            String fullNotesFormatted = "- " + String.join("\n- ", notes);
+            listener.onResponse((T) ("Scratchpad updated. Full content:\n" + fullNotesFormatted));
+        } else {
+            listener.onResponse((T) ("Wrote to scratchpad: " + currentNote));
         }
     }
 
@@ -143,7 +169,7 @@ public class WriteToScratchPadTool implements Tool {
 
         @Override
         public Map<String, Object> getDefaultAttributes() {
-            return Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+            return Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
         }
     }
 }
