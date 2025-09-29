@@ -20,6 +20,7 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -80,14 +81,14 @@ public class MemoryProcessingService {
         if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
             stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT); // use default strategy
         } else {
-            String customPrompt = strategy.getStrategyConfig().get("prompt");
-            if (customPrompt == null || customPrompt.trim().isEmpty()) {
+            Object customPrompt = strategy.getStrategyConfig().get("prompt");
+            if (customPrompt == null || customPrompt.toString().trim().isEmpty()) {
                 stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
-            } else if (!validatePromptFormat(customPrompt)) {
+            } else if (!validatePromptFormat(customPrompt.toString())) {
                 listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
                 return;
             } else {
-                stringParameters.put("system_prompt", customPrompt); // use custom strategy
+                stringParameters.put("system_prompt", customPrompt.toString()); // use custom strategy
             }
         }
 
@@ -96,29 +97,20 @@ public class MemoryProcessingService {
             messagesBuilder.startArray();
 
             for (MessageInput message : messages) {
-                messagesBuilder.startObject();
-                messagesBuilder.field("role", message.getRole() != null ? message.getRole() : "user");
-                messagesBuilder.startArray("content");
-                messagesBuilder.startObject();
-                messagesBuilder.field("type", "text");
-                messagesBuilder.field("text", message.getContent());
-                messagesBuilder.endObject();
-                messagesBuilder.endArray();
-                messagesBuilder.endObject();
+                message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
-            int size = messages.size();
-            if (size > 1 && messages.get(size - 1).getRole().equalsIgnoreCase("assistant")) {
-                messagesBuilder.startObject();
-                messagesBuilder.field("role", "user");
-                messagesBuilder.startArray("content");
-                messagesBuilder.startObject();
-                messagesBuilder.field("type", "text");
-                messagesBuilder.field("text", "Please extract information from our conversation so far");
-                messagesBuilder.endObject();
-                messagesBuilder.endArray();
-                messagesBuilder.endObject();
+            Map<String, Object> strategyConfig = strategy.getStrategyConfig();
+            if (strategyConfig.containsKey("user_prompt")) {
+                Object userPrompt = strategyConfig.get("user_prompt");
+                if (userPrompt != null && userPrompt instanceof Map) {
+                    messagesBuilder.map((Map) userPrompt);
+                }
+            } else { // Add default user prompt
+                List<Map<String, Object>> content = new ArrayList<>();
+                content.add(Map.of("text", "Please extract information from our conversation so far", "type", "text"));
+                MessageInput message = MessageInput.builder().role("user").content(content).build();
+                message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
-
             messagesBuilder.endArray();
             String messagesJson = messagesBuilder.toString();
             stringParameters.put("messages", messagesJson);
