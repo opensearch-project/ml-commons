@@ -92,8 +92,7 @@ public class MLHttpClientFactory {
         int second = bytes[1] & 0xff;
 
         // 127.0.0.1, 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x
-        return (first == 127 && second == 0)
-            || (first == 10)
+        return (first == 10)
             || (first == 172 && second >= 16 && second <= 31)
             || (first == 192 && second == 168)
             || (first == 169 && second == 254);
