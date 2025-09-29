@@ -46,7 +46,7 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-@Builder
+@Builder(builderClassName = "Builder", buildMethodName = "internalBuild")
 public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     // Required fields
@@ -75,15 +75,14 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> tags,
         String ownerId
     ) {
-        // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
-
+        // Constructor used internally - the builder handles auto-determination logic
         this.memoryContainerId = memoryContainerId;
-        this.memoryType = memoryType == null ? WorkingMemoryType.CONVERSATIONAL : memoryType;
+        this.memoryType = memoryType;
         this.messages = messages;
         this.binaryData = binaryData;
         this.structuredData = structuredData;
         this.namespace = namespace;
-        this.infer = infer; // default infer is false
+        this.infer = infer;
         this.metadata = metadata;
         this.tags = tags;
         this.ownerId = ownerId;
@@ -91,10 +90,23 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     }
 
     public void validate() {
-        if (messages == null || messages.isEmpty()) {
-            if (infer) {
-                throw new IllegalArgumentException("No messages provided when inferring memory");
-            }
+        // Check that at least one data field is provided
+        boolean hasMessages = messages != null && !messages.isEmpty();
+        boolean hasBinaryData = binaryData != null && !binaryData.isEmpty();
+        boolean hasStructuredData = structuredData != null && !structuredData.isEmpty();
+
+        if (!hasMessages && !hasBinaryData && !hasStructuredData) {
+            throw new IllegalArgumentException("At least one of 'messages', 'binary_data', or 'structured_data' must be provided");
+        }
+
+        // Validate memoryType consistency
+        if (memoryType == WorkingMemoryType.CONVERSATIONAL && !hasMessages) {
+            throw new IllegalArgumentException("No messages provided for conversational memory");
+        }
+
+        // Validate infer requirements
+        if (infer && !hasMessages) {
+            throw new IllegalArgumentException("Inference requires messages to be provided");
         }
 
         if (memoryContainerId == null) {
@@ -222,7 +234,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         String binaryData = null;
         Map<String, Object> structuredData = null;
         Map<String, String> namespace = null;
-        boolean infer = false;
+        Boolean infer = null;  // Use Boolean to track if it was explicitly set
         Map<String, String> metadata = null;
         Map<String, String> tags = null;
 
@@ -269,18 +281,28 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             }
         }
 
-        return MLAddMemoriesInput
+        // Build with auto-determination logic
+        Builder builder = MLAddMemoriesInput
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType(memoryType == null ? WorkingMemoryType.CONVERSATIONAL : WorkingMemoryType.fromString(memoryType))
             .messages(messages)
             .binaryData(binaryData)
             .structuredData(structuredData)
             .namespace(namespace)
-            .infer(infer)
             .metadata(metadata)
-            .tags(tags)
-            .build();
+            .tags(tags);
+
+        // Set memoryType if explicitly provided
+        if (memoryType != null) {
+            builder.memoryType(WorkingMemoryType.fromString(memoryType));
+        }
+
+        // Set infer if explicitly provided
+        if (infer != null) {
+            builder.infer(infer);
+        }
+
+        return builder.build();
     }
 
     public String getSessionId() {
@@ -289,5 +311,38 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     public String getAgentId() {
         return namespace == null ? null : namespace.get(AGENT_ID_FIELD);
+    }
+
+    // Custom builder class to handle auto-determination logic
+    public static class Builder {
+        private Boolean inferProvided = false;
+        private boolean inferValue = false;
+
+        public Builder infer(boolean infer) {
+            this.inferValue = infer;
+            this.inferProvided = true;
+            return this;
+        }
+
+        public MLAddMemoriesInput build() {
+            // Auto-determine memoryType if not specified
+            if (memoryType == null) {
+                if (binaryData != null || structuredData != null) {
+                    memoryType = WorkingMemoryType.DATA;
+                } else if (messages != null && !messages.isEmpty()) {
+                    memoryType = WorkingMemoryType.CONVERSATIONAL;
+                }
+                // If still null, validation will catch it
+            }
+
+            // Set infer default based on memoryType if not explicitly provided
+            if (!inferProvided && memoryType != null) {
+                inferValue = (memoryType == WorkingMemoryType.CONVERSATIONAL);
+            }
+
+            // Use the renamed internal build method
+            this.infer = inferValue;
+            return internalBuild();
+        }
     }
 }
