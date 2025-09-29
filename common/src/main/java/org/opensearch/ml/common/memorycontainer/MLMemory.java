@@ -14,6 +14,8 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
@@ -54,6 +56,7 @@ public class MLMemory implements ToXContentObject, Writeable {
     // Vector/embedding field (optional, for semantic storage)
     private Object memoryEmbedding;
     private String ownerId;
+    private String strategyId;
 
     @Builder
     public MLMemory(
@@ -64,7 +67,8 @@ public class MLMemory implements ToXContentObject, Writeable {
         Instant createdTime,
         Instant lastUpdatedTime,
         Object memoryEmbedding,
-        String ownerId
+        String ownerId,
+        String strategyId
     ) {
         this.memory = memory;
         this.memoryType = memoryType;
@@ -74,6 +78,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.lastUpdatedTime = lastUpdatedTime;
         this.memoryEmbedding = memoryEmbedding;
         this.ownerId = ownerId;
+        this.strategyId = strategyId;
     }
 
     public MLMemory(StreamInput in) throws IOException {
@@ -88,6 +93,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.createdTime = in.readInstant();
         this.lastUpdatedTime = in.readInstant();
         this.ownerId = in.readOptionalString();
+        this.strategyId = in.readOptionalString();
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
 
@@ -110,6 +116,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         out.writeInstant(createdTime);
         out.writeInstant(lastUpdatedTime);
         out.writeOptionalString(ownerId);
+        out.writeOptionalString(strategyId);
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
 
@@ -136,6 +143,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         if (ownerId != null) {
             builder.field(OWNER_ID_FIELD, ownerId);
         }
+        if (strategyId != null) {
+            builder.field(STRATEGY_ID_FIELD, strategyId);
+        }
 
         builder.endObject();
         return builder;
@@ -150,6 +160,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         Instant lastUpdatedTime = null;
         Object memoryEmbedding = null;
         String ownerId = null;
+        String strategyId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -186,8 +197,10 @@ public class MLMemory implements ToXContentObject, Writeable {
                     }
                     break;
                 case OWNER_ID_FIELD:
-                    // Parse embedding as generic object (could be array or sparse map)
                     ownerId = parser.text();
+                    break;
+                case STRATEGY_ID_FIELD:
+                    strategyId = parser.text();
                     break;
                 default:
                     parser.skipChildren();
@@ -205,6 +218,7 @@ public class MLMemory implements ToXContentObject, Writeable {
             .lastUpdatedTime(lastUpdatedTime)
             .memoryEmbedding(memoryEmbedding)
             .ownerId(ownerId)
+            .strategyId(strategyId)
             .build();
     }
 
@@ -239,6 +253,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         }
         if (ownerId != null) {
             result.put(OWNER_ID_FIELD, ownerId);
+        }
+        if (strategyId != null) {
+            result.put(STRATEGY_ID_FIELD, strategyId);
         }
         return result;
     }

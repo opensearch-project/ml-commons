@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_STRATEGY_TYPE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_FOUND_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
@@ -16,6 +17,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
@@ -36,6 +38,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
@@ -106,15 +109,26 @@ public class TransportCreateMemoryContainerAction extends
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
 
-        // Validate models before creating memory container
-        validateModels(input.getConfiguration(), ActionListener.wrap(isValid -> {
+        // Validate configuration before creating memory container
+        validateConfiguration(input.getConfiguration(), ActionListener.wrap(isValid -> {
             // Check if memory container index exists, create if not
             ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
                 try {
-                    // Create memory container document without ID (will be auto-generated)
+                    // Generate UUID prefix if needed (before building container)
+                    MemoryConfiguration config = input.getConfiguration();
+                    if (config != null
+                        && !config.isUseSystemIndex()
+                        && (config.getIndexPrefix() == null || config.getIndexPrefix().isEmpty())) {
+                        // Generate a unique prefix upfront
+                        String autoPrefix = UUID.randomUUID().toString().substring(0, 8).toLowerCase();
+                        config.setIndexPrefix(autoPrefix);
+                        log.info("Auto-generated prefix for memory container: {}", autoPrefix);
+                    }
+
+                    // Create memory container document with potentially updated configuration
                     MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
 
-                    // Index the memory container document first to get the generated ID
+                    // Index the memory container document (now includes auto-generated prefix if applicable)
                     indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
                         // Create memory data indices based on semantic storage config
                         createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
@@ -318,8 +332,22 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void validateModels(MemoryConfiguration config, ActionListener<Boolean> listener) {
-        // Validate LLM model first
+    private void validateConfiguration(MemoryConfiguration config, ActionListener<Boolean> listener) {
+        // Validate strategy types first
+        if (config.getStrategies() != null) {
+            for (MemoryStrategy strategy : config.getStrategies()) {
+                String type = strategy.getType();
+                if (type != null
+                    && !("semantic".equalsIgnoreCase(type)
+                        || "user_preference".equalsIgnoreCase(type)
+                        || "summary".equalsIgnoreCase(type))) {
+                    listener.onFailure(new IllegalArgumentException(String.format(INVALID_STRATEGY_TYPE_ERROR, type)));
+                    return;
+                }
+            }
+        }
+
+        // Validate LLM model
         if (config.getLlmId() != null) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(llmModel -> {

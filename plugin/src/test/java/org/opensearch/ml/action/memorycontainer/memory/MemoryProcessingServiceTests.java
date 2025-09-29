@@ -637,4 +637,116 @@ public class MemoryProcessingServiceTests {
 
         verify(factsListener).onResponse(any(List.class));
     }
+
+    @Test
+    public void testExtractFactsFromConversation_UserPreferenceStrategy() {
+        // Test with user_preference strategy type
+        MemoryStrategy userPreferenceStrategy = new MemoryStrategy(
+            "id",
+            true,
+            "user_preference",
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().contentText("I prefer dark mode for the UI").role("user").build());
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, userPreferenceStrategy, storageConfig, factsListener);
+
+        // Verify that the LLM is called (which means the strategy was accepted)
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testRunMemoryStrategy_UserPreferenceStrategy() {
+        // Test that user_preference strategy is properly routed
+        MemoryStrategy userPreferenceStrategy = new MemoryStrategy(
+            "id",
+            true,
+            "user_preference",
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().contentText("I like weekly summary emails").role("user").build());
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.runMemoryStrategy(userPreferenceStrategy, messages, storageConfig, factsListener);
+
+        // Verify that the LLM is called (strategy was accepted and processed)
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testRunMemoryStrategy_SemanticStrategy() {
+        // Test that semantic strategy still works
+        MemoryStrategy semanticStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("My name is John").role("user").build());
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.runMemoryStrategy(semanticStrategy, messages, storageConfig, factsListener);
+
+        // Verify that the LLM is called (strategy was accepted and processed)
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testRunMemoryStrategy_SummaryStrategy() {
+        // Test that summary strategy is properly routed
+        MemoryStrategy summaryStrategy = new MemoryStrategy("id", true, "summary", Arrays.asList("user_id"), new HashMap<>());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().contentText("This is a document to summarize").role("user").build());
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.runMemoryStrategy(summaryStrategy, messages, storageConfig, factsListener);
+
+        // Verify that the LLM is called (strategy was accepted and processed)
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_SummaryStrategy() {
+        // Test with summary strategy type
+        MemoryStrategy summaryStrategy = new MemoryStrategy("id", true, "summary", Arrays.asList("user_id"), new HashMap<>());
+
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().contentText("Document content to summarize").role("user").build());
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, summaryStrategy, storageConfig, factsListener);
+
+        // Verify that the LLM is called (which means the strategy was accepted)
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testRunMemoryStrategy_InvalidStrategy() {
+        // Test that invalid strategy type is rejected
+        MemoryStrategy invalidStrategy = new MemoryStrategy("id", true, "invalid_type", Arrays.asList("user_id"), new HashMap<>());
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Test message").role("user").build());
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.runMemoryStrategy(invalidStrategy, messages, storageConfig, factsListener);
+
+        // Verify that the listener receives a failure for unsupported strategy type
+        verify(factsListener).onFailure(any(IllegalArgumentException.class));
+    }
 }
