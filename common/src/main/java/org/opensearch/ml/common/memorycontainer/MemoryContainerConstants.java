@@ -54,6 +54,7 @@ public class MemoryContainerConstants {
     public static final String SESSION_ID_FIELD = "session_id";
     public static final String WORKING_MEMORY_ID_FIELD = "working_memory_id";
     public static final String NAMESPACE_FIELD = "namespace";
+    public static final String STRATEGY_CONFIG_FIELD = "configuration";
     public static final String BINARY_DATA_FIELD = "binary_data";
     public static final String STRUCTURED_DATA_FIELD = "structured_data";
     public static final String NAMESPACE_SIZE_FIELD = "namespace_size";

@@ -24,6 +24,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -45,12 +46,14 @@ public class MemoryProcessingServiceTests {
 
     @Mock
     private ActionListener<List<MemoryDecision>> decisionsListener;
+    private MemoryStrategy memoryStrategy;
 
     private MemoryProcessingService memoryProcessingService;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
     }
 
@@ -58,7 +61,7 @@ public class MemoryProcessingServiceTests {
     public void testExtractFactsFromConversation_NoStorageConfig() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
 
-        memoryProcessingService.extractFactsFromConversation(messages, null, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, null, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -70,7 +73,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn(null);
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -94,7 +97,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -155,7 +158,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -172,7 +175,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(Exception.class));
     }
@@ -201,7 +204,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -258,7 +261,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(IllegalArgumentException.class));
     }
@@ -279,7 +282,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -301,7 +304,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -325,7 +328,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -355,7 +358,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -385,7 +388,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -417,7 +420,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -620,7 +623,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
