@@ -12,6 +12,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.TestHelper.createTestContent;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.io.IOException;
@@ -49,9 +50,9 @@ public class MLAddMemoriesInputTest {
     public void setUp() {
         testMessages = Arrays
             .asList(
-                MessageInput.builder().role("user").contentText("Hello, how are you?").build(),
-                MessageInput.builder().role("assistant").contentText("I'm doing well, thank you!").build(),
-                MessageInput.builder().role("user").contentText("What can you help me with?").build()
+                MessageInput.builder().role("user").content(createTestContent("Hello, how are you?")).build(),
+                MessageInput.builder().role("assistant").content(createTestContent("I'm doing well, thank you!")).build(),
+                MessageInput.builder().role("user").content(createTestContent("What can you help me with?")).build()
             );
 
         testTags = new HashMap<>();
@@ -87,7 +88,7 @@ public class MLAddMemoriesInputTest {
         inputMinimal = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Single message").build()))
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Single message")).build()))
             .ownerId("owner-minimal")
             .build();
 
@@ -96,7 +97,7 @@ public class MLAddMemoriesInputTest {
             .builder()
             .memoryContainerId("container-999")
             .memoryType(WorkingMemoryType.CONVERSATIONAL)
-            .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Test message").build()))
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Test message")).build()))
             .namespace(Map.of(SESSION_ID_FIELD, "session-456", "agent_id", "agent-789"))
             .infer(true)
             .tags(testTags)
@@ -175,7 +176,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput inputEmptyTags = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Test").build()))
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Test")).build()))
             .tags(new HashMap<>())
             .ownerId("owner-empty-tags")
             .build();
@@ -269,7 +270,7 @@ public class MLAddMemoriesInputTest {
         assertTrue(jsonString.contains("\"memory_container_id\":\"container-123\""));
         assertTrue(jsonString.contains("\"messages\":["));
         assertTrue(jsonString.contains("\"role\":\"user\""));
-        assertTrue(jsonString.contains("\"content_text\":\"Hello, how are you?\""));
+        assertTrue(jsonString.contains("\"content\":"));
         assertTrue(jsonString.contains("\"session_id\":\"session-456\""));
         assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
         assertTrue(jsonString.contains("\"infer\":true"));
@@ -285,7 +286,7 @@ public class MLAddMemoriesInputTest {
 
         assertTrue(jsonString.contains("\"memory_container_id\""));
         assertTrue(jsonString.contains("\"messages\":["));
-        assertTrue(jsonString.contains("\"content_text\":\"Single message\""));
+        assertTrue(jsonString.contains("\"content\":"));
         assertTrue(!jsonString.contains("\"session_id\""));
         assertTrue(!jsonString.contains("\"agent_id\""));
         assertTrue(jsonString.contains("\"infer\":false"));
@@ -298,8 +299,8 @@ public class MLAddMemoriesInputTest {
         String jsonString = "{"
             + "\"memory_container_id\":\"container-123\","
             + "\"messages\":["
-            + "{\"role\":\"user\",\"content\":\"Test message 1\"},"
-            + "{\"role\":\"assistant\",\"content\":\"Test response\"}"
+            + "{\"role\":\"user\",\"content\":[{\"type\":\"text\", \"text\": \"Test message 1\"}]},"
+            + "{\"role\":\"assistant\",\"content\":[{\"type\":\"text\", \"text\": \"Test response\"}]}"
             + "],"
             + "\"namespace\": {\"session_id\":\"session-789\", \"agent_id\":\"agent-456\"},"
             + "\"infer\":false,"
@@ -316,7 +317,7 @@ public class MLAddMemoriesInputTest {
         assertEquals("container-123", parsed.getMemoryContainerId());
         assertEquals(2, parsed.getMessages().size());
         assertEquals("user", parsed.getMessages().get(0).getRole());
-        assertEquals("Test message 1", parsed.getMessages().get(0).getContent());
+        assertEquals("Test message 1", parsed.getMessages().get(0).getContent().get(0).get("text"));
         assertEquals("session-789", parsed.getSessionId());
         assertEquals("agent-456", parsed.getAgentId());
         assertEquals(Boolean.FALSE, parsed.isInfer());
@@ -329,7 +330,7 @@ public class MLAddMemoriesInputTest {
         String jsonString = "{"
             + "\"memory_container_id\":\"container-123\","
             + "\"messages\":["
-            + "{\"role\":\"user\", \"content\":\"Minimal message\"}"
+            + "{\"role\":\"user\", \"content\":[{\"type\":\"text\", \"text\": \"Minimal message\"}]}"
             + "]"
             + "}";
 
@@ -342,14 +343,14 @@ public class MLAddMemoriesInputTest {
 
         assertNotNull(parsed.getMemoryContainerId());
         assertEquals(1, parsed.getMessages().size());
-        assertEquals("Minimal message", parsed.getMessages().get(0).getContent());
+        assertEquals("Minimal message", parsed.getMessages().get(0).getContent().get(0).get("text"));
         assertEquals("user", parsed.getMessages().get(0).getRole());
     }
 
     @Test
     public void testParseWithUnknownFields() throws IOException {
         String jsonString = "{"
-            + "\"messages\":[{\"role\":\"user\", \"content\":\"Test\"}],"
+            + "\"messages\":[{\"role\":\"user\", \"content\":[{\"type\":\"text\", \"text\": \"Test\"}]}],"
             + "\"memory_container_id\":\"container-123\","
             + "\"unknown_field\":\"ignored\","
             + "\"another_unknown\":123"
@@ -363,7 +364,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
 
         assertEquals(1, parsed.getMessages().size());
-        assertEquals("Test", parsed.getMessages().get(0).getContent());
+        assertEquals("Test", parsed.getMessages().get(0).getContent().get(0).get("text"));
     }
 
     @Test
@@ -371,7 +372,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput input = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .messages(Arrays.asList(MessageInput.builder().role("user").contentText("Initial").build()))
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Initial")).build()))
             .ownerId("owner-setters")
             .build();
 
@@ -394,7 +395,7 @@ public class MLAddMemoriesInputTest {
         // Test that we can handle a large number of messages now that limit is removed
         List<MessageInput> manyMessages = new ArrayList<>();
         for (int i = 0; i < 1000; i++) { // Test with 1000 messages
-            manyMessages.add(MessageInput.builder().role("user").contentText("Message " + i).build());
+            manyMessages.add(MessageInput.builder().role("user").content(createTestContent("Message " + i)).build());
         }
 
         // Should succeed with large number of messages
@@ -414,8 +415,8 @@ public class MLAddMemoriesInputTest {
 
         List<MessageInput> specialMessages = Arrays
             .asList(
-                MessageInput.builder().role("user").contentText("Message with\n\ttabs and \"quotes\"").build(),
-                MessageInput.builder().role("assistant").contentText("Response with unicode 🚀✨").build()
+                MessageInput.builder().role("user").content(createTestContent("Message with\n\ttabs and \"quotes\"")).build(),
+                MessageInput.builder().role("assistant").content(createTestContent("Response with unicode 🚀✨")).build()
             );
 
         MLAddMemoriesInput specialInput = MLAddMemoriesInput
