@@ -36,6 +36,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
@@ -54,12 +55,23 @@ public class MemoryOperationsService {
         this.memoryContainerHelper = memoryContainerHelper;
     }
 
+    /**
+     * Maps strategy type to corresponding MemoryType
+     */
+    private MemoryType getMemoryTypeFromStrategy(MemoryStrategy strategy) {
+        if ("user_preference".equalsIgnoreCase(strategy.getType())) {
+            return MemoryType.USER_PREFERENCE;
+        }
+        return MemoryType.SEMANTIC; // Default for "semantic" and any other types
+    }
+
     public void executeMemoryOperations(
         List<MemoryDecision> decisions,
         MemoryConfiguration memoryConfig,
         Map<String, String> namespace,
         User user,
         MLAddMemoriesInput input,
+        MemoryStrategy strategy,
         ActionListener<List<MemoryResult>> listener
     ) {
         String longTermMemoryIndex = memoryConfig.getLongMemoryIndexName();
@@ -79,9 +91,10 @@ public class MemoryOperationsService {
                         .builder()
                         .ownerId(input.getOwnerId())
                         .memory(decision.getText())
-                        .memoryType(MemoryType.SEMANTIC)
+                        .memoryType(getMemoryTypeFromStrategy(strategy))
                         .namespace(namespace)
                         .tags(input.getTags())
+                        .strategyId(strategy.getId())
                         .createdTime(now)
                         .lastUpdatedTime(now)
                         .build();
@@ -273,6 +286,7 @@ public class MemoryOperationsService {
         MLAddMemoriesInput input,
         Map<String, String> strategyNameSpace,
         User user,
+        MemoryStrategy strategy,
         List<IndexRequest> indexRequests,
         List<MemoryInfo> memoryInfos
     ) {
@@ -281,9 +295,10 @@ public class MemoryOperationsService {
             MLMemory factMemory = MLMemory
                 .builder()
                 .memory(fact)
-                .memoryType(MemoryType.SEMANTIC)
+                .memoryType(getMemoryTypeFromStrategy(strategy))
                 .namespace(strategyNameSpace)
                 .tags(input.getTags())
+                .strategyId(strategy.getId())
                 .createdTime(now)
                 .lastUpdatedTime(now)
                 .build();

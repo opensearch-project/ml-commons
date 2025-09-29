@@ -44,7 +44,8 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     private Map<String, Object> strategyConfig;
 
     public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
-        this.id = id;
+        // Generate ID if not provided, using type prefix for better identification
+        this.id = (id != null && !id.trim().isEmpty()) ? id : generateStrategyId(type);
         this.enabled = enabled;
         this.type = type;
         this.namespace = namespace;
@@ -130,13 +131,23 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         }
 
         // Generate ID with type prefix if not provided
-        if (id == null && type != null) {
-            id = type.toLowerCase() + "_" + UUID.randomUUID().toString();
-        } else if (id == null) {
-            id = UUID.randomUUID().toString();
+        if (id == null) {
+            id = generateStrategyId(type);
         }
 
         return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
+    }
+
+    /**
+     * Generate a unique strategy ID with format: type_XXXXXXXX (8 char UUID)
+     * If type is null or empty, defaults to "strategy_XXXXXXXX"
+     *
+     * @param type The strategy type (e.g., "semantic", "user_preference")
+     * @return A unique strategy ID
+     */
+    public static String generateStrategyId(String type) {
+        String prefix = (type != null && !type.trim().isEmpty()) ? type.toLowerCase().replace(" ", "_") : "strategy";
+        return prefix + "_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
 }
