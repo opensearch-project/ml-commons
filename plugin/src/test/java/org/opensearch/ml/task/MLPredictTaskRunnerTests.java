@@ -348,7 +348,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener
                 .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
         when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
         when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
         taskRunner.dispatchTask(FunctionName.REMOTE, textDocsInputRequest, transportService, listener);
@@ -469,7 +469,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockTaskId");
@@ -549,7 +549,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener
                 .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockTaskId");
@@ -625,7 +625,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockTaskId");
