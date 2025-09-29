@@ -13,10 +13,14 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_BEFORE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -25,6 +29,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -42,8 +47,10 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
     private String ownerId;
     private String memoryId;
     private MemoryEvent action;
-    private MLMemory before;
-    private MLMemory after;
+    private Map<String, Object> before;
+    private Map<String, Object> after;
+    private Map<String, String> namespace;
+    private Map<String, String> tags;
     private Instant createdTime;
     private String tenantId;
     private String error;
@@ -52,8 +59,10 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         String ownerId,
         String memoryId,
         MemoryEvent action,
-        MLMemory before,
-        MLMemory after,
+        Map<String, Object> before,
+        Map<String, Object> after,
+        Map<String, String> namespace,
+        Map<String, String> tags,
         Instant createdTime,
         String tenantId,
         String error
@@ -63,6 +72,8 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         this.action = action;
         this.before = before;
         this.after = after;
+        this.namespace = namespace;
+        this.tags = tags;
         this.createdTime = createdTime;
         this.tenantId = tenantId;
         this.error = error;
@@ -75,12 +86,18 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
             this.action = in.readEnum(MemoryEvent.class);
         }
         if (in.readBoolean()) {
-            this.before = new MLMemory(in);
+            this.before = in.readMap();
         }
         if (in.readBoolean()) {
-            this.after = new MLMemory(in);
+            this.after = in.readMap();
         }
         this.createdTime = in.readOptionalInstant();
+        if (in.readBoolean()) {
+            namespace = in.readMap(StreamInput::readString, StreamInput::readString);
+        }
+        if (in.readBoolean()) {
+            this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
+        }
         this.tenantId = in.readOptionalString();
         this.error = in.readOptionalString();
     }
@@ -97,13 +114,25 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         }
         if (before != null) {
             out.writeBoolean(true);
-            before.writeTo(out);
+            out.writeMap(before);
         } else {
             out.writeBoolean(false);
         }
         if (after != null) {
             out.writeBoolean(true);
-            after.writeTo(out);
+            out.writeMap(after);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (namespace != null && !namespace.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (tags != null && !tags.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
         }
@@ -130,6 +159,13 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         if (after != null) {
             builder.field(MEMORY_AFTER_FIELD, after);
         }
+        if (namespace != null && !namespace.isEmpty()) {
+            builder.field(NAMESPACE_FIELD, namespace);
+            builder.field(NAMESPACE_SIZE_FIELD, namespace.size());
+        }
+        if (tags != null && !tags.isEmpty()) {
+            builder.field(TAGS_FIELD, tags);
+        }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
@@ -147,8 +183,10 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         String ownerId = null;
         String memoryId = null;
         MemoryEvent action = null;
-        MLMemory before = null;
-        MLMemory after = null;
+        Map<String, Object> before = null;
+        Map<String, Object> after = null;
+        Map<String, String> namespace = null;
+        Map<String, String> tags = null;
         Instant createdTime = null;
         String tenantId = null;
         String error = null;
@@ -169,10 +207,16 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
                     action = MemoryEvent.fromString(parser.text());
                     break;
                 case MEMORY_BEFORE_FIELD:
-                    before = MLMemory.parse(parser);
+                    before = parser.map();
                     break;
                 case MEMORY_AFTER_FIELD:
-                    after = MLMemory.parse(parser);
+                    after = parser.map();
+                    break;
+                case NAMESPACE_FIELD:
+                    namespace = StringUtils.getParameterMap(parser.map());
+                    break;
+                case TAGS_FIELD:
+                    tags = StringUtils.getParameterMap(parser.map());
                     break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
@@ -196,6 +240,8 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
             .action(action)
             .before(before)
             .after(after)
+            .namespace(namespace)
+            .tags(tags)
             .createdTime(createdTime)
             .tenantId(tenantId)
             .error(error)
