@@ -134,7 +134,7 @@ public class RestMLAddMemoriesActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequest() {
-        String requestContent = "{\"messages\":[{\"role\":\"user\",\"content\":\"test message\"}]}";
+        String requestContent = "{\"messages\":[{\"role\":\"user\",\"content\":[{\"text\":\"test message\",\"type\":\"text\"}]}]}";
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
 

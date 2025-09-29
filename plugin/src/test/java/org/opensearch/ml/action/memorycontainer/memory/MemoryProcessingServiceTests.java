@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -50,16 +51,20 @@ public class MemoryProcessingServiceTests {
 
     private MemoryProcessingService memoryProcessingService;
 
+    private List<Map<String, Object>> testContent;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+        memoryStrategy.getStrategyConfig().put("llm_result_path", "$");
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        testContent = createTestContent("Hello");
     }
 
     @Test
     public void testExtractFactsFromConversation_NoStorageConfig() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, null, factsListener);
 
@@ -68,7 +73,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_NoLLMModel() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn(null);
@@ -80,7 +85,8 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_WithLLMModel() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("My name is John").role("user").build());
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("My name is John")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
@@ -154,7 +160,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_WithValidLLMCall() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -165,7 +171,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_LLMFailure() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -236,7 +242,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_ParseException() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -261,6 +267,9 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
+        MemoryStrategy memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+        memoryStrategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(IllegalArgumentException.class));
@@ -268,7 +277,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_NonModelTensorOutput() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -289,7 +298,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_EmptyModelOutputs() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -311,7 +320,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_EmptyModelTensors() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -335,7 +344,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_NoContentKey() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -365,7 +374,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_EmptyContentList() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -395,7 +404,7 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_NoTextKey() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Hello").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
@@ -598,7 +607,8 @@ public class MemoryProcessingServiceTests {
 
     @Test
     public void testExtractFactsFromConversation_WithOtherFields() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("My name is John").role("user").build());
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("My name is John")).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
