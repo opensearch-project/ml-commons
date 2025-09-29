@@ -7,10 +7,11 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CONTENT_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CONTENT_TEXT_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -32,44 +33,31 @@ import lombok.Setter;
 @Builder
 public class MessageInput implements ToXContentObject, Writeable {
 
-    private String role;    // Optional when infer=true
-    private String contentText; // Required
+    private String role;
+    private List<Map<String, Object>> content;
 
-    private Map<String, Object> content;
-
-    public MessageInput(String role, String contentText, Map<String, Object> content) {
+    public MessageInput(String role, List<Map<String, Object>> content) {
         this.role = role;
-        this.contentText = contentText;
         this.content = content;
 
-        if (role == null || (content == null && contentText == null)) {
+        if (role == null || content == null) {
             throw new IllegalArgumentException("Message must have role and content");
-        }
-    }
-
-    public Object getContent() {
-        if (content != null) {
-            return content;
-        } else {
-            return contentText;
         }
     }
 
     public MessageInput(StreamInput in) throws IOException {
         this.role = in.readOptionalString();
-        this.contentText = in.readOptionalString();
         if (in.readBoolean()) {
-            this.content = in.readMap();
+            in.readList(StreamInput::readMap);
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(role);
-        out.writeOptionalString(contentText);
-        if (contentText != null) {
+        if (content != null) {
             out.writeBoolean(true);
-            out.writeMap(content);
+            out.writeCollection(content, StreamOutput::writeMap);
         } else {
             out.writeBoolean(false);
         }
@@ -81,21 +69,16 @@ public class MessageInput implements ToXContentObject, Writeable {
         if (role != null) {
             builder.field(ROLE_FIELD, role);
         }
-        if (contentText != null) {
-            builder.field(CONTENT_TEXT_FIELD, contentText);
-        }
         if (content != null) {
             builder.field(CONTENT_FIELD, content);
         }
-
         builder.endObject();
         return builder;
     }
 
     public static MessageInput parse(XContentParser parser) throws IOException {
         String role = null;
-        String contentText = null;
-        Map<String, Object> content = null;
+        List<Map<String, Object>> content = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -106,14 +89,11 @@ public class MessageInput implements ToXContentObject, Writeable {
                 case ROLE_FIELD:
                     role = parser.text();
                     break;
-                case CONTENT_TEXT_FIELD:
-                    contentText = parser.text();
-                    break;
                 case CONTENT_FIELD:
-                    if (!parser.currentToken().equals(XContentParser.Token.START_OBJECT)) {
-                        contentText = parser.text();
-                    } else {
-                        content = parser.map();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    content = new ArrayList<>();
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        content.add(parser.map());
                     }
                     break;
                 default:
@@ -122,6 +102,6 @@ public class MessageInput implements ToXContentObject, Writeable {
             }
         }
 
-        return MessageInput.builder().role(role).contentText(contentText).content(content).build();
+        return MessageInput.builder().role(role).content(content).build();
     }
 }
