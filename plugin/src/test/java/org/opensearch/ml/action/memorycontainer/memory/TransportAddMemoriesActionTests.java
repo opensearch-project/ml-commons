@@ -117,10 +117,7 @@ public class TransportAddMemoriesActionTests {
             client,
             sdkClient,
             xContentRegistry,
-            clusterService,
-            connectorAccessControlHelper,
             mlFeatureEnabledSetting,
-            mlModelManager,
             memoryContainerHelper,
             threadPool
         );

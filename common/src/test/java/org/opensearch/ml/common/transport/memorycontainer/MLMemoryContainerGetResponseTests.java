@@ -137,7 +137,7 @@ public class MLMemoryContainerGetResponseTests {
         assertNull(parsedContainer.getTenantId());
         assertNull(parsedContainer.getCreatedTime());
         assertNull(parsedContainer.getLastUpdatedTime());
-        assertNull(parsedContainer.getConfiguration());
+        assertNotNull(parsedContainer.getConfiguration());
     }
 
     @Test

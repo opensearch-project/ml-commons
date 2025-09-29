@@ -202,8 +202,13 @@ public class MemoryOperationsService {
         memoryContainerHelper.bulkIngestData(memoryConfig, bulkRequest, bulkResponseActionListener);
     }
 
-    public void writeErrorToMemoryHistory(MemoryConfiguration configuration, MLAddMemoriesInput input, Exception exception) {
-        Map<String, Object> errorMemoryHistory = createErrorMemoryHistory(input, exception);
+    public void writeErrorToMemoryHistory(
+        MemoryConfiguration configuration,
+        Map<String, String> strategyNamespace,
+        MLAddMemoriesInput input,
+        Exception exception
+    ) {
+        Map<String, Object> errorMemoryHistory = createErrorMemoryHistory(strategyNamespace, input, exception);
         IndexRequest indexRequest = new IndexRequest(configuration.getLongMemoryHistoryIndexName());
         indexRequest.source(errorMemoryHistory);
         memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {
@@ -211,18 +216,21 @@ public class MemoryOperationsService {
         }, e -> { log.error("Failed to index error memory history", e); }));
     }
 
-    public Map<String, Object> createErrorMemoryHistory(MLAddMemoriesInput input, Exception exception) {
+    public Map<String, Object> createErrorMemoryHistory(
+        Map<String, String> strategyNamespace,
+        MLAddMemoriesInput input,
+        Exception exception
+    ) {
         Map<String, Object> history = new HashMap<>();
         String ownerId = input.getOwnerId();
-        Map<String, String> namespace = input.getNamespace();
         Map<String, String> tags = input.getTags();
         if (ownerId == null) {
             history.put(OWNER_ID_FIELD, ownerId);
         }
         history.put(CREATED_TIME_FIELD, Instant.now().toEpochMilli());
-        if (namespace != null && namespace.size() > 0) {
-            history.put(NAMESPACE_FIELD, namespace);
-            history.put(NAMESPACE_SIZE_FIELD, namespace.size());
+        if (strategyNamespace != null && strategyNamespace.size() > 0) {
+            history.put(NAMESPACE_FIELD, strategyNamespace);
+            history.put(NAMESPACE_SIZE_FIELD, strategyNamespace.size());
         }
         if (tags != null) {
             history.put(TAGS_FIELD, tags);
@@ -231,7 +239,11 @@ public class MemoryOperationsService {
         return history;
     }
 
-    private Map<String, Object> createMemoryHistory(MemoryResult memoryResult, Map<String, String> namespace, MLAddMemoriesInput input) {
+    private Map<String, Object> createMemoryHistory(
+        MemoryResult memoryResult,
+        Map<String, String> strategyNamespace,
+        MLAddMemoriesInput input
+    ) {
         Map<String, Object> history = new HashMap<>();
         if (memoryResult.getOwnerId() != null) {
             history.put(OWNER_ID_FIELD, memoryResult.getOwnerId());
@@ -245,9 +257,9 @@ public class MemoryOperationsService {
             history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));
         }
         history.put(CREATED_TIME_FIELD, Instant.now().toEpochMilli());
-        if (namespace != null && namespace.size() > 0) {
-            history.put(NAMESPACE_FIELD, namespace);
-            history.put(NAMESPACE_SIZE_FIELD, namespace.size());
+        if (strategyNamespace != null && strategyNamespace.size() > 0) {
+            history.put(NAMESPACE_FIELD, strategyNamespace);
+            history.put(NAMESPACE_SIZE_FIELD, strategyNamespace.size());
         }
         if (input.getTags() != null) {
             history.put(TAGS_FIELD, input.getTags());
