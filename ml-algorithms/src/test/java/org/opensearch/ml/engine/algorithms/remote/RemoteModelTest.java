@@ -47,6 +47,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -167,9 +168,10 @@ public class RemoteModelTest extends MLStaticMockBase {
         String expExceptionMessage
     ) {
         ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
+        TransportChannel channel = mock(TransportChannel.class);
         doThrow(actualException)
             .when(remoteConnectorExecutor)
-            .executeAction(ConnectorAction.ActionType.PREDICT.toString(), mlInput, actionListener);
+            .executeAction(ConnectorAction.ActionType.PREDICT.toString(), mlInput, actionListener, channel);
         try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
             Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
             when(mlModel.getConnector()).thenReturn(connector);
@@ -180,7 +182,7 @@ public class RemoteModelTest extends MLStaticMockBase {
                 .initModelAsync(mlModel, ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, settings), encryptor)
                 .toCompletableFuture()
                 .join();
-            remoteModel.asyncPredict(mlInput, actionListener);
+            remoteModel.asyncPredict(mlInput, actionListener, channel);
             ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
             verify(actionListener).onFailure(argumentCaptor.capture());
             assert expExceptionClass.isInstance(argumentCaptor.getValue());

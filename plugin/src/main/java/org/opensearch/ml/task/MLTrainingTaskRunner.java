@@ -92,6 +92,11 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     }
 
     @Override
+    protected String getTransportStreamActionName() {
+        return MLTrainingTaskAction.NAME;
+    }
+
+    @Override
     protected TransportResponseHandler<MLTaskResponse> getResponseHandler(ActionListener<MLTaskResponse> listener) {
         return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
     }

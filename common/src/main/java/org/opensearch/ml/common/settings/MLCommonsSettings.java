@@ -485,4 +485,8 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Final
         );
+
+    // Feature flag for streaming feature
+    public static final Setting<Boolean> ML_COMMONS_STREAM_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "stream_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
