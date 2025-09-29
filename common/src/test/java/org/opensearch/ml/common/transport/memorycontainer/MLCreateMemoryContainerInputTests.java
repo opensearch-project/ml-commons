@@ -71,7 +71,7 @@ public class MLCreateMemoryContainerInputTests {
         assertNotNull(inputMinimal);
         assertEquals("minimal-container", inputMinimal.getName());
         assertNull(inputMinimal.getDescription());
-        assertNull(inputMinimal.getConfiguration());
+        assertNotNull(inputMinimal.getConfiguration());
         assertNull(inputMinimal.getTenantId());
     }
 
@@ -103,7 +103,7 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals("null-optional-container", input.getName());
         assertNull(input.getDescription());
-        assertNull(input.getConfiguration());
+        assertNotNull(input.getConfiguration());
         assertNull(input.getTenantId());
     }
 
@@ -158,7 +158,7 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals(inputMinimal.getName(), parsedInput.getName());
         assertNull(parsedInput.getDescription());
-        assertNull(parsedInput.getConfiguration());
+        assertNotNull(parsedInput.getConfiguration());
         assertNull(parsedInput.getTenantId());
     }
 
@@ -190,7 +190,7 @@ public class MLCreateMemoryContainerInputTests {
         assertTrue(jsonStr.contains("\"name\":\"minimal-container\""));
         // Verify optional fields are not present
         assertFalse(jsonStr.contains("\"description\""));
-        assertFalse(jsonStr.contains("\"configuration\""));
+        assertTrue(jsonStr.contains("\"configuration\""));
         assertFalse(jsonStr.contains("\"tenant_id\""));
     }
 
@@ -240,7 +240,7 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals("minimal-parsed-container", parsedInput.getName());
         assertNull(parsedInput.getDescription());
-        assertNull(parsedInput.getConfiguration());
+        assertNotNull(parsedInput.getConfiguration());
         assertNull(parsedInput.getTenantId());
     }
 
@@ -262,7 +262,7 @@ public class MLCreateMemoryContainerInputTests {
         assertEquals("unknown-fields-container", parsedInput.getName());
         assertEquals("test description", parsedInput.getDescription());
         // Unknown fields should be ignored
-        assertNull(parsedInput.getConfiguration());
+        assertNotNull(parsedInput.getConfiguration());
         assertNull(parsedInput.getTenantId());
     }
 

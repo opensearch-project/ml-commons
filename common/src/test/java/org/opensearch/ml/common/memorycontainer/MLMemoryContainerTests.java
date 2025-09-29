@@ -115,7 +115,7 @@ public class MLMemoryContainerTests {
         assertNull(container.getTenantId());
         assertNull(container.getCreatedTime());
         assertNull(container.getLastUpdatedTime());
-        assertNull(container.getConfiguration());
+        assertNotNull(container.getConfiguration());
     }
 
     @Test
@@ -160,7 +160,7 @@ public class MLMemoryContainerTests {
         assertEquals(containerWithNulls.getTenantId(), parsedContainer.getTenantId());
         assertEquals(containerWithNulls.getCreatedTime(), parsedContainer.getCreatedTime());
         assertEquals(containerWithNulls.getLastUpdatedTime(), parsedContainer.getLastUpdatedTime());
-        assertNull(parsedContainer.getConfiguration());
+        assertNotNull(parsedContainer.getConfiguration());
     }
 
     @Test
@@ -223,7 +223,7 @@ public class MLMemoryContainerTests {
         assertNull(parsedContainer.getTenantId());
         assertNull(parsedContainer.getCreatedTime());
         assertNull(parsedContainer.getLastUpdatedTime());
-        assertNull(parsedContainer.getConfiguration());
+        assertNotNull(parsedContainer.getConfiguration());
     }
 
     @Test
@@ -265,7 +265,7 @@ public class MLMemoryContainerTests {
         assertEquals(testCreatedTime, parsedContainer.getCreatedTime());
         assertEquals(testLastUpdatedTime, parsedContainer.getLastUpdatedTime());
         assertNull(parsedContainer.getOwner());
-        assertNull(parsedContainer.getConfiguration());
+        assertNotNull(parsedContainer.getConfiguration());
     }
 
     @Test
