@@ -100,7 +100,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 actionListener.onFailure(new OpenSearchStatusException("Memory index not found", RestStatus.NOT_FOUND));
                 return;
             }
-            if (memoryIndexName.equals("history")) {
+            if (memoryIndexName.endsWith("-memory-history")) {
                 actionListener.onFailure(new OpenSearchStatusException("Can't update memory history", RestStatus.NOT_FOUND));
                 return;
             }
