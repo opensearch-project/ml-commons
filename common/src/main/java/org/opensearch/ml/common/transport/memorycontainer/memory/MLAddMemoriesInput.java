@@ -95,9 +95,6 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             if (infer) {
                 throw new IllegalArgumentException("No messages provided when inferring memory");
             }
-            if (memoryType == WorkingMemoryType.CONVERSATIONAL) {
-                throw new IllegalArgumentException("No messages provided for conversational memory");
-            }
         }
 
         if (memoryContainerId == null) {
