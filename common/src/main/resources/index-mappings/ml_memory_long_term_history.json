@@ -22,38 +22,10 @@
       "type": "text"
     },
     "before": {
-      "type": "object",
-      "properties": {
-        "memory": {
-          "type": "text"
-        },
-        "memory_type": {
-          "type": "keyword"
-        },
-        "namespace": {
-          "type": "flat_object"
-        },
-        "tags": {
-          "type": "flat_object"
-        }
-      }
+      "type": "flat_object"
     },
     "after": {
-      "type": "object",
-      "properties": {
-        "memory": {
-          "type": "text"
-        },
-        "memory_type": {
-          "type": "keyword"
-        },
-        "namespace": {
-          "type": "flat_object"
-        },
-        "tags": {
-          "type": "flat_object"
-        }
-      }
+      "type": "flat_object"
     },
     "created_time": {
       "type": "date",
