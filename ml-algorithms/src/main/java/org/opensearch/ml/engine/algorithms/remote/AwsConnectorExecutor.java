@@ -93,7 +93,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
         Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
-        this.bedrockRuntimeAsyncClient = buildBedrockRuntimeAsyncClient(httpClient);
+        this.bedrockRuntimeAsyncClient = null;
     }
 
     @Override
@@ -196,6 +196,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                         break;
                 }
             }).build();
+            if (bedrockRuntimeAsyncClient == null) {
+                bedrockRuntimeAsyncClient = buildBedrockRuntimeAsyncClient(httpClient);
+            }
             bedrockRuntimeAsyncClient.converseStream(request, handler);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);
@@ -204,9 +207,17 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     }
 
     private BedrockRuntimeAsyncClient buildBedrockRuntimeAsyncClient(SdkAsyncHttpClient sdkAsyncHttpClient) {
-        AwsSessionCredentials credentials = AwsSessionCredentials
-            .create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken());
-        AwsCredentialsProvider awsCredentialsProvider = StaticCredentialsProvider.create(credentials);
+        AwsCredentialsProvider awsCredentialsProvider;
+        if (connector.getSessionToken() != null) {
+            AwsSessionCredentials credentials = AwsSessionCredentials
+                .create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken());
+            awsCredentialsProvider = StaticCredentialsProvider.create(credentials);
+        } else {
+            awsCredentialsProvider = StaticCredentialsProvider
+                .create(
+                    software.amazon.awssdk.auth.credentials.AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey())
+                );
+        }
 
         return BedrockRuntimeAsyncClient
             .builder()

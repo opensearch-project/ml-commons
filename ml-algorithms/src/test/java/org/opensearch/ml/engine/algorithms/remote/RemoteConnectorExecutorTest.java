@@ -18,7 +18,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
@@ -102,14 +101,7 @@ public class RemoteConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
@@ -123,7 +115,6 @@ public class RemoteConnectorExecutorTest {
     }
 
     private AwsConnectorExecutor getExecutor(Connector connector) {
-        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         ThreadContext threadContext = new ThreadContext(settings);
@@ -362,7 +353,7 @@ public class RemoteConnectorExecutorTest {
 
     @Test
     public void executeAction_WithTransportChannel() {
-        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "bedrock", REGION_FIELD, "us-west-2");
         Connector connector = getConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 

@@ -31,10 +31,6 @@ public class AbstractConnectorExecutorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        when(mockConnector.getAccessKey()).thenReturn("test_access_key");
-        when(mockConnector.getSecretKey()).thenReturn("test_secret_key");
-        when(mockConnector.getSessionToken()).thenReturn("test_session_token");
-        when(mockConnector.getRegion()).thenReturn("us-east-1");
         executor = new AwsConnectorExecutor(mockConnector);
         connectorClientConfig = new ConnectorClientConfig();
     }

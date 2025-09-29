@@ -542,7 +542,6 @@ public class MLEngineTest extends MLStaticMockBase {
     public void testDeploy_withPredictableActionListener_successful() throws IOException {
         String encryptedAccessKey = mlEngine.encrypt("access-key", null);
         String encryptedSecretKey = mlEngine.encrypt("secret-key", null);
-        String encryptedSessionToken = mlEngine.encrypt("session-token", null);
         String testConnector = String.format(Locale.ROOT, """
             {
                 "name": "sagemaker: t2ppl",
@@ -551,8 +550,7 @@ public class MLEngineTest extends MLStaticMockBase {
                 "protocol": "aws_sigv4",
                 "credential": {
                     "access_key": "%s",
-                    "secret_key": "%s",
-                    "session_token": "%s"
+                    "secret_key": "%s"
                 },
                 "parameters": {
                     "region": "us-east-1",
@@ -572,7 +570,7 @@ public class MLEngineTest extends MLStaticMockBase {
                     }
                 ]
             }
-            """, encryptedAccessKey, encryptedSecretKey, encryptedSessionToken);
+            """, encryptedAccessKey, encryptedSecretKey);
 
         XContentParser parser = XContentType.JSON
             .xContent()

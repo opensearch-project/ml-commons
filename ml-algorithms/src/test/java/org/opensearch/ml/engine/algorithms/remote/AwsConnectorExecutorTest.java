@@ -19,7 +19,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
@@ -106,16 +105,9 @@ public class AwsConnectorExecutorTest {
             new ModelTensor("tensor2", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap)
         );
 
-    @Mock
-    AwsConnector awsConnector;
-
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        when(awsConnector.getAccessKey()).thenReturn("test_access_key");
-        when(awsConnector.getSecretKey()).thenReturn("test_secret_key");
-        when(awsConnector.getSessionToken()).thenReturn("test_session_token");
-        when(awsConnector.getRegion()).thenReturn("us-east-1");
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         when(scriptService.compile(any(), any()))
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
@@ -151,14 +143,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -205,14 +190,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -251,14 +229,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
         Connector connector = AwsConnector
@@ -310,14 +281,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -377,14 +341,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -441,14 +398,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -507,14 +457,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -559,14 +502,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
         Connector connector = AwsConnector
@@ -609,14 +545,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -660,14 +589,7 @@ public class AwsConnectorExecutorTest {
             )
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -707,14 +629,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -753,14 +668,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -800,14 +708,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(
-                ACCESS_KEY_FIELD,
-                encryptor.encrypt("test_key", null),
-                SECRET_KEY_FIELD,
-                encryptor.encrypt("test_secret_key", null),
-                SESSION_TOKEN_FIELD,
-                encryptor.encrypt("test_session_token", null)
-            );
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
         // execute with retry disabled
@@ -871,7 +772,7 @@ public class AwsConnectorExecutorTest {
 
     @Test
     public void testGetRetryBackoffPolicy() {
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
 
         ConnectorClientConfig.ConnectorClientConfigBuilder configBuilder = ConnectorClientConfig
             .builder()
@@ -906,7 +807,7 @@ public class AwsConnectorExecutorTest {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
         ExecutorService executorService = mock(ExecutorService.class);
 
         doAnswer(new Answer() {
@@ -953,7 +854,7 @@ public class AwsConnectorExecutorTest {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, 5, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
         ExecutorService executorService = mock(ExecutorService.class);
 
         doAnswer(new Answer() {
@@ -1000,7 +901,7 @@ public class AwsConnectorExecutorTest {
         ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig(10, 10, 10, 1, 10, -1, RetryBackoffPolicy.CONSTANT);
         ExecutionContext executionContext = new ExecutionContext(123);
         ActionListener<Tuple<Integer, ModelTensors>> actionListener = mock(ActionListener.class);
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(awsConnector));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(mock(AwsConnector.class)));
         ExecutorService executorService = mock(ExecutorService.class);
 
         doAnswer(new Answer() {
@@ -1047,7 +948,12 @@ public class AwsConnectorExecutorTest {
 
     @Test
     public void testInvokeRemoteServiceStream_ValidInterface() {
-        AwsConnectorExecutor executor = new AwsConnectorExecutor(awsConnector);
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of("_llm_interface", "bedrock/converse/claude", "model", "claude-v2", "inputs", "test input");
         String payload = "test payload";
@@ -1060,7 +966,12 @@ public class AwsConnectorExecutorTest {
 
     @Test
     public void testInvokeRemoteServiceStream_WithException() {
-        AwsConnectorExecutor executor = new AwsConnectorExecutor(awsConnector);
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
         MLInput mlInput = mock(MLInput.class);
         Map<String, String> parameters = Map.of("llm_interface", "invalid_interface", "model", "claude-v2", "inputs", "test input");
         String payload = "test payload";

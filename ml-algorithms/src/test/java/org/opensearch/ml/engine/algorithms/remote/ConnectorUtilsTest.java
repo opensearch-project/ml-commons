@@ -471,7 +471,7 @@ public class ConnectorUtilsTest {
             .method("POST")
             .url("http://test.com/mock")
             .requestBody("{\"input\": \"${parameters.input}\"}")
-            .headers(ImmutableMap.of("Authorization", "Bearer token123"))  // Add headers to action
+            .headers(ImmutableMap.of("Authorization", "Bearer token123"))
             .build();
 
         Connector connector = HttpConnector
