@@ -539,8 +539,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
-                processOutput(output, modelTensors);
-                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+                if (MLAgentType.AG_UI.name().equals(agentType) && isAGUIEventsOutput(output)) {
+                    listener.onResponse(createRawAGUIOutput(output));
+                } else {
+                    processOutput(output, modelTensors);
+                    listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
+                }
             } else {
                 listener.onResponse(null);
             }
@@ -698,6 +702,48 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 modelTensors.add(ModelTensor.builder().name("response").result(result).build());
             }
         }
+    }
+
+    private boolean isAGUIEventsOutput(Object output) {
+        if (output instanceof String) {
+            String result = (String) output;
+            return result.startsWith("[") && (result.contains("RUN_STARTED") || result.contains("RUN_FINISHED")
+                    || result.contains("TEXT_MESSAGE_START") || result.contains("MESSAGES_SNAPSHOT"));
+        }
+        return false;
+    }
+
+    private Output createRawAGUIOutput(Object output) {
+        if (output instanceof String) {
+            String eventsJson = (String) output;
+            log.debug("Returning raw AG-UI events: {}", eventsJson);
+
+            Map<String, Object> responseMap = new HashMap<>();
+            try {
+                Gson gson = new Gson();
+                Object events = gson.fromJson(eventsJson, Object.class);
+                responseMap.put("events", events);
+            } catch (Exception e) {
+                log.error("Failed to parse AG-UI events, returning as raw string", e);
+                responseMap.put("events", eventsJson);
+            }
+
+            return MLTaskOutput.builder()
+                .taskId(null)
+                .status("COMPLETED")
+                .response(responseMap)
+                .build();
+        }
+
+        List<ModelTensors> outputs = new ArrayList<>();
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
+        try {
+            processOutput(output, modelTensors);
+        } catch (PrivilegedActionException e) {
+            log.error("Failed to process AG-UI output fallback", e);
+        }
+        return ModelTensorOutput.builder().mlModelOutputs(outputs).build();
     }
 
     public void indexMLTask(MLTask mlTask, ActionListener<IndexResponse> listener) {
