@@ -161,11 +161,21 @@ public class TransportCreateMemoryContainerAction extends
         final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName();
 
         if (configuration.getLlmId() == null || configuration.getStrategies().isEmpty()) {
-            mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
-                // Return the actual index name that was created
-                // Create the memory data index with appropriate mapping
-                listener.onResponse(workingMemoryIndexName);
-            }, listener::onFailure));
+            if (configuration.isDisableSession()) {
+                mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
+                    // Return the actual index name that was created
+                    // Create the memory data index with appropriate mapping
+                    listener.onResponse(workingMemoryIndexName);
+                }, listener::onFailure));
+            } else {
+                mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
+                    mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
+                        // Return the actual index name that was created
+                        // Create the memory data index with appropriate mapping
+                        listener.onResponse(workingMemoryIndexName);
+                    }, listener::onFailure));
+                }, listener::onFailure));
+            }
         } else {
             if (configuration.isDisableSession()) {
                 createMemoryIndexes(
