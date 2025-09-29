@@ -1264,19 +1264,12 @@ public class MLAgentExecutorTest {
         }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
 
         // Mock memory factory failure for existing conversation
+        RuntimeException memoryException = new RuntimeException("Memory creation failed");
         Mockito.doAnswer(invocation -> {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
-            listener.onFailure(new RuntimeException("Memory creation failed"));
+            listener.onFailure(memoryException);
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("existing-memory"), Mockito.any(), Mockito.any());
-
-        // Mock agent runner to return success (should not be called due to memory failure)
-        ModelTensor modelTensor = ModelTensor.builder().name("response").result("test").build();
-        Mockito.doAnswer(invocation -> {
-            ActionListener<ModelTensor> listener = invocation.getArgument(2);
-            listener.onResponse(modelTensor);
-            return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
 
         Map<String, String> params = new HashMap<>();
         params.put(MEMORY_ID, "existing-memory");
@@ -1287,10 +1280,9 @@ public class MLAgentExecutorTest {
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
-        // Should still proceed without memory (fallback behavior)
-        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
-        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
-        Assert.assertEquals(1, output.getMlModelOutputs().size());
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertEquals(memoryException, exception);
     }
 
     @Test
