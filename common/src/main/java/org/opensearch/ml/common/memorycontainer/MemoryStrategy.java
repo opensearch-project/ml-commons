@@ -9,11 +9,14 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ENABLED_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_CONFIG_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_TYPE_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -38,12 +41,14 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     private boolean enabled;
     private String type;
     private List<String> namespace;
+    private Map<String, String> strategyConfig;
 
-    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace) {
+    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace, Map<String, String> strategyConfig) {
         this.id = id;
         this.enabled = enabled;
         this.type = type;
         this.namespace = namespace;
+        this.strategyConfig = strategyConfig;
     }
 
     public MemoryStrategy(StreamInput input) throws IOException {
@@ -51,6 +56,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         this.enabled = input.readBoolean();
         this.type = input.readString();
         this.namespace = input.readStringList();
+        if (input.readBoolean()) {
+            this.strategyConfig = input.readMap(StreamInput::readString, StreamInput::readString);
+        }
     }
 
     @Override
@@ -59,6 +67,12 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         out.writeBoolean(enabled);
         out.writeString(type);
         out.writeStringCollection(namespace);
+        if (!strategyConfig.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(strategyConfig, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -69,6 +83,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         builder.field(ENABLED_FIELD, enabled);
         builder.field(STRATEGY_TYPE_FIELD, type);
         builder.field(NAMESPACE_FIELD, namespace);
+        if (!strategyConfig.isEmpty()) {
+            builder.field(STRATEGY_CONFIG_FIELD, strategyConfig);
+        }
 
         builder.endObject();
         return builder;
@@ -79,6 +96,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         boolean enabled = true;  // Default to true
         String type = null;
         List<String> namespace = null;
+        Map<String, String> strategyConfig = new HashMap<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -102,6 +120,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                         namespace.add(parser.text());
                     }
                     break;
+                case STRATEGY_CONFIG_FIELD:
+                    strategyConfig.putAll(parser.mapStrings());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -115,7 +136,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             id = UUID.randomUUID().toString();
         }
 
-        return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).build();
+        return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
     }
 
 }
