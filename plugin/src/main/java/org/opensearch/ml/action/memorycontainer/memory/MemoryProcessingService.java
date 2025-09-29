@@ -58,7 +58,7 @@ public class MemoryProcessingService {
         ActionListener<List<String>> listener
     ) {
         if ("semantic".equalsIgnoreCase(strategy.getType())) {// TODO: change to enum
-            extractFactsFromConversation(messages, memoryConfig, listener);
+            extractFactsFromConversation(messages, strategy, memoryConfig, listener);
         } else {
             listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
         }
@@ -66,6 +66,7 @@ public class MemoryProcessingService {
 
     public void extractFactsFromConversation(
         List<MessageInput> messages,
+        MemoryStrategy strategy,
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
@@ -76,7 +77,19 @@ public class MemoryProcessingService {
 
         String llmModelId = memoryConfig.getLlmId();
         Map<String, String> stringParameters = new HashMap<>();
-        stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
+        if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
+            stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT); // use default strategy
+        } else {
+            String customPrompt = strategy.getStrategyConfig().get("prompt");
+            if (customPrompt == null || customPrompt.trim().isEmpty()) {
+                stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
+            } else if (!validatePromptFormat(customPrompt)) {
+                listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
+                return;
+            } else {
+                stringParameters.put("system_prompt", customPrompt); // use custom strategy
+            }
+        }
 
         try {
             XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
@@ -350,5 +363,12 @@ public class MemoryProcessingService {
         } else {
             listener.onResponse(messages.get(0).toString());
         }
+    }
+
+    private boolean validatePromptFormat(String prompt) {
+        if (!prompt.contains("\"facts\"") || !prompt.contains("JSON")) {
+            return false;
+        }
+        return true;
     }
 }
