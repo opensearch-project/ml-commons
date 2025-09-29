@@ -48,8 +48,8 @@ public class CommonValue {
     public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
     public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
     public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
-    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-memory-container";
-    public static final String ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX = ".plugins-ml-am-";
+    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-am-memory-container";
+    public static final String ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX = ".plugins-ml-am";
     public static final String ML_AGENTIC_MEMORY_INDEX_PATTERN = ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "*";
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
     // index used in 2.19 to track MlTaskBatchUpdate task

@@ -9,7 +9,9 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PERSONAL_INFORMATION_ORGANIZER_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_FACTS_EXTRACTION_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FACTS_EXTRACTION_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -64,7 +66,9 @@ public class MemoryProcessingService {
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
-        if ("semantic".equalsIgnoreCase(strategy.getType())) {// TODO: change to enum
+        if ("semantic".equalsIgnoreCase(strategy.getType())
+            || "user_preference".equalsIgnoreCase(strategy.getType())
+            || "summary".equalsIgnoreCase(strategy.getType())) {
             extractFactsFromConversation(messages, strategy, memoryConfig, listener);
         } else {
             listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
@@ -84,12 +88,23 @@ public class MemoryProcessingService {
 
         String llmModelId = memoryConfig.getLlmId();
         Map<String, String> stringParameters = new HashMap<>();
+
+        // Determine default prompt based on strategy type
+        String defaultPrompt;
+        if ("user_preference".equalsIgnoreCase(strategy.getType())) {
+            defaultPrompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+        } else if ("summary".equalsIgnoreCase(strategy.getType())) {
+            defaultPrompt = SUMMARY_FACTS_EXTRACTION_PROMPT;
+        } else {
+            defaultPrompt = SEMANTIC_FACTS_EXTRACTION_PROMPT;
+        }
+
         if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
-            stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT); // use default strategy
+            stringParameters.put("system_prompt", defaultPrompt);
         } else {
             Object customPrompt = strategy.getStrategyConfig().get("prompt");
             if (customPrompt == null || customPrompt.toString().trim().isEmpty()) {
-                stringParameters.put("system_prompt", PERSONAL_INFORMATION_ORGANIZER_PROMPT);
+                stringParameters.put("system_prompt", defaultPrompt);
             } else if (!validatePromptFormat(customPrompt.toString())) {
                 listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
                 return;
@@ -266,6 +281,7 @@ public class MemoryProcessingService {
             String llmResult = null;
             if (filterdResult != null) {
                 llmResult = StringUtils.toJson(filterdResult);
+                llmResult = cleanMarkdownFromJson(llmResult);
             }
             if (llmResult != null) {
                 try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)) {
@@ -323,11 +339,7 @@ public class MemoryProcessingService {
             }
 
             // Clean response content
-            if (responseContent.startsWith("```json") && responseContent.endsWith("```")) {
-                responseContent = responseContent.substring(7, responseContent.length() - 3).trim();
-            } else if (responseContent.startsWith("```") && responseContent.endsWith("```")) {
-                responseContent = responseContent.substring(3, responseContent.length() - 3).trim();
-            }
+            responseContent = cleanMarkdownFromJson(responseContent);
 
             List<MemoryDecision> decisions = new ArrayList<>();
             try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)) {
@@ -367,5 +379,28 @@ public class MemoryProcessingService {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Utility method to clean markdown formatting from JSON responses.
+     * Strips ```json...``` and ```...``` wrappers that LLMs commonly add.
+     */
+    private String cleanMarkdownFromJson(String response) {
+        if (response == null) {
+            return null;
+        }
+
+        response = response.trim();
+
+        // Remove ```json...``` wrapper
+        if (response.startsWith("```json") && response.endsWith("```")) {
+            response = response.substring(7, response.length() - 3).trim();
+        }
+        // Remove ```...``` wrapper
+        else if (response.startsWith("```") && response.endsWith("```")) {
+            response = response.substring(3, response.length() - 3).trim();
+        }
+
+        return response;
     }
 }
