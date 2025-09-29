@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.UUID;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
@@ -111,10 +112,21 @@ public class TransportCreateMemoryContainerAction extends
             // Check if memory container index exists, create if not
             ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
                 try {
-                    // Create memory container document without ID (will be auto-generated)
+                    // Generate UUID prefix if needed (before building container)
+                    MemoryConfiguration config = input.getConfiguration();
+                    if (config != null
+                        && !config.isUseSystemIndex()
+                        && (config.getIndexPrefix() == null || config.getIndexPrefix().isEmpty())) {
+                        // Generate a unique prefix upfront
+                        String autoPrefix = UUID.randomUUID().toString().substring(0, 8).toLowerCase();
+                        config.setIndexPrefix(autoPrefix);
+                        log.info("Auto-generated prefix for memory container: {}", autoPrefix);
+                    }
+
+                    // Create memory container document with potentially updated configuration
                     MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
 
-                    // Index the memory container document first to get the generated ID
+                    // Index the memory container document (now includes auto-generated prefix if applicable)
                     indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
                         // Create memory data indices based on semantic storage config
                         createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
