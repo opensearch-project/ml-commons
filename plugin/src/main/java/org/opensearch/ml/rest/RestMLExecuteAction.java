@@ -27,6 +27,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -124,10 +125,17 @@ public class RestMLExecuteAction extends BaseRestHandler {
             String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
             String agentId = request.param(PARAMETER_AGENT_ID);
             functionName = FunctionName.AGENT;
-            input = MLInput.parse(parser, functionName.name());
-            ((AgentMLInput) input).setAgentId(agentId);
-            ((AgentMLInput) input).setTenantId(tenantId);
-            ((AgentMLInput) input).setIsAsync(async);
+
+            String requestBodyJson = request.contentOrSourceParam().v2().utf8ToString();
+            if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+                log.info("Detected AG-UI input format for agent: {}", agentId);
+                input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
+            } else {
+                input = MLInput.parse(parser, functionName.name());
+                ((AgentMLInput) input).setAgentId(agentId);
+                ((AgentMLInput) input).setTenantId(tenantId);
+                ((AgentMLInput) input).setIsAsync(async);
+            }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
                 throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);
