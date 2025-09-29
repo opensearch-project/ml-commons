@@ -319,6 +319,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                 strategyNameSpace,
                                 user,
                                 input,
+                                strategy,
                                 ActionListener.wrap(operationResults -> {
                                     List<MemoryResult> allResults = new ArrayList<>(operationResults);
                                     MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
@@ -341,6 +342,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                             strategyNameSpace,
                             user,
                             input,
+                            strategy,
                             ActionListener.wrap(operationResults -> {
                                 List<MemoryResult> allResults = new ArrayList<>(operationResults);
                                 MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
@@ -361,6 +363,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     input,
                     strategyNameSpace,
                     user,
+                    strategy,
                     indexRequests,
                     memoryInfos
                 );
