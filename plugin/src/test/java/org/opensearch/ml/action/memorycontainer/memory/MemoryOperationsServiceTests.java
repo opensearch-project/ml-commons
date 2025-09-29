@@ -34,6 +34,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
@@ -58,6 +59,7 @@ public class MemoryOperationsServiceTests {
     private Map<String, String> namespace;
     @Mock
     private MemoryContainerHelper memoryContainerHelper;
+    MemoryStrategy strategy;
 
     @Before
     public void setup() {
@@ -75,6 +77,8 @@ public class MemoryOperationsServiceTests {
             .build();
         namespace = new HashMap<>();
         namespace.put("session_id", "session-123");
+
+        strategy = MemoryStrategy.builder().type("semantic").enabled(true).id("strategy-123").build();
     }
 
     @Test
@@ -86,7 +90,7 @@ public class MemoryOperationsServiceTests {
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(operationsListener).onResponse(any(List.class));
     }
@@ -125,7 +129,7 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
     }
@@ -147,7 +151,7 @@ public class MemoryOperationsServiceTests {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, namespace, user, indexRequests, memoryInfos);
+        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos);
 
         // Verify that requests and infos were populated
         assert indexRequests.size() == 2;
@@ -180,7 +184,7 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
@@ -211,7 +215,7 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
@@ -231,7 +235,7 @@ public class MemoryOperationsServiceTests {
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         // Verify that NONE events result in an empty response list (no operations to execute)
         ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
@@ -286,7 +290,7 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         // Verify that only ADD, UPDATE, DELETE are included in results (not NONE)
         ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
@@ -325,7 +329,7 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(memoryContainerHelper).bulkIngestData(any(), any(), any());
         verify(operationsListener).onFailure(bulkException);
@@ -362,7 +366,7 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(client).bulk(any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
     }
 
 }
