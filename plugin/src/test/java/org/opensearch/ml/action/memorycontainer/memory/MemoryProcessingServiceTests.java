@@ -650,7 +650,7 @@ public class MemoryProcessingServiceTests {
         );
 
         List<MessageInput> messages = Arrays
-            .asList(MessageInput.builder().contentText("I prefer dark mode for the UI").role("user").build());
+            .asList(MessageInput.builder().content(createTestContent("I prefer dark mode for the UI")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
@@ -673,7 +673,7 @@ public class MemoryProcessingServiceTests {
         );
 
         List<MessageInput> messages = Arrays
-            .asList(MessageInput.builder().contentText("I like weekly summary emails").role("user").build());
+            .asList(MessageInput.builder().content(createTestContent("I like weekly summary emails")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
@@ -689,7 +689,8 @@ public class MemoryProcessingServiceTests {
         // Test that semantic strategy still works
         MemoryStrategy semanticStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
 
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("My name is John").role("user").build());
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("My name is John")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
@@ -706,7 +707,7 @@ public class MemoryProcessingServiceTests {
         MemoryStrategy summaryStrategy = new MemoryStrategy("id", true, "summary", Arrays.asList("user_id"), new HashMap<>());
 
         List<MessageInput> messages = Arrays
-            .asList(MessageInput.builder().contentText("This is a document to summarize").role("user").build());
+            .asList(MessageInput.builder().content(createTestContent("This is a document to summarize")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
@@ -723,7 +724,7 @@ public class MemoryProcessingServiceTests {
         MemoryStrategy summaryStrategy = new MemoryStrategy("id", true, "summary", Arrays.asList("user_id"), new HashMap<>());
 
         List<MessageInput> messages = Arrays
-            .asList(MessageInput.builder().contentText("Document content to summarize").role("user").build());
+            .asList(MessageInput.builder().content(createTestContent("Document content to summarize")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
@@ -739,7 +740,7 @@ public class MemoryProcessingServiceTests {
         // Test that invalid strategy type is rejected
         MemoryStrategy invalidStrategy = new MemoryStrategy("id", true, "invalid_type", Arrays.asList("user_id"), new HashMap<>());
 
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().contentText("Test message").role("user").build());
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
 
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
