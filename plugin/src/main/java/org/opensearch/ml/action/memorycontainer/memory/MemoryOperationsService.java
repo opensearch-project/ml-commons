@@ -59,8 +59,11 @@ public class MemoryOperationsService {
      * Maps strategy type to corresponding MemoryType
      */
     private MemoryType getMemoryTypeFromStrategy(MemoryStrategy strategy) {
-        if ("user_preference".equalsIgnoreCase(strategy.getType())) {
+        String strategyType = strategy.getType();
+        if ("user_preference".equalsIgnoreCase(strategyType)) {
             return MemoryType.USER_PREFERENCE;
+        } else if ("summary".equalsIgnoreCase(strategyType)) {
+            return MemoryType.SUMMARY;
         }
         return MemoryType.SEMANTIC; // Default for "semantic" and any other types
     }
@@ -291,6 +294,7 @@ public class MemoryOperationsService {
         List<MemoryInfo> memoryInfos
     ) {
         Instant now = Instant.now();
+
         for (String fact : facts) {
             MLMemory factMemory = MLMemory
                 .builder()

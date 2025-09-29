@@ -134,7 +134,6 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         if (id == null) {
             id = generateStrategyId(type);
         }
-
         return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
     }
 
