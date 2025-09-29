@@ -9,8 +9,6 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_PREDICT_THREAD_POOL;
-import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
-import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -311,14 +309,16 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request, BytesReference content) throws IOException {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
-        if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+        if (!FunctionName.REMOTE.name().equals(algorithm)) {
+            throw new IllegalStateException("Streaming is only supported for remote models");
+        }
+        if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase(Locale.ROOT)))
-            && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
-        } else if (ActionType.BATCH_PREDICT == actionType && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
-            throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
-        } else if (!ActionType.isValidActionInModelPrediction(actionType)) {
+        }
+        if (ActionType.BATCH_PREDICT == actionType) {
+            throw new IllegalStateException("Streaming is not supported for batch predict.");
+        }
+        if (!ActionType.isValidActionInModelPrediction(actionType)) {
             throw new IllegalArgumentException("Wrong action type in the rest request path!");
         }
 

@@ -349,6 +349,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTaskManager',
         'org.opensearch.ml.task.MLTrainingTaskRunner',
         'org.opensearch.ml.task.MLPredictTaskRunner',
+        'org.opensearch.ml.task.MLPredictTaskRunner.*',
         'org.opensearch.ml.task.MLTaskDispatcher',
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
         'org.opensearch.ml.task.MLExecuteTaskRunner',
@@ -377,7 +378,9 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
         'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
         'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*'
+        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*',
+        'org.opensearch.ml.rest.RestMLPredictionStreamAction',
+        'org.opensearch.ml.rest.RestMLPredictionStreamAction.*'
 ]
 
 jacocoTestCoverageVerification {

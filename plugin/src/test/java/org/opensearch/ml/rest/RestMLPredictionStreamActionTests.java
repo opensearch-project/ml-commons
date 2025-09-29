@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -74,6 +75,21 @@ public class RestMLPredictionStreamActionTests {
     }
 
     @Test
+    public void testSupportsContentStream() {
+        assertTrue(restAction.supportsContentStream());
+    }
+
+    @Test
+    public void testSupportsStreaming() {
+        assertTrue(restAction.supportsStreaming());
+    }
+
+    @Test
+    public void testAllowsUnsafeBuffers() {
+        assertTrue(restAction.allowsUnsafeBuffers());
+    }
+
+    @Test
     public void testPrepareRequestWhenStreamDisabled() throws IOException {
         when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(false);
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
@@ -83,6 +99,34 @@ public class RestMLPredictionStreamActionTests {
                 () -> restAction.prepareRequest(request, null)
         );
         assertEquals(STREAM_DISABLED_ERR_MSG, exception.getMessage());
+    }
+
+    @Test
+    public void testPrepareRequestWithModelInCache() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(modelManager.getOptionalModelFunctionName("test-model")).thenReturn(java.util.Optional.of(org.opensearch.ml.common.FunctionName.REMOTE));
+
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
+        assertNotNull(restAction.prepareRequest(request, null));
+    }
+
+    @Test
+    public void testPrepareRequestWithModelNotInCache() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(modelManager.getOptionalModelFunctionName("test-model")).thenReturn(java.util.Optional.empty());
+
+        org.opensearch.ml.common.MLModel mockModel = mock(org.opensearch.ml.common.MLModel.class);
+        when(mockModel.getAlgorithm()).thenReturn(org.opensearch.ml.common.FunctionName.REMOTE);
+
+        doAnswer(invocation -> {
+            org.opensearch.core.action.ActionListener<org.opensearch.ml.common.MLModel> listener = invocation.getArgument(2);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(modelManager).getModel(org.mockito.ArgumentMatchers.eq("test-model"), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
+        assertNotNull(restAction.prepareRequest(request, null));
     }
 
     @Test
@@ -114,6 +158,42 @@ public class RestMLPredictionStreamActionTests {
             restAction.getRequest("test-model", "REMOTE", request, content);
         });
         assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequestLocalModelNotSupported() throws IOException {
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict");
+        BytesReference content = request.content();
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            restAction.getRequest("test-model", "TEXT_EMBEDDING", request, content);
+        });
+        assertEquals("Streaming is only supported for remote models", exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequestBatchPredictNotSupported() throws IOException {
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_batch_predict");
+        BytesReference content = request.content();
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            restAction.getRequest("test-model", "REMOTE", request, content);
+        });
+        assertEquals("Streaming is not supported for batch predict.", exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequestInvalidActionType() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_invalid_action");
+        BytesReference content = request.content();
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            restAction.getRequest("test-model", "REMOTE", request, content);
+        });
+        assertEquals("Wrong Action Type of models", exception.getMessage());
     }
 
     private FakeRestRequest createFakeRestRequestWithValidContent(String path) throws IOException {

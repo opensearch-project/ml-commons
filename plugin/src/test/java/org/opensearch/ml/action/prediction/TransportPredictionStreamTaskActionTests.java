@@ -296,6 +296,127 @@ public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase
     }
 
     @Test
+    public void testDoExecuteModelDisabled() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Model is disabled.", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteModelRateLimited() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getRateLimiter("test_id")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Request is throttled at model level.", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteUserRateLimited() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getRateLimiter("test_id")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(true);
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin").request()).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Request is throttled at user level. If you think there's an issue, please contact your cluster admin.", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteDLModelNotSupported() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getRateLimiter("test_id")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(true);
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin").request()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Non-streaming requests are not supported by the streaming transport action", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteStreamExecution() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getOptionalFunctionName("test_id")).thenReturn(java.util.Optional.of(FunctionName.REMOTE));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(3);
+            listener.onResponse(mock(MLTaskResponse.class));
+            return null;
+        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        verify(mlPredictTaskRunner).run(any(), any(), any(), any());
+        verify(modelCacheHelper).addPredictRequestDuration(eq("test_id"), any(Double.class));
+        verify(modelCacheHelper).refreshLastAccessTime("test_id");
+    }
+
+    @Test
     public void testValidateInputSchemaSuccess() {
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
             .builder()
