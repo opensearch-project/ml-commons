@@ -116,7 +116,7 @@ public class MLCreateMemoryContainerRequestTests {
         assertEquals("minimal-container", parsedInput.getName());
         assertNull(parsedInput.getDescription());
         assertNull(parsedInput.getTenantId());
-        assertNull(parsedInput.getConfiguration());
+        assertNotNull(parsedInput.getConfiguration());
     }
 
     @Test

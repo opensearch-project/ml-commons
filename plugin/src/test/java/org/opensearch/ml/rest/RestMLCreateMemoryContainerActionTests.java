@@ -149,7 +149,7 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("minimal-container", input.getName());
         assertNull(input.getDescription());
-        assertNull(input.getConfiguration());
+        assertNotNull(input.getConfiguration());
         assertNull(input.getTenantId());
     }
 

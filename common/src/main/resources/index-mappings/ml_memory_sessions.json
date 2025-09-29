@@ -23,6 +23,9 @@
     "namespace": {
       "type": "flat_object"
     },
+    "namespace_size": {
+      "type": "integer"
+    },
     "owner": USER_MAPPING_PLACEHOLDER,
     "tenant_id": {
       "type": "keyword"

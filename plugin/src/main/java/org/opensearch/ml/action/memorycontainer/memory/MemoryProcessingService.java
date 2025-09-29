@@ -343,4 +343,12 @@ public class MemoryProcessingService {
             throw new RuntimeException("Failed to parse memory decisions", e);
         }
     }
+
+    public void summarizeMessages(List<MessageInput> messages, ActionListener<String> listener) {
+        if (messages == null || messages.isEmpty()) {
+            listener.onResponse("");
+        } else {
+            listener.onResponse(messages.get(0).toString());
+        }
+    }
 }
