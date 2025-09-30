@@ -100,7 +100,7 @@ public class MLToolExecutorTest {
              return null;
          }).when(tool).run(Mockito.eq(parameters), any());
 
-         mlToolExecutor.execute(toolMLInput, actionListener, null);
+         mlToolExecutor.execute(toolMLInput, actionListener);
 
          Mockito.verify(actionListener).onResponse(outputCaptor.capture());
          Output output = outputCaptor.getValue();
@@ -113,7 +113,7 @@ public class MLToolExecutorTest {
         when(toolMLInput.getInputDataset()).thenReturn(inputDataSet);
         when(inputDataSet.getParameters()).thenReturn(parameters);
 
-        mlToolExecutor.execute(toolMLInput, actionListener, null);
+        mlToolExecutor.execute(toolMLInput, actionListener);
 
         Mockito.verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
@@ -122,13 +122,13 @@ public class MLToolExecutorTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void test_NullInput_ThrowsException() {
-        mlToolExecutor.execute(null, actionListener, null);
+        mlToolExecutor.execute(null, actionListener);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void test_NonToolInput_ThrowsException() {
         Input input = Mockito.mock(Input.class);
-        mlToolExecutor.execute(input, actionListener, null);
+        mlToolExecutor.execute(input, actionListener);
     }
 
     @Test
@@ -139,7 +139,7 @@ public class MLToolExecutorTest {
         when(toolFactory.create(any())).thenReturn(tool);
         when(tool.validate(parameters)).thenReturn(false);
 
-        mlToolExecutor.execute(toolMLInput, actionListener, null);
+        mlToolExecutor.execute(toolMLInput, actionListener);
 
         Mockito.verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
@@ -160,7 +160,7 @@ public class MLToolExecutorTest {
              return null;
          }).when(tool).run(Mockito.eq(parameters), any());
 
-         mlToolExecutor.execute(toolMLInput, actionListener, null);
+         mlToolExecutor.execute(toolMLInput, actionListener);
 
          Mockito.verify(actionListener).onFailure(exceptionCaptor.capture());
          Exception exception = exceptionCaptor.getValue();
@@ -173,7 +173,7 @@ public class MLToolExecutorTest {
         when(toolMLInput.getInputDataset()).thenReturn(null);
 
         Assert.assertThrows(IllegalArgumentException.class, () -> {
-            mlToolExecutor.execute(toolMLInput, actionListener, null);
+            mlToolExecutor.execute(toolMLInput, actionListener);
         });
     }
 }

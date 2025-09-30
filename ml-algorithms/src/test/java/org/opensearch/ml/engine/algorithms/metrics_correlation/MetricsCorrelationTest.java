@@ -280,7 +280,7 @@ public class MetricsCorrelationTest {
             });
 
         try {
-            metricsCorrelation.execute(wrongInput, listener, null);
+            metricsCorrelation.execute(wrongInput, listener);
             fail("Should throw ExecuteException for wrong input type");
         } catch (ExecuteException e) {
             assertEquals("wrong input", e.getMessage());
@@ -702,7 +702,7 @@ public class MetricsCorrelationTest {
             .wrap(out -> { /* success */ }, e -> { /* failure */ });
 
         try {
-            metricsCorrelation.execute(in, listener, null);
+            metricsCorrelation.execute(in, listener);
         } catch (Exception ignored) {
             // OK; covered the index creation path
         }
@@ -755,7 +755,7 @@ public class MetricsCorrelationTest {
             .wrap(out -> fail("We don't need success"), e -> { /* fine */ });
 
         try {
-            spyMetrics.execute(in, listener, null);
+            spyMetrics.execute(in, listener);
         } catch (Exception ignored) {}
 
         verify(spyMetrics, times(0)).deployModel(anyString(), any());
@@ -824,7 +824,7 @@ public class MetricsCorrelationTest {
             );
 
         try {
-            spyMetrics.execute(in, listener, null);
+            spyMetrics.execute(in, listener);
         } catch (Exception ignored) {}
 
         verify(spyMetrics, times(1)).deployModel(eq("abc"), any());
@@ -881,7 +881,7 @@ public class MetricsCorrelationTest {
             .wrap(out -> fail("Not expected to succeed"), e -> { /* ok */ });
 
         try {
-            spyMetrics.execute(in, listener, null);
+            spyMetrics.execute(in, listener);
         } catch (Exception ignored) {}
 
         verify(spyMetrics, times(1)).registerModel(any());

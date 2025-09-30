@@ -5,23 +5,33 @@
 
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import javax.naming.AuthenticationException;
+
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorThrottlingException;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -36,6 +46,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockDeltaEvent;
+import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockStartEvent;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamOutput;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
@@ -47,15 +58,23 @@ import software.amazon.awssdk.services.bedrockruntime.model.ToolInputSchema;
 import software.amazon.awssdk.services.bedrockruntime.model.ToolResultBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ToolResultContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ToolSpecification;
+import software.amazon.awssdk.services.bedrockruntime.model.ValidationException;
+import software.amazon.awssdk.services.s3.model.InvalidRequestException;
 
 @Log4j2
 public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private final SdkAsyncHttpClient httpClient;
     private final AwsConnector connector;
-    private static final Pattern TOOL_USE_ID_PATTERN = Pattern.compile("ToolUseId=([^,\\)]+)");
-    private static final Pattern TOOL_NAME_PATTERN = Pattern.compile("Name=([^,\\)]+)");
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
+
+    private enum StreamState {
+        STREAMING_CONTENT,
+        TOOL_CALL_DETECTED,
+        ACCUMULATING_TOOL_INPUT,
+        WAITING_FOR_TOOL_RESULT,
+        COMPLETED
+    }
 
     public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector) {
         this.httpClient = httpClient;
@@ -71,12 +90,11 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     ) {
         try {
             AtomicBoolean isStreamClosed = new AtomicBoolean(false);
-            AtomicBoolean functionCallInProgress = new AtomicBoolean(false);
-            AtomicBoolean agentExecutionInProgress = new AtomicBoolean(false);
             AtomicReference<String> toolName = new AtomicReference<>();
             AtomicReference<Map<String, Object>> toolInput = new AtomicReference<>();
             AtomicReference<String> toolUseId = new AtomicReference<>();
             StringBuilder toolInputAccumulator = new StringBuilder();
+            AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
 
             // Build Bedrock client
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
@@ -84,28 +102,33 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             // Parse payload to build ConverseStreamRequest
             ConverseStreamRequest request = buildConverseStreamRequest(payload, parameters);
 
-            // Build response handler with comprehensive raw logging
             ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder().onResponse(response -> {}).onError(error -> {
                 log.error("Converse stream error: {}", error.getMessage());
-                listener.onFailure(new MLException("Error from remote service: " + error.getMessage(), error));
+                if (isThrottlingError(error)) {
+                    listener
+                        .onFailure(
+                            new RemoteConnectorThrottlingException(
+                                REMOTE_SERVICE_ERROR
+                                    + "The request was denied due to remote server throttling. "
+                                    + "To change the retry policy and behavior, please update the connector client_config.",
+                                RestStatus.BAD_REQUEST
+                            )
+                        );
+                } else if (isClientError(error)) {
+                    // 4XX errors
+                    listener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + error.getMessage(), RestStatus.BAD_REQUEST));
+                } else {
+                    // 5xx errors
+                    listener.onFailure(new MLException(REMOTE_SERVICE_ERROR + error.getMessage(), error));
+                }
             }).onComplete(() -> {
-                if (!functionCallInProgress.get() && !agentExecutionInProgress.get()) {
+                if (currentState.get() != StreamState.WAITING_FOR_TOOL_RESULT) {
                     sendCompletionResponse(isStreamClosed, listener);
                 } else {
-                    log.debug("Function call or agent execution in progress - keeping stream open");
+                    log.debug("Tool execution in progress - keeping stream open");
                 }
             }).subscriber(event -> {
-                handleStreamEvent(
-                    event,
-                    listener,
-                    isStreamClosed,
-                    functionCallInProgress,
-                    agentExecutionInProgress,
-                    toolName,
-                    toolInput,
-                    toolUseId,
-                    toolInputAccumulator
-                );
+                handleStreamEvent(event, listener, isStreamClosed, toolName, toolInput, toolUseId, toolInputAccumulator, currentState);
             }).build();
 
             // Start streaming
@@ -116,101 +139,82 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         }
     }
 
+    private boolean isThrottlingError(Throwable error) {
+        return error.getMessage().contains("throttling")
+            || error.getMessage().contains("TooManyRequestsException")
+            || error.getMessage().contains("Rate exceeded");
+    }
+
+    private boolean isClientError(Throwable error) {
+        return error instanceof ValidationException || error instanceof InvalidRequestException || error instanceof AuthenticationException;
+    }
+
     private ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
-            ConverseStreamRequest.Builder requestBuilder = ConverseStreamRequest.builder().modelId(parameters.get("model"));
-
-            // Add system messages if present
-            if (payloadJson.has("system")) {
-                requestBuilder.system(parseSystemMessages(payloadJson.get("system")));
-            }
-
-            // Add messages if present
-            if (payloadJson.has("messages")) {
-                requestBuilder.messages(parseMessages(payloadJson.get("messages")));
-            }
-
-            // Add tool configuration if present
-            if (payloadJson.has("toolConfig")) {
-                requestBuilder.toolConfig(parseToolConfig(payloadJson.get("toolConfig")));
-            }
-            return requestBuilder.build();
+            return ConverseStreamRequest
+                .builder()
+                .modelId(parameters.get("model"))
+                .system(getOptionalNode(payloadJson, "system").map(this::parseSystemMessages).orElse(null))
+                .messages(getOptionalNode(payloadJson, "messages").map(this::parseMessages).orElse(null))
+                .toolConfig(getOptionalNode(payloadJson, "toolConfig").map(this::parseToolConfig).orElse(null))
+                .build();
         } catch (Exception e) {
             throw new MLException("Failed to parse payload for Bedrock request", e);
         }
+    }
+
+    private Optional<JsonNode> getOptionalNode(JsonNode json, String field) {
+        return Optional.ofNullable(json.get(field));
     }
 
     private void handleStreamEvent(
         ConverseStreamOutput event,
         StreamPredictActionListener<MLTaskResponse, ?> listener,
         AtomicBoolean isStreamClosed,
-        AtomicBoolean functionCallInProgress,
-        AtomicBoolean agentExecutionInProgress,
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
-        StringBuilder toolInputAccumulator
+        StringBuilder toolInputAccumulator,
+        AtomicReference<StreamState> currentState
     ) {
-        switch (event.sdkEventType()) {
-            case CONTENT_BLOCK_DELTA:
-                ContentBlockDeltaEvent contentEvent = (ContentBlockDeltaEvent) event;
-
-                // Check if this is a tool use delta
-                if (contentEvent.delta().toolUse() != null) {
-                    log.debug("Tool use delta detected: {}", contentEvent);
-                    accumulateToolInput(contentEvent.delta().toolUse().input(), toolInput, toolInputAccumulator);
-                    return;
-                }
-
-                // Handle regular text content
-                if (contentEvent.delta().text() != null) {
-                    String chunk = contentEvent.delta().text();
-                    sendContentResponse(chunk, false, listener);
+        switch (currentState.get()) {
+            case STREAMING_CONTENT:
+                if (isToolUseDetected(event)) {
+                    currentState.set(StreamState.TOOL_CALL_DETECTED);
+                    extractToolInfo(event, toolName, toolUseId);
+                } else if (isContentDelta(event)) {
+                    sendContentResponse(getTextContent(event), false, listener);
+                } else if (isStreamComplete(event)) {
+                    currentState.set(StreamState.COMPLETED);
+                    sendCompletionResponse(isStreamClosed, listener);
                 }
                 break;
 
-            case CONTENT_BLOCK_START:
-                log.debug("Content block started");
-                String[] toolInfo = extractToolInfoFromContentBlockStart(event);
-                toolName.set(toolInfo[0]);
-                toolUseId.set(toolInfo[1]);
+            case TOOL_CALL_DETECTED:
+                if (isToolInputDelta(event)) {
+                    currentState.set(StreamState.ACCUMULATING_TOOL_INPUT);
+                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                }
                 break;
 
-            case CONTENT_BLOCK_STOP:
-                log.debug("Content block stop");
-                break;
-
-            case MESSAGE_START:
-                log.debug("Message started");
-                break;
-
-            case MESSAGE_STOP:
-                log.debug("Message completed");
-
-                // Check if this is a tool use stop reason
-                if (event.toString().contains(STOP_REASON_TOOL_USE)) {
-                    functionCallInProgress.set(true);
-                    agentExecutionInProgress.set(true);
+            case ACCUMULATING_TOOL_INPUT:
+                if (isToolInputDelta(event)) {
+                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                } else if (isToolInputComplete(event)) {
+                    currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
                     listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId));
                 }
-
-                // Close only if no function call or agent execution in progress
-                if (!functionCallInProgress.get() && !agentExecutionInProgress.get()) {
-                    sendCompletionResponse(isStreamClosed, listener);
-                } else {
-                    log.debug("Function call or agent execution in progress - keeping stream open");
-                }
                 break;
 
-            case METADATA:
-                log.debug("Stream metadata: {}", event);
+            case WAITING_FOR_TOOL_RESULT:
+                // Don't close stream - wait for tool execution
+                log.debug("Waiting for tool result - keeping stream open");
                 break;
 
-            default:
-                log.warn("Unsupported event type: {}", event.sdkEventType());
-                listener.onFailure(new IllegalArgumentException("Unsupported streaming event type: " + event.sdkEventType()));
+            case COMPLETED:
+                // Stream already completed
                 break;
         }
     }
@@ -221,11 +225,56 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         listener.onFailure(new MLException("Fail to execute streaming", error));
     }
 
+    // TODO: refactor the event type checker methods
+    private void extractToolInfo(ConverseStreamOutput event, AtomicReference<String> toolName, AtomicReference<String> toolUseId) {
+        ContentBlockStartEvent startEvent = (ContentBlockStartEvent) event;
+        if (startEvent.start() != null && startEvent.start().toolUse() != null) {
+            toolName.set(startEvent.start().toolUse().name());
+            toolUseId.set(startEvent.start().toolUse().toolUseId());
+        }
+    }
+
+    private String getTextContent(ConverseStreamOutput event) {
+        ContentBlockDeltaEvent contentEvent = (ContentBlockDeltaEvent) event;
+        return contentEvent.delta().text();
+    }
+
+    private String getToolInputFragment(ConverseStreamOutput event) {
+        ContentBlockDeltaEvent contentEvent = (ContentBlockDeltaEvent) event;
+        return contentEvent.delta().toolUse().input();
+    }
+
+    private boolean isToolUseDetected(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_START;
+    }
+
+    private boolean isContentDelta(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_DELTA
+            && ((ContentBlockDeltaEvent) event).delta().text() != null;
+    }
+
+    private boolean isToolInputDelta(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_DELTA
+            && ((ContentBlockDeltaEvent) event).delta().toolUse() != null;
+    }
+
+    private boolean isStreamComplete(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && !event.toString().contains(STOP_REASON_TOOL_USE);
+    }
+
+    private boolean isToolInputComplete(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && event.toString().contains(STOP_REASON_TOOL_USE);
+    }
+
     private MLTaskResponse createToolUseResponse(
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId
     ) {
+        // Validate inputs
+        if (toolName == null || toolInput == null || toolUseId == null) {
+            throw new IllegalArgumentException("Tool references cannot be null");
+        }
         Map<String, Object> wrappedResponse = Map
             .of(
                 "output",
@@ -255,39 +304,61 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return new MLTaskResponse(output);
     }
 
-    private String[] extractToolInfoFromContentBlockStart(ConverseStreamOutput event) {
-        String eventString = event.toString();
-        String toolName = extractWithPattern(eventString, TOOL_NAME_PATTERN);
-        String toolUseId = extractWithPattern(eventString, TOOL_USE_ID_PATTERN);
-        log.debug("Extracted tool - name: {}, id: {}", toolName, toolUseId);
-        return new String[] { toolName, toolUseId };
-    }
-
-    private String extractWithPattern(String text, Pattern pattern) {
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(1).trim() : null;
-    }
-
     private void accumulateToolInput(
         String inputFragment,
         AtomicReference<Map<String, Object>> toolInput,
         StringBuilder toolInputAccumulator
     ) {
-        if (inputFragment != null) {
-            toolInputAccumulator.append(inputFragment);
+        if (inputFragment == null) {
+            return;
+        }
+        ObjectMapper objectMapper = new ObjectMapper();
+        toolInputAccumulator.append(inputFragment);
+        String accumulated = toolInputAccumulator.toString();
 
-            // Try to parse as JSON
-            String accumulated = toolInputAccumulator.toString();
-            if (accumulated.startsWith("{") && accumulated.endsWith("}")) {
-                try {
-                    ObjectMapper mapper = new ObjectMapper();
-                    Map<String, Object> parsedInput = mapper.readValue(accumulated, Map.class);
+        try {
+            JsonParser parser = objectMapper.getFactory().createParser(accumulated);
+            JsonToken firstToken = parser.nextToken();
+
+            // Check if it starts with an object
+            if (firstToken != JsonToken.START_OBJECT) {
+                log.debug("Input does not start with an object: {}", accumulated);
+                return;
+            }
+
+            // Parse through the entire structure
+            int objectDepth = 1;
+            while (parser.nextToken() != null) {
+                JsonToken currentToken = parser.getCurrentToken();
+                if (currentToken == JsonToken.START_OBJECT) {
+                    objectDepth++;
+                } else if (currentToken == JsonToken.END_OBJECT) {
+                    objectDepth--;
+                }
+
+                // Check if a complete object is found
+                if (objectDepth == 0) {
+                    // Check if there's any remaining content
+                    if (parser.nextToken() != null) {
+                        log.debug("Extra content after JSON object: {}", accumulated);
+                        return;
+                    }
+
+                    // Valid and complete JSON object found
+                    Map<String, Object> parsedInput = objectMapper.readValue(accumulated, Map.class);
                     toolInput.set(parsedInput);
-                    log.debug("Parse tool input: {}", toolInput);
-                } catch (Exception e) {
-                    log.debug("Input not yet complete or invalid JSON: {}", accumulated);
+                    log.debug("Successfully parsed tool input: {}", parsedInput);
+                    return;
                 }
             }
+
+            // JSON is incomplete
+            log.debug("Incomplete JSON object: {}", accumulated);
+
+        } catch (JsonParseException e) {
+            log.debug("Invalid or incomplete JSON: {}", accumulated);
+        } catch (IOException e) {
+            log.error("Error parsing JSON input", e);
         }
     }
 
@@ -422,7 +493,11 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             return Document.fromMap(map);
         }
         if (node.isArray()) {
-            return Document.fromList(node.findValues("").stream().map(this::buildDocumentFromJsonNode).collect(Collectors.toList()));
+            List<Document> list = new ArrayList<>();
+            for (JsonNode item : node) {
+                list.add(buildDocumentFromJsonNode(item));
+            }
+            return Document.fromList(list);
         }
         if (node.isTextual())
             return Document.fromString(node.asText());

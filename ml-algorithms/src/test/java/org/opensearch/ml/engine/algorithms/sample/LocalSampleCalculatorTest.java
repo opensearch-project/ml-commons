@@ -45,21 +45,21 @@ public class LocalSampleCalculatorTest {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             Assert.assertEquals(6.0, output.getResult().doubleValue(), 1e-5);
         }, e -> { fail("Test failed: " + e.getMessage()); });
-        calculator.execute(input, actionListener1, null);
+        calculator.execute(input, actionListener1);
 
         ActionListener<Output> actionListener2 = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             Assert.assertEquals(3.0, output.getResult().doubleValue(), 1e-5);
         }, e -> { fail("Test failed: " + e.getMessage()); });
         LocalSampleCalculatorInput input2 = new LocalSampleCalculatorInput("max", Arrays.asList(1.0, 2.0, 3.0));
-        calculator.execute(input2, actionListener2, null);
+        calculator.execute(input2, actionListener2);
 
         ActionListener<Output> actionListener3 = ActionListener.wrap(o -> {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             Assert.assertEquals(1.0, output.getResult().doubleValue(), 1e-5);
         }, e -> { fail("Test failed: " + e.getMessage()); });
         LocalSampleCalculatorInput input3 = new LocalSampleCalculatorInput("min", Arrays.asList(1.0, 2.0, 3.0));
-        calculator.execute(input3, actionListener3, null);
+        calculator.execute(input3, actionListener3);
     }
 
     @Test
@@ -68,13 +68,13 @@ public class LocalSampleCalculatorTest {
         exceptionRule.expectMessage("can't support this operation");
         input = new LocalSampleCalculatorInput("wrong_operation", Arrays.asList(1.0, 2.0, 3.0));
         ActionListener<Output> actionListener = ActionListener.wrap(o -> {}, e -> { fail("Test failed: " + e.getMessage()); });
-        calculator.execute(input, actionListener, null);
+        calculator.execute(input, actionListener);
     }
 
     @Test
     public void executeWithNullInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("wrong input");
-        calculator.execute(null, mock(ActionListener.class), null);
+        calculator.execute(null, mock(ActionListener.class));
     }
 }

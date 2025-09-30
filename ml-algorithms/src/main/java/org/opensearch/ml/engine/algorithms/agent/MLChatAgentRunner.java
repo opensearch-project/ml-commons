@@ -581,7 +581,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling,
         TransportChannel channel
     ) {
-        boolean isStreaming = (channel != null);
+        StreamingWrapper wrapper = new StreamingWrapper(channel);
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
@@ -639,20 +639,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         functionCalling
                     );
 
-                    if (isStreaming && !interactions.isEmpty()) {
-                        try {
-                            String lastInteraction = interactions.get(interactions.size() - 1);
-                            Map<String, Object> messageMap = gson.fromJson(lastInteraction, Map.class);
-
-                            if (!messageMap.containsKey("role") && messageMap.containsKey("tool_calls")) {
-                                messageMap.put("role", "assistant");
-                                interactions.set(interactions.size() - 1, StringUtils.toJson(messageMap));
-                            }
-                        } catch (Exception e) {
-                            log.error("Failed to fix assistant message role after parseLLMOutput", e);
-                        }
-                    }
-
+                    wrapper.fixInteractionRole(interactions);
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
                     String action = String.valueOf(modelOutput.get(ACTION));
@@ -662,34 +649,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
-                        if (isStreaming) {
-                            saveToMemory(
-                                sessionId,
-                                listener,
-                                question,
-                                parentInteractionId,
-                                traceDisabled,
-                                conversationIndexMemory,
-                                traceNumber,
-                                additionalInfo,
-                                finalAnswer,
-                                channel
-                            );
-                        } else {
-                            sendFinalAnswer(
-                                sessionId,
-                                listener,
-                                question,
-                                parentInteractionId,
-                                verbose,
-                                traceDisabled,
-                                traceTensors,
-                                conversationIndexMemory,
-                                traceNumber,
-                                additionalInfo,
-                                finalAnswer
-                            );
-                        }
+                        sendFinalAnswer(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            finalAnswer,
+                            wrapper
+                        );
                         cleanUpResource(tools);
                         return;
                     }
@@ -733,7 +706,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             lastThought,
                             maxIterations,
-                            tools
+                            tools,
+                            wrapper
                         );
                         return;
                     }
@@ -804,14 +778,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-                    if (isStreaming) {
-                        MLTaskResponse toolChunk = createStreamChunk(outputToOutputString(output), sessionId, parentInteractionId, false);
-                        try {
-                            channel.sendResponseBatch(toolChunk);
-                        } catch (Exception e) {
-                            log.error("Failed to send tool response chunk", e);
-                        }
-                    }
+                    wrapper.sendToolResponse(outputToOutputString(output), sessionId, parentInteractionId);
+
                     traceTensors
                         .add(
                             ModelTensors
@@ -839,27 +807,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             lastThought,
                             maxIterations,
-                            tools
+                            tools,
+                            wrapper
                         );
                         return;
                     }
-                    ActionRequest request = new MLPredictionTaskRequest(
-                        llm.getModelId(),
-                        RemoteInferenceMLInput
-                            .builder()
-                            .algorithm(FunctionName.REMOTE)
-                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                            .build(),
-                        !isStreaming, // set dispatchTask to false for streaming
-                        null,
-                        tenantId
-                    );
-                    if (isStreaming) {
-                        ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
-                        client.execute(MLPredictionStreamTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
-                    } else {
-                        client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
-                    }
+                    ActionRequest request = wrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+                    wrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
@@ -869,71 +823,94 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 lastStepListener = nextStepListener;
             }
         }
-        ActionRequest request = new MLPredictionTaskRequest(
-            llm.getModelId(),
-            RemoteInferenceMLInput
-                .builder()
-                .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                .build(),
-            !isStreaming, // set dispatchTask to false for streaming
-            null,
-            tenantId
-        );
-        if (isStreaming) {
-            ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
-            client.execute(MLPredictionStreamTaskAction.INSTANCE, request, firstListener);
-        } else {
-            client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
-        }
+        ActionRequest request = wrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+        wrapper.executeRequest(request, firstListener);
     }
 
-    private void saveToMemory(
-        String sessionId,
-        ActionListener<Object> listener,
-        String question,
-        String parentInteractionId,
-        boolean traceDisabled,
-        ConversationIndexMemory conversationIndexMemory,
-        AtomicInteger traceNumber,
-        Map<String, Object> additionalInfo,
-        String finalAnswer,
-        TransportChannel channel
-    ) {
-        // Send completion chunk to close stream
-        MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
-        try {
-            channel.sendResponseBatch(completionChunk);
-        } catch (Exception e) {
-            log.warn("Failed to send completion chunk: {}", e.getMessage());
+    private class StreamingWrapper {
+        private final TransportChannel channel;
+        private final boolean isStreaming;
+
+        public StreamingWrapper(TransportChannel channel) {
+            this.channel = channel;
+            this.isStreaming = (channel != null);
         }
 
-        if (conversationIndexMemory != null) {
-            String copyOfFinalAnswer = finalAnswer;
-            ActionListener saveTraceListener = ActionListener.wrap(r -> {
-                conversationIndexMemory
-                    .getMemoryManager()
-                    .updateInteraction(
-                        parentInteractionId,
-                        Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
-                        ActionListener.wrap(res -> {
-                            listener.onResponse("Streaming completed");
-                        }, e -> { listener.onFailure(e); })
-                    );
-            }, e -> { listener.onFailure(e); });
-            saveMessage(
-                conversationIndexMemory,
-                question,
-                finalAnswer,
-                sessionId,
-                parentInteractionId,
-                traceNumber,
-                true,
-                traceDisabled,
-                saveTraceListener
+        public void fixInteractionRole(List<String> interactions) {
+            if (isStreaming && !interactions.isEmpty()) {
+                try {
+                    String lastInteraction = interactions.get(interactions.size() - 1);
+                    Map<String, Object> messageMap = gson.fromJson(lastInteraction, Map.class);
+
+                    if (!messageMap.containsKey("role") && messageMap.containsKey("tool_calls")) {
+                        messageMap.put("role", "assistant");
+                        interactions.set(interactions.size() - 1, StringUtils.toJson(messageMap));
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to fix assistant message role after parseLLMOutput", e);
+                }
+            }
+        }
+
+        public ActionRequest createPredictionRequest(LLMSpec llm, Map<String, String> parameters, String tenantId) {
+            return new MLPredictionTaskRequest(
+                llm.getModelId(),
+                RemoteInferenceMLInput
+                    .builder()
+                    .algorithm(FunctionName.REMOTE)
+                    .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
+                    .build(),
+                !isStreaming, // set dispatchTask to false for streaming
+                null,
+                tenantId
             );
-        } else {
-            listener.onResponse("Streaming completed");
+        }
+
+        public void executeRequest(ActionRequest request, ActionListener<MLTaskResponse> listener) {
+            if (isStreaming) {
+                ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
+                client.execute(MLPredictionStreamTaskAction.INSTANCE, request, listener);
+            } else {
+                client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
+            }
+        }
+
+        public void sendCompletionChunk(String sessionId, String parentInteractionId) {
+            if (isStreaming) {
+                MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
+                try {
+                    channel.sendResponseBatch(completionChunk);
+                } catch (Exception e) {
+                    log.warn("Failed to send completion chunk: {}", e.getMessage());
+                }
+            }
+        }
+
+        public void sendFinalResponse(
+            String sessionId,
+            ActionListener<Object> listener,
+            String parentInteractionId,
+            boolean verbose,
+            List<ModelTensors> cotModelTensors,
+            Map<String, Object> additionalInfo,
+            String finalAnswer
+        ) {
+            if (isStreaming) {
+                listener.onResponse("Streaming completed");
+            } else {
+                returnFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+            }
+        }
+
+        public void sendToolResponse(String toolOutput, String sessionId, String parentInteractionId) {
+            if (isStreaming) {
+                try {
+                    MLTaskResponse toolChunk = createStreamChunk(toolOutput, sessionId, parentInteractionId, false);
+                    channel.sendResponseBatch(toolChunk);
+                } catch (Exception e) {
+                    log.error("Failed to send tool response chunk", e);
+                }
+            }
         }
     }
 
@@ -1132,8 +1109,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ConversationIndexMemory conversationIndexMemory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
-        String finalAnswer
+        String finalAnswer,
+        StreamingWrapper wrapper
     ) {
+        // Send completion chunk for streaming
+        wrapper.sendCompletionChunk(sessionId, parentInteractionId);
+
         if (conversationIndexMemory != null) {
             String copyOfFinalAnswer = finalAnswer;
             ActionListener saveTraceListener = ActionListener.wrap(r -> {
@@ -1167,7 +1148,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 saveTraceListener
             );
         } else {
-            returnFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+            wrapper.sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
         }
     }
 
@@ -1299,7 +1280,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Object> additionalInfo,
         AtomicReference<String> lastThought,
         int maxIterations,
-        Map<String, Tool> tools
+        Map<String, Tool> tools,
+        StreamingWrapper wrapper
     ) {
         String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
             ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
@@ -1315,7 +1297,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
             conversationIndexMemory,
             traceNumber,
             additionalInfo,
-            incompleteResponse
+            incompleteResponse,
+            wrapper
         );
         cleanUpResource(tools);
     }

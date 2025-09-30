@@ -131,7 +131,6 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
                 } else {
                     transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
                 }
-                transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
             }
         }, listener::onFailure));
     }

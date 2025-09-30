@@ -447,7 +447,7 @@ public class AnomalyLocalizerImplTests {
         }, e -> {
             fail("Test failed: " + e.getMessage());
         });
-        anomalyLocalizer.execute(input, actionListener, null);
+        anomalyLocalizer.execute(input, actionListener);
     }
 
     @SuppressWarnings("unchecked")
@@ -460,7 +460,7 @@ public class AnomalyLocalizerImplTests {
             return null;
         }).when(client).multiSearch(any(), any());
         ActionListener actionListener = mock(ActionListener.class);
-        anomalyLocalizer.execute(input, actionListener, null);
+        anomalyLocalizer.execute(input, actionListener);
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         assertTrue(exceptionArgumentCaptor.getValue() instanceof RuntimeException);
@@ -471,7 +471,7 @@ public class AnomalyLocalizerImplTests {
         ActionListener<Output> actionListener = ActionListener.wrap(o -> { Thread.currentThread().interrupt(); }, e -> {
             assertTrue(e.getMessage().contains("Failed to find index"));
         });
-        anomalyLocalizer.execute(input, actionListener, null);
+        anomalyLocalizer.execute(input, actionListener);
     }
 
     private ClusterState setupTestClusterState() {

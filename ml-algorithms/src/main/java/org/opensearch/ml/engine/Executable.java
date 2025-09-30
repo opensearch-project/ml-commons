@@ -14,10 +14,19 @@ import org.opensearch.transport.TransportChannel;
 public interface Executable {
 
     /**
-     * Execute algorithm with given input data.
+     * Execute algorithm with given input data (non-streaming).
+     * @param input input data
+     * @param listener action listener
+     */
+    default void execute(Input input, ActionListener<Output> listener) throws ExecuteException {
+        execute(input, listener, null);
+    }
+
+    /**
+     * Execute algorithm with given input data (streaming).
      * @param input input data
      * @param listener action listener
      * @param channel transport channel
      */
-    void execute(Input input, ActionListener<Output> listener, TransportChannel channel) throws ExecuteException;
+    default void execute(Input input, ActionListener<Output> listener, TransportChannel channel) {}
 }
