@@ -104,7 +104,12 @@ public class ModelAccessControlHelper {
                     listener
                         .onFailure(
                             new OpenSearchStatusException(
-                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                "User "
+                                    + user.getName()
+                                    + " is not authorized to perform action "
+                                    + action
+                                    + " on ml-model-group id: "
+                                    + modelGroupId,
                                 RestStatus.FORBIDDEN
                             )
                         );

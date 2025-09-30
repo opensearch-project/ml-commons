@@ -3,16 +3,14 @@ resource_types:
   ml-model-group:
     ml_read_only:
       allowed_actions:
-        - "cluster:admin/opensearch/ml/model_groups/search"
         - "cluster:admin/opensearch/ml/model_groups/get"
-        - "cluster:admin/opensearch/ml/models/search"
         - "cluster:admin/opensearch/ml/models/get"
 
     ml_read_write:
       allowed_actions:
-        - "cluster:admin/opensearch/ml/model*"
+        - "cluster:admin/opensearch/ml/*"
 
     ml_full_access:
       allowed_actions:
-        - "cluster:admin/opensearch/ml/model*"
+        - "cluster:admin/opensearch/ml/*"
         - "cluster:admin/security/resource/share"

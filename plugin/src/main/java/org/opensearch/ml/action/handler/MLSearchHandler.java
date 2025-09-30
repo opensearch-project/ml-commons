@@ -147,7 +147,7 @@ public class MLSearchHandler {
                 );
             boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
-            if (skip || !hasIndex) {
+            if (!hasIndex) {
                 // No gating at all
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()
@@ -175,6 +175,18 @@ public class MLSearchHandler {
                         ),
                         doubleWrapperListener
                     );
+            } else if (skip) {
+                // No gating at all
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(request.indices())
+                    .searchSourceBuilder(request.source())
+                    .tenantId(tenantId)
+                    .build();
+
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
             } else {
                 // Legacy backend-roles/owner path
                 SearchSourceBuilder searchSourceBuilder = modelAccessControlHelper

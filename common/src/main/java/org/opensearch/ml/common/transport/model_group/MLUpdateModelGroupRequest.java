@@ -101,6 +101,5 @@ public class MLUpdateModelGroupRequest extends ActionRequest implements DocReque
     @Override
     public String id() {
         return updateModelGroupInput.getModelGroupID();
-
     }
 }
