@@ -217,7 +217,7 @@ public class TransportAddMemoriesActionTests {
         when(request.getMlAddMemoryInput()).thenReturn(input);
         
         MLMemoryContainer container = mock(MLMemoryContainer.class);
-        when(container.getConfiguration()).thenReturn(null);
+        when(container.getConfiguration()).thenReturn(MemoryConfiguration.builder().build());
         
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
