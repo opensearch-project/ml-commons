@@ -41,6 +41,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -306,6 +307,56 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                             + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
                     )
             )
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testValidateBatchPredictInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"string\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testInvalidateBatchPredictInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
             .build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
         Map<String, String> modelInterface = Map

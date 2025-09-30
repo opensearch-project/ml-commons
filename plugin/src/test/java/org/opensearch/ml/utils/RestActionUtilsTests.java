@@ -327,6 +327,28 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         Assert.assertFalse(isAdmin);
     }
 
+    @Test
+    public void testGetActionTypeFromRestRequest_Predict() {
+        FakeRestRequest request = createRestRequest(
+            Collections.emptyMap(),
+            "/_plugins/_ml/models/test-model/_predict",
+            RestRequest.Method.POST
+        );
+        String actionType = RestActionUtils.getActionTypeFromRestRequest(request);
+        assertEquals("predict", actionType);
+    }
+
+    @Test
+    public void testGetActionTypeFromRestRequest_PredictStream() {
+        FakeRestRequest request = createRestRequest(
+            Collections.emptyMap(),
+            "/_plugins/_ml/models/test-model/_predict/stream",
+            RestRequest.Method.POST
+        );
+        String actionType = RestActionUtils.getActionTypeFromRestRequest(request);
+        assertEquals("predict", actionType);
+    }
+
     public void testDoubleWrapper_handleIndexNotFound() {
         final IndexNotFoundException indexNotFoundException = new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         final DummyActionListener actionListener = new DummyActionListener();

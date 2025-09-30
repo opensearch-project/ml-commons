@@ -233,7 +233,7 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         List<ExecutorBuilder<?>> executorBuilders = plugin.getExecutorBuilders(settings);
         assertNotNull(executorBuilders);
-        assertEquals(10, executorBuilders.size());
+        assertEquals(11, executorBuilders.size());
 
         // Verify we have the expected number of thread pools
         assertTrue(executorBuilders.size() > 5);
@@ -321,6 +321,7 @@ public class MachineLearningPluginTests {
         assertEquals("opensearch_ml_execute", MachineLearningPlugin.EXECUTE_THREAD_POOL);
         assertEquals("opensearch_ml_train", MachineLearningPlugin.TRAIN_THREAD_POOL);
         assertEquals("opensearch_ml_predict", MachineLearningPlugin.PREDICT_THREAD_POOL);
+        assertEquals("opensearch_ml_predict_stream", MachineLearningPlugin.STREAM_PREDICT_THREAD_POOL);
         assertEquals("opensearch_ml_register", MachineLearningPlugin.REGISTER_THREAD_POOL);
         assertEquals("opensearch_ml_deploy", MachineLearningPlugin.DEPLOY_THREAD_POOL);
         assertEquals("/_plugins/_ml", MachineLearningPlugin.ML_BASE_URI);

@@ -3,18 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.httpclient;
+package org.opensearch.ml.common.httpclient;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.opensearch.common.util.concurrent.ThreadContextAccess;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -24,19 +23,15 @@ import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
 public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
-        try {
-            return AccessController
-                .doPrivileged(
-                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> NettyNioAsyncHttpClient
-                        .builder()
-                        .connectionTimeout(connectionTimeout)
-                        .readTimeout(readTimeout)
-                        .maxConcurrency(maxConnections)
-                        .build()
-                );
-        } catch (PrivilegedActionException e) {
-            return null;
-        }
+        return ThreadContextAccess
+            .doPrivileged(
+                () -> NettyNioAsyncHttpClient
+                    .builder()
+                    .connectionTimeout(connectionTimeout)
+                    .readTimeout(readTimeout)
+                    .maxConcurrency(maxConnections)
+                    .build()
+            );
     }
 
     /**
@@ -50,7 +45,7 @@ public class MLHttpClientFactory {
     public static void validate(String protocol, String host, int port, AtomicBoolean connectorPrivateIpEnabled)
         throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
-            log.error("Remote inference protocol is not http or https: " + protocol);
+            log.error("Remote inference protocol is not http or https: {}", protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
         }
         // When port is not specified, the default port is -1, and we need to set it to 80 or 443 based on protocol.
@@ -62,7 +57,7 @@ public class MLHttpClientFactory {
             }
         }
         if (port < 0 || port > 65536) {
-            log.error("Remote inference port out of range: " + port);
+            log.error("Remote inference port out of range: {}", port);
             throw new IllegalArgumentException("Port out of range: " + port);
         }
         validateIp(host, connectorPrivateIpEnabled);
@@ -71,7 +66,7 @@ public class MLHttpClientFactory {
     private static void validateIp(String hostName, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if ((connectorPrivateIpEnabled == null || !connectorPrivateIpEnabled.get()) && hasPrivateIpAddress(addresses)) {
-            log.error("Remote inference host name has private ip address: " + hostName);
+            log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }
     }
@@ -83,23 +78,8 @@ public class MLHttpClientFactory {
                 if (bytes.length != 4) {
                     return true;
                 } else {
-                    int firstOctets = bytes[0] & 0xff;
-                    int firstInOctal = parseWithOctal(String.valueOf(firstOctets));
-                    int firstInHex = Integer.parseInt(String.valueOf(firstOctets), 16);
-                    if (firstInOctal == 127 || firstInHex == 127) {
-                        return bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 1;
-                    } else if (firstInOctal == 10 || firstInHex == 10) {
+                    if (isPrivateIPv4(bytes)) {
                         return true;
-                    } else if (firstInOctal == 172 || firstInHex == 172) {
-                        int secondOctets = bytes[1] & 0xff;
-                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
-                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
-                        return (secondInOctal >= 16 && secondInOctal <= 32) || (secondInHex >= 16 && secondInHex <= 32);
-                    } else if (firstInOctal == 192 || firstInHex == 192) {
-                        int secondOctets = bytes[1] & 0xff;
-                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
-                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
-                        return secondInOctal == 168 || secondInHex == 168;
                     }
                 }
             }
@@ -107,11 +87,14 @@ public class MLHttpClientFactory {
         return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
     }
 
-    private static int parseWithOctal(String input) {
-        try {
-            return Integer.parseInt(input, 8);
-        } catch (NumberFormatException e) {
-            return Integer.parseInt(input);
-        }
+    private static boolean isPrivateIPv4(byte[] bytes) {
+        int first = bytes[0] & 0xff;
+        int second = bytes[1] & 0xff;
+
+        // 127.0.0.1, 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x
+        return (first == 10)
+            || (first == 172 && second >= 16 && second <= 31)
+            || (first == 192 && second == 168)
+            || (first == 169 && second == 254);
     }
 }

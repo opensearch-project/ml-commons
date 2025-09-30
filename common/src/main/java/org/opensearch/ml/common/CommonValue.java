@@ -132,4 +132,16 @@ public class CommonValue {
     public static final long INDEX_INSIGHT_GENERATING_TIMEOUT = 3 * 60 * 1000;
     public static final long INDEX_INSIGHT_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
 
+    // JSON-RPC Error Codes
+    public static final int JSON_RPC_PARSE_ERROR = -32700;
+    public static final int JSON_RPC_INTERNAL_ERROR = -32603;
+    public static final int JSON_RPC_SERVER_NOT_READY_ERROR = -32000;
+
+    // MCP Server response fields
+    public static final String ACKNOWLEDGE_FIELD = "acknowledged";
+    public static final String MCP_RESPONSE_FIELD = "mcp_response";
+    public static final String ERROR_FIELD = "error";
+    public static final String MESSAGE_FIELD = "message";
+    public static final String ID_FIELD = "id";
+    public static final String ERROR_CODE_FIELD = "error_code";
 }

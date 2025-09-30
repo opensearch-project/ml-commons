@@ -58,15 +58,15 @@ dependencies {
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
-    implementation group: 'software.amazon.awssdk', name: 's3', version: "2.30.18"
-    implementation group: 'software.amazon.awssdk', name: 'regions', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
+    implementation group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
+    implementation group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: "${versions.aws}"
 
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
@@ -349,6 +349,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTaskManager',
         'org.opensearch.ml.task.MLTrainingTaskRunner',
         'org.opensearch.ml.task.MLPredictTaskRunner',
+        'org.opensearch.ml.task.MLPredictTaskRunner.*',
         'org.opensearch.ml.task.MLTaskDispatcher',
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
         'org.opensearch.ml.task.MLExecuteTaskRunner',
@@ -377,7 +378,9 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
         'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
         'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*'
+        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*',
+        'org.opensearch.ml.rest.RestMLPredictionStreamAction',
+        'org.opensearch.ml.rest.RestMLPredictionStreamAction.*'
 ]
 
 jacocoTestCoverageVerification {
@@ -430,6 +433,10 @@ configurations.all {
     resolutionStrategy.force "org.opensearch:opensearch:${opensearch_version}"
     resolutionStrategy.force "org.bouncycastle:bcprov-jdk18on:1.78.1"
     resolutionStrategy.force 'io.projectreactor:reactor-core:3.7.0'
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib:1.9.23"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.23"
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
     resolutionStrategy.force "com.google.code.gson:gson:${versions.gson}"
     resolutionStrategy.force "software.amazon.awssdk:bom:${versions.aws}"
