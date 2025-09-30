@@ -34,6 +34,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutpu
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
+import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
@@ -326,7 +327,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
-
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
@@ -442,6 +442,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             toolCallId,
                             functionCalling
                         );
+
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
                         StringSubstitutor substitutor = new StringSubstitutor(
@@ -664,11 +665,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
                     llmToolTmpParameters.put(MLAgentExecutor.QUESTION, actionInput);
                     tools.get(action).run(llmToolTmpParameters, toolListener); // run tool
+                    updateParametersAcrossTools(tmpParameters, llmToolTmpParameters);
                 } else {
                     Map<String, String> parameters = new HashMap<>();
                     parameters.putAll(tmpParameters);
                     parameters.putAll(toolParams);
                     tools.get(action).run(parameters, toolListener); // run tool
+                    updateParametersAcrossTools(tmpParameters, parameters);
                 }
             } catch (Exception e) {
                 log.error("Failed to run tool {}", action, e);
@@ -678,6 +681,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else { // TODO: add failure to interaction to let LLM regenerate ?
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
             nextStepListener.onResponse(res);
+        }
+    }
+
+    /**
+     * In each tool runs, it copies agent parameters, which is tmpParameters into a new set of parameter llmToolTmpParameters,
+     * after the tool runs, normally llmToolTmpParameters will be discarded, but for some special parameters like SCRATCHPAD_NOTES_KEY,
+     * some new llmToolTmpParameters produced by the tool run can opt to be copied back to tmpParameters to share across tools in the same interaction
+     * @param tmpParameters
+     * @param llmToolTmpParameters
+     */
+    private static void updateParametersAcrossTools(Map<String, String> tmpParameters, Map<String, String> llmToolTmpParameters) {
+        // update the tmpParameters if the tool run produce new scratch pad
+        if (llmToolTmpParameters.containsKey(SCRATCHPAD_NOTES_KEY) && llmToolTmpParameters.get(SCRATCHPAD_NOTES_KEY) != "[]") {
+            tmpParameters.put(SCRATCHPAD_NOTES_KEY, llmToolTmpParameters.getOrDefault(SCRATCHPAD_NOTES_KEY, "[]"));
         }
     }
 
