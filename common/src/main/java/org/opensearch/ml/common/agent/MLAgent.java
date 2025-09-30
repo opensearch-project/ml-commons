@@ -30,6 +30,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.telemetry.metrics.tags.Tags;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -50,6 +51,9 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String IS_HIDDEN_FIELD = "is_hidden";
+    private static final String LLM_INTERFACE_FIELD = "_llm_interface";
+    private static final String TAG_VALUE_UNKNOWN = "unknown";
+    private static final String TAG_MEMORY_TYPE = "memory_type";
 
     public static final int AGENT_NAME_MAX_LENGTH = 128;
 
@@ -353,5 +357,31 @@ public class MLAgent implements ToXContentObject, Writeable {
 
     public static MLAgent fromStream(StreamInput in) throws IOException {
         return new MLAgent(in);
+    }
+
+    /**
+     * Generates telemetry tags for the ML agent to support metrics collection and monitoring.
+     * 
+     * @return Tags object containing agent metadata including:
+     *         - is_hidden: Whether the agent is hidden (boolean)
+     *         - type: Agent type (e.g., conversational, flow)
+     *         - memory_type: Memory configuration type if memory is configured
+     *         - _llm_interface: LLM interface parameter if specified in parameters
+     */
+    public Tags getTags() {
+        Tags tags = Tags
+            .create()
+            .addTag(IS_HIDDEN_FIELD, isHidden != null ? isHidden : false)
+            .addTag(AGENT_TYPE_FIELD, type != null ? type : TAG_VALUE_UNKNOWN);
+
+        if (memory != null && memory.getType() != null) {
+            tags.addTag(TAG_MEMORY_TYPE, memory.getType());
+        }
+
+        if (parameters != null && parameters.get(LLM_INTERFACE_FIELD) != null) {
+            tags.addTag(LLM_INTERFACE_FIELD, parameters.get(LLM_INTERFACE_FIELD));
+        }
+
+        return tags;
     }
 }
