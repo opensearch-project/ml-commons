@@ -300,7 +300,7 @@ public class MemoryContainerHelper {
     }
 
     public boolean isAdminUser(User user) {
-        return user == null || (!CollectionUtils.isEmpty(user.getRoles()) && user.getRoles().contains("all_access"));
+        return user != null && (!CollectionUtils.isEmpty(user.getRoles()) && user.getRoles().contains("all_access"));
     }
 
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
