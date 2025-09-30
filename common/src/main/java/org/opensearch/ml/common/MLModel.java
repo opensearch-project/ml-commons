@@ -863,17 +863,17 @@ public class MLModel implements ToXContentObject {
     public Tags getTags(Connector connector) {
         // if connector is present, model is a remote model
         if (this.algorithm == FunctionName.REMOTE && connector != null) {
-            return getRemoteModelTags(connector);
+            return getRemoteModelTags(connector).addTag(IS_HIDDEN_FIELD, isHidden);
         }
 
         // pre-trained models follow a specific naming convention, relying on that to identify a pre-trained model
         if (this.name != null
             && (this.name.startsWith("amazon/") || this.name.startsWith("huggingface/"))
             && this.name.split("/").length >= 3) {
-            return getPreTrainedModelTags();
+            return getPreTrainedModelTags().addTag(IS_HIDDEN_FIELD, isHidden);
         }
 
-        return getCustomModelTags();
+        return getCustomModelTags().addTag(IS_HIDDEN_FIELD, isHidden);
     }
 
     /**
