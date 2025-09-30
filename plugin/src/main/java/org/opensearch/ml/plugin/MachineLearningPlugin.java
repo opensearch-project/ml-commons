@@ -1241,15 +1241,6 @@ public class MachineLearningPlugin extends Plugin
             false
         );
 
-        FixedExecutorBuilder agenticMemoryThreadPool = new FixedExecutorBuilder(
-            settings,
-            AGENTIC_MEMORY_THREAD_POOL,
-            OpenSearchExecutors.allocatedProcessors(settings) * 4,
-            10000,
-            ML_THREAD_POOL_PREFIX + AGENTIC_MEMORY_THREAD_POOL,
-            false
-        );
-
         return ImmutableList
             .of(
                 generalThreadPool,
