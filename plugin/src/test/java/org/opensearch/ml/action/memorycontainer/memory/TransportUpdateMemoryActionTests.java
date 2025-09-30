@@ -512,4 +512,285 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         assertEquals(input, convertedRequest.getMlUpdateMemoryInput());
     }
 
+    @Test
+    public void testDoExecute_FeatureDisabled() {
+        // Arrange
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", "new text")).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("long-term")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        // Act
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) capturedError).status());
+        assertTrue(capturedError.getMessage().contains("Agentic Memory APIs are not enabled"));
+    }
+
+    @Test
+    public void testDoExecute_MemoryIndexNotFound() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        String memoryType = "unknown-type";
+        String memoryId = "memory-456";
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", "new text")).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(memoryType)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock getMemoryIndexName to return null (index not found)
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn(null);
+
+        // Act
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) capturedError).status());
+        assertTrue(capturedError.getMessage().contains("Memory index not found"));
+    }
+
+    @Test
+    public void testDoExecute_CannotUpdateHistoryIndex() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        String memoryType = "history";
+        String memoryId = "memory-456";
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", "new text")).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(memoryType)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock getMemoryIndexName to return history index
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-history");
+
+        // Act
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) capturedError).status());
+        assertTrue(capturedError.getMessage().contains("Can't update memory history"));
+    }
+
+    @Test
+    public void testDoExecute_MemoryAccessDenied() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        String memoryType = "long-term";
+        String memoryId = "memory-456";
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, "new text")).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(memoryType)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        GetResponse mockGetResponse = mock(GetResponse.class);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put(MEMORY_FIELD, "original memory");
+        sourceMap.put("owner_id", "different-user");
+
+        when(mockGetResponse.isExists()).thenReturn(true);
+        when(mockGetResponse.getSourceAsMap()).thenReturn(sourceMap);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock getMemoryIndexName
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
+
+        // Mock get operation
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockGetResponse);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
+
+        // Mock checkMemoryAccess to deny access
+        when(memoryContainerHelper.checkMemoryAccess(any(), eq("different-user"))).thenReturn(false);
+
+        // Act
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) capturedError).status());
+        assertTrue(capturedError.getMessage().contains("User doesn't have permissions to update this memory"));
+    }
+
+    @Test
+    public void testConstructUpdateFields_SessionType() {
+        // Test session memory update fields construction
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("summary", "Updated summary");
+        updateContent.put("additional_info", Map.of("key", "value"));
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+
+        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "session");
+
+        assertEquals(2, result.size());
+        assertEquals("Updated summary", result.get("summary"));
+        assertNotNull(result.get("additional_info"));
+    }
+
+    @Test
+    public void testConstructUpdateFields_WorkingType() {
+        // Test working memory update fields construction
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("messages", "New messages");
+        updateContent.put("binary_data", "Binary content");
+        updateContent.put("structured_data", Map.of("data", "value"));
+        updateContent.put("metadata", Map.of("meta", "data"));
+        updateContent.put("tags", Map.of("tag1", "value1"));
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+
+        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "working");
+
+        assertEquals(5, result.size());
+        assertEquals("New messages", result.get("messages"));
+        assertEquals("Binary content", result.get("binary_data"));
+        assertNotNull(result.get("structured_data"));
+        assertNotNull(result.get("metadata"));
+        assertNotNull(result.get("tags"));
+    }
+
+    @Test
+    public void testConstructUpdateFields_LongTermType() {
+        // Test long-term memory update fields construction
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put(MEMORY_FIELD, "Updated memory text");
+        updateContent.put("tags", Map.of("tag1", "value1"));
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+
+        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "long-term");
+
+        assertEquals(2, result.size());
+        assertEquals("Updated memory text", result.get(MEMORY_FIELD));
+        assertNotNull(result.get("tags"));
+    }
+
+    @Test
+    public void testConstructUpdateFields_UnknownType() {
+        // Test unknown memory type returns empty map
+        Map<String, Object> updateContent = new HashMap<>();
+        updateContent.put("field", "value");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
+
+        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "unknown");
+
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testDoExecute_GetRequestFailure() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        String memoryType = "long-term";
+        String memoryId = "memory-456";
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, "new text")).build();
+        MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(memoryType)
+            .memoryId(memoryId)
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        Exception getError = new RuntimeException("Failed to retrieve memory");
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock getMemoryIndexName
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, memoryType)).thenReturn("test-memory-index");
+
+        // Mock get operation to fail
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(2);
+            listener.onFailure(getError);
+            return null;
+        }).when(memoryContainerHelper).getData(any(), any(GetRequest.class), any());
+
+        // Act
+        transportUpdateMemoryAction.doExecute(task, updateRequest, actionListener);
+
+        // Assert
+        verify(actionListener, times(1)).onFailure(getError);
+        verify(actionListener, never()).onResponse(any());
+        verify(memoryContainerHelper, never()).updateData(any(), any(), any());
+    }
+
 }

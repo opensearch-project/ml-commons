@@ -750,4 +750,139 @@ public class MemoryProcessingServiceTests {
         // Verify that the listener receives a failure for unsupported strategy type
         verify(factsListener).onFailure(any(IllegalArgumentException.class));
     }
+
+    @Test
+    public void testExtractFactsFromConversation_InvalidCustomPrompt() {
+        // Test with custom prompt that doesn't specify JSON format
+        Map<String, Object> strategyConfig = new HashMap<>();
+        strategyConfig.put("prompt", "Extract information from this conversation");
+        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        // Verify that the listener receives a failure for invalid prompt format
+        verify(factsListener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_EmptyCustomPrompt() {
+        // Test with empty custom prompt (should fallback to default)
+        Map<String, Object> strategyConfig = new HashMap<>();
+        strategyConfig.put("prompt", "");
+        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        // Should execute with default prompt
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithSystemPromptMessage() {
+        // Test with system_prompt_message in strategy config
+        Map<String, Object> strategyConfig = new HashMap<>();
+        Map<String, Object> systemPromptMsg = new HashMap<>();
+        systemPromptMsg.put("role", "system");
+        systemPromptMsg.put("content", Arrays.asList(Map.of("text", "You are a helpful assistant", "type", "text")));
+        strategyConfig.put("system_prompt_message", systemPromptMsg);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithUserPromptMessage() {
+        // Test with user_prompt_message in strategy config
+        Map<String, Object> strategyConfig = new HashMap<>();
+        Map<String, Object> userPromptMsg = new HashMap<>();
+        userPromptMsg.put("role", "user");
+        userPromptMsg.put("content", Arrays.asList(Map.of("text", "Extract all facts from above", "type", "text")));
+        strategyConfig.put("user_prompt_message", userPromptMsg);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithBothPromptMessages() {
+        // Test with both system_prompt_message and user_prompt_message
+        Map<String, Object> strategyConfig = new HashMap<>();
+        Map<String, Object> systemPromptMsg = new HashMap<>();
+        systemPromptMsg.put("role", "system");
+        systemPromptMsg.put("content", Arrays.asList(Map.of("text", "You are a helpful assistant", "type", "text")));
+        strategyConfig.put("system_prompt_message", systemPromptMsg);
+
+        Map<String, Object> userPromptMsg = new HashMap<>();
+        userPromptMsg.put("role", "user");
+        userPromptMsg.put("content", Arrays.asList(Map.of("text", "Extract all facts", "type", "text")));
+        strategyConfig.put("user_prompt_message", userPromptMsg);
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testSummarizeMessages_NullMessages() {
+        ActionListener<String> stringListener = mock(ActionListener.class);
+        memoryProcessingService.summarizeMessages(null, stringListener);
+        verify(stringListener).onResponse("");
+    }
+
+    @Test
+    public void testSummarizeMessages_EmptyMessages() {
+        ActionListener<String> stringListener = mock(ActionListener.class);
+        memoryProcessingService.summarizeMessages(Arrays.asList(), stringListener);
+        verify(stringListener).onResponse("");
+    }
+
+    @Test
+    public void testSummarizeMessages_WithMessages() {
+        ActionListener<String> stringListener = mock(ActionListener.class);
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        memoryProcessingService.summarizeMessages(messages, stringListener);
+        verify(stringListener).onResponse(any(String.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_ValidCustomPrompt() {
+        // Test with valid custom prompt that has JSON and "facts" keywords (with quotes as required by validation)
+        Map<String, Object> strategyConfig = new HashMap<>();
+        strategyConfig.put("prompt", "Extract information and return JSON response format with \"facts\" array containing key points");
+        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
 }
