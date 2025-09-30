@@ -137,11 +137,11 @@ public class WriteToScratchPadToolTests {
     }
 
     @Test
-    public void testRun_Success_IncludeHistory_WithExistingNotes() {
+    public void testRun_Success_ReturnHistory_WithExistingNotes() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
         parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, new ArrayList<>(Arrays.asList("existing note")));
-        parameters.put(WriteToScratchPadTool.INCLUDE_HISTORY_KEY, "true");
+        parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "true");
         tool.run((Map) parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
@@ -151,10 +151,10 @@ public class WriteToScratchPadToolTests {
     }
 
     @Test
-    public void testRun_Success_IncludeHistory_NoExistingNotes() {
+    public void testRun_Success_ReturnHistory_NoExistingNotes() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
-        parameters.put(WriteToScratchPadTool.INCLUDE_HISTORY_KEY, "true");
+        parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "true");
         tool.run((Map) parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
@@ -190,10 +190,10 @@ public class WriteToScratchPadToolTests {
     }
 
     @Test
-    public void testRun_Success_IncludeHistory_False() {
+    public void testRun_Success_ReturnHistory_False() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
-        parameters.put(WriteToScratchPadTool.INCLUDE_HISTORY_KEY, "false");
+        parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "false");
         tool.run((Map) parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);

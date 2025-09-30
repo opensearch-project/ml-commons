@@ -22,7 +22,7 @@ public class WriteToScratchPadTool implements Tool {
     public static final String TYPE = "WriteToScratchPadTool";
     public static final String SCRATCHPAD_NOTES_KEY = "_scratchpad_notes";
     public static final String NOTES_KEY = "notes";
-    public static final String INCLUDE_HISTORY_KEY = "include_history";
+    public static final String RETURN_HISTORY_KEY = "return_history";
     public static final String STRICT_FIELD = "strict";
     private static final String DEFAULT_DESCRIPTION = "Save research plans, findings, and progress updates to a persistent scratchpad.";
 
@@ -94,7 +94,7 @@ public class WriteToScratchPadTool implements Tool {
      *
      * @param parameters A map containing tool-specific parameters. Expected to contain:
      *                   - {@code NOTES_KEY} (required): The note to be saved
-     *                   - {@code INCLUDE_HISTORY_KEY} (optional): Boolean string to include full history in response
+     *                   - {@code RETURN_HISTORY_KEY} (optional): Boolean string to return full history in response
      *                   - {@code SCRATCHPAD_NOTES_KEY} (optional): Existing notes as List<String> or JSON string
      * @param listener The action listener to report the result of the tool execution.
      *                 On success, returns either a simple confirmation or full scratchpad content.
@@ -103,8 +103,8 @@ public class WriteToScratchPadTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         String currentNote = parameters.get(NOTES_KEY);
 
-        final boolean includeHistory = parameters.containsKey(INCLUDE_HISTORY_KEY)
-            && Boolean.parseBoolean(parameters.get(INCLUDE_HISTORY_KEY));
+        final boolean returnHistory = parameters.containsKey(RETURN_HISTORY_KEY)
+            && Boolean.parseBoolean(parameters.get(RETURN_HISTORY_KEY));
 
         if (currentNote == null || currentNote.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Parameter 'notes' is required for WriteToScratchPadTool."));
@@ -127,7 +127,7 @@ public class WriteToScratchPadTool implements Tool {
         notes.add(currentNote);
         rawParameters.put(SCRATCHPAD_NOTES_KEY, notes);
 
-        if (includeHistory) {
+        if (returnHistory) {
             String fullNotesFormatted = "- " + String.join("\n- ", notes);
             listener.onResponse((T) ("Scratchpad updated. Full content:\n" + fullNotesFormatted));
         } else {
