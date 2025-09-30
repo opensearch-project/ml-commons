@@ -10,8 +10,10 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_FACTS_EXTRACTION_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_SUMMARY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -102,7 +104,7 @@ public class MemoryProcessingService {
         if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
             stringParameters.put("system_prompt", defaultPrompt);
         } else {
-            Object customPrompt = strategy.getStrategyConfig().get("prompt");
+            Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
             if (customPrompt == null || customPrompt.toString().trim().isEmpty()) {
                 stringParameters.put("system_prompt", defaultPrompt);
             } else if (!validatePromptFormat(customPrompt.toString())) {
@@ -132,9 +134,7 @@ public class MemoryProcessingService {
                     messagesBuilder.map((Map) userPromptMsg);
                 }
             } else { // Add default user prompt
-                List<Map<String, Object>> content = new ArrayList<>();
-                content.add(Map.of("text", "Please extract information from our conversation so far", "type", "text"));
-                MessageInput message = MessageInput.builder().role("user").content(content).build();
+                MessageInput message = getMessageInput("Please extract information from our conversation so far");
                 message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
             messagesBuilder.endArray();
@@ -171,6 +171,12 @@ public class MemoryProcessingService {
             log.error("Failed to call LLM for fact extraction", e);
             listener.onFailure(new OpenSearchException("Failed to extract facts using LLM model: " + e.getMessage(), e));
         }));
+    }
+
+    private static MessageInput getMessageInput(String userPrompt) {
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("text", userPrompt, "type", "text"));
+        return MessageInput.builder().role("user").content(content).build();
     }
 
     public void makeMemoryDecisions(
@@ -366,12 +372,72 @@ public class MemoryProcessingService {
         }
     }
 
-    public void summarizeMessages(List<MessageInput> messages, ActionListener<String> listener) {
+    public void summarizeMessages(MemoryConfiguration configuration, List<MessageInput> messages, ActionListener<String> listener) {
         if (messages == null || messages.isEmpty()) {
             listener.onResponse("");
         } else {
-            listener.onResponse(messages.get(0).toString());
+            Map<String, String> stringParameters = new HashMap<>();
+            Map<String, Object> memoryParams = configuration.getParameters();
+            String llmResultPath = (String) memoryParams.getOrDefault("llm_result_path", DEFAULT_LLM_RESULT_PATH);
+            Map<String, String> sessionParams = (Map<String, String>) memoryParams.getOrDefault("session", new HashMap<>());
+            stringParameters.put("system_prompt", SESSION_SUMMARY_PROMPT);
+            stringParameters.putAll(getParameterMap(sessionParams));
+            stringParameters.putIfAbsent("max_summary_size", "10");
+
+            try {
+                XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
+                messagesBuilder.startArray();
+                for (MessageInput message : messages) {
+                    message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
+                }
+                if (sessionParams.containsKey("user_prompt_message")) {
+                    Object userPromptMsg = sessionParams.get("user_prompt_message");
+                    if (userPromptMsg != null && userPromptMsg instanceof Map) {
+                        messagesBuilder.map((Map) userPromptMsg);
+                    }
+                } else {
+                    MessageInput message = getMessageInput(
+                        "Please summarize our conversation, not exceed " + stringParameters.get("max_summary_size") + " words"
+                    );
+                    message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
+                }
+                messagesBuilder.endArray();
+                stringParameters.put("messages", messagesBuilder.toString());
+
+                RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
+                MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+                MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
+                    .builder()
+                    .modelId(configuration.getLlmId())
+                    .mlInput(mlInput)
+                    .build();
+
+                client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
+                    try {
+                        String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmResultPath);
+                        listener.onResponse(summary);
+                    } catch (Exception e) {
+                        log.error("Failed to parse memory decisions from LLM response", e);
+                        listener.onFailure(e);
+                    }
+                }, e -> {
+                    log.error("Failed to get memory decisions from LLM", e);
+                    listener.onFailure(e);
+                }));
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
         }
+    }
+
+    private String parseSessionSummary(ModelTensorOutput output, String llmResultPath) {
+        Map<String, ?> dataAsMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+        String sessionSummary = null;
+        if (filterdResult != null) {
+            sessionSummary = StringUtils.toJson(filterdResult);
+        }
+        return sessionSummary;
     }
 
     private boolean validatePromptFormat(String prompt) {
