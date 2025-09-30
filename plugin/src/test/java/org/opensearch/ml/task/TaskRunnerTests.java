@@ -84,6 +84,11 @@ public class TaskRunnerTests extends OpenSearchTestCase {
             }
 
             @Override
+            public String getTransportStreamActionName() {
+                return null;
+            }
+
+            @Override
             public TransportResponseHandler getResponseHandler(ActionListener listener) {
                 return null;
             }

@@ -6,7 +6,10 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.GENERATION_TYPE_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.SEARCH_TEMPLATES_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_SEARCH_TEMPLATES_TYPE_FIELD;
 
 import java.io.IOException;
 import java.util.List;
@@ -49,7 +52,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         + "        \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "        },\n"
-        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.user_prompt}\\\"}]}\"\n"
+        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.query_planner_system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.query_planner_user_prompt}\\\"}]}\"\n"
         + "      }\n"
         + "    ]\n"
         + "}";
@@ -79,9 +82,52 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         String agentId = registerAgentWithQueryPlanningTool(agentName, queryPlanningModelId);
         assertNotNull(agentId);
 
-        String query = "{\"parameters\": {\"query_text\": \"List 5 iris flowers of type setosa\"}}";
+        String query = "{\"parameters\": {\"question\": \"List 5 iris flowers of type setosa\", \"index_name\": \"iris_data\" }}";
         Response response = executeAgent(agentId, query);
         String responseBody = TestHelper.httpEntityToString(response.getEntity());
+
+        Map<String, Object> responseMap = gson.fromJson(responseBody, Map.class);
+
+        List<Map<String, Object>> inferenceResults = (List<Map<String, Object>>) responseMap.get("inference_results");
+        Map<String, Object> firstResult = inferenceResults.get(0);
+        List<Map<String, Object>> outputArray = (List<Map<String, Object>>) firstResult.get("output");
+        Map<String, Object> output = (Map<String, Object>) outputArray.get(0);
+        String result = output.get("result").toString();
+
+        assertTrue(result.contains("query"));
+        deleteAgent(agentId);
+    }
+
+    @Test
+    public void testAgentWithQueryPlanningTool_SearchTemplates() throws IOException {
+        if (OPENAI_KEY == null) {
+            return;
+        }
+
+        // Create Search Templates
+        String templateBody = "{\"script\":{\"lang\":\"mustache\",\"source\":{\"query\":{\"match\":{\"type\":\"{{type}}\"}}}}}";
+        Response response = createSearchTemplate("type_search_template", templateBody);
+        templateBody = "{\"script\":{\"lang\":\"mustache\",\"source\":{\"query\":{\"term\":{\"type\":\"{{type}}\"}}}}}";
+        response = createSearchTemplate("type_search_template_2", templateBody);
+
+        // Register agent with search template IDs
+        String agentName = "Test_AgentWithQueryPlanningTool_SearchTemplates";
+        String searchTemplates = "[{"
+            + "\"template_id\":\"type_search_template\","
+            + "\"template_description\":\"this templates searches for flowers that match the given type this uses a match query\""
+            + "},{"
+            + "\"template_id\":\"type_search_template_2\","
+            + "\"template_description\":\"this templates searches for flowers that match the given type this uses a term query\""
+            + "},{"
+            + "\"template_id\":\"brand_search_template\","
+            + "\"template_description\":\"this templates searches for products that match the given brand\""
+            + "}]";
+        String agentId = registerQueryPlanningAgentWithSearchTemplates(agentName, queryPlanningModelId, searchTemplates);
+        assertNotNull(agentId);
+
+        String query = "{\"parameters\": {\"question\": \"List 5 iris flowers of type setosa\", \"index_name\": \"iris_data\" }}";
+        Response agentResponse = executeAgent(agentId, query);
+        String responseBody = TestHelper.httpEntityToString(agentResponse.getEntity());
 
         Map<String, Object> responseMap = gson.fromJson(responseBody, Map.class);
 
@@ -111,6 +157,44 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
             .name("MyQueryPlanningTool")
             .description("A tool for planning queries")
             .parameters(Map.of(MODEL_ID_FIELD, modelId))
+            .includeOutputInAgentResponse(true)
+            .build();
+
+        MLAgent agent = MLAgent
+            .builder()
+            .name(agentName)
+            .type("flow")
+            .description("Test agent with QueryPlanningTool")
+            .tools(List.of(listIndexTool, queryPlanningTool))
+            .build();
+
+        return registerAgent(agentName, agent);
+    }
+
+    private String registerQueryPlanningAgentWithSearchTemplates(String agentName, String modelId, String searchTemplates)
+        throws IOException {
+        MLToolSpec listIndexTool = MLToolSpec
+            .builder()
+            .type("ListIndexTool")
+            .name("MyListIndexTool")
+            .description("A tool for list indices")
+            .parameters(Map.of("index", IRIS_INDEX, "question", "what fields are in the index?"))
+            .includeOutputInAgentResponse(true)
+            .build();
+
+        MLToolSpec queryPlanningTool = MLToolSpec
+            .builder()
+            .type("QueryPlanningTool")
+            .name("MyQueryPlanningTool")
+            .description("A tool for planning queries")
+            .parameters(
+                Map
+                    .ofEntries(
+                        Map.entry(MODEL_ID_FIELD, modelId),
+                        Map.entry(GENERATION_TYPE_FIELD, USER_SEARCH_TEMPLATES_TYPE_FIELD),
+                        Map.entry(SEARCH_TEMPLATES_FIELD, searchTemplates)
+                    )
+            )
             .includeOutputInAgentResponse(true)
             .build();
 
@@ -173,6 +257,18 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
                 "/_plugins/_ml/agents/" + agentId + "/_execute",
                 null,
                 new StringEntity(query),
+                List.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
+            );
+    }
+
+    private Response createSearchTemplate(String templateName, String templateBody) throws IOException {
+        return TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_scripts/" + templateName,
+                null,
+                new StringEntity(templateBody),
                 List.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
             );
     }

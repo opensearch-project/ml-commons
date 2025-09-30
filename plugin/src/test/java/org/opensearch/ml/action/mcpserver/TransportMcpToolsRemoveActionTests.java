@@ -88,7 +88,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, threadPool, toolFactoryWrapper));
+    private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, toolFactoryWrapper));
 
     private TransportMcpToolsRemoveAction transportMcpToolsRemoveAction;
 
@@ -175,7 +175,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper,
+                mcpToolsHelper,
                 mlFeatureEnabledSetting
         );
         MLMcpToolsRemoveNodesRequest nodesRequest = mock(MLMcpToolsRemoveNodesRequest.class);

@@ -6,9 +6,11 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
@@ -23,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -44,6 +45,8 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 
 import com.google.common.collect.ImmutableMap;
+
+import okhttp3.Request;
 
 public class ConnectorUtilsTest {
 
@@ -272,7 +275,7 @@ public class ConnectorUtilsTest {
             .build();
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils
             .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
-        Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
+        assertNotNull(remoteInferenceInputDataSet.getParameters());
         assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
         assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
     }
@@ -458,5 +461,124 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
         ConnectorUtils.buildSdkRequest("PREDICT", connector, Collections.emptyMap(), "{}", software.amazon.awssdk.http.SdkHttpMethod.POST);
+    }
+
+    @Test
+    public void testBuildOKHttpRequestPOST_WithPayload() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .headers(ImmutableMap.of("Authorization", "Bearer token123"))
+            .build();
+
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        connector = spy(connector);
+        when(connector.getDecryptedHeaders()).thenReturn(ImmutableMap.of("Authorization", "Bearer token123"));
+
+        Map<String, String> parameters = ImmutableMap.of("input", "test input");
+        String payload = "{\"input\": \"test input\"}";
+
+        Request request = ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, payload);
+
+        assertEquals("POST", request.method());
+        assertEquals("http://test.com/mock", request.url().toString());
+        assertEquals("Bearer token123", request.header("Authorization"));
+        assertEquals("", request.header("Accept-Encoding"));
+        assertEquals("text/event-stream", request.header("Accept"));
+        assertEquals("no-cache", request.header("Cache-Control"));
+        assertNotNull(request.body());
+    }
+
+    @Test
+    public void testBuildOKHttpRequestPOST_NullPayload() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Content length is 0. Aborting request to remote model");
+
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        Map<String, String> parameters = new HashMap<>();
+        ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, null);
+    }
+
+    @Test
+    public void testBuildOKHttpRequestPOST_NoHeaders() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        Map<String, String> parameters = new HashMap<>();
+        String payload = "{\"input\": \"test input\"}";
+
+        Request request = ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, payload);
+
+        assertEquals("POST", request.method());
+        assertEquals("http://test.com/mock", request.url().toString());
+        assertNull(request.header("Authorization"));
+        assertEquals("", request.header("Accept-Encoding"));
+        assertEquals("text/event-stream", request.header("Accept"));
+        assertEquals("no-cache", request.header("Cache-Control"));
+    }
+
+    @Test
+    public void testBuildOKHttpRequestPOST_WithParameters() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://test.com/mock/${parameters.model}")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+
+        Map<String, String> parameters = ImmutableMap.of("model", "gpt-3.5", "input", "test input");
+        String payload = "{\"input\": \"test input\"}";
+
+        Request request = ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, payload);
+
+        assertEquals("POST", request.method());
+        assertEquals("http://test.com/mock/gpt-3.5", request.url().toString());
     }
 }
