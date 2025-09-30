@@ -30,12 +30,15 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -84,6 +87,10 @@ public class SearchIndexTool implements Tool {
     private String description = DEFAULT_DESCRIPTION;
 
     private Client client;
+    @Setter
+    @Getter
+    @VisibleForTesting
+    private Parser outputParser;
 
     private NamedXContentRegistry xContentRegistry;
 
@@ -215,7 +222,11 @@ public class SearchIndexTool implements Tool {
                     tensors.add(ModelTensor.builder().name(name).dataAsMap(convertSearchResponseToMap(r)).build());
                     outputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
                     ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
-                    listener.onResponse((T) output);
+                    if (outputParser != null) {
+                        listener.onResponse((T) outputParser.parse(output));
+                    } else {
+                        listener.onResponse((T) output);
+                    }
                     return;
                 }
                 if (hits != null && hits.length > 0) {
@@ -225,7 +236,11 @@ public class SearchIndexTool implements Tool {
                         String doc = GSON.toJson(docContent);
                         contextBuilder.append(doc).append("\n");
                     }
-                    listener.onResponse((T) contextBuilder.toString());
+                    if (outputParser != null) {
+                        listener.onResponse((T) outputParser.parse(contextBuilder.toString()));
+                    } else {
+                        listener.onResponse((T) contextBuilder.toString());
+                    }
                 } else {
                     listener.onResponse((T) "");
                 }
@@ -281,7 +296,10 @@ public class SearchIndexTool implements Tool {
 
         @Override
         public SearchIndexTool create(Map<String, Object> params) {
-            return new SearchIndexTool(client, xContentRegistry);
+            SearchIndexTool tool = new SearchIndexTool(client, xContentRegistry);
+            // Enhance the output parser with processors if configured
+            tool.setOutputParser(ToolParser.createFromToolParams(params));
+            return tool;
         }
 
         @Override

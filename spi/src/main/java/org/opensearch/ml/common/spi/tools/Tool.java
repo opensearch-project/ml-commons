@@ -110,7 +110,7 @@ public interface Tool {
     interface Factory<T extends Tool> {
         /**
          * Create an instance of this tool.
-         *
+         * TODO: add default implement to set tool output parser
          * @param params Parameters for the tool
          * @return an instance of this tool
          */
