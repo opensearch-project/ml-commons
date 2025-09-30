@@ -292,7 +292,7 @@ public class ModelTensorsTest {
         doThrow(new IOException("Mock IOException")).when(spyTensors).toXContent(any(XContentBuilder.class), any());
 
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Can't convert ModelTensor to string");
+        exceptionRule.expectMessage("Can't convert ModelTensors to string");
 
         spyTensors.toString();
     }

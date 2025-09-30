@@ -109,7 +109,7 @@ public class ModelTensorOutput extends MLOutput {
         try {
             return this.toXContent(JsonXContent.contentBuilder(), null).toString();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new IllegalArgumentException("Can't convert ModelTensorOutput to string", e);
         }
     }
 }

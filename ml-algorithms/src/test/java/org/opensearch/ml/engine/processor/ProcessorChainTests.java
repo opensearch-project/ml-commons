@@ -1000,4 +1000,886 @@ public class ProcessorChainTests {
         assertEquals(input, result);
     }
 
+    @Test
+    public void testConditionalProcessorWithRegexCondition() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("message", "Error: File not found");
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.message");
+
+        List<Object> routes = new ArrayList<>();
+
+        // Regex condition for error messages
+        List<Map<String, Object>> errorRoute = new ArrayList<>();
+        Map<String, Object> errorReplace = new HashMap<>();
+        errorReplace.put("type", "regex_replace");
+        errorReplace.put("pattern", "\\{.*\\}");
+        errorReplace.put("replacement", "Error detected");
+        errorRoute.add(errorReplace);
+        routes.add(Map.of("regex:Error:.*", errorRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Error detected", processor.process(input));
+    }
+
+    @Test
+    public void testConditionalProcessorWithContainsCondition() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("status", "processing_complete");
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.status");
+
+        List<Object> routes = new ArrayList<>();
+
+        // Contains condition
+        List<Map<String, Object>> completeRoute = new ArrayList<>();
+        Map<String, Object> completeReplace = new HashMap<>();
+        completeReplace.put("type", "regex_replace");
+        completeReplace.put("pattern", "\\{.*\\}");
+        completeReplace.put("replacement", "Task completed");
+        completeRoute.add(completeReplace);
+        routes.add(Map.of("contains:complete", completeRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Task completed", processor.process(input));
+    }
+
+    @Test
+    public void testConditionalProcessorWithGreaterThanEqualCondition() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("score", 85);
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.score");
+
+        List<Object> routes = new ArrayList<>();
+
+        // >= condition
+        List<Map<String, Object>> passRoute = new ArrayList<>();
+        Map<String, Object> passReplace = new HashMap<>();
+        passReplace.put("type", "regex_replace");
+        passReplace.put("pattern", "\\{.*\\}");
+        passReplace.put("replacement", "Passed");
+        passRoute.add(passReplace);
+        routes.add(Map.of(">=80", passRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Passed", processor.process(input));
+    }
+
+    @Test
+    public void testConditionalProcessorWithLessThanEqualCondition() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("attempts", 3);
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.attempts");
+
+        List<Object> routes = new ArrayList<>();
+
+        // <= condition
+        List<Map<String, Object>> allowRoute = new ArrayList<>();
+        Map<String, Object> allowReplace = new HashMap<>();
+        allowReplace.put("type", "regex_replace");
+        allowReplace.put("pattern", "\\{.*\\}");
+        allowReplace.put("replacement", "Allowed");
+        allowRoute.add(allowReplace);
+        routes.add(Map.of("<=5", allowRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Allowed", processor.process(input));
+    }
+
+    @Test
+    public void testConditionalProcessorWithNullCondition() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("optional_field", null);
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.optional_field");
+
+        List<Object> routes = new ArrayList<>();
+
+        // null condition
+        List<Map<String, Object>> nullRoute = new ArrayList<>();
+        Map<String, Object> nullReplace = new HashMap<>();
+        nullReplace.put("type", "regex_replace");
+        nullReplace.put("pattern", "\\{.*\\}");
+        nullReplace.put("replacement", "Field is null");
+        nullRoute.add(nullReplace);
+        routes.add(Map.of("null", nullRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Field is null", processor.process(input));
+    }
+
+    @Test
+    public void testConditionalProcessorWithEmptyJSONArray() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("items", new net.minidev.json.JSONArray());
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.items");
+
+        List<Object> routes = new ArrayList<>();
+
+        // not_exists condition (empty array should match)
+        List<Map<String, Object>> emptyRoute = new ArrayList<>();
+        Map<String, Object> emptyReplace = new HashMap<>();
+        emptyReplace.put("type", "regex_replace");
+        emptyReplace.put("pattern", "\\{.*\\}");
+        emptyReplace.put("replacement", "Array is empty");
+        emptyRoute.add(emptyReplace);
+        routes.add(Map.of("not_exists", emptyRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Array is empty", processor.process(input));
+    }
+
+    @Test
+    public void testParseProcessorConfigsWithMapInput() {
+        // Test the parseProcessorConfigs method with Map input (currently not covered)
+        Map<String, Object> singleConfig = new HashMap<>();
+        singleConfig.put("type", "to_string");
+
+        // Use reflection to access the private method for testing
+        try {
+            java.lang.reflect.Method method = ProcessorRegistry.class.getDeclaredMethod("parseProcessorConfigs", Object.class);
+            method.setAccessible(true);
+
+            @SuppressWarnings("unchecked")
+            List<OutputProcessor> result = (List<OutputProcessor>) method.invoke(null, singleConfig);
+
+            assertEquals(1, result.size());
+            assertNotNull(result.get(0));
+        } catch (Exception e) {
+            // If reflection fails, create a conditional processor that uses parseProcessorConfigs internally
+            Map<String, Object> conditionalConfig = new HashMap<>();
+            conditionalConfig.put("type", "conditional");
+            conditionalConfig.put("default", singleConfig); // This will call parseProcessorConfigs with Map
+
+            OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+            String result = (String) processor.process("test");
+            assertEquals("\"test\"", result); // Should convert to JSON string
+        }
+    }
+
+    @Test
+    public void testParseProcessorConfigsWithNullInput() {
+        // Test with null input to parseProcessorConfigs by creating a conditional with no routes
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("routes", new ArrayList<>()); // Empty routes list
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        String result = (String) processor.process("test");
+        assertEquals("test", result); // Should return input unchanged when no processors
+    }
+
+    @Test
+    public void testParseProcessorConfigsWithInvalidInput() {
+        // Test with invalid input type to parseProcessorConfigs by using a non-Map, non-List object
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("routes", new ArrayList<>()); // Empty routes
+        conditionalConfig.put("default", 123); // Invalid type (Integer instead of List/Map)
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        String result = (String) processor.process("test");
+        assertEquals("test", result); // Should return input unchanged when invalid config
+    }
+
+    @Test
+    public void testCanParseAsNumberMethod() {
+        // Test the canParseAsNumber method indirectly through numeric conditions
+        Map<String, Object> input = new HashMap<>();
+        input.put("value", "not_a_number");
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.value");
+
+        List<Object> routes = new ArrayList<>();
+
+        // Numeric condition that should fail for non-numeric string
+        List<Map<String, Object>> numericRoute = new ArrayList<>();
+        Map<String, Object> numericReplace = new HashMap<>();
+        numericReplace.put("type", "regex_replace");
+        numericReplace.put("pattern", "\\{.*\\}");
+        numericReplace.put("replacement", "Is numeric");
+        numericRoute.add(numericReplace);
+        routes.add(Map.of(">10", numericRoute));
+
+        // Default route
+        List<Map<String, Object>> defaultRoute = new ArrayList<>();
+        Map<String, Object> defaultReplace = new HashMap<>();
+        defaultReplace.put("type", "regex_replace");
+        defaultReplace.put("pattern", "\\{.*\\}");
+        defaultReplace.put("replacement", "Not numeric");
+        defaultRoute.add(defaultReplace);
+        conditionalConfig.put("default", defaultRoute);
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Not numeric", processor.process(input));
+    }
+
+    @Test
+    public void testNumericConditionWithStringNumber() {
+        // Test numeric condition matching with string that can be parsed as number
+        Map<String, Object> input = new HashMap<>();
+        input.put("value", "25.5");
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.value");
+
+        List<Object> routes = new ArrayList<>();
+
+        // Numeric condition
+        List<Map<String, Object>> numericRoute = new ArrayList<>();
+        Map<String, Object> numericReplace = new HashMap<>();
+        numericReplace.put("type", "regex_replace");
+        numericReplace.put("pattern", "\\{.*\\}");
+        numericReplace.put("replacement", "Greater than 20");
+        numericRoute.add(numericReplace);
+        routes.add(Map.of(">20", numericRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Greater than 20", processor.process(input));
+    }
+
+    @Test
+    public void testRegexCaptureWithInvalidGroupIndex() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("pattern", "value: (\\d+)");
+        config.put("groups", "[1, 5]"); // Group 5 doesn't exist
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor(REGEX_CAPTURE, config);
+
+        String input = "value: 123";
+        Object result = processor.process(input);
+
+        // Should only capture group 1 since group 5 doesn't exist (group 5 is silently ignored)
+        if (result instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<String> captures = (List<String>) result;
+            assertEquals(1, captures.size());
+            assertEquals("123", captures.get(0));
+        } else {
+            // If only one valid group, it returns the string directly
+            assertEquals("123", result);
+        }
+    }
+
+    @Test
+    public void testRegexCaptureWithInvalidGroupsFormat() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("pattern", "(\\d+)");
+        config.put("groups", "invalid_format");
+
+        try {
+            ProcessorRegistry.createProcessor(REGEX_CAPTURE, config);
+            // Should throw IllegalArgumentException
+            assertTrue("Expected IllegalArgumentException", false);
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Invalid 'groups' format"));
+        }
+    }
+
+    @Test
+    public void testExtractJsonWithObjectTypeButArrayFound() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("extract_type", "object");
+        config.put("default", "default_value");
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor(EXTRACT_JSON, config);
+
+        // Input has array but we're forcing object type
+        String input = "prefix [1, 2, 3] suffix";
+        Object result = processor.process(input);
+
+        // Should return default value since array doesn't match object type
+        assertEquals("default_value", result);
+    }
+
+    @Test
+    public void testExtractJsonWithArrayTypeButObjectFound() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("extract_type", "array");
+        config.put("default", "default_value");
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor(EXTRACT_JSON, config);
+
+        // Input has object but we're forcing array type
+        String input = "prefix {\"key\": \"value\"} suffix";
+        Object result = processor.process(input);
+
+        // Should return default value since object doesn't match array type
+        assertEquals("default_value", result);
+    }
+
+    @Test
+    public void testExtractJsonAutoModeWithNeitherObjectNorArray() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("extract_type", "auto");
+        config.put("default", "default_value");
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor(EXTRACT_JSON, config);
+
+        // Create a JSON that's neither object nor array (e.g., just a string)
+        String input = "prefix \"just a string\" suffix";
+        Object result = processor.process(input);
+
+        // Should return default value since it's neither object nor array
+        assertEquals("default_value", result);
+    }
+
+    @Test
+    public void testConditionalProcessorPathEvaluationError() {
+        Map<String, Object> input = new HashMap<>();
+        input.put("malformed", "not json");
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.nonexistent");
+
+        List<Object> routes = new ArrayList<>();
+
+        // null condition (should match when path evaluation fails)
+        List<Map<String, Object>> nullRoute = new ArrayList<>();
+        Map<String, Object> nullReplace = new HashMap<>();
+        nullReplace.put("type", "regex_replace");
+        nullReplace.put("pattern", "\\{.*\\}");
+        nullReplace.put("replacement", "Path not found");
+        nullRoute.add(nullReplace);
+        routes.add(Map.of("null", nullRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        assertEquals("Path not found", processor.process(input));
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithNullJsonResult() {
+        // Test with JSON string that parses to null
+        Map<String, Object> params = new HashMap<>();
+        String configStr = "null";
+
+        params.put(ProcessorChain.OUTPUT_PROCESSORS, configStr);
+
+        List<Map<String, Object>> result = ProcessorChain.extractProcessorConfigs(params);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testRegexReplaceProcessorWithException() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("pattern", "["); // Invalid regex pattern that will cause PatternSyntaxException
+        config.put("replacement", "test");
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor(REGEX_REPLACE, config);
+
+        String input = "test input";
+        Object result = processor.process(input);
+        // Should return original input when regex compilation fails
+        assertEquals(input, result);
+    }
+
+    @Test
+    public void testJsonPathProcessorWithGeneralException() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.valid.path");
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor(JSONPATH_FILTER, config);
+
+        // Pass an object that can't be converted to JSON properly to trigger general exception
+        Object problematicInput = new Object() {
+            @Override
+            public String toString() {
+                throw new RuntimeException("Cannot convert to string");
+            }
+        };
+
+        Object result = processor.process(problematicInput);
+        // Should return original input when general exception occurs
+        assertEquals(problematicInput, result);
+    }
+
+    @Test
+    public void testParseProcessorConfigsWithNullConfig() {
+        // Test parseProcessorConfigs with null input directly through conditional processor
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("routes", new ArrayList<>());
+        // Don't set default, which will be null and test the null branch in parseProcessorConfigs
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        String result = (String) processor.process("test");
+        assertEquals("test", result);
+    }
+
+    @Test
+    public void testConditionalProcessorWithGeneralPathException() {
+        // Test the general exception catch block in conditional processor path evaluation
+        // Use a simple input that will work but test the path evaluation exception
+        Map<String, Object> input = new HashMap<>();
+        input.put("field", "value");
+
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.some.path"); // This path doesn't exist, will trigger PathNotFoundException
+
+        List<Object> routes = new ArrayList<>();
+
+        // null condition (should match when path evaluation fails)
+        List<Map<String, Object>> nullRoute = new ArrayList<>();
+        Map<String, Object> nullReplace = new HashMap<>();
+        nullReplace.put("type", "regex_replace");
+        nullReplace.put("pattern", "\\{.*\\}");
+        nullReplace.put("replacement", "Path exception handled");
+        nullRoute.add(nullReplace);
+        routes.add(Map.of("null", nullRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        OutputProcessor processor = ProcessorRegistry.createProcessor("conditional", conditionalConfig);
+        String result = (String) processor.process(input);
+        assertEquals("Path exception handled", result);
+    }
+
+    @Test
+    public void testCreateProcessingChainWithNullConfig() {
+        // Test createProcessingChain with null input
+        List<OutputProcessor> result = ProcessorRegistry.createProcessingChain(null);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testCreateProcessingChainWithEmptyConfig() {
+        // Test createProcessingChain with empty list
+        List<OutputProcessor> result = ProcessorRegistry.createProcessingChain(new ArrayList<>());
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testRecursiveConditionalProcessors() {
+        /*
+         * Test case for recursive conditional processors - demonstrates nested conditionals
+         * 
+         * This test simulates a processor configuration like:
+         * {
+         *     "type": "conditional",
+         *     "path": "$.output.message.content[*].toolUse",
+         *     "routes": [
+         *         {
+         *             "exists": [
+         *                 {
+         *                     "type": "regex_replace",
+         *                     "pattern": "\"stopReason\"\\s*:\\s*\"end_turn\"",
+         *                     "replacement": "\"stopReason\": \"tool_use\""
+         *                 }
+         *             ]
+         *         },
+         *         {
+         *             "not_exists": [
+         *                 {
+         *                     "type": "conditional",  // <- NESTED CONDITIONAL HERE!
+         *                     "path": "$.xyz",
+         *                     "routes": [
+         *                         {
+         *                             "exists": [
+         *                                 {
+         *                                     "type": "regex_replace",
+         *                                     "pattern": "\"xyz\"\\s*:\\s*\"([^\"]+)\"",
+         *                                     "replacement": "\"xyz\": \"processed_$1\""
+         *                                 }
+         *                             ]
+         *                         },
+         *                         {
+         *                             "not_exists": [
+         *                                 {
+         *                                     "type": "regex_replace",
+         *                                     "pattern": "\\{.*\\}",
+         *                                     "replacement": "No xyz field found"
+         *                                 }
+         *                             ]
+         *                         }
+         *                     ]
+         *                 }
+         *             ]
+         *         }
+         *     ]
+         * }
+         * 
+         * Test scenarios:
+         * 1. Input with toolUse field -> takes first route (exists)
+         * 2. Input without toolUse but with xyz -> takes second route, then nested exists
+         * 3. Input without toolUse and without xyz -> takes second route, then nested not_exists
+         */
+
+        // Create test input with toolUse field
+        // This represents JSON like: {"output": {"message": {"content": [{"toolUse": "some_tool"}]}}}
+        Map<String, Object> inputWithToolUse = new HashMap<>();
+        Map<String, Object> output = new HashMap<>();
+        Map<String, Object> message = new HashMap<>();
+        List<Map<String, Object>> content = new ArrayList<>();
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("toolUse", "some_tool");
+        content.add(contentItem);
+        message.put("content", content);
+        output.put("message", message);
+        inputWithToolUse.put("output", output);
+
+        // Create test input without toolUse field but with xyz field
+        // This represents JSON like: {"output": {"message": {"content": [{"text": "some text"}]}}, "xyz": "test_value"}
+        Map<String, Object> inputWithoutToolUse = new HashMap<>();
+        Map<String, Object> outputNoTool = new HashMap<>();
+        Map<String, Object> messageNoTool = new HashMap<>();
+        List<Map<String, Object>> contentNoTool = new ArrayList<>();
+        Map<String, Object> contentItemNoTool = new HashMap<>();
+        contentItemNoTool.put("text", "some text");
+        contentNoTool.add(contentItemNoTool);
+        messageNoTool.put("content", contentNoTool);
+        outputNoTool.put("message", messageNoTool);
+        inputWithoutToolUse.put("output", outputNoTool);
+        inputWithoutToolUse.put("xyz", "test_value"); // For nested conditional
+
+        // Create the recursive conditional processor configuration
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.output.message.content[*].toolUse");
+
+        List<Object> routes = new ArrayList<>();
+
+        // Route 1: if toolUse exists - simple regex replacement
+        List<Map<String, Object>> existsRoute = new ArrayList<>();
+        Map<String, Object> regexReplace1 = new HashMap<>();
+        regexReplace1.put("type", "regex_replace");
+        regexReplace1.put("pattern", "\"stopReason\"\\s*:\\s*\"end_turn\"");
+        regexReplace1.put("replacement", "\"stopReason\": \"tool_use\"");
+        existsRoute.add(regexReplace1);
+        routes.add(Collections.singletonMap("exists", existsRoute));
+
+        // Route 2: if toolUse not exists - contains NESTED conditional (this is the recursive part!)
+        List<Map<String, Object>> notExistsRoute = new ArrayList<>();
+
+        // Nested conditional processor - this demonstrates recursion!
+        // The conditional processor contains another conditional processor
+        Map<String, Object> nestedConditional = new HashMap<>();
+        nestedConditional.put("type", "conditional");
+        nestedConditional.put("path", "$.xyz");
+
+        List<Object> nestedRoutes = new ArrayList<>();
+
+        // Nested route 1: if xyz exists - modify the xyz value
+        List<Map<String, Object>> nestedExistsRoute = new ArrayList<>();
+        Map<String, Object> nestedRegex1 = new HashMap<>();
+        nestedRegex1.put("type", "regex_replace");
+        nestedRegex1.put("pattern", "\"xyz\"\\s*:\\s*\"([^\"]+)\"");
+        nestedRegex1.put("replacement", "\"xyz\": \"processed_$1\"");
+        nestedExistsRoute.add(nestedRegex1);
+        nestedRoutes.add(Collections.singletonMap("exists", nestedExistsRoute));
+
+        // Nested route 2: if xyz not exists - replace entire JSON with message
+        List<Map<String, Object>> nestedNotExistsRoute = new ArrayList<>();
+        Map<String, Object> nestedRegex2 = new HashMap<>();
+        nestedRegex2.put("type", "regex_replace");
+        nestedRegex2.put("pattern", "\\{.*\\}");
+        nestedRegex2.put("replacement", "No xyz field found");
+        nestedNotExistsRoute.add(nestedRegex2);
+        nestedRoutes.add(Collections.singletonMap("not_exists", nestedNotExistsRoute));
+
+        nestedConditional.put("routes", nestedRoutes);
+        notExistsRoute.add(nestedConditional);
+        routes.add(Collections.singletonMap("not_exists", notExistsRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        // Create processor chain with the recursive conditional
+        List<Map<String, Object>> processorConfigs = new ArrayList<>();
+        processorConfigs.add(conditionalConfig);
+        ProcessorChain chain = new ProcessorChain(processorConfigs);
+
+        // Test 1: Input with toolUse (should trigger first route)
+        String inputJson1 = StringUtils.toJson(inputWithToolUse);
+        Object result1 = chain.process(inputJson1);
+
+        // Should apply the regex replacement for stopReason
+        assertTrue(result1 instanceof String);
+        String resultStr1 = (String) result1;
+        // Since there's no stopReason in our test input, it should remain unchanged
+        assertEquals(inputJson1, resultStr1);
+
+        // Test 2: Input without toolUse but with xyz (should trigger nested conditional's first route)
+        String inputJson2 = StringUtils.toJson(inputWithoutToolUse);
+        Object result2 = chain.process(inputJson2);
+
+        assertTrue(result2 instanceof String);
+        String resultStr2 = (String) result2;
+        // Should process the xyz field through nested conditional
+        assertTrue(resultStr2.contains("processed_test_value"));
+
+        // Test 3: Input without toolUse and without xyz (should trigger nested conditional's second route)
+        // This represents JSON like: {"output": {"message": {"content": [{"text": "some text"}]}}}
+        Map<String, Object> inputNoXyz = new HashMap<>();
+        inputNoXyz.put("output", outputNoTool);
+        // No xyz field - this will trigger the nested conditional's "not_exists" route
+
+        String inputJson3 = StringUtils.toJson(inputNoXyz);
+        Object result3 = chain.process(inputJson3);
+
+        assertEquals("No xyz field found", result3);
+    }
+
+    @Test
+    public void testDeeplyNestedConditionalProcessors() {
+        /*
+         * Test even deeper nesting (3 levels) to ensure recursion works at any depth
+         * 
+         * This test creates a 3-level deep nested conditional structure like:
+         * {
+         *     "type": "conditional",
+         *     "path": "$.level1",
+         *     "routes": [
+         *         {
+         *             "exists": [
+         *                 {
+         *                     "type": "conditional",  // <- LEVEL 2 NESTED CONDITIONAL
+         *                     "path": "$.level2", 
+         *                     "routes": [
+         *                         {
+         *                             "exists": [
+         *                                 {
+         *                                     "type": "conditional",  // <- LEVEL 3 NESTED CONDITIONAL
+         *                                     "path": "$.level3",
+         *                                     "routes": [
+         *                                         {
+         *                                             "exists": [
+         *                                                 {
+         *                                                     "type": "regex_replace",
+         *                                                     "pattern": "\\{.*\\}",
+         *                                                     "replacement": "Successfully processed through 3 levels!"
+         *                                                 }
+         *                                             ]
+         *                                         }
+         *                                     ]
+         *                                 }
+         *                             ]
+         *                         }
+         *                     ]
+         *                 }
+         *             ]
+         *         }
+         *     ]
+         * }
+         * 
+         * Input JSON: {"level1": "exists", "level2": "exists", "level3": "final_value"}
+         * Expected: "Successfully processed through 3 levels!"
+         */
+
+        Map<String, Object> testInput = new HashMap<>();
+        testInput.put("level1", "exists");
+        testInput.put("level2", "exists");
+        testInput.put("level3", "final_value");
+
+        // Level 1 conditional - checks $.level1
+        Map<String, Object> level1Config = new HashMap<>();
+        level1Config.put("type", "conditional");
+        level1Config.put("path", "$.level1");
+
+        List<Object> level1Routes = new ArrayList<>();
+
+        // Level 1 exists route -> contains Level 2 conditional (first level of nesting)
+        List<Map<String, Object>> level1ExistsRoute = new ArrayList<>();
+
+        // Level 2 conditional (nested in level 1) - checks $.level2
+        Map<String, Object> level2Config = new HashMap<>();
+        level2Config.put("type", "conditional");
+        level2Config.put("path", "$.level2");
+
+        List<Object> level2Routes = new ArrayList<>();
+
+        // Level 2 exists route -> contains Level 3 conditional (second level of nesting)
+        List<Map<String, Object>> level2ExistsRoute = new ArrayList<>();
+
+        // Level 3 conditional (nested in level 2) - checks $.level3 (deepest nesting level)
+        Map<String, Object> level3Config = new HashMap<>();
+        level3Config.put("type", "conditional");
+        level3Config.put("path", "$.level3");
+
+        List<Object> level3Routes = new ArrayList<>();
+
+        // Level 3 final processing - if level3 exists, replace entire JSON with success message
+        List<Map<String, Object>> level3ExistsRoute = new ArrayList<>();
+        Map<String, Object> finalProcessor = new HashMap<>();
+        finalProcessor.put("type", "regex_replace");
+        finalProcessor.put("pattern", "\\{.*\\}");
+        finalProcessor.put("replacement", "Successfully processed through 3 levels!");
+        level3ExistsRoute.add(finalProcessor);
+        level3Routes.add(Collections.singletonMap("exists", level3ExistsRoute));
+
+        level3Config.put("routes", level3Routes);
+        level2ExistsRoute.add(level3Config);
+        level2Routes.add(Collections.singletonMap("exists", level2ExistsRoute));
+
+        level2Config.put("routes", level2Routes);
+        level1ExistsRoute.add(level2Config);
+        level1Routes.add(Collections.singletonMap("exists", level1ExistsRoute));
+
+        level1Config.put("routes", level1Routes);
+
+        // Create processor chain
+        List<Map<String, Object>> processorConfigs = new ArrayList<>();
+        processorConfigs.add(level1Config);
+        ProcessorChain chain = new ProcessorChain(processorConfigs);
+
+        // Test the deeply nested processing
+        String inputJson = StringUtils.toJson(testInput);
+        Object result = chain.process(inputJson);
+
+        assertEquals("Successfully processed through 3 levels!", result);
+    }
+
+    @Test
+    public void testRecursiveConditionalWithMixedProcessorTypes() {
+        /*
+         * Test recursive conditionals mixed with other processor types
+         * 
+         * This test demonstrates that recursive conditionals work seamlessly with other processors.
+         * The configuration looks like:
+         * {
+         *     "type": "conditional",
+         *     "path": "$.condition",
+         *     "routes": [
+         *         {
+         *             "extract": [
+         *                 {
+         *                     "type": "jsonpath_filter",  // <- Extract data field
+         *                     "path": "$.data"
+         *                 },
+         *                 {
+         *                     "type": "extract_json"      // <- Parse JSON string
+         *                 },
+         *                 {
+         *                     "type": "conditional",      // <- NESTED CONDITIONAL after other processors!
+         *                     "path": "$.nested",
+         *                     "routes": [
+         *                         {
+         *                             "exists": [
+         *                                 {
+         *                                     "type": "to_string"
+         *                                 },
+         *                                 {
+         *                                     "type": "regex_replace",
+         *                                     "pattern": "\\{.*\\}",
+         *                                     "replacement": "Extracted and processed nested JSON!"
+         *                                 }
+         *                             ]
+         *                         }
+         *                     ]
+         *                 }
+         *             ]
+         *         }
+         *     ]
+         * }
+         * 
+         * Input JSON: {"data": "{\"nested\": \"json_value\"}", "condition": "extract"}
+         * Processing flow:
+         * 1. condition="extract" -> take extract route
+         * 2. jsonpath_filter extracts: "{\"nested\": \"json_value\"}"
+         * 3. extract_json parses to: {"nested": "json_value"}
+         * 4. nested conditional checks $.nested (exists) -> apply processors
+         * 5. Final result: "Extracted and processed nested JSON!"
+         */
+
+        Map<String, Object> testInput = new HashMap<>();
+        testInput.put("data", "{\"nested\": \"json_value\"}");
+        testInput.put("condition", "extract");
+
+        // Main conditional - checks $.condition field
+        Map<String, Object> conditionalConfig = new HashMap<>();
+        conditionalConfig.put("type", "conditional");
+        conditionalConfig.put("path", "$.condition");
+
+        List<Object> routes = new ArrayList<>();
+
+        // Extract route - contains mixed processors including nested conditional
+        // This demonstrates that recursion works with any combination of processor types
+        List<Map<String, Object>> extractRoute = new ArrayList<>();
+
+        // Step 1: extract JSON string from data field using JSONPath
+        Map<String, Object> extractJson = new HashMap<>();
+        extractJson.put("type", "jsonpath_filter");
+        extractJson.put("path", "$.data");
+        extractRoute.add(extractJson);
+
+        // Step 2: parse the JSON string into actual JSON object
+        Map<String, Object> parseJson = new HashMap<>();
+        parseJson.put("type", "extract_json");
+        extractRoute.add(parseJson);
+
+        // Step 3: nested conditional based on extracted content (this is the recursive part!)
+        // Now we have a conditional processor nested within other processor types
+        Map<String, Object> nestedConditional = new HashMap<>();
+        nestedConditional.put("type", "conditional");
+        nestedConditional.put("path", "$.nested");
+
+        List<Object> nestedRoutes = new ArrayList<>();
+
+        List<Map<String, Object>> nestedExistsRoute = new ArrayList<>();
+        Map<String, Object> finalTransform = new HashMap<>();
+        finalTransform.put("type", "to_string");
+        nestedExistsRoute.add(finalTransform);
+
+        Map<String, Object> finalReplace = new HashMap<>();
+        finalReplace.put("type", "regex_replace");
+        finalReplace.put("pattern", "\\{.*\\}");
+        finalReplace.put("replacement", "Extracted and processed nested JSON!");
+        nestedExistsRoute.add(finalReplace);
+
+        nestedRoutes.add(Collections.singletonMap("exists", nestedExistsRoute));
+        nestedConditional.put("routes", nestedRoutes);
+
+        extractRoute.add(nestedConditional);
+        routes.add(Collections.singletonMap("extract", extractRoute));
+
+        conditionalConfig.put("routes", routes);
+
+        // Create processor chain
+        List<Map<String, Object>> processorConfigs = new ArrayList<>();
+        processorConfigs.add(conditionalConfig);
+        ProcessorChain chain = new ProcessorChain(processorConfigs);
+
+        // Test the mixed processing
+        String inputJson = StringUtils.toJson(testInput);
+        Object result = chain.process(inputJson);
+
+        assertEquals("Extracted and processed nested JSON!", result);
+    }
+
 }

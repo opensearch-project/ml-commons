@@ -3,6 +3,9 @@ package org.opensearch.ml.common.output.model;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -12,7 +15,9 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -27,6 +32,8 @@ public class ModelTensorOutputTest {
 
     Float[] value;
     ModelTensorOutput modelTensorOutput;
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -176,6 +183,17 @@ public class ModelTensorOutputTest {
         String expected =
             "{\"inference_results\":[{\"output\":[{\"name\":\"test\",\"data_type\":\"FLOAT32\",\"shape\":[1,3],\"data\":[1.0,2.0,3.0],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}]}]}";
         assertEquals(expected, result);
+    }
+
+    @Test
+    public void test_ToString_ThrowsException() throws IOException {
+        ModelTensorOutput spyTensor = spy(modelTensorOutput);
+        doThrow(new IOException("Mock IOException")).when(spyTensor).toXContent(any(XContentBuilder.class), any());
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Can't convert ModelTensorOutput to string");
+
+        spyTensor.toString();
     }
 
     private void readInputStream(ModelTensorOutput input, Consumer<ModelTensorOutput> verify) throws IOException {
