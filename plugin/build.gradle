@@ -58,15 +58,15 @@ dependencies {
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
-    implementation group: 'software.amazon.awssdk', name: 's3', version: "2.30.18"
-    implementation group: 'software.amazon.awssdk', name: 'regions', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
+    implementation group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
+    implementation group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: "${versions.aws}"
 
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
