@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
@@ -24,6 +25,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -61,6 +63,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private boolean infer;
     private Map<String, String> metadata;
     private Map<String, String> tags;
+    private Map<String, Object> parameters;
     private String ownerId;
 
     public MLAddMemoriesInput(
@@ -73,6 +76,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         boolean infer,
         Map<String, String> metadata,
         Map<String, String> tags,
+        Map<String, Object> parameters,
         String ownerId
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
@@ -86,6 +90,10 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         this.infer = infer; // default infer is false
         this.metadata = metadata;
         this.tags = tags;
+        this.parameters = new HashMap<>();
+        if (parameters != null && !parameters.isEmpty()) {
+            this.parameters.putAll(parameters);
+        }
         this.ownerId = ownerId;
         validate();
     }
@@ -126,6 +134,10 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
+        if (in.readBoolean()) {
+            this.parameters = in.readMap();
+        }
+        this.ownerId = in.readOptionalString();
     }
 
     @Override
@@ -168,6 +180,13 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        if (parameters != null) {
+            out.writeBoolean(true);
+            out.writeMap(parameters);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalString(ownerId);
     }
 
     @Override
@@ -204,6 +223,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
         }
+        if (parameters != null && !parameters.isEmpty()) {
+            builder.field(PARAMETERS_FIELD, parameters);
+        }
         if (ownerId != null) {
             builder.field(OWNER_ID_FIELD, ownerId);
         }
@@ -225,6 +247,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         boolean infer = false;
         Map<String, String> metadata = null;
         Map<String, String> tags = null;
+        Map<String, Object> parameters = null;
+        String ownerId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -263,6 +287,12 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                 case TAGS_FIELD:
                     tags = StringUtils.getParameterMap(parser.map());
                     break;
+                case PARAMETERS_FIELD:
+                    parameters = parser.map();
+                    break;
+                case OWNER_ID_FIELD:
+                    ownerId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -280,6 +310,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             .infer(infer)
             .metadata(metadata)
             .tags(tags)
+            .parameters(parameters)
+            .ownerId(ownerId)
             .build();
     }
 
