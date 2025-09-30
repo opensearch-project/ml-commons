@@ -19,11 +19,13 @@ import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -427,10 +429,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         PutDataObjectRequest putRequest = putRequestCaptor.getValue();
         assertNotNull(putRequest);
 
-        // Verify that the configuration has an auto-generated prefix
-        // The prefix should be set before indexing
+        // Verify that the configuration has the default prefix
+        // Since no prefix was specified, it defaults to "default" from MemoryConfiguration
         assertNotNull(config.getIndexPrefix());
-        assertEquals(8, config.getIndexPrefix().length()); // 8 chars from UUID
+        assertEquals("default", config.getIndexPrefix());
 
         // Verify success response
         verify(actionListener).onResponse(responseCaptor.capture());
@@ -874,6 +876,54 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertNotNull(response);
         assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
         assertEquals("created", response.getStatus());
+    }
+
+    @Test
+    public void testDoExecuteWithInvalidStrategyType() throws InterruptedException {
+        // Arrange
+        MemoryStrategy invalidStrategy = MemoryStrategy
+            .builder()
+            .type("invalid_type")
+            .enabled(true)
+            .namespace(Arrays.asList("user_id"))
+            .build();
+
+        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(invalidStrategy)).build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
+        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
+
+        // Act
+        action.doExecute(task, request, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertTrue(exception.getMessage().contains("Invalid strategy type"));
+    }
+
+    @Test
+    public void testDoExecuteWithEmptyStrategyType() throws InterruptedException {
+        // Test behavior when strategy type is empty string
+        MemoryStrategy emptyTypeStrategy = MemoryStrategy.builder().type("").enabled(true).namespace(Arrays.asList("user_id")).build();
+
+        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(emptyTypeStrategy)).build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
+        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
+
+        mockSuccessfulIndexCreation();
+
+        // Act
+        action.doExecute(task, request, actionListener);
+
+        // Assert - empty string should be treated as invalid
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof IllegalArgumentException);
     }
 
     // Helper method to mock successful model validation
