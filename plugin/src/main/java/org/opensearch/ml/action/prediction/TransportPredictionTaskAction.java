@@ -25,6 +25,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -258,6 +260,15 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     }
 
     public void validateInputSchema(String modelId, MLInput mlInput) {
+        ActionType actionType = null;
+        if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+        }
+        actionType = actionType == null ? ActionType.PREDICT : actionType;
+        if (actionType == ActionType.BATCH_PREDICT) {
+            return;
+        }
+
         if (modelCacheHelper.getModelInterface(modelId) != null && modelCacheHelper.getModelInterface(modelId).get("input") != null) {
             String inputSchemaString = modelCacheHelper.getModelInterface(modelId).get("input");
             try {

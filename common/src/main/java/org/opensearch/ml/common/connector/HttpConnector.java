@@ -19,12 +19,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -35,6 +37,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -351,10 +356,39 @@ public class HttpConnector extends AbstractConnector {
 
             if (!isJson(payload)) {
                 throw new IllegalArgumentException("Invalid payload: " + payload);
+            } else if (neededStreamParameterInPayload(parameters)) {
+                JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+                jsonObject.addProperty("stream", true);
+                payload = jsonObject.toString();
             }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+    }
+
+    private boolean neededStreamParameterInPayload(Map<String, String> parameters) {
+        if (parameters == null) {
+            return false;
+        }
+
+        boolean isStream = parameters.containsKey("stream");
+        if (!isStream) {
+            return false;
+        }
+
+        String llmInterface = parameters.get("_llm_interface");
+        if (llmInterface.isBlank()) {
+            return false;
+        }
+
+        llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
+        llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+        switch (llmInterface) {
+            case "openai/v1/chat/completions":
+                return true;
+            default:
+                return false;
+        }
     }
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {
