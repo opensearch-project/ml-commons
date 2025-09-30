@@ -88,7 +88,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, threadPool, toolFactoryWrapper));
+    private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, toolFactoryWrapper));
 
     private TransportMcpToolsRegisterAction transportMcpToolsRegisterAction;
 
@@ -183,7 +183,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             nodeFilter,
             mlIndicesHandler,
             mcpToolsHelper,
-                mlFeatureEnabledSetting
+            mlFeatureEnabledSetting
         );
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
         List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());

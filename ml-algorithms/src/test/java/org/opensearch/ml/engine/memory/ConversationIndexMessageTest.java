@@ -44,5 +44,6 @@ public class ConversationIndexMessageTest {
         Assert.assertTrue(content.contains("\"response\":\"response\""));
         Assert.assertTrue(content.contains("\"final_answer\":false"));
         Assert.assertTrue(content.contains("\"created_time\":"));
+        Assert.assertTrue(content.contains("\"updated_time\":"));
     }
 }

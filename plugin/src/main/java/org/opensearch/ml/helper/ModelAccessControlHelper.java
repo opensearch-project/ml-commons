@@ -132,10 +132,18 @@ public class ModelAccessControlHelper {
         SdkClient sdkClient,
         ActionListener<Boolean> listener
     ) {
-        if (modelGroupId == null
-            || (!mlFeatureEnabledSetting.isMultiTenancyEnabled()
-                && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)))) {
+        if (modelGroupId == null) {
             listener.onResponse(true);
+            return;
+        }
+
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+            listener.onResponse(true);  // Multi-tenancy handles access control
+            return;
+        }
+
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+            listener.onResponse(true);  // Admin or security disabled
             return;
         }
         GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest

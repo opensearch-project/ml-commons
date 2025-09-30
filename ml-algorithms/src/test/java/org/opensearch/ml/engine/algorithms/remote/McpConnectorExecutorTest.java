@@ -94,4 +94,27 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
         }
     }
 
+    @Test
+    public void getMcpToolSpecs_throwsOnListToolsError() {
+        when(mcpClient.initialize()).thenReturn(null);
+        when(mcpClient.listTools()).thenThrow(new RuntimeException("Error listing tools"));
+        try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
+            mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
+            McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
+            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+        }
+    }
+
+    @Test
+    public void testUnimplementedMethods_ThrowUnsupportedOperationException() {
+        McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
+
+        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(null, null, null, null, null, null));
+        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteServiceStream(null, null, null, null, null, null));
+        assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getRateLimiter());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getMlGuard());
+        assertThrows(UnsupportedOperationException.class, () -> exec.getUserRateLimiterMap());
+    }
 }

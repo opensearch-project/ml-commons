@@ -35,6 +35,7 @@ public class InteractionTests {
             .builder()
             .id("test-interaction-id")
             .createTime(time)
+            .updatedTime(time)
             .conversationId("conversation-id")
             .input("sample inputs")
             .promptTemplate("some prompt template")
@@ -51,6 +52,8 @@ public class InteractionTests {
         Map<String, Object> params = Map
             .of(
                 ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                time.toString(),
+                ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD,
                 time.toString(),
                 ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
                 "conversation-id",
@@ -72,6 +75,7 @@ public class InteractionTests {
         Interaction interaction = Interaction.fromMap("test-interaction-id", params);
         assertEquals(interaction.getId(), "test-interaction-id");
         assertEquals(interaction.getCreateTime(), time);
+        assertEquals(interaction.getUpdatedTime(), time);
         assertEquals(interaction.getInput(), "sample inputs");
         assertEquals(interaction.getPromptTemplate(), "some prompt template");
         assertEquals(interaction.getResponse(), "sample responses");
@@ -203,5 +207,68 @@ public class InteractionTests {
             "Interaction{id=test-interaction-id,cid=conversation-id,create_time=1970-01-01T00:00:00.123Z,origin=amazon bedrock,input=sample inputs,promt_template=some prompt template,response=sample responses,additional_info={suggestion=new suggestion},parentInteractionId=null,traceNum=null}",
             parentInteraction.toString()
         );
+    }
+
+    @Test
+    public void test_NineParameterConstructor() {
+        Interaction interaction = new Interaction(
+            "id",
+            time,
+            time,
+            "conv-id",
+            "input",
+            "template",
+            "response",
+            "origin",
+            Collections.singletonMap("key", "value")
+        );
+        assertEquals("id", interaction.getId());
+        assertEquals(time, interaction.getCreateTime());
+        assertEquals(time, interaction.getUpdatedTime());
+        assertEquals("conv-id", interaction.getConversationId());
+        assertEquals("input", interaction.getInput());
+        assertEquals("template", interaction.getPromptTemplate());
+        assertEquals("response", interaction.getResponse());
+        assertEquals("origin", interaction.getOrigin());
+        assertEquals(Collections.singletonMap("key", "value"), interaction.getAdditionalInfo());
+        assertEquals(null, interaction.getParentInteractionId());
+        assertEquals(null, interaction.getTraceNum());
+    }
+
+    @Test
+    public void test_ToXContentWithNullUpdatedTime() throws IOException {
+        Interaction interactionWithNullUpdatedTime = Interaction
+            .builder()
+            .id("test-id")
+            .createTime(time)
+            .conversationId("conv-id")
+            .input("input")
+            .promptTemplate("template")
+            .response("response")
+            .origin("origin")
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        interactionWithNullUpdatedTime.toXContent(builder, EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        assertEquals(false, content.contains("updated_time"));
+    }
+
+    @Test
+    public void test_ToXContentWithNullInput() throws IOException {
+        Interaction interactionWithNullInput = Interaction
+            .builder()
+            .id("test-id")
+            .createTime(time)
+            .conversationId("conv-id")
+            .promptTemplate("template")
+            .response("response")
+            .origin("origin")
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        interactionWithNullInput.toXContent(builder, EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        assertEquals(false, content.contains("input"));
     }
 }
