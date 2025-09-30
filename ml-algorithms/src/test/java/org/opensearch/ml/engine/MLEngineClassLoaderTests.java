@@ -53,7 +53,7 @@ public class MLEngineClassLoaderTests {
             assertEquals(settings, instance.getSettings());
         }, e -> { fail("Test failed: " + e.getMessage()); });
 
-        instance.execute(input, actionListener);
+        instance.execute(input, actionListener, null);
 
         // don't set properties
         final LocalSampleCalculator instance2 = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class);
@@ -63,7 +63,7 @@ public class MLEngineClassLoaderTests {
             assertNull(instance2.getClient());
             assertNull(instance2.getSettings());
         }, e -> { fail("Test failed: " + e.getMessage()); });
-        instance2.execute(input, actionListener2);
+        instance2.execute(input, actionListener2, null);
     }
 
     @Test

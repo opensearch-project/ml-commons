@@ -72,7 +72,12 @@ public interface RemoteConnectorExecutor {
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
         // Check for streaming
         if (channel != null) {
-            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), null, actionListener, channel);
+            ActionListener<Tuple<Integer, ModelTensors>> streamingListener = ActionListener.wrap(response -> {
+                ModelTensors tensors = response.v2();
+                MLTaskResponse mlResponse = new MLTaskResponse(new ModelTensorOutput(Arrays.asList(tensors)));
+                actionListener.onResponse(mlResponse);
+            }, actionListener::onFailure);
+            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), streamingListener, actionListener, channel);
             return;
         }
 

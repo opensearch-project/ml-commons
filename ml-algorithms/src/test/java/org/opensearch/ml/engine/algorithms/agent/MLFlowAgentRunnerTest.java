@@ -190,7 +190,7 @@ public class MLFlowAgentRunnerTest {
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener, null);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         assertEquals(1, agentOutput.size());
@@ -210,7 +210,7 @@ public class MLFlowAgentRunnerTest {
         params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
         MLMemorySpec mlMemorySpec = MLMemorySpec.builder().type("memoryType").build();
         final MLAgent mlAgent = MLAgent.builder().name("TestAgent").type(MLAgentType.FLOW.name()).memory(mlMemorySpec).build();
-        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener, null);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(agentActionListener).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("no tool configured"));
@@ -244,7 +244,7 @@ public class MLFlowAgentRunnerTest {
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener, null);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         // Respond with all tool output
@@ -274,7 +274,7 @@ public class MLFlowAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
         doAnswer(generateToolTensorResponse()).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
-        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener, null);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         // Respond with all tool output
@@ -414,7 +414,7 @@ public class MLFlowAgentRunnerTest {
             .memory(null)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener, null);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         assertEquals(1, agentOutput.size());
@@ -477,7 +477,7 @@ public class MLFlowAgentRunnerTest {
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+        mlFlowAgentRunner.run(mlAgent, params, agentActionListener, null);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         assertEquals(1, agentOutput.size());

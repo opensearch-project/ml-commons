@@ -10,6 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -35,26 +36,38 @@ public class TransportExecuteStreamTaskAction extends HandledTransportAction<Act
     TransportService transportService;
 
     public static StreamTransportService streamTransportService;
+    private static StreamTransportService streamTransportServiceInstance;
 
     @Inject
     public TransportExecuteStreamTaskAction(
         TransportService transportService,
         ActionFilters actionFilters,
         MLExecuteTaskRunner mlExecuteTaskRunner,
-        StreamTransportService streamTransportService
+        @Nullable StreamTransportService streamTransportService
     ) {
         super(MLExecuteStreamTaskAction.NAME, transportService, actionFilters, MLExecuteTaskRequest::new);
         this.mlExecuteTaskRunner = mlExecuteTaskRunner;
         this.transportService = transportService;
-        this.streamTransportService = streamTransportService;
+        if (streamTransportServiceInstance == null) {
+            streamTransportServiceInstance = streamTransportService;
+        }
+        this.streamTransportService = streamTransportServiceInstance;
 
-        streamTransportService
-            .registerRequestHandler(
-                MLExecuteStreamTaskAction.NAME,
-                STREAM_EXECUTE_THREAD_POOL,
-                MLExecuteTaskRequest::new,
-                this::messageReceived
-            );
+        if (streamTransportService != null) {
+            streamTransportService
+                .registerRequestHandler(
+                    MLExecuteStreamTaskAction.NAME,
+                    STREAM_EXECUTE_THREAD_POOL,
+                    MLExecuteTaskRequest::new,
+                    this::messageReceived
+                );
+        } else {
+            log.warn("StreamTransportService is not available.");
+        }
+    }
+
+    public static StreamTransportService getStreamTransportService() {
+        return streamTransportService;
     }
 
     public void messageReceived(MLExecuteTaskRequest request, TransportChannel channel, Task task) {

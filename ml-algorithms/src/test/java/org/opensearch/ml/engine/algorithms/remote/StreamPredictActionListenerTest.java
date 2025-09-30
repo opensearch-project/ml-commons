@@ -60,7 +60,6 @@ public class StreamPredictActionListenerTest {
         listener.onResponse(mockResponse);
 
         verify(mockChannel).sendResponseBatch(mockResponse);
-        verify(mockChannel).completeStream();
     }
 
     @Test

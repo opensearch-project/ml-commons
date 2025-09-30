@@ -111,6 +111,7 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
             ModelTensorOutput output = (ModelTensorOutput) mlResponse.getOutput();
             List<ModelTensors> updatedOutputs = new ArrayList<>();
 
+            // TODO: refactor this to handle other types of agents
             for (ModelTensors tensors : output.getMlModelOutputs()) {
                 List<ModelTensor> updatedTensors = new ArrayList<>();
 

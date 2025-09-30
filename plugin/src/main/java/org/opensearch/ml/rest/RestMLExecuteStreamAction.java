@@ -58,6 +58,7 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.StreamTransportResponseHandler;
+import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.client.node.NodeClient;
@@ -179,7 +180,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         }
                     };
 
-                    TransportExecuteStreamTaskAction.streamTransportService
+                    StreamTransportService streamTransportService = TransportExecuteStreamTaskAction.getStreamTransportService();
+                    streamTransportService
                         .sendRequest(
                             clusterService.localNode(),
                             MLExecuteStreamTaskAction.NAME,
@@ -245,13 +247,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return new MLExecuteTaskRequest(functionName, input);
     }
 
-    // TODO: refactor this method
     private HttpChunk convertToHttpChunk(MLTaskResponse response) throws IOException {
         String memoryId = "";
         String parentInteractionId = "";
         String content = "";
         boolean isLast = false;
 
+        // TODO: refactor to handle other types of agents
         // Extract values from multiple tensors
         try {
             ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
