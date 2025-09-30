@@ -270,7 +270,11 @@ public class MemoryOperationsService {
             history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getOldMemory()));
         }
         if (memoryResult.getMemory() != null) {
-            history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));
+            if (memoryResult.getEvent() == MemoryEvent.DELETE) {
+                history.put(MEMORY_BEFORE_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));
+            } else {
+                history.put(MEMORY_AFTER_FIELD, Map.of(MEMORY_FIELD, memoryResult.getMemory()));
+            }
         }
         history.put(CREATED_TIME_FIELD, Instant.now().toEpochMilli());
         if (strategyNamespace != null && strategyNamespace.size() > 0) {
