@@ -413,6 +413,82 @@ public class SearchIndexToolTests {
 
     @Test
     @SneakyThrows
+    public void testRunWithOutputParserForModelTensorOutput() {
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mockedSearchIndexTool.setOutputParser(output -> "parsed_output");
+
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "true");
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        Object result = future.join();
+        assertEquals("parsed_output", result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithOutputParserForStringResponse() {
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mockedSearchIndexTool.setOutputParser(output -> "parsed_string_output");
+
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "false");
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        Object result = future.join();
+        assertEquals("parsed_string_output", result);
+    }
+
+    @Test
+    public void testFactoryCreateWithProcessorEnhancement() {
+        SearchIndexTool.Factory.getInstance().init(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("processor_configs", "[{\"type\":\"test_processor\"}]");
+
+        SearchIndexTool tool = SearchIndexTool.Factory.getInstance().create(params);
+
+        assertEquals(SearchIndexTool.TYPE, tool.getType());
+        // Verify that the output parser was set (not null)
+        assertTrue(tool.getOutputParser() != null);
+    }
+
+    @Test
+    @SneakyThrows
     public void testRun_withMatchQuery_triggersPlainDoubleGson() {
         String input = "{\"index\":\"test-index\",\"query\":{}}";
         Map<String, String> params = Map.of("input", input);

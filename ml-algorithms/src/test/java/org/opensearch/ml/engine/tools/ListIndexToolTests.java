@@ -132,6 +132,33 @@ public class ListIndexToolTests {
         verifyResult(tool, createParameters(null, null, null, null));
     }
 
+    @Test
+    public void test_run_with_output_parser() {
+        mockUp();
+        Map<String, Object> params = new HashMap<>();
+        params.put("output_processors", Arrays.asList(Map.of("type", "regex_replace", "pattern", "index-1", "replacement", "test-index")));
+        Tool tool = ListIndexTool.Factory.getInstance().create(params);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        tool.run(createParameters("[\"index-1\"]", "true", "10", "true"), listener);
+        verify(listener).onResponse(captor.capture());
+        assert captor.getValue().contains("test-index");
+        assert !captor.getValue().contains("index-1");
+    }
+
+    @Test
+    public void test_run_without_output_parser() {
+        mockUp();
+        Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        tool.run(createParameters("[\"index-1\"]", "true", "10", "true"), listener);
+        verify(listener).onResponse(captor.capture());
+        assert captor.getValue().contains("index-1");
+    }
+
     private Map<String, String> createParameters(String indices, String local, String pageSize, String includeUnloadedSegments) {
         Map<String, String> parameters = new HashMap<>();
         if (indices != null) {

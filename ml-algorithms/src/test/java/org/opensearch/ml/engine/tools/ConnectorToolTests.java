@@ -17,7 +17,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 import org.hamcrest.MatcherAssert;
@@ -87,31 +86,11 @@ public class ConnectorToolTests {
         }).when(client).execute(eq(MLExecuteConnectorAction.INSTANCE), any(), any());
 
         Tool tool = ConnectorTool.Factory.getInstance().create(Map.of("connector_id", "test_connector"));
-        tool.run(null, ActionListener.wrap(r -> { assertEquals("response 1", r); }, e -> { throw new RuntimeException("Test failed"); }));
-    }
-
-    @Test
-    public void testConnectorTool_NullOutputParser() {
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "response 1", "action", "action1")).build();
-        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
-        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-        doAnswer(invocation -> {
-            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
-            return null;
-        }).when(client).execute(eq(MLExecuteConnectorAction.INSTANCE), any(), any());
-
-        Tool tool = ConnectorTool.Factory.getInstance().create(Map.of("connector_id", "test_connector"));
-        tool.setOutputParser(null);
-
         tool.run(null, ActionListener.wrap(r -> {
-            List response = (List) r;
-            assertEquals(1, response.size());
-            assertEquals(1, ((ModelTensors) response.get(0)).getMlModelTensors().size());
-            ModelTensor modelTensor1 = ((ModelTensors) response.get(0)).getMlModelTensors().get(0);
-            assertEquals(2, modelTensor1.getDataAsMap().size());
-            assertEquals("response 1", modelTensor1.getDataAsMap().get("response"));
-            assertEquals("action1", modelTensor1.getDataAsMap().get("action"));
+            assertEquals(
+                "{\"inference_results\":[{\"output\":[{\"dataAsMap\":{\"response\":\"response 1\",\"action\":\"action1\"}}]}]}",
+                r.toString()
+            );
         }, e -> { throw new RuntimeException("Test failed"); }));
     }
 

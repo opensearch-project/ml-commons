@@ -324,7 +324,7 @@ public class AgentUtils {
             dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
         }
         if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
-            String llmReasoningResponse = (String) dataAsMap.get(RESPONSE_FIELD);
+            String llmReasoningResponse = StringUtils.toJson(dataAsMap.get(RESPONSE_FIELD));
             String thoughtResponse = null;
             try {
                 thoughtResponse = extractModelResponseJson(llmReasoningResponse, llmResponsePatterns);
