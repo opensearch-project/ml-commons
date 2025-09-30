@@ -224,7 +224,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -297,7 +297,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("question", "test question");
         params.put("memory_id", "test_memory_id");
         params.put("parent_interaction_id", "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -368,7 +368,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("parent_interaction_id", "test_parent_interaction_id");
         params.put("message_history_limit", "5");
         params.put("executor_message_history_limit", "3");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         verify(conversationIndexMemory).getMessages(any(), eq(5));
 
@@ -753,7 +753,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             params.put("memory_id", "test_memory_id");
             params.put("parent_interaction_id", "test_parent_interaction_id");
             params.put("task_id", taskId);
-            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, null);
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
             Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
             assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));

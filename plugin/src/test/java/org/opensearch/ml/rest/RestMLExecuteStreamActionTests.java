@@ -108,6 +108,15 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testPrepareRequestWhenStreamEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+
+        RestRequest request = getExecuteAgentStreamRestRequest();
+        assertNotNull(restAction.prepareRequest(request, client));
+    }
+
+    @Test
     public void testPrepareRequestWhenStreamDisabled() throws IOException {
         when(mlFeatureEnabledSetting.isStreamEnabled()).thenReturn(false);
         RestRequest request = getExecuteAgentStreamRestRequest();
@@ -149,11 +158,11 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertEquals("true", inputDataSet.getParameters().get("stream"));
     }
 
+    @Test
     public void testGetRequestAgentFrameworkDisabled() {
         RestRequest request = getExecuteAgentStreamRestRequest();
 
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restAction.handleRequest(request, channel, client));
     }
-
 }

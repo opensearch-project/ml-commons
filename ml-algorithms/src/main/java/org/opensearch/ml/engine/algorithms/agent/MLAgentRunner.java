@@ -17,7 +17,17 @@ import org.opensearch.transport.TransportChannel;
 public interface MLAgentRunner {
 
     /**
-     * Function interface to execute agent.
+     * Function interface to execute agent (non-streaming)
+     * @param mlAgent
+     * @param params
+     * @param listener
+     */
+    default void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+        run(mlAgent, params, listener, null);
+    }
+
+    /**
+     * Function interface to execute agent (streaming)
      * @param mlAgent
      * @param params
      * @param listener

@@ -769,7 +769,7 @@ public class MLChatAgentRunnerTest {
         MLAgent mlAgent = createMLAgentWithScratchpadTools();
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id_for_scratchpad_test");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
 
         // Also verify the final response to the user
         verify(agentActionListener).onResponse(objectCaptor.capture());

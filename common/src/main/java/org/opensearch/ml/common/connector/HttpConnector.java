@@ -57,6 +57,7 @@ public class HttpConnector extends AbstractConnector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
+    // TODO: move the AgentUtils class from algorithm module to common module
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
 
     // TODO: add RequestConfig like request time out,
