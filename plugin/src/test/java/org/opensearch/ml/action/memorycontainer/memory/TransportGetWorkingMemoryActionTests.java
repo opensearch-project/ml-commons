@@ -12,15 +12,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -72,7 +69,8 @@ public class TransportGetWorkingMemoryActionTests extends OpenSearchTestCase {
 
         // Setup thread context
         when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.builder().build()));
+        when(threadPool.getThreadContext())
+            .thenReturn(new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.builder().build()));
 
         action = new TransportGetWorkingMemoryAction(
             transportService,
@@ -124,14 +122,16 @@ public class TransportGetWorkingMemoryActionTests extends OpenSearchTestCase {
         }).when(memoryContainerHelper).getMemoryContainer(any(), any());
 
         // Mock get operation with valid source
-        BytesReference source = BytesReference.bytes(
-            XContentFactory.jsonBuilder()
-                .startObject()
-                .field("memory_container_id", containerId)
-                .field("memory_type", "CONVERSATIONAL")
-                .field("messages", java.util.Collections.emptyList())
-                .endObject()
-        );
+        BytesReference source = BytesReference
+            .bytes(
+                XContentFactory
+                    .jsonBuilder()
+                    .startObject()
+                    .field("memory_container_id", containerId)
+                    .field("memory_type", "CONVERSATIONAL")
+                    .field("messages", java.util.Collections.emptyList())
+                    .endObject()
+            );
 
         GetResult getResult = new GetResult(indexName, memoryId, 1L, 1L, 1L, true, source, null, null);
         GetResponse getResponse = new GetResponse(getResult);
