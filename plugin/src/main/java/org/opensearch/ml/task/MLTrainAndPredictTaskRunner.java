@@ -89,16 +89,6 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
     }
 
-    @Override
-    protected TransportResponseHandler<MLTaskResponse> getResponseStreamHandler(MLTrainingTaskRequest request) {
-        throw new UnsupportedOperationException("Streaming is not supported for train and predict task.");
-    }
-
-    @Override
-    protected boolean isStreamingRequest(MLTrainingTaskRequest request) {
-        return false;
-    }
-
     /**
      * Start prediction task
      * @param request MLPredictionTaskRequest

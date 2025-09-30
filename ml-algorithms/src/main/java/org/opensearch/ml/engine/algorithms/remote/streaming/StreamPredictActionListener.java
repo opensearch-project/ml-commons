@@ -32,10 +32,7 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
     private final String parentInteractionId;
 
     public StreamPredictActionListener(TransportChannel channel) {
-        this.channel = channel;
-        this.agentListener = null;
-        this.memoryId = null;
-        this.parentInteractionId = null;
+        this(channel, null, null, null);
     }
 
     public StreamPredictActionListener(
@@ -105,7 +102,7 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
         }
 
         // Only add metadata for agent streaming
-        if (memoryId == null && parentInteractionId == null) {
+        if (agentListener == null) {
             return response;
         }
 

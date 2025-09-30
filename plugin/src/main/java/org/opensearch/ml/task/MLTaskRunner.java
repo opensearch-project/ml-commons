@@ -142,9 +142,13 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
 
     protected abstract TransportResponseHandler<Response> getResponseHandler(ActionListener<Response> listener);
 
-    protected abstract TransportResponseHandler<Response> getResponseStreamHandler(Request request);
+    protected TransportResponseHandler<Response> getResponseStreamHandler(Request request) {
+        throw new UnsupportedOperationException("Streaming is not supported.");
+    }
 
-    protected abstract boolean isStreamingRequest(Request request);
+    protected boolean isStreamingRequest(Request request) {
+        return false;
+    }
 
     protected abstract void executeTask(Request request, ActionListener<Response> listener);
 

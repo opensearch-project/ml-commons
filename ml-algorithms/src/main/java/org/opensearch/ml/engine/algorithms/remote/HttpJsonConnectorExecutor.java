@@ -183,7 +183,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
                 break;
             default:
-                throw new MLException(String.format("Unsupported llm interface: %s", llmInterface));
+                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
     }
 }
