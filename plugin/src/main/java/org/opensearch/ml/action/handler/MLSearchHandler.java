@@ -25,12 +25,15 @@ import org.opensearch.common.Nullable;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
@@ -42,7 +45,6 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -53,6 +55,7 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 
 import lombok.extern.log4j.Log4j2;
@@ -146,15 +149,17 @@ public class MLSearchHandler {
                 );
             boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
-            if (user == null || !modelAccessControlHelper.modelAccessControlEnabled() || !hasModelGroupIndex) {
-                // Superuser / feature disabled / no model-group index → no gating
-                SearchDataObjectRequest sreq = SearchDataObjectRequest
+            if (modelAccessControlHelper.skipModelAccessControl(user) || !hasModelGroupIndex) {
+                // user is null / access control disabled / no model-group index → no gating
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()
                     .indices(request.indices())
                     .searchSourceBuilder(request.source())
                     .tenantId(tenantId)
                     .build();
-                sdkClient.searchDataObjectAsync(sreq).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
                 return;
             }
 
@@ -181,20 +186,6 @@ public class MLSearchHandler {
             }
 
             // Legacy backend-roles: discover allowed model-group IDs, then gate models (IDs or missing)
-            if (modelAccessControlHelper.isAdmin(user)) {
-                // user with all access or feature is disabled → no gating
-                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                    .builder()
-                    .indices(request.indices())
-                    .searchSourceBuilder(request.source())
-                    .tenantId(tenantId)
-                    .build();
-                sdkClient
-                    .searchDataObjectAsync(searchDataObjectRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
-                return;
-            }
-
             SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
             SearchRequest modelGroupSearchRequest = new SearchRequest();
             sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
@@ -211,10 +202,10 @@ public class MLSearchHandler {
                     List<String> modelGroupIds = new ArrayList<>();
                     Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
 
-                    request.source().query(rewriteQueryBuilderLegacy(request.source().query(), modelGroupIds));
+                    request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
                 } else {
                     log.debug("No model group found");
-                    request.source().query(rewriteQueryBuilderLegacy(request.source().query(), null));
+                    request.source().query(rewriteQueryBuilder(request.source().query(), null));
                 }
                 SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                     .builder()
@@ -251,43 +242,54 @@ public class MLSearchHandler {
     @VisibleForTesting
     static QueryBuilder rewriteQueryBuilderRSC(QueryBuilder existing, @Nullable Collection<String> modelGroupIds) {
         // RSC: empty => DENY-ALL; non-empty => (ids OR missing)
-        return rewriteModelGroupGate(existing, modelGroupIds, /*denyAllIfEmpty*/ true);
-    }
+        final QueryBuilder gate;
 
-    /**
-     * Gate model search by model-groups; legacy backend-roles path
-     */
-    @VisibleForTesting
-    static QueryBuilder rewriteQueryBuilderLegacy(QueryBuilder existing, @Nullable Collection<String> modelGroupIds) {
-        // Legacy: empty => MISSING-ONLY; non-empty => (ids OR missing)
-        return rewriteModelGroupGate(existing, modelGroupIds, /*denyAllIfEmpty*/ false);
-    }
-
-    private static QueryBuilder rewriteModelGroupGate(QueryBuilder existing, @Nullable Collection<String> ids, boolean denyAllIfEmpty) {
-        QueryBuilder gate;
-
-        if (ids == null || ids.isEmpty()) {
-            // TODO: Question: Can there be models without model groups?
-            gate = denyAllIfEmpty
-                ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery())                     // DENY-ALL - from RSC path
-                : QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.MODEL_GROUP_ID_FIELD)); // MISSING-ONLY
+        if (modelGroupIds == null || modelGroupIds.isEmpty()) {
+            // RSC empty => DENY-ALL; Legacy empty => MISSING-ONLY
+            // DENY-ALL
+            gate = QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()); // MISSING-ONLY
         } else {
-            // Always (ids OR missing) when IDs are present
+            // Non-empty IDs => allow (ids OR missing)
             gate = QueryBuilders
                 .boolQuery()
-                .should(QueryBuilders.termsQuery(MLModel.MODEL_GROUP_ID_FIELD, ids))
+                .should(QueryBuilders.termsQuery(MLModel.MODEL_GROUP_ID_FIELD, modelGroupIds))
                 .should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.MODEL_GROUP_ID_FIELD)))
                 .minimumShouldMatch(1);
         }
 
         if (existing == null) {
-            // ensure a bool wrapper so 'gate' acts as a filter
-            return QueryBuilders.boolQuery().filter(null);
+            // gate becomes the top-level query; ensure bool wrapper when not already
+            return (gate != null) ? gate : QueryBuilders.boolQuery().filter(null);
         } else if (existing instanceof BoolQueryBuilder) {
             ((BoolQueryBuilder) existing).filter(gate);
             return existing;
         } else {
             return QueryBuilders.boolQuery().must(existing).filter(gate);
+        }
+    }
+
+    @VisibleForTesting
+    static QueryBuilder rewriteQueryBuilder(QueryBuilder queryBuilder, List<String> modelGroupIds) {
+        ExistsQueryBuilder existsQueryBuilder = new ExistsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD);
+        BoolQueryBuilder modelGroupIdMustNotExistBoolQuery = new BoolQueryBuilder();
+        modelGroupIdMustNotExistBoolQuery.mustNot(existsQueryBuilder);
+
+        BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
+        if (!CollectionUtils.isEmpty(modelGroupIds)) {
+            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD, modelGroupIds);
+            accessControlledBoolQuery.should(modelGroupIdTermsQuery);
+        }
+        accessControlledBoolQuery.should(modelGroupIdMustNotExistBoolQuery);
+        if (queryBuilder == null) {
+            return accessControlledBoolQuery;
+        } else if (queryBuilder instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) queryBuilder).must(accessControlledBoolQuery);
+            return queryBuilder;
+        } else {
+            BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+            boolQueryBuilder.must(queryBuilder);
+            boolQueryBuilder.must(modelGroupIdMustNotExistBoolQuery);
+            return boolQueryBuilder;
         }
     }
 

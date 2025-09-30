@@ -55,8 +55,7 @@ public class MLSearchHandlerTests extends OpenSearchTestCase {
             + "    \"boost\" : 1.0\n"
             + "  }\n"
             + "}";
-        final QueryBuilder queryBuilder = MLSearchHandler
-            .rewriteQueryBuilderLegacy(new QueryStringQueryBuilder(""), List.of("group1", "group2"));
+        final QueryBuilder queryBuilder = MLSearchHandler.rewriteQueryBuilder(new QueryStringQueryBuilder(""), List.of("group1", "group2"));
         final String queryString = queryBuilder.toString();
         Assert.assertEquals(expectedQueryString, queryString);
     }
@@ -93,7 +92,7 @@ public class MLSearchHandlerTests extends OpenSearchTestCase {
             + "    \"boost\" : 1.0\n"
             + "  }\n"
             + "}";
-        final QueryBuilder queryBuilder = MLSearchHandler.rewriteQueryBuilderLegacy(null, List.of("group1", "group2"));
+        final QueryBuilder queryBuilder = MLSearchHandler.rewriteQueryBuilder(null, List.of("group1", "group2"));
         final String queryString = queryBuilder.toString();
         Assert.assertEquals(expectedQueryString, queryString);
     }
