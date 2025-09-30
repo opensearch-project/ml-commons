@@ -5,11 +5,15 @@
 
 package org.opensearch.ml.utils;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 
 import java.io.IOException;
 import java.util.List;
@@ -17,7 +21,10 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.query.WrapperQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -142,22 +149,49 @@ public class MemorySearchQueryBuilderTests {
             .embeddingModelId("sparse-model-789")
             .build();
 
-        QueryBuilder builder = MemorySearchQueryBuilder
-            .buildFactSearchQuery(
-                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
-                fact,
-                Map.of(SESSION_ID_FIELD, sessionId),
-                null, // ownerId
-                config
-            );
-        String jsonString = builder.toString();
-        jsonString = jsonString.replace("\n", "");
-        jsonString = jsonString.replace(" ", "");
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type("semantic")
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
 
-        // Verify filters
-        assertTrue(jsonString.contains("{\"term\":{\"namespace.session_id\":{\"value\":\"session-456\",\"boost\":1.0}}}"));
-        assertTrue(jsonString.contains("{\"term\":{\"namespace_size\":{\"value\":1,\"boost\":1.0}}}"));
-        assertTrue(jsonString.contains("{\"term\":{\"memory_type\":{\"value\":\"SEMANTIC\",\"boost\":1.0}}}"));
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, config);
+
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        // Verify filter terms
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_FIELD + "." + SESSION_ID_FIELD) && sessionId.equals(term.value()))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_SIZE_FIELD) && term.value().equals(1))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD) && strategy.getId().equals(term.value()))
+        );
+
+        assertEquals(1, boolQuery.must().size());
+        assertTrue(boolQuery.must().get(0) instanceof WrapperQueryBuilder);
+        WrapperQueryBuilder wrapper = (WrapperQueryBuilder) boolQuery.must().get(0);
+        assertTrue(new String(wrapper.source()).contains("\"neural_sparse\""));
     }
 
     @Test
@@ -165,12 +199,19 @@ public class MemorySearchQueryBuilderTests {
         String fact = "Has a PhD in Computer Science";
         String sessionId = "session-999";
 
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type("semantic")
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
+
         QueryBuilder builder = MemorySearchQueryBuilder
             .buildFactSearchQuery(
-                MemoryStrategy.builder().type("semantic").namespace(List.of(SESSION_ID_FIELD)).build(),
+                strategy,
                 fact,
                 Map.of(SESSION_ID_FIELD, sessionId),
-                null, // ownerId
+                null,
                 MemoryConfiguration
                     .builder()
                     .llmId("llm_id1")
@@ -179,14 +220,39 @@ public class MemorySearchQueryBuilderTests {
                     .dimension(512)
                     .build()
             );
-        String jsonString = builder.toString();
-        jsonString = jsonString.replace("\n", "");
-        jsonString = jsonString.replace(" ", "");
 
-        // Verify filters
-        assertTrue(jsonString.contains("{\"term\":{\"namespace.session_id\":{\"value\":\"session-999\",\"boost\":1.0}}}"));
-        assertTrue(jsonString.contains("{\"term\":{\"namespace_size\":{\"value\":1,\"boost\":1.0}}}"));
-        assertTrue(jsonString.contains("{\"term\":{\"memory_type\":{\"value\":\"SEMANTIC\",\"boost\":1.0}}}"));
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_FIELD + "." + SESSION_ID_FIELD) && sessionId.equals(term.value()))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_SIZE_FIELD) && term.value().equals(1))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD) && strategy.getId().equals(term.value()))
+        );
+
+        assertEquals(1, boolQuery.must().size());
+        assertTrue(boolQuery.must().get(0) instanceof WrapperQueryBuilder);
+        WrapperQueryBuilder wrapper = (WrapperQueryBuilder) boolQuery.must().get(0);
+        assertTrue(new String(wrapper.source()).contains("\"neural\""));
     }
 
     @Test

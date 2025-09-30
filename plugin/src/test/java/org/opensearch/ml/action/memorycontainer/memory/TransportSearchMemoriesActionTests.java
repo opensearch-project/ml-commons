@@ -811,4 +811,466 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Verify search was called
         verify(memoryContainerHelper, times(1)).searchData(any(), any(SearchDataObjectRequest.class), any());
     }
+
+    @Test
+    public void testDoExecute_FeatureDisabled() {
+        // Arrange
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) capturedError).status());
+        assertTrue(capturedError.getMessage().contains("Agentic Memory APIs are not enabled"));
+
+        // Verify no container access was attempted
+        verify(memoryContainerHelper, never()).getMemoryContainer(any(), any(), any());
+    }
+
+    @Test
+    public void testDoExecute_NonAdminUserAppliesOwnerFilter() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock non-admin user
+        org.opensearch.commons.authuser.User nonAdminUser = new org.opensearch.commons.authuser.User(
+            "regular-user",
+            java.util.Collections.emptyList(),
+            java.util.Collections.emptyList(),
+            java.util.Collections.emptyMap()
+        );
+        when(memoryContainerHelper.isAdminUser(nonAdminUser)).thenReturn(false);
+
+        // Mock search response
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(mockSearchResponse.getHits()).thenReturn(searchHits);
+        when(mockSearchResponse.isTimedOut()).thenReturn(false);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert - verify addOwnerIdFilter was called for non-admin user
+        verify(memoryContainerHelper, times(1)).addOwnerIdFilter(isNull(), any(SearchSourceBuilder.class));
+        verify(actionListener, times(1)).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_WithSpecificMemoryType() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .memoryType("working")  // Specify working memory type
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock search response
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(mockSearchResponse.getHits()).thenReturn(searchHits);
+        when(mockSearchResponse.isTimedOut()).thenReturn(false);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<SearchDataObjectRequest> requestCaptor = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        verify(memoryContainerHelper, times(1)).searchData(any(), requestCaptor.capture(), any());
+
+        SearchDataObjectRequest capturedRequest = requestCaptor.getValue();
+        assertNotNull(capturedRequest);
+        // Verify the request was created with the specific memory type index
+        assertNotNull(capturedRequest.indices());
+    }
+
+    @Test
+    public void testDoExecute_ExceptionDuringSearchExecution() {
+        // Arrange
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation to throw an exception
+        doAnswer(invocation -> { throw new RuntimeException("Unexpected error during search"); })
+            .when(memoryContainerHelper)
+            .searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+        verify(actionListener, never()).onResponse(any());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof org.opensearch.OpenSearchException);
+        assertTrue(capturedError.getMessage().contains("Failed to build search request"));
+    }
+
+    @Test
+    public void testDoExecute_AdminUserDoesNotApplyOwnerFilter() {
+        // Arrange - test that admin users do NOT get owner ID filter applied
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock admin user
+        org.opensearch.commons.authuser.User adminUser = new org.opensearch.commons.authuser.User(
+            "admin-user",
+            java.util.Collections.emptyList(),
+            java.util.Collections.emptyList(),
+            java.util.Collections.emptyMap()
+        );
+        when(memoryContainerHelper.isAdminUser(isNull())).thenReturn(true);
+
+        // Mock search response
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(mockSearchResponse.getHits()).thenReturn(searchHits);
+        when(mockSearchResponse.isTimedOut()).thenReturn(false);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert - verify addOwnerIdFilter was NOT called for admin user
+        verify(memoryContainerHelper, never()).addOwnerIdFilter(any(), any(SearchSourceBuilder.class));
+        verify(actionListener, times(1)).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_WithTenantId() {
+        // Arrange - test search with explicit tenant ID
+        String memoryContainerId = "container-123";
+        String tenantId = "tenant-456";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(tenantId).build();
+
+        // Mock search response
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(mockSearchResponse.getHits()).thenReturn(searchHits);
+        when(mockSearchResponse.isTimedOut()).thenReturn(false);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), eq(tenantId), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert
+        verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), eq(tenantId), any());
+        ArgumentCaptor<SearchDataObjectRequest> requestCaptor = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        verify(memoryContainerHelper, times(1)).searchData(any(), requestCaptor.capture(), any());
+
+        SearchDataObjectRequest capturedRequest = requestCaptor.getValue();
+        assertEquals(tenantId, capturedRequest.tenantId());
+        verify(actionListener, times(1)).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_SearchHitWithInvalidMemoryType() {
+        // Test the catch block for invalid memory type parsing (lines 200-204)
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Create search hit with invalid memory type to test the catch block (though it just logs warning)
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("memory", "test content");
+        sourceMap.put("memory_type", "INVALID_TYPE");  // Invalid memory type to test catch block
+
+        try {
+            XContentBuilder content = XContentFactory.jsonBuilder();
+            content.map(sourceMap);
+            SearchHit hit = new SearchHit(0, "mem-1", null, null);
+            hit.sourceRef(BytesReference.bytes(content));
+            hit.score(0.9f);
+
+            SearchHit[] hits = new SearchHit[] { hit };
+            SearchHits searchHits = new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 0.9f);
+            when(mockSearchResponse.getHits()).thenReturn(searchHits);
+        } catch (Exception e) {
+            fail("Failed to create test data: " + e.getMessage());
+        }
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert - should still call onResponse even with invalid memory type (just logs warning)
+        verify(actionListener, times(1)).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_BuildSearchRequestException() {
+        // Test the catch block in searchMemories method (lines 157-160)
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock memoryConfig.getIndexName() to throw exception
+        MemoryConfiguration badConfig = mock(MemoryConfiguration.class);
+        when(badConfig.getIndexName(any())).thenThrow(new RuntimeException("Index name error"));
+        MLMemoryContainer badContainer = MLMemoryContainer
+            .builder()
+            .name("bad-container")
+            .configuration(badConfig)
+            .build();
+
+        // Mock getMemoryContainer to return bad container
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(badContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(badContainer))).thenReturn(true);
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert - should call onFailure due to exception building search request
+        ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(errorCaptor.capture());
+
+        Exception capturedError = errorCaptor.getValue();
+        assertTrue(capturedError instanceof org.opensearch.OpenSearchException);
+        assertTrue(capturedError.getMessage().contains("Failed to build search request"));
+    }
+
+    @Test
+    public void testDoExecute_WithNonAdminUserAppliesOwnerFilter() {
+        // Test that non-admin users get owner filter applied (line 131-133)
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock isAdminUser to return false
+        when(memoryContainerHelper.isAdminUser(isNull())).thenReturn(false);
+
+        // Mock search response
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(mockSearchResponse.getHits()).thenReturn(searchHits);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert - verify addOwnerIdFilter was called for non-admin user
+        verify(memoryContainerHelper, times(1)).addOwnerIdFilter(isNull(), any(SearchSourceBuilder.class));
+        verify(actionListener, times(1)).onResponse(any());
+    }
+
+    @Test
+    public void testDoExecute_WithAdminUserSkipsOwnerFilter() {
+        // Test that admin users do NOT get owner filter applied (line 131 - false branch)
+        String memoryContainerId = "container-123";
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test"));
+        MLSearchMemoriesInput input = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
+
+        // Mock admin user
+        when(memoryContainerHelper.isAdminUser(isNull())).thenReturn(true);
+
+        // Mock search response
+        SearchResponse mockSearchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(mockSearchResponse.getHits()).thenReturn(searchHits);
+
+        // Mock getMemoryContainer
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any(), any());
+
+        // Mock checkMemoryContainerAccess
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(mockContainer))).thenReturn(true);
+
+        // Mock search operation
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockSearchResponse);
+            return null;
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+
+        // Act
+        transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
+
+        // Assert - verify addOwnerIdFilter was NOT called for admin user
+        verify(memoryContainerHelper, never()).addOwnerIdFilter(any(), any(SearchSourceBuilder.class));
+        verify(actionListener, times(1)).onResponse(any());
+    }
 }
