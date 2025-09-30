@@ -79,7 +79,8 @@ public class MLModelTool implements WithModelTool {
 
         outputParser = o -> {
             try {
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
+                ModelTensorOutput output = (ModelTensorOutput) o;
+                List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
                 Map<String, ?> dataAsMap = mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap();
                 // Return the response field if it exists, otherwise return the whole response as json string.
                 if (dataAsMap.containsKey(responseField)) {
@@ -111,8 +112,7 @@ public class MLModelTool implements WithModelTool {
                 .build();
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
                 ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
-                modelTensorOutput.getMlModelOutputs();
-                listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+                listener.onResponse((T) outputParser.parse(modelTensorOutput));
             }, e -> {
                 log.error("Failed to run model {}", modelId, e);
                 listener.onFailure(e);

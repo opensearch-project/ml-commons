@@ -181,6 +181,66 @@ public class StringUtils {
         return result;
     }
 
+    /**
+     * Parses a JSON string and wraps the parsed content under a specified key.
+     *
+     * <p>This method takes a JSON string containing either a JSON object or JSON array,
+     * parses it, and returns a new Map with the parsed content wrapped under the provided
+     * wrapping key. This is useful for standardizing response formats or adding a consistent
+     * wrapper structure around varying JSON content types.</p>
+     *
+     * <p>Supported JSON input types:</p>
+     * <ul>
+     *   <li><strong>JSON Object</strong>: Parsed as a Map and wrapped under the key</li>
+     *   <li><strong>JSON Array</strong>: Parsed as a List and wrapped under the key</li>
+     * </ul>
+     *
+     * <p>Examples:</p>
+     * <pre>
+     *   // JSON Object input
+     *   fromJsonWithWrappingKey("{\"name\": \"John\", \"age\": 30}", "user")
+     *   // Returns: {"user": {"name": "John", "age": 30}}
+     *
+     *   // JSON Array input
+     *   fromJsonWithWrappingKey("[\"apple\", \"banana\", \"cherry\"]", "fruits")
+     *   // Returns: {"fruits": ["apple", "banana", "cherry"]}
+     *
+     *   // Empty object
+     *   fromJsonWithWrappingKey("{}", "data")
+     *   // Returns: {"data": {}}
+     *
+     *   // Empty array
+     *   fromJsonWithWrappingKey("[]", "items")
+     *   // Returns: {"items": []}
+     * </pre>
+     *
+     * @param jsonStr the JSON string to parse. Must be a valid JSON object or array.
+     *                Cannot be null or contain primitive JSON values (string, number, boolean, null).
+     * @param wrappingKey the key under which to wrap the parsed JSON content.
+     *                    This becomes the single key in the returned Map.
+     * @return a new Map containing the parsed JSON content wrapped under the specified key.
+     *         The Map will always contain exactly one entry with the wrapping key.
+     * @throws IllegalArgumentException if the JSON string contains unsupported types
+     *                                  (primitive values like strings, numbers, booleans, or null)
+     * @throws com.google.gson.JsonSyntaxException if the input string is not valid JSON
+     *
+     * @see #fromJson(String, String) for parsing with a default key for arrays only
+     */
+    public static Map<String, Object> fromJsonWithWrappingKey(String jsonStr, String wrappingKey) {
+        Map<String, Object> result = new HashMap<>();
+        JsonElement jsonElement = JsonParser.parseString(jsonStr);
+        if (jsonElement.isJsonObject()) {
+            Map parsedMap = gson.fromJson(jsonElement, Map.class);
+            result.put(wrappingKey, parsedMap);
+        } else if (jsonElement.isJsonArray()) {
+            List<Object> list = gson.fromJson(jsonElement, List.class);
+            result.put(wrappingKey, list);
+        } else {
+            throw new IllegalArgumentException("Unsupported response type");
+        }
+        return result;
+    }
+
     public static Map<String, String> filteredParameterMap(Map<String, ?> parameterObjs, Set<String> allowedList) {
         Map<String, String> parameters = new HashMap<>();
         Set<String> filteredKeys = new HashSet<>(parameterObjs.keySet());

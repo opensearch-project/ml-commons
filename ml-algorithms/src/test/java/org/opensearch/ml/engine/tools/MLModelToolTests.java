@@ -181,14 +181,14 @@ public class MLModelToolTests {
         ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("key1", "value1", "key2", "value2")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-        Object result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        Object result = outputParser.parse(mlModelTensorOutput);
         assertEquals(expectedJson, result);
 
         // Create a mock ModelTensors with response string
         modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"key1\":\"value1\",\"key2\":\"value2\"}")).build();
         modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-        result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        result = outputParser.parse(mlModelTensorOutput);
         assertEquals(expectedJson, result);
     }
 
