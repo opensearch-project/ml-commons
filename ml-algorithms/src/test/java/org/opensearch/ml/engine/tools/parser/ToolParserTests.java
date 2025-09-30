@@ -94,4 +94,42 @@ public class ToolParserTests {
         Object result = parser.parse("input");
         assertEquals("input", result);
     }
+
+    @Test
+    public void testCreateFromToolParamsWithNullParamsAndNullBaseParser() {
+        Parser parser = ToolParser.createFromToolParams(null, null);
+
+        assertNotNull(parser);
+        Object result = parser.parse("input");
+        assertEquals("input", result);
+    }
+
+    @Test
+    public void testCreateFromToolParamsWithNullParamsAndBaseParser() {
+        Parser baseParser = input -> "base_" + input;
+        Parser parser = ToolParser.createFromToolParams(null, baseParser);
+
+        assertNotNull(parser);
+        Object result = parser.parse("input");
+        assertEquals("base_input", result);
+    }
+
+    @Test
+    public void testCreateFromToolParamsParseNullInput() {
+        Parser parser = ToolParser.createFromToolParams(Collections.emptyMap());
+
+        assertNotNull(parser);
+        Object result = parser.parse(null);
+        assertEquals(null, result);
+    }
+
+    @Test
+    public void testCreateFromToolParamsWithBaseParserParseNullInput() {
+        Parser baseParser = input -> input == null ? "null_handled" : "base_" + input;
+        Parser parser = ToolParser.createFromToolParams(Collections.emptyMap(), baseParser);
+
+        assertNotNull(parser);
+        Object result = parser.parse(null);
+        assertEquals("null_handled", result);
+    }
 }
