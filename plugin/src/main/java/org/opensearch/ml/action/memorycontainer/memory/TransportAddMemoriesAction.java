@@ -13,7 +13,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.AGENTIC_MEMORY_THREAD_POOL;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -217,7 +217,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 actionListener.onResponse(response);
 
                 if (infer) {
-                    threadPool.executor(TRAIN_THREAD_POOL).execute(() -> {
+                    threadPool.executor(AGENTIC_MEMORY_THREAD_POOL).execute(() -> {
                         try {
                             extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
                                 log.error("Failed to extract longTermMemory id from memory container", e);
