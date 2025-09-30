@@ -43,10 +43,10 @@ public class MLStatsJobProcessor extends MLJobProcessor {
     private static final Logger log = LogManager.getLogger(MLStatsJobProcessor.class);
 
     // Tag constants for agent model information
-    private static final String TAG_MODEL = "model";
-    private static final String TAG_MODEL_SERVICE_PROVIDER = "model_service_provider";
-    private static final String TAG_MODEL_DEPLOYMENT = "model_deployment";
-    private static final String TAG_MODEL_TYPE = "model_type";
+    private static final String TAG_AGENT_MODEL = "model";
+    private static final String TAG_AGENT_MODEL_SERVICE_PROVIDER = "model_service_provider";
+    private static final String TAG_AGENT_MODEL_DEPLOYMENT = "model_deployment";
+    private static final String TAG_AGENT_MODEL_TYPE = "model_type";
 
     // Model tag keys for lookup
     private static final String MODEL_TAG_MODEL = "model";
@@ -206,11 +206,23 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                         if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
                             Tags modelTags = modelTagsCache.get(agent.getLlm().getModelId());
                             if (modelTags != null) {
-                                agentTags = agentTags
-                                    .addTag(TAG_MODEL, (String) modelTags.getTagsMap().get(MODEL_TAG_MODEL))
-                                    .addTag(TAG_MODEL_SERVICE_PROVIDER, (String) modelTags.getTagsMap().get(MODEL_TAG_SERVICE_PROVIDER))
-                                    .addTag(TAG_MODEL_DEPLOYMENT, (String) modelTags.getTagsMap().get(MODEL_TAG_DEPLOYMENT))
-                                    .addTag(TAG_MODEL_TYPE, (String) modelTags.getTagsMap().get(MODEL_TAG_TYPE));
+                                Map<String, ?> tagsMap = modelTags.getTagsMap();
+
+                                if (tagsMap.containsKey(MODEL_TAG_MODEL) && tagsMap.get(MODEL_TAG_MODEL) != null) {
+                                    agentTags.addTag(TAG_AGENT_MODEL, (String) tagsMap.get(MODEL_TAG_MODEL));
+                                }
+
+                                if (tagsMap.containsKey(MODEL_TAG_SERVICE_PROVIDER) && tagsMap.get(MODEL_TAG_SERVICE_PROVIDER) != null) {
+                                    agentTags.addTag(TAG_AGENT_MODEL_SERVICE_PROVIDER, (String) tagsMap.get(MODEL_TAG_SERVICE_PROVIDER));
+                                }
+
+                                if (tagsMap.containsKey(MODEL_TAG_DEPLOYMENT) && tagsMap.get(MODEL_TAG_DEPLOYMENT) != null) {
+                                    agentTags.addTag(TAG_AGENT_MODEL_DEPLOYMENT, (String) tagsMap.get(MODEL_TAG_DEPLOYMENT));
+                                }
+
+                                if (tagsMap.containsKey(MODEL_TAG_TYPE) && tagsMap.get(MODEL_TAG_TYPE) != null) {
+                                    agentTags.addTag(TAG_AGENT_MODEL_TYPE, (String) tagsMap.get(MODEL_TAG_TYPE));
+                                }
                             }
                         }
 
