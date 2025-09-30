@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,6 +27,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.stats.otel.counters.MLAdoptionMetricsCounter;
@@ -37,6 +39,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 public class MLStatsJobProcessor extends MLJobProcessor {
 
@@ -53,6 +57,8 @@ public class MLStatsJobProcessor extends MLJobProcessor {
     private static final String MODEL_TAG_SERVICE_PROVIDER = "service_provider";
     private static final String MODEL_TAG_DEPLOYMENT = "deployment";
     private static final String MODEL_TAG_TYPE = "type";
+
+    private static final int BATCH_SIZE = 10_000;
 
     private static MLStatsJobProcessor instance;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -118,7 +124,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.CHUNK_NUMBER_FIELD));
         searchSourceBuilder.query(boolQuery);
 
-        searchSourceBuilder.size(10_000);
+        searchSourceBuilder.size(BATCH_SIZE);
         searchRequest.source(searchSourceBuilder);
 
         client.search(searchRequest, new ActionListener<SearchResponse>() {
@@ -153,6 +159,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                                         ActionListener.wrap(connector -> {
                                             Tags modelTags = model.getTags(connector);
                                             modelTagsCache.put(modelId, modelTags);
+                                            log.info("model: {}", modelTags.getTagsMap());
                                             MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.MODEL_COUNT, modelTags);
                                         }, e -> log.error("Failed to get connector for model: {}", modelId, e))
                                     );
@@ -163,6 +170,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
 
                         Tags modelTags = model.getTags();
                         modelTagsCache.put(modelId, modelTags);
+                        log.info("model: {}", modelTags.getTagsMap());
                         MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.MODEL_COUNT, modelTags);
                     } catch (Exception e) {
                         log.error("Failed to parse model from hit: {}", hit.getId(), e);
@@ -170,6 +178,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                 }
 
                 // dependent on model tags to capture rich information about agents
+
                 collectAgentMetrics();
             }
 
@@ -189,7 +198,7 @@ public class MLStatsJobProcessor extends MLJobProcessor {
 
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.size(10_000);
+        searchSourceBuilder.size(BATCH_SIZE);
         searchRequest.source(searchSourceBuilder);
 
         client.search(searchRequest, new ActionListener<SearchResponse>() {
@@ -206,29 +215,20 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                         Tags agentTags = agent.getTags();
 
                         // Add model and provider info if agent has LLM spec
-                        if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
-                            Tags modelTags = modelTagsCache.get(agent.getLlm().getModelId());
-                            if (modelTags != null) {
-                                Map<String, ?> tagsMap = modelTags.getTagsMap();
+                        Optional
+                            .of(agent)
+                            .map(MLAgent::getLlm)
+                            .map(LLMSpec::getModelId)
+                            .map(modelTagsCache::get)
+                            .map(Tags::getTagsMap)
+                            .ifPresent(tagsMap -> {
+                                addTagIfExists(tagsMap, MODEL_TAG_MODEL, TAG_AGENT_MODEL, agentTags);
+                                addTagIfExists(tagsMap, MODEL_TAG_SERVICE_PROVIDER, TAG_AGENT_MODEL_SERVICE_PROVIDER, agentTags);
+                                addTagIfExists(tagsMap, MODEL_TAG_DEPLOYMENT, TAG_AGENT_MODEL_DEPLOYMENT, agentTags);
+                                addTagIfExists(tagsMap, MODEL_TAG_TYPE, TAG_AGENT_MODEL_TYPE, agentTags);
+                            });
 
-                                if (tagsMap.containsKey(MODEL_TAG_MODEL) && tagsMap.get(MODEL_TAG_MODEL) != null) {
-                                    agentTags.addTag(TAG_AGENT_MODEL, (String) tagsMap.get(MODEL_TAG_MODEL));
-                                }
-
-                                if (tagsMap.containsKey(MODEL_TAG_SERVICE_PROVIDER) && tagsMap.get(MODEL_TAG_SERVICE_PROVIDER) != null) {
-                                    agentTags.addTag(TAG_AGENT_MODEL_SERVICE_PROVIDER, (String) tagsMap.get(MODEL_TAG_SERVICE_PROVIDER));
-                                }
-
-                                if (tagsMap.containsKey(MODEL_TAG_DEPLOYMENT) && tagsMap.get(MODEL_TAG_DEPLOYMENT) != null) {
-                                    agentTags.addTag(TAG_AGENT_MODEL_DEPLOYMENT, (String) tagsMap.get(MODEL_TAG_DEPLOYMENT));
-                                }
-
-                                if (tagsMap.containsKey(MODEL_TAG_TYPE) && tagsMap.get(MODEL_TAG_TYPE) != null) {
-                                    agentTags.addTag(TAG_AGENT_MODEL_TYPE, (String) tagsMap.get(MODEL_TAG_TYPE));
-                                }
-                            }
-                        }
-
+                        log.info("Agent: {}", agentTags.getTagsMap());
                         MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.AGENT_COUNT, agentTags);
                     } catch (Exception e) {
                         log.error("Failed to parse agent from hit: {}", hit.getId(), e);
@@ -241,5 +241,12 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                 log.error("Failed to fetch agents", e);
             }
         });
+    }
+
+    @VisibleForTesting
+    void addTagIfExists(Map<String, ?> sourceTagsMap, String sourceKey, String targetKey, Tags targetTags) {
+        if (sourceTagsMap.containsKey(sourceKey) && sourceTagsMap.get(sourceKey) != null) {
+            targetTags.addTag(targetKey, (String) sourceTagsMap.get(sourceKey));
+        }
     }
 }

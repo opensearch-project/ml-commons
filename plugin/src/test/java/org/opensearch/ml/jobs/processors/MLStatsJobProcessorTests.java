@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
@@ -463,5 +464,25 @@ public class MLStatsJobProcessorTests {
         SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(searchResponse.getHits()).thenReturn(hits);
         return searchResponse;
+    }
+
+    @Test
+    public void testAddTagIfExists() {
+        Tags agentTags = Tags.create();
+        Map<String, Object> sourceTagsMap = new HashMap<>();
+        sourceTagsMap.put("model", "test-model");
+        sourceTagsMap.put("service_provider", "openai");
+        sourceTagsMap.put("empty_key", null);
+
+        processor.addTagIfExists(sourceTagsMap, "model", "agent_model", agentTags);
+        processor.addTagIfExists(sourceTagsMap, "service_provider", "agent_service_provider", agentTags);
+        processor.addTagIfExists(sourceTagsMap, "nonexistent_key", "agent_nonexistent", agentTags);
+        processor.addTagIfExists(sourceTagsMap, "empty_key", "agent_empty", agentTags);
+
+        Map<String, ?> resultTags = agentTags.getTagsMap();
+        Assert.assertEquals("test-model", resultTags.get("agent_model"));
+        Assert.assertEquals("openai", resultTags.get("agent_service_provider"));
+        Assert.assertNull(resultTags.get("agent_nonexistent"));
+        Assert.assertNull(resultTags.get("agent_empty"));
     }
 }
