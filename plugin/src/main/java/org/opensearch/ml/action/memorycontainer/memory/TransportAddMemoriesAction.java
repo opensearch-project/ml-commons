@@ -131,7 +131,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     );
                 return;
             }
-
             createNewSessionIfAbsent(input, container, user, actionListener);
         }, actionListener::onFailure));
     }
@@ -143,6 +142,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
+            container.getConfiguration().getParameters().putAll(input.getParameters()); // merge user provided parameters
             List<MessageInput> messages = input.getMessages();
 
             MemoryConfiguration configuration = container.getConfiguration();
@@ -177,7 +177,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
                 }, exception -> actionListener.onFailure(exception));
 
-                memoryProcessingService.summarizeMessages(messages, summaryListener);
+                memoryProcessingService.summarizeMessages(container.getConfiguration(), messages, summaryListener);
             } else {
                 processAndIndexMemory(input, container, user, actionListener);
             }
