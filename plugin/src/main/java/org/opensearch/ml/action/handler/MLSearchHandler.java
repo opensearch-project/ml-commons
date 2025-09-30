@@ -149,21 +149,7 @@ public class MLSearchHandler {
                 );
             boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
-            if (modelAccessControlHelper.skipModelAccessControl(user) || !hasModelGroupIndex) {
-                // user is null / access control disabled / no model-group index → no gating
-                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                    .builder()
-                    .indices(request.indices())
-                    .searchSourceBuilder(request.source())
-                    .tenantId(tenantId)
-                    .build();
-                sdkClient
-                    .searchDataObjectAsync(searchDataObjectRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
-                return;
-            }
-
-            if (rsClientPresent) {
+            if (rsClientPresent && user != null && modelAccessControlHelper.modelAccessControlEnabled() && hasModelGroupIndex) {
                 // RSC fast-path: get accessible group IDs → gate models (IDs or missing)
                 ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
                 rsc.getAccessibleResourceIds(CommonValue.ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
@@ -182,6 +168,20 @@ public class MLSearchHandler {
                     log.error("RSC getAccessibleResourceIds failed", e);
                     wrappedListener.onFailure(e);
                 }));
+                return;
+            }
+
+            if (modelAccessControlHelper.skipModelAccessControl(user) || !hasModelGroupIndex) {
+                // user is null / access control disabled / no model-group index → no gating
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(request.indices())
+                    .searchSourceBuilder(request.source())
+                    .tenantId(tenantId)
+                    .build();
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
                 return;
             }
 
