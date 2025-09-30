@@ -3,38 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.remote;
+package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 
-import lombok.Getter;
-import lombok.Setter;
+public abstract class BaseStreamingHandler implements StreamingHandler {
 
-@Setter
-@Getter
-public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor {
-    private ConnectorClientConfig connectorClientConfig;
-
-    public void initialize(Connector connector) {
-        if (connector.getConnectorClientConfig() != null) {
-            connectorClientConfig = connector.getConnectorClientConfig();
-        } else {
-            connectorClientConfig = new ConnectorClientConfig();
-        }
-    }
-
-    public void sendContentResponse(String content, boolean isLast, StreamPredictActionListener<MLTaskResponse, ?> actionListener) {
+    protected void sendContentResponse(String content, boolean isLast, StreamPredictActionListener<MLTaskResponse, ?> actionListener) {
         List<ModelTensor> modelTensors = new ArrayList<>();
         Map<String, Object> dataMap = Map.of("content", content, "is_last", isLast);
 
@@ -47,7 +30,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
         actionListener.onStreamResponse(response, isLast);
     }
 
-    public void sendCompletionResponse(AtomicBoolean isStreamClosed, StreamPredictActionListener<MLTaskResponse, ?> actionListener) {
+    protected void sendCompletionResponse(AtomicBoolean isStreamClosed, StreamPredictActionListener<MLTaskResponse, ?> actionListener) {
         if (isStreamClosed.compareAndSet(false, true)) {
             sendContentResponse("", true, actionListener);
         }

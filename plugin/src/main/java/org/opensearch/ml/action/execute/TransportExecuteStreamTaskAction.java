@@ -16,7 +16,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
-import org.opensearch.ml.engine.algorithms.remote.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.task.MLExecuteTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.tasks.Task;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.remote;
+package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
