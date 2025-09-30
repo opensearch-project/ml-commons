@@ -21,6 +21,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_PREFIX_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
@@ -70,6 +71,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     @Builder.Default
     private Map<String, Map<String, Object>> indexSettings = new HashMap<>();
     @Builder.Default
+    private Map<String, Object> parameters = new HashMap<>();
+    @Builder.Default
     private boolean disableHistory = false;
     @Builder.Default
     private boolean disableSession = false;
@@ -86,6 +89,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Integer maxInferSize,
         List<MemoryStrategy> strategies,
         Map<String, Map<String, Object>> indexSettings,
+        Map<String, Object> parameters,
         boolean disableHistory,
         boolean disableSession,
         boolean useSystemIndex,
@@ -109,6 +113,10 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (indexSettings != null && !indexSettings.isEmpty()) {
             this.indexSettings.putAll(indexSettings);
         }
+        this.parameters = new HashMap<>();
+        if (parameters != null && !parameters.isEmpty()) {
+            this.parameters.putAll(parameters);
+        }
         this.disableHistory = disableHistory;
         this.disableSession = disableSession;
         this.useSystemIndex = useSystemIndex;
@@ -128,6 +136,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
         if (input.readBoolean()) {
             this.indexSettings = input.readMap(StreamInput::readString, StreamInput::readMap);
+        }
+        if (input.readBoolean()) {
+            this.parameters = input.readMap();
         }
         this.disableHistory = input.readBoolean();
         this.disableSession = input.readBoolean();
@@ -152,6 +163,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (!indexSettings.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(indexSettings, StreamOutput::writeString, StreamOutput::writeMap);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (!parameters.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(parameters);
         } else {
             out.writeBoolean(false);
         }
@@ -196,6 +213,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (!indexSettings.isEmpty()) {
             builder.field(INDEX_SETTINGS_FIELD, indexSettings);
         }
+        if (!parameters.isEmpty()) {
+            builder.field(PARAMETERS_FIELD, parameters);
+        }
         builder.field(DISABLE_HISTORY_FIELD, disableHistory);
         builder.field(DISABLE_SESSION_FIELD, disableSession);
         builder.field(USE_SYSTEM_INDEX_FIELD, useSystemIndex);
@@ -215,6 +235,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Integer maxInferSize = null;
         List<MemoryStrategy> strategies = new ArrayList<>();
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
+        Map<String, Object> parameters = new HashMap<>();
         boolean disableHistory = false;
         boolean disableSession = false;
         boolean useSystemIndex = true;
@@ -253,6 +274,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case INDEX_SETTINGS_FIELD:
                     indexSettings = parser.map(HashMap::new, p -> p.map());
                     break;
+                case PARAMETERS_FIELD:
+                    parameters = parser.map();
+                    break;
                 case DISABLE_HISTORY_FIELD:
                     disableHistory = parser.booleanValue();
                     break;
@@ -279,6 +303,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .maxInferSize(maxInferSize)
             .strategies(strategies)
             .indexSettings(indexSettings)
+            .parameters(parameters)
             .disableHistory(disableHistory)
             .disableSession(disableSession)
             .useSystemIndex(useSystemIndex)
