@@ -21,7 +21,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.agent.MLToolSpec;
-import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.engine.MLStaticMockBase;
 
 import io.modelcontextprotocol.client.McpClient;
@@ -29,10 +29,10 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 
-public class McpConnectorExecutorTest extends MLStaticMockBase {
+public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
 
     @Mock
-    private McpConnector mockConnector;
+    private McpStreamableHttpConnector mockConnector;
     @Mock
     private McpSyncClient mcpClient;
     @Mock
@@ -66,7 +66,7 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
 
         try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
-            McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
+            McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
             List<MLToolSpec> specs = exec.getMcpToolSpecs();
 
             Assert.assertEquals(1, specs.size());
@@ -88,7 +88,7 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
         when(mcpClient.initialize()).thenThrow(new RuntimeException("Error initializing"));
         try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
-            McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
+            McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
             assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
         }
@@ -96,25 +96,28 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
 
     @Test
     public void getMcpToolSpecs_throwsOnListToolsError() {
+
         when(mcpClient.initialize()).thenReturn(null);
         when(mcpClient.listTools()).thenThrow(new RuntimeException("Error listing tools"));
         try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
-            McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
+            McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
+
             assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
         }
     }
 
     @Test
     public void testUnimplementedMethods_ThrowUnsupportedOperationException() {
-        McpConnectorExecutor exec = new McpConnectorExecutor(mockConnector);
+        McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
         assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(null, null, null, null, null, null));
-        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteServiceStream(null, null, null, null, null, null));
         assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
         assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
         assertThrows(UnsupportedOperationException.class, () -> exec.getRateLimiter());
         assertThrows(UnsupportedOperationException.class, () -> exec.getMlGuard());
         assertThrows(UnsupportedOperationException.class, () -> exec.getUserRateLimiterMap());
+
     }
+
 }

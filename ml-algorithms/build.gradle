@@ -71,6 +71,9 @@ dependencies {
     implementation platform('software.amazon.awssdk:bom:2.30.18')
     api 'software.amazon.awssdk:auth:2.30.18'
     implementation 'software.amazon.awssdk:apache-client'
+    implementation ('software.amazon.awssdk:bedrockruntime') {
+        exclude group: 'io.netty'
+    }
     implementation ('com.amazonaws:aws-encryption-sdk-java:2.4.1') {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
@@ -86,10 +89,12 @@ dependencies {
     implementation('net.minidev:json-smart:2.5.2')
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.30.18"
-    api('io.modelcontextprotocol.sdk:mcp:0.9.0')
+    api('io.modelcontextprotocol.sdk:mcp:0.12.1')
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
+    api group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'
+    implementation group: 'com.squareup.okhttp3', name: 'okhttp-sse', version: '4.12.0'
 }
 
 lombok {

@@ -127,6 +127,7 @@ import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
 import org.opensearch.ml.action.models.UpdateModelTransportAction;
+import org.opensearch.ml.action.prediction.TransportPredictionStreamTaskAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
@@ -224,6 +225,7 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -266,6 +268,7 @@ import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
@@ -338,6 +341,7 @@ import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLPredictionStreamAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLPutIndexInsightConfigAction;
 import org.opensearch.ml.rest.RestMLRegisterAgentAction;
@@ -450,6 +454,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+    public static final String STREAM_PREDICT_THREAD_POOL = "opensearch_ml_predict_stream";
     public static final String REMOTE_PREDICT_THREAD_POOL = "opensearch_ml_predict_remote";
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
@@ -510,6 +515,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
+                new ActionHandler<>(MLPredictionStreamTaskAction.INSTANCE, TransportPredictionStreamTaskAction.class),
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
                 new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, TransportTrainAndPredictionTaskAction.class),
                 new ActionHandler<>(MLModelGetAction.INSTANCE, GetModelTransportAction.class),
@@ -777,6 +783,7 @@ public class MachineLearningPlugin extends Plugin
         MLModelTool.Factory.getInstance().init(client);
         IndexInsightTool.Factory.getInstance().init(client);
         McpSseTool.Factory.getInstance().init();
+        McpStreamableHttpTool.Factory.getInstance().init();
         AgentTool.Factory.getInstance().init(client);
         ListIndexTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
@@ -790,6 +797,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(IndexInsightTool.TYPE, IndexInsightTool.Factory.getInstance());
         toolFactories.put(McpSseTool.TYPE, McpSseTool.Factory.getInstance());
+        toolFactories.put(McpStreamableHttpTool.TYPE, McpStreamableHttpTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
         toolFactories.put(ListIndexTool.TYPE, ListIndexTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
@@ -932,6 +940,11 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
+        RestMLPredictionStreamAction restMLPredictionStreamAction = new RestMLPredictionStreamAction(
+            mlModelManager,
+            mlFeatureEnabledSetting,
+            clusterService
+        );
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
@@ -1027,6 +1040,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLStatsAction,
                 restMLTrainingAction,
                 restMLPredictionAction,
+                restMLPredictionStreamAction,
                 restMLExecuteAction,
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
@@ -1172,6 +1186,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder streamPredictThreadPool = new FixedExecutorBuilder(
+            settings,
+            STREAM_PREDICT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + STREAM_PREDICT_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -1183,7 +1205,8 @@ public class MachineLearningPlugin extends Plugin
                 predictThreadPool,
                 remotePredictThreadPool,
                 batchIngestThreadPool,
-                sdkClientThreadPool
+                sdkClientThreadPool,
+                streamPredictThreadPool
             );
     }
 
@@ -1273,7 +1296,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
-                MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL
+                MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
+                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
             );
         return settings;
     }

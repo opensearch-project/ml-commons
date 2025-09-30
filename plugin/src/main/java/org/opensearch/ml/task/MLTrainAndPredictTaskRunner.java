@@ -80,6 +80,11 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     }
 
     @Override
+    protected String getTransportStreamActionName() {
+        return MLTrainAndPredictionTaskAction.NAME;
+    }
+
+    @Override
     protected TransportResponseHandler<MLTaskResponse> getResponseHandler(ActionListener<MLTaskResponse> listener) {
         return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
     }

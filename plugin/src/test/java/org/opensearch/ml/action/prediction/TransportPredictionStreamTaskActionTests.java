@@ -5,14 +5,15 @@
 
 package org.opensearch.ml.action.prediction;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
-import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,7 +42,6 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -58,12 +58,15 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.StreamTransportService;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
+public class TransportPredictionStreamTaskActionTests extends OpenSearchTestCase {
     @Mock
     private MLPredictTaskRunner mlPredictTaskRunner;
 
@@ -79,9 +82,6 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
     @Mock
     private ClusterService clusterService;
-
-    @Mock
-    private NamedXContentRegistry xContentRegistry;
 
     @Mock
     private MLModelManager mlModelManager;
@@ -105,7 +105,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private TransportPredictionTaskAction transportPredictionTaskAction;
+    private TransportPredictionStreamTaskAction transportPredictionStreamTaskAction;
 
     ThreadContext threadContext;
 
@@ -113,6 +113,12 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     ThreadPool threadPool;
 
     private MLInput mlInput;
+
+    @Mock
+    private StreamTransportService streamTransportService;
+
+    @Mock
+    private TransportChannel transportChannel;
 
     @Before
     public void setup() {
@@ -144,8 +150,8 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
 
-        transportPredictionTaskAction = spy(
-            new TransportPredictionTaskAction(
+        transportPredictionStreamTaskAction = spy(
+            new TransportPredictionStreamTaskAction(
                 transportService,
                 actionFilters,
                 modelCacheHelper,
@@ -153,56 +159,76 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 clusterService,
                 client,
                 sdkClient,
-                xContentRegistry,
                 mlModelManager,
                 modelAccessControlHelper,
                 mlFeatureEnabledSetting,
-                settings
+                settings,
+                streamTransportService
             )
         );
     }
 
     @Test
-    public void testPrediction_default_exception() {
-        when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
-        when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
+    public void testGetStreamTransportService() {
+        StreamTransportService result = TransportPredictionStreamTaskAction.getStreamTransportService();
+        assertNotNull(result);
+    }
+
+    @Test
+    public void testMessageReceived() {
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.messageReceived(mlPredictionTaskRequest, transportChannel, task);
+
+        verify(transportPredictionStreamTaskAction).doExecute(eq(task), eq(mlPredictionTaskRequest), any(), eq(transportChannel));
+    }
+
+    @Test
+    public void testDoExecuteWithoutChannel() {
+        transportPredictionStreamTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof UnsupportedOperationException);
+        assertEquals("Use doExecute with TransportChannel for streaming requests", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteWithAccessDenied() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(6);
-            listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
+            listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
-        doAnswer(invocation -> {
-            ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
-            return null;
-        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
 
-        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to Validate Access for ModelId test_id", argumentCaptor.getValue().getMessage());
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.FORBIDDEN, ((OpenSearchStatusException) captor.getValue()).status());
     }
 
     @Test
-    public void testPrediction_local_model_not_exception() {
+    public void testDoExecuteLocalModelNotSupported() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(model.getModelGroupId()).thenReturn("test_group_id");
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
 
-        IllegalStateException e = assertThrows(
-                IllegalStateException.class,
-                () -> transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener)
-        );
-        assertEquals(
-                e.getMessage(),
-                LOCAL_MODEL_DISABLED_ERR_MSG
-        );
+        transportPredictionStreamTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof UnsupportedOperationException);
+        assertEquals("Streaming is not supported for local model.", captor.getValue().getMessage());
     }
 
     @Test
-    public void testPrediction_OpenSearchStatusException() {
+    public void testDoExecuteOpenSearchStatusException() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
@@ -217,15 +243,14 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
 
-        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+        transportPredictionStreamTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener, transportChannel);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Testing OpenSearchStatusException", argumentCaptor.getValue().getMessage());
     }
 
-    @Test
-    public void testPrediction_MLResourceNotFoundException() {
+    public void testDoExecuteMLResourceNotFoundException() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
@@ -240,15 +265,15 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
 
-        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+        transportPredictionStreamTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener, transportChannel);
 
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLResourceNotFoundException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Testing MLResourceNotFoundException", argumentCaptor.getValue().getMessage());
     }
 
     @Test
-    public void testPrediction_MLLimitExceededException() {
+    public void testDoExecuteMLLimitExceededException() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
 
@@ -263,11 +288,132 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
 
-        transportPredictionTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener);
+        transportPredictionStreamTaskAction.doExecute(null, mlPredictionTaskRequest, actionListener, transportChannel);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(CircuitBreakingException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Memory Circuit Breaker is open, please check your resources!", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteModelDisabled() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Model is disabled.", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteModelRateLimited() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getRateLimiter("test_id")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Request is throttled at model level.", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteUserRateLimited() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getRateLimiter("test_id")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(true);
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin").request()).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Request is throttled at user level. If you think there's an issue, please contact your cluster admin.", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteDLModelNotSupported() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getRateLimiter("test_id")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getRateLimiter("test_id").request()).thenReturn(true);
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin")).thenReturn(mock(org.opensearch.common.util.TokenBucket.class));
+        when(modelCacheHelper.getUserRateLimiter("test_id", "admin").request()).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals("Non-streaming requests are not supported by the streaming transport action", captor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecuteStreamExecution() {
+        when(modelCacheHelper.getModelInfo("test_id")).thenReturn(model);
+        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(modelCacheHelper.getIsModelEnabled("test_id")).thenReturn(true);
+        when(modelCacheHelper.getOptionalFunctionName("test_id")).thenReturn(java.util.Optional.of(FunctionName.REMOTE));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(3);
+            listener.onResponse(mock(MLTaskResponse.class));
+            return null;
+        }).when(mlPredictTaskRunner).run(any(), any(), any(), any());
+
+        Task task = mock(Task.class);
+        transportPredictionStreamTaskAction.doExecute(task, mlPredictionTaskRequest, actionListener, transportChannel);
+
+        verify(mlPredictTaskRunner).run(any(), any(), any(), any());
+        verify(modelCacheHelper).addPredictRequestDuration(eq("test_id"), any(Double.class));
+        verify(modelCacheHelper).refreshLastAccessTime("test_id");
     }
 
     @Test
@@ -291,7 +437,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                     + "\"description\":\"This is a test description field\",\"type\":\"string\"}}}}}"
             );
         when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
-        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+        transportPredictionStreamTaskAction.validateInputSchema("testId", mlInput);
     }
 
     @Test
@@ -316,56 +462,6 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                     + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
             );
         when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
-        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
-    }
-
-    @Test
-    public void testValidateBatchPredictInputSchemaSuccess() {
-        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
-            .builder()
-            .parameters(
-                Map
-                    .of(
-                        "messages",
-                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
-                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
-                    )
-            )
-            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-            .build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
-        Map<String, String> modelInterface = Map
-            .of(
-                "input",
-                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
-                    + "\"description\":\"This is a test description field\",\"type\":\"string\"}}}}}"
-            );
-        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
-        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
-    }
-
-    @Test
-    public void testInvalidateBatchPredictInputSchemaSuccess() {
-        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
-            .builder()
-            .parameters(
-                Map
-                    .of(
-                        "messages",
-                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
-                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
-                    )
-            )
-            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-            .build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
-        Map<String, String> modelInterface = Map
-            .of(
-                "input",
-                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
-                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
-            );
-        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
-        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+        transportPredictionStreamTaskAction.validateInputSchema("testId", mlInput);
     }
 }

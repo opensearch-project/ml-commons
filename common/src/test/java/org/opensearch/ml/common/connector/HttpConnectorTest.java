@@ -62,7 +62,7 @@ public class HttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
 
         HttpConnector.builder().protocol("wrong protocol").build();
     }
@@ -226,6 +226,52 @@ public class HttpConnectorTest {
         parameters.put("sparseEmbeddingFormat", "WORD");
         String predictPayload = connector.createPayload(PREDICT.name(), parameters);
         connector.validatePayload(predictPayload);
+    }
+
+    @Test
+    public void createPayload_WithStreamParameter_OpenAI() {
+        String requestBody = "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        Assert
+            .assertEquals(
+                "{\"model\":\"gpt-3.5-turbo\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello world\"}],\"stream\":true}",
+                payload
+            );
+    }
+
+    @Test
+    public void createPayload_WithoutStreamParameter() {
+        String requestBody = "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        Assert.assertEquals("{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello world\"}]}", payload);
+    }
+
+    @Test
+    public void createPayload_WithStreamParameter_UnsupportedInterface() {
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "invalid/interface");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        Assert.assertEquals("{\"input\": \"Hello world\"}", payload);
     }
 
     @Test
