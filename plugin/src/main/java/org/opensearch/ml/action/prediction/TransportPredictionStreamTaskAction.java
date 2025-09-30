@@ -173,6 +173,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
+                            MLPredictionStreamTaskAction.NAME,
                             client,
                             sdkClient,
                             ActionListener.wrap(access -> {
