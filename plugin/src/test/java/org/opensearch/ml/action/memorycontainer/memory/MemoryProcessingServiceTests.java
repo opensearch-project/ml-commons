@@ -6,12 +6,14 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +34,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceTests {
@@ -53,6 +56,9 @@ public class MemoryProcessingServiceTests {
 
     private List<Map<String, Object>> testContent;
 
+    @Mock
+    private MemoryConfiguration memoryConfig;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -60,6 +66,7 @@ public class MemoryProcessingServiceTests {
         memoryStrategy.getStrategyConfig().put("llm_result_path", "$");
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
         testContent = createTestContent("Hello");
+        when(memoryConfig.getParameters()).thenReturn(new HashMap<>());
     }
 
     @Test
@@ -755,7 +762,7 @@ public class MemoryProcessingServiceTests {
     public void testExtractFactsFromConversation_InvalidCustomPrompt() {
         // Test with custom prompt that doesn't specify JSON format
         Map<String, Object> strategyConfig = new HashMap<>();
-        strategyConfig.put("prompt", "Extract information from this conversation");
+        strategyConfig.put("system_prompt", "Extract information from this conversation");
         MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
@@ -851,14 +858,14 @@ public class MemoryProcessingServiceTests {
     @Test
     public void testSummarizeMessages_NullMessages() {
         ActionListener<String> stringListener = mock(ActionListener.class);
-        memoryProcessingService.summarizeMessages(null, stringListener);
+        memoryProcessingService.summarizeMessages(memoryConfig, null, stringListener);
         verify(stringListener).onResponse("");
     }
 
     @Test
     public void testSummarizeMessages_EmptyMessages() {
         ActionListener<String> stringListener = mock(ActionListener.class);
-        memoryProcessingService.summarizeMessages(Arrays.asList(), stringListener);
+        memoryProcessingService.summarizeMessages(memoryConfig, Arrays.asList(), stringListener);
         verify(stringListener).onResponse("");
     }
 
@@ -866,7 +873,23 @@ public class MemoryProcessingServiceTests {
     public void testSummarizeMessages_WithMessages() {
         ActionListener<String> stringListener = mock(ActionListener.class);
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
-        memoryProcessingService.summarizeMessages(messages, stringListener);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "test summary")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            MLTaskResponse output = MLTaskResponse
+                .builder()
+                .output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build())
+                .build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+        memoryProcessingService.summarizeMessages(memoryConfig, messages, stringListener);
         verify(stringListener).onResponse(any(String.class));
     }
 

@@ -204,6 +204,7 @@ public class MLAddMemoriesInputTest {
                 false,
                 null,
                 null,
+                null,
                 "owner-1"
             )
         );
@@ -220,6 +221,7 @@ public class MLAddMemoriesInputTest {
                 null,
                 null,
                 true,
+                null,
                 null,
                 null,
                 "owner-1"
@@ -240,6 +242,7 @@ public class MLAddMemoriesInputTest {
                 true,
                 null,
                 null,
+                null,
                 "owner-1"
             )
         );
@@ -254,6 +257,7 @@ public class MLAddMemoriesInputTest {
             null,
             null,
             false,
+            null,
             null,
             null,
             "owner-1"
