@@ -233,7 +233,7 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         List<ExecutorBuilder<?>> executorBuilders = plugin.getExecutorBuilders(settings);
         assertNotNull(executorBuilders);
-        assertEquals(10, executorBuilders.size());
+        assertEquals(11, executorBuilders.size());
 
         // Verify we have the expected number of thread pools
         assertTrue(executorBuilders.size() > 5);
