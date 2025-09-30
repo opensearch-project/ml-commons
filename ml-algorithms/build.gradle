@@ -58,6 +58,7 @@ dependencies {
     // Multi-tenant SDK Client
     implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
     implementation 'commons-beanutils:commons-beanutils:1.11.0'
+    implementation "org.opensearch:opensearch-remote-metadata-sdk-ddb-client:${opensearch_build}"
 
     def os = DefaultNativePlatform.currentOperatingSystem
     //arm/macos doesn't support GPU
@@ -88,9 +89,7 @@ dependencies {
     }
     implementation('net.minidev:json-smart:2.5.2')
     implementation group: 'org.json', name: 'json', version: '20231013'
-    implementation(enforcedPlatform("io.netty:netty-bom:4.2.5.Final"))
-    implementation("software.amazon.awssdk:netty-nio-client")
-
+    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.30.18"
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
