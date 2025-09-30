@@ -11,9 +11,9 @@ import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearch
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.lucene.search.TotalHits;
@@ -25,15 +25,12 @@ import org.opensearch.common.Nullable;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
@@ -45,6 +42,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -52,6 +50,7 @@ import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.base.Throwables;
@@ -138,8 +137,8 @@ public class MLSearchHandler {
             request.source().fetchSource(rebuiltFetchSourceContext);
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
-            boolean skip = modelAccessControlHelper.skipModelAccessControl(user);
-            boolean hasIndex = MLIndicesHandler
+
+            boolean hasModelGroupIndex = MLIndicesHandler
                 .doesMultiTenantIndexExist(
                     clusterService,
                     mlFeatureEnabledSetting.isMultiTenancyEnabled(),
@@ -147,52 +146,99 @@ public class MLSearchHandler {
                 );
             boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
-            if (!hasIndex) {
-                // No gating at all
-                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+            if (user == null || !modelAccessControlHelper.modelAccessControlEnabled() || !hasModelGroupIndex) {
+                // Superuser / feature disabled / no model-group index → no gating
+                SearchDataObjectRequest sreq = SearchDataObjectRequest
                     .builder()
                     .indices(request.indices())
                     .searchSourceBuilder(request.source())
                     .tenantId(tenantId)
                     .build();
-
-                sdkClient
-                    .searchDataObjectAsync(searchDataObjectRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
-            } else if (rsClientPresent) {
-                modelAccessControlHelper
-                    .addAccessibleModelGroupsFilterAndSearch(
-                        tenantId,
-                        request,
-                        sdkClient,
-                        (ids) -> modelGroupGateAndSearch(
-                            tenantId,
-                            request,
-                            sdkClient,
-                            ids,
-                            /*useBackendRoles*/ request.source(),
-                            wrappedListener
-                        ),
-                        doubleWrapperListener
-                    );
-            } else if (skip) {
-                // No gating at all
-                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                    .builder()
-                    .indices(request.indices())
-                    .searchSourceBuilder(request.source())
-                    .tenantId(tenantId)
-                    .build();
-
-                sdkClient
-                    .searchDataObjectAsync(searchDataObjectRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
-            } else {
-                // Legacy backend-roles/owner path
-                SearchSourceBuilder searchSourceBuilder = modelAccessControlHelper
-                    .addUserBackendRolesFilter(user, new SearchSourceBuilder());
-                modelGroupGateAndSearch(tenantId, request, sdkClient, /*modelGroupIds*/ null, searchSourceBuilder, doubleWrapperListener);
+                sdkClient.searchDataObjectAsync(sreq).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                return;
             }
+
+            if (rsClientPresent) {
+                // RSC fast-path: get accessible group IDs → gate models (IDs or missing)
+                ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+                rsc.getAccessibleResourceIds(CommonValue.ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
+                    SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
+                    gated.query(rewriteQueryBuilderRSC(gated.query(), ids)); // ids may be empty → "missing only"
+                    request.source(gated);
+
+                    SearchDataObjectRequest finalSearch = SearchDataObjectRequest
+                        .builder()
+                        .indices(request.indices())
+                        .searchSourceBuilder(request.source())
+                        .tenantId(tenantId)
+                        .build();
+                    sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                }, e -> {
+                    log.error("RSC getAccessibleResourceIds failed", e);
+                    wrappedListener.onFailure(e);
+                }));
+                return;
+            }
+
+            // Legacy backend-roles: discover allowed model-group IDs, then gate models (IDs or missing)
+            if (modelAccessControlHelper.isAdmin(user)) {
+                // user with all access or feature is disabled → no gating
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(request.indices())
+                    .searchSourceBuilder(request.source())
+                    .tenantId(tenantId)
+                    .build();
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+                return;
+            }
+
+            SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
+            SearchRequest modelGroupSearchRequest = new SearchRequest();
+            sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
+            sourceBuilder.size(10000);
+            modelGroupSearchRequest.source(sourceBuilder);
+            modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
+            ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
+                if (Optional
+                    .ofNullable(r)
+                    .map(SearchResponse::getHits)
+                    .map(SearchHits::getTotalHits)
+                    .map(TotalHits::value)
+                    .orElse(0L) > 0) {
+                    List<String> modelGroupIds = new ArrayList<>();
+                    Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
+
+                    request.source().query(rewriteQueryBuilderLegacy(request.source().query(), modelGroupIds));
+                } else {
+                    log.debug("No model group found");
+                    request.source().query(rewriteQueryBuilderLegacy(request.source().query(), null));
+                }
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(request.indices())
+                    .searchSourceBuilder(request.source())
+                    .tenantId(tenantId)
+                    .build();
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
+            }, e -> {
+                log.error("Fail to search model groups!", e);
+                wrappedListener.onFailure(e);
+            });
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
+                .indices(modelGroupSearchRequest.indices())
+                .searchSourceBuilder(modelGroupSearchRequest.source())
+                .tenantId(tenantId)
+                .build();
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest)
+                .whenComplete(SdkClientUtils.wrapSearchCompletion(modelGroupSearchActionListener));
+
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
@@ -200,90 +246,48 @@ public class MLSearchHandler {
     }
 
     /**
-     * Adds modelGroupIDs as search filter to prevent unauthorized access to not accessible entities.
+     * Gate model search by model-groups; resource-sharing feature path
      */
-
-    public void modelGroupGateAndSearch(
-        String tenantId,
-        SearchRequest request,
-        SdkClient sdkClient,
-        @Nullable Set<String> modelGroupIds,
-        SearchSourceBuilder sourceBuilder,
-        ActionListener<SearchResponse> wrappedListener
-    ) {
-        // build discovery source
-        sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD }, null);
-        sourceBuilder.size(10_000);
-
-        if (modelGroupIds != null) {
-            // RSC pre-filter → merge as filter (doesn't affect scoring)
-            sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), modelGroupIds));
-        }
-
-        SearchRequest modelGroupSearchReq = new SearchRequest().indices(CommonValue.ML_MODEL_GROUP_INDEX).source(sourceBuilder);
-
-        SearchDataObjectRequest mgSearch = SearchDataObjectRequest
-            .builder()
-            .indices(modelGroupSearchReq.indices())
-            .searchSourceBuilder(modelGroupSearchReq.source())
-            .tenantId(tenantId)
-            .build();
-
-        sdkClient.searchDataObjectAsync(mgSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.wrap(mgResp -> {
-            long total = Optional
-                .ofNullable(mgResp)
-                .map(SearchResponse::getHits)
-                .map(SearchHits::getTotalHits)
-                .map(TotalHits::value)
-                .orElse(0L);
-
-            List<String> mGIds = new ArrayList<>();
-            if (total > 0) {
-                Arrays.stream(mgResp.getHits().getHits()).forEach(h -> mGIds.add(h.getId()));
-            }
-
-            // Apply the model-group constraint to the ORIGINAL request
-            SearchSourceBuilder reqSrc = request.source() != null ? request.source() : new SearchSourceBuilder();
-            reqSrc.query(rewriteQueryBuilder(reqSrc.query(), total > 0 ? mGIds : null));
-            request.source(reqSrc);
-
-            // Final search
-            SearchDataObjectRequest finalSearch = SearchDataObjectRequest
-                .builder()
-                .indices(request.indices())
-                .searchSourceBuilder(request.source())
-                .tenantId(tenantId)
-                .build();
-
-            sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
-
-        }, e -> {
-            log.error("Fail to search model groups!", e);
-            wrappedListener.onFailure(e);
-        })));
+    @VisibleForTesting
+    static QueryBuilder rewriteQueryBuilderRSC(QueryBuilder existing, @Nullable Collection<String> modelGroupIds) {
+        // RSC: empty => DENY-ALL; non-empty => (ids OR missing)
+        return rewriteModelGroupGate(existing, modelGroupIds, /*denyAllIfEmpty*/ true);
     }
 
-    public static QueryBuilder rewriteQueryBuilder(QueryBuilder queryBuilder, List<String> modelGroupIds) {
-        ExistsQueryBuilder existsQueryBuilder = new ExistsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD);
-        BoolQueryBuilder modelGroupIdMustNotExistBoolQuery = new BoolQueryBuilder();
-        modelGroupIdMustNotExistBoolQuery.mustNot(existsQueryBuilder);
+    /**
+     * Gate model search by model-groups; legacy backend-roles path
+     */
+    @VisibleForTesting
+    static QueryBuilder rewriteQueryBuilderLegacy(QueryBuilder existing, @Nullable Collection<String> modelGroupIds) {
+        // Legacy: empty => MISSING-ONLY; non-empty => (ids OR missing)
+        return rewriteModelGroupGate(existing, modelGroupIds, /*denyAllIfEmpty*/ false);
+    }
 
-        BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
-        if (!CollectionUtils.isEmpty(modelGroupIds)) {
-            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD, modelGroupIds);
-            accessControlledBoolQuery.should(modelGroupIdTermsQuery);
-        }
-        accessControlledBoolQuery.should(modelGroupIdMustNotExistBoolQuery);
-        if (queryBuilder == null) {
-            return accessControlledBoolQuery;
-        } else if (queryBuilder instanceof BoolQueryBuilder) {
-            ((BoolQueryBuilder) queryBuilder).must(accessControlledBoolQuery);
-            return queryBuilder;
+    private static QueryBuilder rewriteModelGroupGate(QueryBuilder existing, @Nullable Collection<String> ids, boolean denyAllIfEmpty) {
+        QueryBuilder gate;
+
+        if (ids == null || ids.isEmpty()) {
+            // TODO: Question: Can there be models without model groups?
+            gate = denyAllIfEmpty
+                ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery())                     // DENY-ALL - from RSC path
+                : QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.MODEL_GROUP_ID_FIELD)); // MISSING-ONLY
         } else {
-            BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-            boolQueryBuilder.must(queryBuilder);
-            boolQueryBuilder.must(modelGroupIdMustNotExistBoolQuery);
-            return boolQueryBuilder;
+            // Always (ids OR missing) when IDs are present
+            gate = QueryBuilders
+                .boolQuery()
+                .should(QueryBuilders.termsQuery(MLModel.MODEL_GROUP_ID_FIELD, ids))
+                .should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.MODEL_GROUP_ID_FIELD)))
+                .minimumShouldMatch(1);
+        }
+
+        if (existing == null) {
+            // ensure a bool wrapper so 'gate' acts as a filter
+            return QueryBuilders.boolQuery().filter(null);
+        } else if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(gate);
+            return existing;
+        } else {
+            return QueryBuilders.boolQuery().must(existing).filter(gate);
         }
     }
 

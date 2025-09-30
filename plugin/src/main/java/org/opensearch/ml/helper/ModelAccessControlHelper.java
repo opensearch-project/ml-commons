@@ -15,15 +15,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -57,7 +54,6 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
@@ -77,6 +73,10 @@ public class ModelAccessControlHelper {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> modelAccessControlEnabled = it);
+    }
+
+    public boolean modelAccessControlEnabled() {
+        return modelAccessControlEnabled;
     }
 
     private static final List<Class<?>> SUPPORTED_QUERY_TYPES = ImmutableList
@@ -377,6 +377,10 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
+    public SearchSourceBuilder createSearchSourceBuilder(User user) {
+        return addUserBackendRolesFilter(user, new SearchSourceBuilder());
+    }
+
     public QueryBuilder mergeWithAccessFilter(QueryBuilder existing, Set<String> ids) {
         QueryBuilder accessFilter = (ids == null || ids.isEmpty())
             ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()) // deny-all
@@ -390,31 +394,4 @@ public class ModelAccessControlHelper {
         }
         return QueryBuilders.boolQuery().must(existing).filter(accessFilter);
     }
-
-    public void addAccessibleModelGroupsFilterAndSearch(
-        String tenantId,
-        SearchRequest request,
-        SdkClient sdkClient,
-        Consumer<Set<String>> onSuccess,
-        ActionListener<SearchResponse> wrappedListener
-    ) {
-        ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-        // filter by accessible model-groups
-        rsc.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(onSuccess::accept, e -> {
-            // Fail-safe: deny-all and still return a response
-            SearchSourceBuilder reqSrc = request.source() != null ? request.source() : new SearchSourceBuilder();
-            reqSrc.query(mergeWithAccessFilter(reqSrc.query(), Collections.emptySet()));
-            request.source(reqSrc);
-
-            SearchDataObjectRequest finalSearch = SearchDataObjectRequest
-                .builder()
-                .indices(request.indices())
-                .searchSourceBuilder(request.source())
-                .tenantId(tenantId)
-                .build();
-
-            sdkClient.searchDataObjectAsync(finalSearch).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
-        }));
-    }
-
 }
