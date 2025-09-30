@@ -96,16 +96,12 @@ public class MemoryContainerConstants {
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_MEMORY_TYPE = "memory_type";
     public static final String PARAMETER_MEMORY_ID = "memory_id";
-    public static final String PARAMETER_WORKING_MEMORY_ID = "working_memory_id";
     public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
-    public static final String WORKING_MEMORIES_PATH = MEMORIES_PATH + "/working";
     public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_search";
     public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String UPDATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}";
     public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
-    public static final String GET_WORKING_MEMORY_PATH = WORKING_MEMORIES_PATH + "/{" + PARAMETER_WORKING_MEMORY_ID + "}";
-    public static final String DELETE_WORKING_MEMORY_PATH = WORKING_MEMORIES_PATH + "/{" + PARAMETER_WORKING_MEMORY_ID + "}";
     public static final String DELETE_MEMORIES_BY_QUERY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_delete_by_query";
 
     // Memory types are defined in MemoryType enum
