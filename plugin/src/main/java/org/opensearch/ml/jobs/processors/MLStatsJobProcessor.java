@@ -101,11 +101,11 @@ public class MLStatsJobProcessor extends MLJobProcessor {
 
     @Override
     public void run() {
-        collectModelMetrics();
-        collectAgentMetrics();
+        modelTagsCache.clear();
+        collectModelAndAgentMetrics();
     }
 
-    private void collectModelMetrics() {
+    private void collectModelAndAgentMetrics() {
         // check if `.plugins-ml-model` index exists
         if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX)) {
             log.info("Skipping ML model metrics collection - ML model index not found");
@@ -168,6 +168,9 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                         log.error("Failed to parse model from hit: {}", hit.getId(), e);
                     }
                 }
+
+                // dependent on model tags to capture rich information about agents
+                collectAgentMetrics();
             }
 
             @Override

@@ -213,7 +213,7 @@ public class MLStatsJobProcessorTests {
 
         processor.run();
 
-        verify(client, times(2)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
         verify(connectorAccessControlHelper, times(1))
             .getConnector(
                 eq(sdkClient),
@@ -236,7 +236,8 @@ public class MLStatsJobProcessorTests {
 
         processor.run();
 
-        verify(client, times(2)).search(any(SearchRequest.class), isA(ActionListener.class));
+        // only model search
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
         verify(mockCounter, never()).add(anyDouble(), any(Tags.class));
     }
 
@@ -274,7 +275,7 @@ public class MLStatsJobProcessorTests {
 
         processor.run();
 
-        verify(client, times(2)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
         verify(connectorAccessControlHelper, times(1))
             .getConnector(
                 eq(sdkClient),
