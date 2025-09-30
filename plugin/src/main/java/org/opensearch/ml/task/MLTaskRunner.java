@@ -124,6 +124,8 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
 
     protected abstract String getTransportActionName();
 
+    protected abstract String getTransportStreamActionName();
+
     protected abstract TransportResponseHandler<Response> getResponseHandler(ActionListener<Response> listener);
 
     protected abstract void executeTask(Request request, ActionListener<Response> listener);

@@ -52,7 +52,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         + "        \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "        },\n"
-        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.user_prompt}\\\"}]}\"\n"
+        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.query_planner_system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.query_planner_user_prompt}\\\"}]}\"\n"
         + "      }\n"
         + "    ]\n"
         + "}";
@@ -82,7 +82,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         String agentId = registerAgentWithQueryPlanningTool(agentName, queryPlanningModelId);
         assertNotNull(agentId);
 
-        String query = "{\"parameters\": {\"query_text\": \"List 5 iris flowers of type setosa\"}}";
+        String query = "{\"parameters\": {\"question\": \"List 5 iris flowers of type setosa\", \"index_name\": \"iris_data\" }}";
         Response response = executeAgent(agentId, query);
         String responseBody = TestHelper.httpEntityToString(response.getEntity());
 
@@ -125,7 +125,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         String agentId = registerQueryPlanningAgentWithSearchTemplates(agentName, queryPlanningModelId, searchTemplates);
         assertNotNull(agentId);
 
-        String query = "{\"parameters\": {\"query_text\": \"List 5 iris flowers of type setosa\"}}";
+        String query = "{\"parameters\": {\"question\": \"List 5 iris flowers of type setosa\", \"index_name\": \"iris_data\" }}";
         Response agentResponse = executeAgent(agentId, query);
         String responseBody = TestHelper.httpEntityToString(agentResponse.getEntity());
 

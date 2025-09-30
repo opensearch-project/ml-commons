@@ -36,6 +36,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
@@ -179,5 +180,17 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener
+    ) {
+        throw new UnsupportedOperationException("Streaming is not supported for MCP connector.");
     }
 }
