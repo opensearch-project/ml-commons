@@ -27,6 +27,7 @@ import lombok.Setter;
 public class RemoteInferenceInputDataSet extends MLInputDataset {
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_16_0;
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_DLQ_CONFIG = CommonValue.VERSION_2_19_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_OPTIONAL_STRING = CommonValue.VERSION_3_3_0;
     @Setter
     private Map<String, String> parameters;
     @Setter
@@ -54,7 +55,11 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
         super(MLInputDataType.REMOTE);
         Version streamInputVersion = streamInput.getVersion();
         if (streamInput.readBoolean()) {
-            parameters = streamInput.readMap(StreamInput::readString, StreamInput::readString);
+            if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_OPTIONAL_STRING)) {
+                parameters = streamInput.readMap(StreamInput::readString, StreamInput::readOptionalString);
+            } else {
+                parameters = streamInput.readMap(StreamInput::readString, StreamInput::readString);
+            }
         }
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG)) {
             if (streamInput.readBoolean()) {
@@ -78,7 +83,11 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
         Version streamOutputVersion = streamOutput.getVersion();
         if (parameters != null) {
             streamOutput.writeBoolean(true);
-            streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+            if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_OPTIONAL_STRING)) {
+                streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeOptionalString);
+            } else {
+                streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+            }
         } else {
             streamOutput.writeBoolean(false);
         }
