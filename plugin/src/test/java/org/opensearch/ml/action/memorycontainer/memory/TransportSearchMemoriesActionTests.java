@@ -1156,11 +1156,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Mock memoryConfig.getIndexName() to throw exception
         MemoryConfiguration badConfig = mock(MemoryConfiguration.class);
         when(badConfig.getIndexName(any())).thenThrow(new RuntimeException("Index name error"));
-        MLMemoryContainer badContainer = MLMemoryContainer
-            .builder()
-            .name("bad-container")
-            .configuration(badConfig)
-            .build();
+        MLMemoryContainer badContainer = MLMemoryContainer.builder().name("bad-container").configuration(badConfig).build();
 
         // Mock getMemoryContainer to return bad container
         doAnswer(invocation -> {

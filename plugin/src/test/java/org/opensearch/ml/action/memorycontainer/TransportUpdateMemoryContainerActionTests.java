@@ -84,7 +84,8 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Setup thread context
         when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.builder().build()));
+        when(threadPool.getThreadContext())
+            .thenReturn(new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.builder().build()));
 
         action = new TransportUpdateMemoryContainerAction(
             transportService,
