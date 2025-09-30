@@ -306,8 +306,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         String tenantId,
         ActionListener<Object> listener,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        TransportChannel channel
     ) {
+        StreamingWrapper wrapper = new StreamingWrapper(channel);
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
@@ -363,6 +365,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         functionCalling
                     );
 
+                    wrapper.fixInteractionRole(interactions);
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
                     String action = String.valueOf(modelOutput.get(ACTION));
@@ -383,7 +386,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             conversationIndexMemory,
                             traceNumber,
                             additionalInfo,
-                            finalAnswer
+                            finalAnswer,
+                            wrapper
                         );
                         cleanUpResource(tools);
                         return;
@@ -429,7 +433,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             lastThought,
                             maxIterations,
-                            tools
+                            tools,
+                            wrapper
                         );
                         return;
                     }
@@ -502,284 +507,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-                    traceTensors
-                        .add(
-                            ModelTensors
-                                .builder()
-                                .mlModelTensors(
-                                    Collections
-                                        .singletonList(
-                                            ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build()
-                                        )
-                                )
-                                .build()
-                        );
-
-                    if (finalI == maxIterations - 1) {
-                        handleMaxIterationsReached(
-                            sessionId,
-                            listener,
-                            question,
-                            parentInteractionId,
-                            verbose,
-                            traceDisabled,
-                            traceTensors,
-                            conversationIndexMemory,
-                            traceNumber,
-                            additionalInfo,
-                            lastThought,
-                            maxIterations,
-                            tools
-                        );
-                        return;
-                    }
-
-                    ActionRequest request = new MLPredictionTaskRequest(
-                        llm.getModelId(),
-                        RemoteInferenceMLInput
-                            .builder()
-                            .algorithm(FunctionName.REMOTE)
-                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                            .build(),
-                        null,
-                        tenantId
-                    );
-                    client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
-                }
-            }, e -> {
-                log.error("Failed to run chat agent", e);
-                listener.onFailure(e);
-            });
-            if (nextStepListener != null) {
-                lastStepListener = nextStepListener;
-            }
-        }
-
-        ActionRequest request = new MLPredictionTaskRequest(
-            llm.getModelId(),
-            RemoteInferenceMLInput
-                .builder()
-                .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                .build(),
-            null,
-            tenantId
-        );
-        client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
-    }
-
-    private void runReActStream(
-        LLMSpec llm,
-        MLAgent mlAgent,
-        Map<String, Tool> tools,
-        Map<String, MLToolSpec> toolSpecMap,
-        Map<String, String> parameters,
-        Memory memory,
-        String sessionId,
-        String tenantId,
-        ActionListener<Object> listener,
-        FunctionCalling functionCalling,
-        TransportChannel channel
-    ) {
-        StreamingWrapper wrapper = new StreamingWrapper(channel);
-        Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
-        String prompt = constructLLMPrompt(tools, tmpParameters);
-        tmpParameters.put(PROMPT, prompt);
-        final String finalPrompt = prompt;
-
-        String question = tmpParameters.get(MLAgentExecutor.QUESTION);
-        String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
-        boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
-        boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
-
-        // Create root interaction.
-        ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
-
-        // Trace number
-        AtomicInteger traceNumber = new AtomicInteger(0);
-
-        AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
-        AtomicReference<String> lastThought = new AtomicReference<>();
-        AtomicReference<String> lastAction = new AtomicReference<>();
-        AtomicReference<String> lastActionInput = new AtomicReference<>();
-        AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
-        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        Map<String, String> lastToolParams = new ConcurrentHashMap<>();
-
-        StepListener firstListener = new StepListener<MLTaskResponse>();
-        lastLlmListener.set(firstListener);
-        StepListener<?> lastStepListener = firstListener;
-
-        StringBuilder scratchpadBuilder = new StringBuilder();
-        List<String> interactions = new CopyOnWriteArrayList<>();
-
-        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
-        AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
-        tmpParameters.put(PROMPT, newPrompt.get());
-
-        List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
-        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
-        for (int i = 0; i < maxIterations; i++) {
-            int finalI = i;
-            StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
-
-            lastStepListener.whenComplete(output -> {
-                StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
-
-                if (finalI % 2 == 0) {
-                    MLTaskResponse llmResponse = (MLTaskResponse) output;
-                    ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
-                    List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
-                    Map<String, String> modelOutput = parseLLMOutput(
-                        parameters,
-                        tmpModelTensorOutput,
-                        llmResponsePatterns,
-                        tools.keySet(),
-                        interactions,
-                        functionCalling
-                    );
-
-                    wrapper.fixInteractionRole(interactions);
-                    String thought = String.valueOf(modelOutput.get(THOUGHT));
-                    String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
-                    String action = String.valueOf(modelOutput.get(ACTION));
-                    String actionInput = String.valueOf(modelOutput.get(ACTION_INPUT));
-                    String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
-                    String finalAnswer = modelOutput.get(FINAL_ANSWER);
-
-                    if (finalAnswer != null) {
-                        finalAnswer = finalAnswer.trim();
-                        sendFinalAnswer(
-                            sessionId,
-                            listener,
-                            question,
-                            parentInteractionId,
-                            verbose,
-                            traceDisabled,
-                            traceTensors,
-                            conversationIndexMemory,
-                            traceNumber,
-                            additionalInfo,
-                            finalAnswer,
-                            wrapper
-                        );
-                        cleanUpResource(tools);
-                        return;
-                    }
-                    sessionMsgAnswerBuilder.append(thought);
-                    lastThought.set(thought);
-                    lastAction.set(action);
-                    lastActionInput.set(actionInput);
-                    lastToolSelectionResponse.set(thoughtResponse);
-
-                    traceTensors
-                        .add(
-                            ModelTensors
-                                .builder()
-                                .mlModelTensors(List.of(ModelTensor.builder().name("response").result(thoughtResponse).build()))
-                                .build()
-                        );
-
-                    saveTraceData(
-                        conversationIndexMemory,
-                        memory.getType(),
-                        question,
-                        thoughtResponse,
-                        sessionId,
-                        traceDisabled,
-                        parentInteractionId,
-                        traceNumber,
-                        "LLM"
-                    );
-
-                    if (nextStepListener == null) {
-                        handleMaxIterationsReached(
-                            sessionId,
-                            listener,
-                            question,
-                            parentInteractionId,
-                            verbose,
-                            traceDisabled,
-                            traceTensors,
-                            conversationIndexMemory,
-                            traceNumber,
-                            additionalInfo,
-                            lastThought,
-                            maxIterations,
-                            tools,
-                            wrapper
-                        );
-                        return;
-                    }
-
-                    if (tools.containsKey(action)) {
-                        Map<String, String> toolParams = constructToolParams(
-                            tools,
-                            toolSpecMap,
-                            question,
-                            lastActionInput,
-                            action,
-                            actionInput
-                        );
-                        lastToolParams.clear();
-                        lastToolParams.putAll(toolParams);
-                        runTool(
-                            tools,
-                            toolSpecMap,
-                            tmpParameters,
-                            (ActionListener<Object>) nextStepListener,
-                            action,
-                            actionInput,
-                            toolParams,
-                            interactions,
-                            toolCallId,
-                            functionCalling
-                        );
-                    } else {
-                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                        StringSubstitutor substitutor = new StringSubstitutor(
-                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
-                            "${parameters.",
-                            "}"
-                        );
-                        newPrompt.set(substitutor.replace(finalPrompt));
-                        tmpParameters.put(PROMPT, newPrompt.get());
-                        ((ActionListener<Object>) nextStepListener).onResponse(res);
-                    }
-                } else {
-                    Object filteredOutput = filterToolOutput(lastToolParams, output);
-                    addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
-                    String toolResponse = constructToolResponse(
-                        tmpParameters,
-                        lastAction,
-                        lastActionInput,
-                        lastToolSelectionResponse,
-                        output
-                    );
-                    scratchpadBuilder.append(toolResponse).append("\n\n");
-
-                    saveTraceData(
-                        conversationIndexMemory,
-                        "ReAct",
-                        lastActionInput.get(),
-                        outputToOutputString(output),
-                        sessionId,
-                        traceDisabled,
-                        parentInteractionId,
-                        traceNumber,
-                        lastAction.get()
-                    );
-
-                    StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
-                    newPrompt.set(substitutor.replace(finalPrompt));
-                    tmpParameters.put(PROMPT, newPrompt.get());
-                    if (!interactions.isEmpty()) {
-                        tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
-                    }
-
-                    sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
                     wrapper.sendToolResponse(outputToOutputString(output), sessionId, parentInteractionId);
-
                     traceTensors
                         .add(
                             ModelTensors
@@ -823,6 +551,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 lastStepListener = nextStepListener;
             }
         }
+
         ActionRequest request = wrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         wrapper.executeRequest(request, firstListener);
     }
