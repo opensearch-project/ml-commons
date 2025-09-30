@@ -1,3 +1,27 @@
+# Agentic RAG with Bedrock Claude Tutorial
+
+## Overview
+
+This tutorial demonstrates how to build an intelligent Retrieval Augmented Generation (RAG) system using Amazon Bedrock's Claude 3.7 model integrated with OpenSearch. The system creates an agentic architecture that can understand natural language queries, search through OpenSearch indices, and provide contextual responses.
+
+### What You'll Build
+
+- **LLM Integration**: Set up Bedrock Claude 3.7 as the primary language model with tool-calling capabilities
+- **Embedding Model**: Configure Bedrock Titan Embedding V2 for semantic search functionality  
+- **Flow Agent**: Create a specialized agent that translates natural language questions into OpenSearch Query DSL
+- **Chat Agent**: Build a conversational RAG agent that can search indices and maintain conversation context
+- **End-to-End RAG Pipeline**: Complete system that can answer questions by retrieving relevant information from your data
+
+### Prerequisites
+
+- OpenSearch cluster with ML plugin enabled
+- AWS Bedrock access with Claude 3.7 and Titan Embedding models
+- Valid AWS credentials (access key and secret key)
+- Sample data indices (the tutorial uses OpenSearch Dashboards sample flight data)
+
+
+---
+
 # 1. Create Model
 
 ## 1.1 LLM
@@ -38,7 +62,7 @@ POST _plugins/_ml/models/_register
 }
 ```
 
-Sampel output
+Sample output
 ```
 {
   "task_id": "t8c_mJgBLapFVETfK14Y",
@@ -312,7 +336,7 @@ POST /_plugins/_ml/agents/_register
 {
   "name": "Query DSL Translator Agent",
   "type": "flow",
-  "description": "This is a demo agent for translating NLQ to OpenSearcdh DSL",
+  "description": "This is a demo agent for translating NLQ to OpenSearch DSL",
   "tools": [
     {
       "type": "IndexMappingTool",

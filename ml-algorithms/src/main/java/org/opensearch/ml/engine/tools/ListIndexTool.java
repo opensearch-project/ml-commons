@@ -159,11 +159,7 @@ public class ListIndexTool implements Tool {
                 }
                 @SuppressWarnings("unchecked")
                 T output = (T) sb.toString();
-                if (outputParser != null) {
-                    listener.onResponse((T) outputParser.parse(output));
-                } else {
-                    listener.onResponse((T) output);
-                }
+                listener.onResponse((T) (outputParser != null ? outputParser.parse(output) : output));
             }, listener::onFailure));
 
             fetchClusterInfoAndPages(

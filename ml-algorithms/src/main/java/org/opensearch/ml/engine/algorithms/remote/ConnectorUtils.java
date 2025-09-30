@@ -274,11 +274,7 @@ public class ConnectorUtils {
             }
 
             // Handle the processed output
-            if (processedOutput instanceof String) {
-                connector.parseResponse((String) processedOutput, modelTensors, scriptReturnModelTensor);
-            } else {
-                connector.parseResponse(processedOutput, modelTensors, scriptReturnModelTensor);
-            }
+            connector.parseResponse(processedOutput, modelTensors, scriptReturnModelTensor);
         } else {
             // Original flow without processor chain
             if (responseFilter == null) {

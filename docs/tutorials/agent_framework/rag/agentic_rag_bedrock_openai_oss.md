@@ -1,3 +1,25 @@
+# Agentic RAG with Bedrock OpenAI OSS Tutorial
+
+## Overview
+
+This tutorial demonstrates how to build an intelligent Retrieval Augmented Generation (RAG) system using OpenSearch's agent framework with Bedrock's OpenAI GPT OSS model. The system combines the power of large language models with OpenSearch's search capabilities to create conversational agents that can intelligently query and retrieve information from your data indices.
+
+### What You'll Build
+
+- **LLM Integration**: Set up Bedrock OpenAI GPT OSS 120b model with tool usage capabilities
+- **Embedding Model**: Configure Bedrock Titan Embedding Model V2 for semantic search
+- **Flow Agent**: Create a specialized agent that translates natural language questions into OpenSearch Query DSL
+- **Chat Agent**: Build a conversational RAG agent that can search across multiple indices and provide contextual responses
+
+### Prerequisites
+
+- OpenSearch cluster with ML plugin enabled
+- AWS Bedrock access with appropriate permissions
+- Basic understanding of OpenSearch Query DSL
+- Sample data indices (the tutorial uses OpenSearch Dashboards sample flight data)
+
+---
+
 # 1. Create Model
 
 ## 1.1 LLM
@@ -79,7 +101,7 @@ POST _plugins/_ml/models/_register
 }
 ```
 
-Sampel output
+Sample output
 ```
 {
   "task_id": "aPArmJgBCqG4iVqlioAh",
@@ -357,7 +379,7 @@ POST /_plugins/_ml/agents/_register
 {
   "name": "Query DSL Translator Agent",
   "type": "flow",
-  "description": "This is a demo agent for translating NLQ to OpenSearcdh DSL",
+  "description": "This is a demo agent for translating NLQ to OpenSearch DSL",
   "tools": [
     {
       "type": "IndexMappingTool",

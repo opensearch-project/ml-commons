@@ -137,16 +137,20 @@ public class ProcessorChain {
                 if (condition.startsWith(">") && !condition.startsWith(">=")) {
                     double threshold = Double.parseDouble(condition.substring(1));
                     return numValue > threshold;
-                } else if (condition.startsWith("<") && !condition.startsWith("<=")) {
+                }
+                if (condition.startsWith("<") && !condition.startsWith("<=")) {
                     double threshold = Double.parseDouble(condition.substring(1));
                     return numValue < threshold;
-                } else if (condition.startsWith(">=")) {
+                }
+                if (condition.startsWith(">=")) {
                     double threshold = Double.parseDouble(condition.substring(2));
                     return numValue >= threshold;
-                } else if (condition.startsWith("<=")) {
+                }
+                if (condition.startsWith("<=")) {
                     double threshold = Double.parseDouble(condition.substring(2));
                     return numValue <= threshold;
-                } else if (condition.startsWith("==")) {
+                }
+                if (condition.startsWith("==")) {
                     double threshold = Double.parseDouble(condition.substring(2));
                     return Math.abs(numValue - threshold) < 1e-10;
                 }
@@ -155,11 +159,7 @@ public class ProcessorChain {
             // Handle regex matching
             if (condition.startsWith("regex:")) {
                 String regex = condition.substring(6);
-                try {
-                    return Pattern.matches(regex, strValue);
-                } catch (Exception e) {
-                    log.warn("Invalid regex in condition: {}", regex);
-                }
+                return Pattern.matches(regex, strValue);
             }
 
             // Handle contains condition
@@ -212,9 +212,8 @@ public class ProcessorChain {
                         Pattern p = Pattern.compile(pattern, Pattern.DOTALL);
                         if (replaceAll) {
                             return p.matcher(text).replaceAll(replacement);
-                        } else {
-                            return p.matcher(text).replaceFirst(replacement);
                         }
+                        return p.matcher(text).replaceFirst(replacement);
                     } catch (Exception e) {
                         log.warn("Failed to apply regex: {}", e.getMessage());
                         return inputObj;
@@ -281,23 +280,23 @@ public class ProcessorChain {
                         if ("object".equalsIgnoreCase(extractType)) {
                             if (jsonNode.isObject()) {
                                 return mapper.convertValue(jsonNode, Map.class);
-                            } else {
-                                return defaultValue != null ? defaultValue : input;
                             }
-                        } else if ("array".equalsIgnoreCase(extractType)) {
+                            return defaultValue != null ? defaultValue : input;
+                        }
+                        if ("array".equalsIgnoreCase(extractType)) {
                             if (jsonNode.isArray()) {
                                 return mapper.convertValue(jsonNode, List.class);
-                            } else {
-                                return defaultValue != null ? defaultValue : input;
                             }
-                        } else { // auto
+                            return defaultValue != null ? defaultValue : input;
+                        }
+                        { // auto
                             if (jsonNode.isObject()) {
                                 return mapper.convertValue(jsonNode, Map.class);
-                            } else if (jsonNode.isArray()) {
-                                return mapper.convertValue(jsonNode, List.class);
-                            } else {
-                                return defaultValue != null ? defaultValue : input;
                             }
+                            if (jsonNode.isArray()) {
+                                return mapper.convertValue(jsonNode, List.class);
+                            }
+                            return defaultValue != null ? defaultValue : input;
                         }
                     } catch (Exception e) {
                         log.warn("Failed to extract JSON: {}", e.getMessage());
@@ -344,10 +343,9 @@ public class ProcessorChain {
                                 }
                             }
                             if (captures.size() == 1) {
-                                return captures.get(0);
+                                return captures.getFirst();
                             }
                             return captures;
-                            // return String.join(" ", captures); // join results with a space
                         }
                         return input;
                     } catch (Exception e) {
