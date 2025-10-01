@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
@@ -81,6 +82,11 @@ public class MLUpdateModelGroupRequest extends ActionRequest implements DocReque
             throw new UncheckedIOException("Failed to parse ActionRequest into MLUpdateModelGroupRequest", e);
         }
 
+    }
+
+    @Override
+    public String type() {
+        return ML_MODEL_GROUP_RESOURCE_TYPE;
     }
 
     /**

@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
@@ -84,6 +85,11 @@ public class MLModelGroupGetRequest extends ActionRequest implements DocRequest 
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLModelGroupGetRequest", e);
         }
+    }
+
+    @Override
+    public String type() {
+        return ML_MODEL_GROUP_RESOURCE_TYPE;
     }
 
     /**
