@@ -33,25 +33,21 @@ public class MLGetMemoryResponseTest {
     public void setUp() {
         testMemory = MLMemory
             .builder()
-            .sessionId("test-session")
             .memory("Test memory content")
-            .memoryType(MemoryType.RAW_MESSAGE)
-            .userId("test-user")
+            .memoryType(MemoryType.SEMANTIC)
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
 
-        responseNormal = MLGetMemoryResponse.builder().mlMemory(testMemory).build();
+        responseNormal = MLGetMemoryResponse.builder().longTermMemory(testMemory).build();
     }
 
     @Test
     public void testBuilderNormal() {
         assertNotNull(responseNormal);
-        assertNotNull(responseNormal.getMlMemory());
-        assertEquals("test-session", responseNormal.getMlMemory().getSessionId());
-        assertEquals("Test memory content", responseNormal.getMlMemory().getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, responseNormal.getMlMemory().getMemoryType());
-        assertEquals("test-user", responseNormal.getMlMemory().getUserId());
+        assertNotNull(responseNormal.getLongTermMemory());
+        assertEquals("Test memory content", responseNormal.getLongTermMemory().getMemory());
+        assertEquals(MemoryType.SEMANTIC, responseNormal.getLongTermMemory().getMemoryType());
     }
 
     @Test
@@ -61,11 +57,9 @@ public class MLGetMemoryResponseTest {
         StreamInput in = out.bytes().streamInput();
         MLGetMemoryResponse deserialized = new MLGetMemoryResponse(in);
 
-        assertNotNull(deserialized.getMlMemory());
-        assertEquals(responseNormal.getMlMemory().getSessionId(), deserialized.getMlMemory().getSessionId());
-        assertEquals(responseNormal.getMlMemory().getMemory(), deserialized.getMlMemory().getMemory());
-        assertEquals(responseNormal.getMlMemory().getMemoryType(), deserialized.getMlMemory().getMemoryType());
-        assertEquals(responseNormal.getMlMemory().getUserId(), deserialized.getMlMemory().getUserId());
+        assertNotNull(deserialized.getLongTermMemory());
+        assertEquals(responseNormal.getLongTermMemory().getMemory(), deserialized.getLongTermMemory().getMemory());
+        assertEquals(responseNormal.getLongTermMemory().getMemoryType(), deserialized.getLongTermMemory().getMemoryType());
     }
 
     @Test
@@ -80,17 +74,23 @@ public class MLGetMemoryResponseTest {
         ActionResponse mockResponse = new ActionResponse() {
             @Override
             public void writeTo(StreamOutput out) throws IOException {
+                // Write session (false)
+                out.writeBoolean(false);
+                // Write workingMemory (false)
+                out.writeBoolean(false);
+                // Write longTermMemory (true)
+                out.writeBoolean(true);
                 testMemory.writeTo(out);
+                // Write memoryHistory (false)
+                out.writeBoolean(false);
             }
         };
 
         MLGetMemoryResponse result = MLGetMemoryResponse.fromActionResponse(mockResponse);
         assertNotNull(result);
-        assertNotNull(result.getMlMemory());
-        assertEquals("test-session", result.getMlMemory().getSessionId());
-        assertEquals("Test memory content", result.getMlMemory().getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, result.getMlMemory().getMemoryType());
-        assertEquals("test-user", result.getMlMemory().getUserId());
+        assertNotNull(result.getLongTermMemory());
+        assertEquals("Test memory content", result.getLongTermMemory().getMemory());
+        assertEquals(MemoryType.SEMANTIC, result.getLongTermMemory().getMemoryType());
     }
 
     @Test(expected = UncheckedIOException.class)
@@ -113,9 +113,7 @@ public class MLGetMemoryResponseTest {
         String jsonString = builder.toString();
 
         assertNotNull(jsonString);
-        assertTrue(jsonString.contains("test-session"));
         assertTrue(jsonString.contains("Test memory content"));
-        assertTrue(jsonString.contains("RAW_MESSAGE"));
-        assertTrue(jsonString.contains("test-user"));
+        assertTrue(jsonString.contains("SEMANTIC"));
     }
 }
