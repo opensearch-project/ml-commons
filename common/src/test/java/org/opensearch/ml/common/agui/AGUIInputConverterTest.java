@@ -25,8 +25,7 @@ public class AGUIInputConverterTest {
     @Test
     public void testIsAGUIInput_InvalidFormat() {
         String standardInput = "{\"question\":\"What is the weather?\"}";
-        assertFalse("Should not detect standard ML-Commons input as AG-UI format",
-                   AGUIInputConverter.isAGUIInput(standardInput));
+        assertFalse("Should not detect standard ML-Commons input as AG-UI format", AGUIInputConverter.isAGUIInput(standardInput));
     }
 
     @Test
@@ -37,22 +36,21 @@ public class AGUIInputConverterTest {
 
     @Test
     public void testConvertFromAGUIInput_BasicConversion() {
-        String aguiInput = "{\n" +
-            "  \"threadId\": \"thread_123\",\n" +
-            "  \"runId\": \"run_456\",\n" +
-            "  \"state\": {\"status\": \"active\"},\n" +
-            "  \"messages\": [\n" +
-            "    {\"id\": \"msg_1\", \"role\": \"user\", \"content\": \"Hello world\"}\n" +
-            "  ],\n" +
-            "  \"tools\": [\n" +
-            "    {\"name\": \"search\", \"description\": \"Search tool\"}\n" +
-            "  ],\n" +
-            "  \"context\": [],\n" +
-            "  \"forwardedProps\": {}\n" +
-            "}";
+        String aguiInput = "{\n"
+            + "  \"threadId\": \"thread_123\",\n"
+            + "  \"runId\": \"run_456\",\n"
+            + "  \"state\": {\"status\": \"active\"},\n"
+            + "  \"messages\": [\n"
+            + "    {\"id\": \"msg_1\", \"role\": \"user\", \"content\": \"Hello world\"}\n"
+            + "  ],\n"
+            + "  \"tools\": [\n"
+            + "    {\"name\": \"search\", \"description\": \"Search tool\"}\n"
+            + "  ],\n"
+            + "  \"context\": [],\n"
+            + "  \"forwardedProps\": {}\n"
+            + "}";
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(
-            aguiInput, "test_agent_id", "test_tenant", false);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "test_agent_id", "test_tenant", false);
 
         assertNotNull("Converted result should not be null", result);
         assertEquals("Agent ID should be set correctly", "test_agent_id", result.getAgentId());
@@ -64,46 +62,37 @@ public class AGUIInputConverterTest {
         assertNotNull("Input dataset should not be null", inputDataSet);
         assertNotNull("Parameters should not be null", inputDataSet.getParameters());
 
-        assertTrue("Should contain AG-UI thread ID",
-                  inputDataSet.getParameters().containsKey("agui_thread_id"));
-        assertEquals("Thread ID should match", "thread_123",
-                    inputDataSet.getParameters().get("agui_thread_id"));
+        assertTrue("Should contain AG-UI thread ID", inputDataSet.getParameters().containsKey("agui_thread_id"));
+        assertEquals("Thread ID should match", "thread_123", inputDataSet.getParameters().get("agui_thread_id"));
 
-        assertTrue("Should contain AG-UI run ID",
-                  inputDataSet.getParameters().containsKey("agui_run_id"));
-        assertEquals("Run ID should match", "run_456",
-                    inputDataSet.getParameters().get("agui_run_id"));
+        assertTrue("Should contain AG-UI run ID", inputDataSet.getParameters().containsKey("agui_run_id"));
+        assertEquals("Run ID should match", "run_456", inputDataSet.getParameters().get("agui_run_id"));
 
-        assertTrue("Should extract user question",
-                  inputDataSet.getParameters().containsKey("question"));
-        assertEquals("User question should be extracted", "Hello world",
-                    inputDataSet.getParameters().get("question"));
+        assertTrue("Should extract user question", inputDataSet.getParameters().containsKey("question"));
+        assertEquals("User question should be extracted", "Hello world", inputDataSet.getParameters().get("question"));
     }
 
     @Test
     public void testConvertFromAGUIInput_MinimalInput() {
-        String aguiInput = "{\n" +
-            "  \"threadId\": \"thread_minimal\",\n" +
-            "  \"runId\": \"run_minimal\",\n" +
-            "  \"state\": null,\n" +
-            "  \"messages\": [],\n" +
-            "  \"tools\": [],\n" +
-            "  \"context\": [],\n" +
-            "  \"forwardedProps\": null\n" +
-            "}";
+        String aguiInput = "{\n"
+            + "  \"threadId\": \"thread_minimal\",\n"
+            + "  \"runId\": \"run_minimal\",\n"
+            + "  \"state\": null,\n"
+            + "  \"messages\": [],\n"
+            + "  \"tools\": [],\n"
+            + "  \"context\": [],\n"
+            + "  \"forwardedProps\": null\n"
+            + "}";
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(
-            aguiInput, "minimal_agent", "minimal_tenant", true);
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "minimal_agent", "minimal_tenant", true);
 
         assertNotNull("Converted result should not be null", result);
         assertEquals("Agent ID should be set correctly", "minimal_agent", result.getAgentId());
         assertTrue("Async should be true, but was: " + result.getIsAsync(), result.getIsAsync());
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-        assertTrue("Should contain thread ID",
-                  inputDataSet.getParameters().containsKey("agui_thread_id"));
-        assertEquals("Thread ID should match", "thread_minimal",
-                    inputDataSet.getParameters().get("agui_thread_id"));
+        assertTrue("Should contain thread ID", inputDataSet.getParameters().containsKey("agui_thread_id"));
+        assertEquals("Thread ID should match", "thread_minimal", inputDataSet.getParameters().get("agui_thread_id"));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -126,10 +115,8 @@ public class AGUIInputConverterTest {
 
         assertNotNull("Reconstructed result should not be null", result);
         assertTrue("Should contain threadId", result.has("threadId"));
-        assertEquals("Thread ID should match", "reconstruct_thread",
-                    result.get("threadId").getAsString());
+        assertEquals("Thread ID should match", "reconstruct_thread", result.get("threadId").getAsString());
         assertTrue("Should contain runId", result.has("runId"));
-        assertEquals("Run ID should match", "reconstruct_run",
-                    result.get("runId").getAsString());
+        assertEquals("Run ID should match", "reconstruct_run", result.get("runId").getAsString());
     }
 }
