@@ -6,15 +6,24 @@
 package org.opensearch.ml.rest;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.opensearch.ml.common.output.model.ModelTensor.DATA_AS_MAP_FIELD;
 import static org.opensearch.ml.rest.RestMLRemoteInferenceIT.disableClusterConnectorAccessControl;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
+import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.utils.TestHelper;
 
 public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
@@ -143,8 +152,25 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
             + "}";
         String agentId = createAgent(registerAgentRequestBody);
         String agentInput = "{\n" + "  \"parameters\": {\n" + "    \"messages\": \"hello\"\n" + "  }\n" + "}";
-        String result = executeAgent(agentId, agentInput);
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, agentInput, null);
+        String result = parseResponseFromResponse(response);
+        assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
         assertNotNull(result);
     }
 
+    private String parseResponseFromResponse(Response response) throws IOException, ParseException {
+        Map<String, Object> responseInMap = parseResponseToMap(response);
+        return Optional
+            .ofNullable(responseInMap)
+            .map(m -> (List<Object>) m.get(ModelTensorOutput.INFERENCE_RESULT_FIELD))
+            .filter(l -> !l.isEmpty())
+            .map(l -> (Map<String, Object>) l.get(0))
+            .map(m -> (List<Object>) m.get(ModelTensors.OUTPUT_FIELD))
+            .filter(l -> !l.isEmpty())
+            .map(l -> (Map<String, Object>) l.get(0))
+            .map(m -> (Map<String, Object>) m.get(DATA_AS_MAP_FIELD))
+            .map(m -> (String) m.get("response"))
+            .orElseThrow(() -> new AssertionError("Unable to parse response from agent execution"));
+    }
 }
