@@ -373,6 +373,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             mlFeatureEnabledSetting,
                             tenantId,
                             model.getModelGroupId(),
+                            MLTaskGetAction.NAME,
                             client,
                             sdkClient,
                             ActionListener.wrap(access -> {

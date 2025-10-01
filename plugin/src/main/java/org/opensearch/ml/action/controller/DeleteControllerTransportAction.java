@@ -98,49 +98,55 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 Boolean isHidden = mlModel.getIsHidden();
                 modelAccessControlHelper
-                    .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                        if (hasPermission) {
-                            mlModelManager
-                                .getController(
-                                    modelId,
-                                    ActionListener
-                                        .wrap(
-                                            controller -> deleteControllerWithDeployedModel(
+                    .validateModelGroupAccess(
+                        user,
+                        mlModel.getModelGroupId(),
+                        MLControllerDeleteAction.NAME,
+                        client,
+                        ActionListener.wrap(hasPermission -> {
+                            if (hasPermission) {
+                                mlModelManager
+                                    .getController(
+                                        modelId,
+                                        ActionListener
+                                            .wrap(
+                                                controller -> deleteControllerWithDeployedModel(
+                                                    modelId,
+                                                    mlModel.getIsHidden(),
+                                                    wrappedListener
+                                                ),
+                                                deleteException -> {
+                                                    log.error(deleteException);
+                                                    wrappedListener.onFailure(deleteException);
+                                                }
+                                            )
+                                    );
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            getErrorMessage(
+                                                "User doesn't have privilege to perform this operation on this model controller.",
                                                 modelId,
-                                                mlModel.getIsHidden(),
-                                                wrappedListener
+                                                isHidden
                                             ),
-                                            deleteException -> {
-                                                log.error(deleteException);
-                                                wrappedListener.onFailure(deleteException);
-                                            }
+                                            RestStatus.FORBIDDEN
                                         )
+                                    );
+                            }
+                        }, exception -> {
+                            log
+                                .error(
+                                    getErrorMessage(
+                                        "Permission denied: Unable to delete the model controller with the provided model. Details: ",
+                                        modelId,
+                                        isHidden
+                                    ),
+                                    exception
                                 );
-                        } else {
-                            wrappedListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        getErrorMessage(
-                                            "User doesn't have privilege to perform this operation on this model controller.",
-                                            modelId,
-                                            isHidden
-                                        ),
-                                        RestStatus.FORBIDDEN
-                                    )
-                                );
-                        }
-                    }, exception -> {
-                        log
-                            .error(
-                                getErrorMessage(
-                                    "Permission denied: Unable to delete the model controller with the provided model. Details: ",
-                                    modelId,
-                                    isHidden
-                                ),
-                                exception
-                            );
-                        wrappedListener.onFailure(exception);
-                    }));
+                            wrappedListener.onFailure(exception);
+                        })
+                    );
             }, e -> {
                 log
                     .warn(

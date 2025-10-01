@@ -106,10 +106,10 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -132,10 +132,10 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
 
     public void testGetModel_UserHasNoAccess() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLModelGroup();
         doAnswer(invocation -> {
@@ -152,10 +152,10 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
 
     public void testGetModel_ValidateAccessFailed() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLModelGroup();
         doAnswer(invocation -> {
