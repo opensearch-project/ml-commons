@@ -6,11 +6,10 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_FIELD;
 
 import java.io.IOException;
+import java.util.Map;
 
-import org.apache.commons.lang3.StringUtils;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -29,48 +28,36 @@ import lombok.Setter;
 @Setter
 public class MLUpdateMemoryInput implements ToXContentObject, Writeable {
 
-    private String text;
+    private Map<String, Object> updateContent;
 
     @Builder
-    public MLUpdateMemoryInput(String text) {
-        if (StringUtils.isBlank(text)) {
+    public MLUpdateMemoryInput(Map<String, Object> updateContent) {
+        if (updateContent == null || updateContent.size() == 0) {
             throw new IllegalArgumentException("Text cannot be null or empty");
         }
-        this.text = text.trim();
+        this.updateContent = updateContent;
     }
 
     public MLUpdateMemoryInput(StreamInput in) throws IOException {
-        this.text = in.readString();
+        this.updateContent = in.readMap();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(text);
+        out.writeMap(updateContent);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        builder.field(TEXT_FIELD, text);
-        builder.endObject();
-        return builder;
+        return builder.map(updateContent);
     }
 
     public static MLUpdateMemoryInput parse(XContentParser parser) throws IOException {
-        String text = null;
+        Map<String, Object> updateContent = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-            String fieldName = parser.currentName();
-            parser.nextToken();
+        updateContent = parser.map();
 
-            if (TEXT_FIELD.equals(fieldName)) {
-                text = parser.text();
-            } else {
-                parser.skipChildren();
-            }
-        }
-
-        return MLUpdateMemoryInput.builder().text(text).build();
+        return MLUpdateMemoryInput.builder().updateContent(updateContent).build();
     }
 }

@@ -28,15 +28,21 @@ public class MLDeleteMemoryRequestTest {
 
     @Before
     public void setUp() {
-        requestNormal = MLDeleteMemoryRequest.builder().memoryContainerId("container-123").memoryId("memory-456").build();
+        requestNormal = MLDeleteMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("long-term")
+            .memoryId("memory-456")
+            .build();
 
-        requestEmpty = MLDeleteMemoryRequest.builder().memoryContainerId(null).memoryId(null).build();
+        requestEmpty = MLDeleteMemoryRequest.builder().memoryContainerId(null).memoryType(null).memoryId(null).build();
     }
 
     @Test
     public void testBuilderNormal() {
         assertNotNull(requestNormal);
         assertEquals("container-123", requestNormal.getMemoryContainerId());
+        assertEquals("long-term", requestNormal.getMemoryType());
         assertEquals("memory-456", requestNormal.getMemoryId());
     }
 
@@ -44,6 +50,7 @@ public class MLDeleteMemoryRequestTest {
     public void testBuilderWithNullValues() {
         assertNotNull(requestEmpty);
         assertNull(requestEmpty.getMemoryContainerId());
+        assertNull(requestEmpty.getMemoryType());
         assertNull(requestEmpty.getMemoryId());
     }
 
@@ -55,6 +62,7 @@ public class MLDeleteMemoryRequestTest {
         MLDeleteMemoryRequest deserialized = new MLDeleteMemoryRequest(in);
 
         assertEquals(requestNormal.getMemoryContainerId(), deserialized.getMemoryContainerId());
+        assertEquals(requestNormal.getMemoryType(), deserialized.getMemoryType());
         assertEquals(requestNormal.getMemoryId(), deserialized.getMemoryId());
     }
 
@@ -66,7 +74,12 @@ public class MLDeleteMemoryRequestTest {
 
     @Test
     public void testValidateWithNullContainerId() {
-        MLDeleteMemoryRequest request = MLDeleteMemoryRequest.builder().memoryContainerId(null).memoryId("memory-123").build();
+        MLDeleteMemoryRequest request = MLDeleteMemoryRequest
+            .builder()
+            .memoryContainerId(null)
+            .memoryType("long-term")
+            .memoryId("memory-123")
+            .build();
 
         ActionRequestValidationException exception = request.validate();
         assertNotNull(exception);
@@ -76,7 +89,12 @@ public class MLDeleteMemoryRequestTest {
 
     @Test
     public void testValidateWithNullMemoryId() {
-        MLDeleteMemoryRequest request = MLDeleteMemoryRequest.builder().memoryContainerId("container-123").memoryId(null).build();
+        MLDeleteMemoryRequest request = MLDeleteMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("long-term")
+            .memoryId(null)
+            .build();
 
         ActionRequestValidationException exception = request.validate();
         assertNotNull(exception);
@@ -88,9 +106,25 @@ public class MLDeleteMemoryRequestTest {
     public void testValidateWithBothNull() {
         ActionRequestValidationException exception = requestEmpty.validate();
         assertNotNull(exception);
-        assertEquals(2, exception.validationErrors().size());
+        assertEquals(3, exception.validationErrors().size());
         assertTrue(exception.validationErrors().get(0).contains("Memory container id can't be null"));
-        assertTrue(exception.validationErrors().get(1).contains("Memory id can't be null"));
+        assertTrue(exception.validationErrors().get(1).contains("Memory type can't be null"));
+        assertTrue(exception.validationErrors().get(2).contains("Memory id can't be null"));
+    }
+
+    @Test
+    public void testValidateWithNullMemoryType() {
+        MLDeleteMemoryRequest request = MLDeleteMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType(null)
+            .memoryId("memory-456")
+            .build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertEquals(1, exception.validationErrors().size());
+        assertTrue(exception.validationErrors().get(0).contains("Memory type can't be null"));
     }
 
     @Test
@@ -112,6 +146,7 @@ public class MLDeleteMemoryRequestTest {
             public void writeTo(StreamOutput out) throws IOException {
                 super.writeTo(out);
                 out.writeString("test-container");
+                out.writeString("test-type");
                 out.writeString("test-memory");
             }
         };
@@ -119,6 +154,7 @@ public class MLDeleteMemoryRequestTest {
         MLDeleteMemoryRequest result = MLDeleteMemoryRequest.fromActionRequest(mockRequest);
         assertNotNull(result);
         assertEquals("test-container", result.getMemoryContainerId());
+        assertEquals("test-type", result.getMemoryType());
         assertEquals("test-memory", result.getMemoryId());
     }
 
@@ -145,6 +181,7 @@ public class MLDeleteMemoryRequestTest {
         MLDeleteMemoryRequest specialRequest = MLDeleteMemoryRequest
             .builder()
             .memoryContainerId("container-with-special-chars-🚀")
+            .memoryType("long-term")
             .memoryId("memory-with-\n\ttabs-and-\"quotes\"")
             .build();
 
@@ -155,15 +192,22 @@ public class MLDeleteMemoryRequestTest {
         MLDeleteMemoryRequest deserialized = new MLDeleteMemoryRequest(in);
 
         assertEquals(specialRequest.getMemoryContainerId(), deserialized.getMemoryContainerId());
+        assertEquals(specialRequest.getMemoryType(), deserialized.getMemoryType());
         assertEquals(specialRequest.getMemoryId(), deserialized.getMemoryId());
     }
 
     @Test
     public void testEmptyStrings() {
-        MLDeleteMemoryRequest emptyStringRequest = MLDeleteMemoryRequest.builder().memoryContainerId("").memoryId("").build();
+        MLDeleteMemoryRequest emptyStringRequest = MLDeleteMemoryRequest
+            .builder()
+            .memoryContainerId("")
+            .memoryType("")
+            .memoryId("")
+            .build();
 
         assertNotNull(emptyStringRequest);
         assertEquals("", emptyStringRequest.getMemoryContainerId());
+        assertEquals("", emptyStringRequest.getMemoryType());
         assertEquals("", emptyStringRequest.getMemoryId());
 
         // Empty strings should pass validation (only null check in validate method)
@@ -182,6 +226,7 @@ public class MLDeleteMemoryRequestTest {
         MLDeleteMemoryRequest longRequest = MLDeleteMemoryRequest
             .builder()
             .memoryContainerId(longId.toString())
+            .memoryType("long-term")
             .memoryId(longId.toString() + "-memory")
             .build();
 
@@ -192,6 +237,7 @@ public class MLDeleteMemoryRequestTest {
         MLDeleteMemoryRequest deserialized = new MLDeleteMemoryRequest(in);
 
         assertEquals(longRequest.getMemoryContainerId(), deserialized.getMemoryContainerId());
+        assertEquals(longRequest.getMemoryType(), deserialized.getMemoryType());
         assertEquals(longRequest.getMemoryId(), deserialized.getMemoryId());
     }
 }

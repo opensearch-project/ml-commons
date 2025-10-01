@@ -112,12 +112,12 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         String requestBody = "{\n"
             + "  \"name\": \"test-memory-container\",\n"
             + "  \"description\": \"Test memory container description\",\n"
-            + "  \"memory_storage_config\": {\n"
-            + "    \"memory_index_name\": \"test-memory-index\",\n"
+            + "  \"configuration\": {\n"
+            + "    \"index_prefix\": \"test\",\n"
             + "    \"embedding_model_type\": \"TEXT_EMBEDDING\",\n"
             + "    \"embedding_model_id\": \"test-embedding-model\",\n"
-            + "    \"llm_model_id\": \"test-llm-model\",\n"
-            + "    \"dimension\": 768,\n"
+            + "    \"llm_id\": \"test-llm-model\",\n"
+            + "    \"embedding_dimension\": 768,\n"
             + "    \"max_infer_size\": 8\n"
             + "  }\n"
             + "}";
@@ -130,8 +130,11 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("test-memory-container", input.getName());
         assertEquals("Test memory container description", input.getDescription());
-        assertNotNull(input.getMemoryStorageConfig());
-        assertEquals("test-memory-index", input.getMemoryStorageConfig().getMemoryIndexName());
+        assertNotNull(input.getConfiguration());
+        assertEquals(".plugins-ml-am-test-memory-session", input.getConfiguration().getSessionIndexName());
+        assertEquals(".plugins-ml-am-test-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-history", input.getConfiguration().getLongMemoryHistoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-long-term", input.getConfiguration().getLongMemoryIndexName());
         assertNull(input.getTenantId()); // Multi-tenancy disabled
     }
 
@@ -146,7 +149,7 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("minimal-container", input.getName());
         assertNull(input.getDescription());
-        assertNull(input.getMemoryStorageConfig());
+        assertNotNull(input.getConfiguration());
         assertNull(input.getTenantId());
     }
 
@@ -214,11 +217,11 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         String requestBody = "{\n"
             + "  \"name\": \"complex-container\",\n"
             + "  \"description\": \"Complex container with full config\",\n"
-            + "  \"memory_storage_config\": {\n"
-            + "    \"memory_index_name\": \"complex-memory-index\",\n"
+            + "  \"configuration\": {\n"
+            + "    \"index_prefix\": \"complex-memory-index\",\n"
             + "    \"embedding_model_type\": \"SPARSE_ENCODING\",\n"
             + "    \"embedding_model_id\": \"sparse-model\",\n"
-            + "    \"llm_model_id\": \"complex-llm-model\",\n"
+            + "    \"llm_id\": \"complex-llm-model\",\n"
             + "    \"max_infer_size\": 10\n"
             + "  }\n"
             + "}";
@@ -233,11 +236,11 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(input);
         assertEquals("complex-container", input.getName());
         assertEquals("Complex container with full config", input.getDescription());
-        assertNotNull(input.getMemoryStorageConfig());
-        assertEquals("complex-memory-index", input.getMemoryStorageConfig().getMemoryIndexName());
-        assertEquals("sparse-model", input.getMemoryStorageConfig().getEmbeddingModelId());
-        assertEquals("complex-llm-model", input.getMemoryStorageConfig().getLlmModelId());
-        assertEquals(Integer.valueOf(10), input.getMemoryStorageConfig().getMaxInferSize());
+        assertNotNull(input.getConfiguration());
+        assertEquals(".plugins-ml-am-complex-memory-index-memory-working", input.getConfiguration().getWorkingMemoryIndexName());
+        assertEquals("sparse-model", input.getConfiguration().getEmbeddingModelId());
+        assertEquals("complex-llm-model", input.getConfiguration().getLlmId());
+        assertEquals(Integer.valueOf(10), input.getConfiguration().getMaxInferSize());
     }
 
     public void testPrepareRequestWithInvalidContent() throws Exception {

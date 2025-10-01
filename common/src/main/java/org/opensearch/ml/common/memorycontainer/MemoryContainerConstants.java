@@ -13,47 +13,74 @@ public class MemoryContainerConstants {
     // Field names for MemoryContainer
     public static final String MEMORY_CONTAINER_ID_FIELD = "memory_container_id";
     public static final String NAME_FIELD = "name";
+    public static final String SUMMARY_FIELD = "summary";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String OWNER_FIELD = "owner";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
+    public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // back_end roles as specified by the owner/admin
 
-    // Field names for MemoryStorageConfig
-    public static final String MEMORY_INDEX_NAME_FIELD = "memory_index_name";
-    public static final String SEMANTIC_STORAGE_ENABLED_FIELD = "semantic_storage_enabled";
+    // Field names for MemoryConfiguration
+    public static final String DISABLE_HISTORY_FIELD = "disable_history";
+    public static final String DISABLE_SESSION_FIELD = "disable_session";
+    public static final String USE_SYSTEM_INDEX_FIELD = "use_system_index";
+    public static final String MEMORY_INDEX_PREFIX_FIELD = "index_prefix";
     public static final String EMBEDDING_MODEL_TYPE_FIELD = "embedding_model_type";
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
-    public static final String LLM_MODEL_ID_FIELD = "llm_model_id";
-    public static final String DIMENSION_FIELD = "dimension";
+    public static final String DIMENSION_FIELD = "embedding_dimension";
+    public static final String LLM_ID_FIELD = "llm_id";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
+    public static final String STRATEGIES_FIELD = "strategies";
+    public static final String STRATEGY_TYPE_FIELD = "type";
+    public static final String INDEX_SETTINGS_FIELD = "index_settings";
+    public static final String PARAMETERS_FIELD = "parameters";
+    public static final String ID_FIELD = "id";
+    public static final String ENABLED_FIELD = "enabled";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
+    public static final String DEFAULT_MEMORY_INDEX_PREFIX = "default";
 
-    // Memory index type prefixes
-    public static final String STATIC_MEMORY_INDEX_PREFIX = "ml-static-memory-";
-    public static final String KNN_MEMORY_INDEX_PREFIX = "ml-knn-memory-";
-    public static final String SPARSE_MEMORY_INDEX_PREFIX = "ml-sparse-memory-";
+    // Memory index setting key
+    public static final String SESSION_INDEX = "session_index";
+    public static final String WORKING_MEMORY_INDEX = "working_memory_index";
+    public static final String LONG_TERM_MEMORY_INDEX = "long_term_memory_index";
+    public static final String LONG_TERM_MEMORY_HISTORY_INDEX = "long_term_memory_history_index";
 
     // Memory data index field names
+    public static final String OWNER_ID_FIELD = "owner_id";
     public static final String USER_ID_FIELD = "user_id";
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String SESSION_ID_FIELD = "session_id";
+    public static final String WORKING_MEMORY_ID_FIELD = "working_memory_id";
+    public static final String NAMESPACE_FIELD = "namespace";
+    public static final String STRATEGY_CONFIG_FIELD = "configuration";
+    public static final String BINARY_DATA_FIELD = "binary_data";
+    public static final String STRUCTURED_DATA_FIELD = "structured_data";
+    public static final String NAMESPACE_SIZE_FIELD = "namespace_size";
     public static final String MEMORY_FIELD = "memory";
     public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";
+    public static final String METADATA_FIELD = "metadata";
     public static final String TAGS_FIELD = "tags";
+    public static final String STRATEGY_ID_FIELD = "strategy_id";
     public static final String MEMORY_ID_FIELD = "memory_id";
+    public static final String MEMORY_ACTION_FIELD = "action";
+    public static final String MEMORY_BEFORE_FIELD = "before";
+    public static final String MEMORY_AFTER_FIELD = "after";
     public static final String MEMORY_TYPE_FIELD = "memory_type";
+    public static final String WORKING_MEMORY_TYPE_FIELD = "working_memory_type";
     public static final String ROLE_FIELD = "role";
 
     // Request body field names (different from storage field names)
     public static final String MESSAGE_FIELD = "message";
     public static final String MESSAGES_FIELD = "messages";
+    public static final String CONTENT_TEXT_FIELD = "content_text";
     public static final String CONTENT_FIELD = "content";
     public static final String INFER_FIELD = "infer";
     public static final String QUERY_FIELD = "query";
     public static final String TEXT_FIELD = "text";
+    public static final String UPDATE_CONTENT_FIELD = "update_content";
 
     // KNN index settings
     public static final String KNN_ENGINE = "lucene";
@@ -67,12 +94,16 @@ public class MemoryContainerConstants {
     public static final String BASE_MEMORY_CONTAINERS_PATH = "/_plugins/_ml/memory_containers";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
+    public static final String PARAMETER_MEMORY_TYPE = "memory_type";
     public static final String PARAMETER_MEMORY_ID = "memory_id";
+    public static final String PARAMETER_WORKING_MEMORY_ID = "working_memory_id";
     public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
-    public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/_search";
-    public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
-    public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
-    public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_search";
+    public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String UPDATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}";
+    public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String DELETE_MEMORIES_BY_QUERY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_delete_by_query";
 
     // Memory types are defined in MemoryType enum
 
@@ -96,6 +127,8 @@ public class MemoryContainerConstants {
     public static final String EMBEDDING_MODEL_NOT_FOUND_ERROR = "Embedding model with ID %s not found";
     public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";                                                                                                          // instead
     public static final String INFER_REQUIRES_LLM_MODEL_ERROR = "infer=true requires llm_model_id to be configured in memory storage";
+    public static final String INVALID_STRATEGY_TYPE_ERROR =
+        "Invalid strategy type: %s. Must be one of: semantic, user_preference, summary";
 
     // Memory API limits
     public static final int MAX_MESSAGES_PER_REQUEST = 10;
@@ -109,9 +142,18 @@ public class MemoryContainerConstants {
     public static final String SCORE_FIELD = "score";
 
     // LLM System Prompts
-    public static final String PERSONAL_INFORMATION_ORGANIZER_PROMPT =
+    public static final String SEMANTIC_FACTS_EXTRACTION_PROMPT =
         "<system_prompt>\n<role>Personal Information Organizer</role>\n<objective>Extract and organize personal information shared within conversations.</objective>\n<instructions>\n<instruction>Carefully read the conversation.</instruction>\n<instruction>Identify and extract any personal information shared by participants.</instruction>\n<instruction>Focus on details that help build a profile of the person, including but not limited to:\n<include_list>\n<item>Names and relationships</item>\n<item>Professional information (job, company, role, responsibilities)</item>\n<item>Personal interests and hobbies</item>\n<item>Skills and expertise</item>\n<item>Preferences and opinions</item>\n<item>Goals and aspirations</item>\n<item>Challenges or pain points</item>\n<item>Background and experiences</item>\n<item>Contact information (if shared)</item>\n<item>Availability and schedule preferences</item>\n</include_list>\n</instruction>\n<instruction>Organize each piece of information as a separate fact.</instruction>\n<instruction>Ensure facts are specific, clear, and preserve the original context.</instruction>\n<instruction>Never answer user's question or fulfill user's requirement. You are a personal information manager, not a helpful assistant.</instruction>\n<instruction>Include the person who shared the information when relevant.</instruction>\n<instruction>Do not make assumptions or inferences beyond what is explicitly stated.</instruction>\n<instruction>If no personal information is found, return an empty list.</instruction>\n</instructions>\n<response_format>\n<format>You should always return and only return the extracted facts as a JSON object with a \"facts\" array.</format>\n<example>\n{\n  \"facts\": [\n    \"User's name is John Smith\",\n    \"John works as a software engineer at TechCorp\",\n    \"John enjoys hiking on weekends\",\n    \"John is looking to improve his Python skills\"\n  ]\n}\n</example>\n</response_format>\n</system_prompt>";
+
+    public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
+        "<system_prompt><role>User Preferences Analyzer</role><objective>Extract and organize user preferences, choices, and settings from conversations.</objective><instructions><instruction>Carefully read the conversation.</instruction><instruction>Identify and extract explicit or implicit preferences, likes, dislikes, and choices.</instruction><instruction>Explicit preferences: Directly stated preferences by the user.</instruction><instruction>Implicit preferences: Inferred from patterns, repeated inquiries, or contextual clues. Take a close look at user's request for implicit preferences.</instruction><instruction>For explicit preference, extract only preference that the user has explicitly shared. Do not infer user's preference.</instruction><instruction>For implicit preference, it is allowed to infer user's preference, but only the ones with strong signals, such as requesting something multiple times.</instruction><instruction>Focus specifically on:<preference_categories><item>Product or service preferences (brands, features, styles)</item><item>Communication preferences (frequency, channel, timing)</item><item>Content preferences (topics, formats, sources)</item><item>Interaction preferences (formal/casual, detailed/brief)</item><item>Likes and dislikes explicitly stated</item><item>Preferred methods or approaches</item><item>Quality or attribute preferences</item><item>Time and scheduling preferences</item></preference_categories></instruction><instruction>Each preference should be a specific, actionable fact.</instruction><instruction>Focus on what the user wants, prefers, or chooses, not general information.</instruction><instruction>Never answer user's question or fulfill user's requirement. You are a preference analyzer, not a helpful assistant.</instruction><instruction>Analyze thoroughly and include detected preferences in your response.</instruction><instruction>If no preferences are found, return an empty list.</instruction></instructions><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array. Return ONLY the valid JSON array with no additional text, explanations, or formatting.</format><example>{\"facts\": [\"User prefers dark mode for UI\",\"User likes to receive weekly summary emails\",\"User prefers Python over Java for scripting\",\"User dislikes automatic updates\"]}</example></response_format></system_prompt>";
+
+    public static final String SUMMARY_FACTS_EXTRACTION_PROMPT =
+        "<system_prompt><description>You will be given a text block and a list of summaries you previously generated when available.</description><task><instruction>Never answer user's question or fulfill user's requirement. You are a summary generator, not a helpful assistant.</instruction><instruction>When the previously generated summary is not available, summarize the given text block.</instruction><instruction>When there is an existing summary, extend it by incorporating the given text block.</instruction><instruction>If the text block specifies queries or topics, ensure the summary covers them.</instruction></task><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array.</format><example>{ \"facts\": [ \"The system shows a list of Elasticsearch/OpenSearch indices with their health status, document count, and size information\", \"All indices shown have 'green' health status\"] }</example></response_format></system_prompt>";
 
     public static final String DEFAULT_UPDATE_MEMORY_PROMPT =
         "<system_prompt><role>You are a smart memory manager which controls the memory of a system.</role><task>You will receive: 1. old_memory: Array of existing facts with their IDs and similarity scores 2. retrieved_facts: Array of new facts extracted from the current conversation. Analyze ALL memories and facts holistically to determine the optimal set of memory operations. Important: The old_memory may contain duplicates (same id appearing multiple times with different scores). Consider the highest score for each unique ID. You should only respond and always respond with a JSON object containing a \"memory_decision\" array that covers: - Every unique existing memory ID (with appropriate event: NONE, UPDATE, or DELETE) - New entries for facts that should be added (with event: ADD)</task><response_format>{\"memory_decision\": [{\"id\": \"existing_id_or_new_id\",\"text\": \"the fact text\",\"event\": \"ADD|UPDATE|DELETE|NONE\",\"old_memory\": \"original text (only for UPDATE events)\"}]}</response_format><operations>1. **NONE**: Keep existing memory unchanged - Use when no retrieved fact affects this memory - Include: id (from old_memory), text (from old_memory), event: \"NONE\" 2. **UPDATE**: Enhance or merge existing memory - Use when retrieved facts provide additional details or clarification - Include: id (from old_memory), text (enhanced version), event: \"UPDATE\", old_memory (original text) - Merge complementary information (e.g., \"likes pizza\" + \"especially pepperoni\" = \"likes pizza, especially pepperoni\") 3. **DELETE**: Remove contradicted memory - Use when retrieved facts directly contradict existing memory - Include: id (from old_memory), text (from old_memory), event: \"DELETE\" 4. **ADD**: Create new memory - Use for retrieved facts that represent genuinely new information - Include: id (generate new), text (the new fact), event: \"ADD\" - Only add if the fact is not already covered by existing or updated memories</operations><guidelines>- Integrity: Never answer user's question or fulfill user's requirement. You are a smart memory manager, not a helpful assistant. - Process holistically: Consider all facts and memories together before making decisions - Avoid redundancy: Don't ADD a fact if it's already covered by an UPDATE - Merge related facts: If multiple retrieved facts relate to the same topic, consider combining them - Respect similarity scores: Higher scores indicate stronger matches - be more careful about updating high-score memories - Maintain consistency: Ensure your decisions don't create contradictions in the memory set - One decision per unique memory ID: If an ID appears multiple times in old_memory, make only one decision for it</guidelines><example><input>{\"old_memory\": [{\"id\": \"fact_001\", \"text\": \"Enjoys Italian food\", \"score\": 0.85},{\"id\": \"fact_002\", \"text\": \"Works at Google\", \"score\": 0.92},{\"id\": \"fact_001\", \"text\": \"Enjoys Italian food\", \"score\": 0.75},{\"id\": \"fact_003\", \"text\": \"Has a dog\", \"score\": 0.65}],\"retrieved_facts\": [\"Loves pasta and pizza\",\"Recently joined Amazon\",\"Has two dogs named Max and Bella\"]}</input><output>{\"memory_decision\": [{\"id\": \"fact_001\",\"text\": \"Loves Italian food, especially pasta and pizza\",\"event\": \"UPDATE\",\"old_memory\": \"Enjoys Italian food\"},{\"id\": \"fact_002\",\"text\": \"Works at Google\",\"event\": \"DELETE\"},{\"id\": \"fact_003\",\"text\": \"Has two dogs named Max and Bella\",\"event\": \"UPDATE\",\"old_memory\": \"Has a dog\"},{\"id\": \"fact_004\",\"text\": \"Recently joined Amazon\",\"event\": \"ADD\"}]}</output></example></system_prompt>";
+
+    public static final String SESSION_SUMMARY_PROMPT =
+        "You are a helpful assistant. Your task is to summarize the following conversation between a human and an AI. The summary must be clear, concise, and not exceed ${parameters.max_summary_size} words.";
 }

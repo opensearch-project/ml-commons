@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DELETE_MEMORY_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 
 import java.util.HashMap;
 import java.util.List;
@@ -100,11 +101,31 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
         MLDeleteMemoryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
+        assertEquals("test-memory-type", capturedRequest.getMemoryType());
         assertEquals("test-memory-id", capturedRequest.getMemoryId());
     }
 
     public void testPrepareRequestWithMissingContainerId() throws Exception {
         Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MEMORY_TYPE, "test-memory-type");
+        params.put(PARAMETER_MEMORY_ID, "test-memory-id");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.DELETE)
+            .withPath(DELETE_MEMORY_PATH)
+            .withParams(params)
+            .build();
+
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMLDeleteMemoryAction.handleRequest(request, channel, client);
+        });
+
+        assertNotNull(exception);
+    }
+
+    public void testPrepareRequestWithMissingMemoryType() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
         params.put(PARAMETER_MEMORY_ID, "test-memory-id");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -123,6 +144,7 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testPrepareRequestWithMissingMemoryId() throws Exception {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
+        params.put(PARAMETER_MEMORY_TYPE, "test-memory-type");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.DELETE)
@@ -140,6 +162,7 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testPrepareRequestWithEmptyIds() throws Exception {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "");
+        params.put(PARAMETER_MEMORY_TYPE, "");
         params.put(PARAMETER_MEMORY_ID, "");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -158,6 +181,7 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testPrepareRequestWithSpecialCharacters() throws Exception {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "container-with-dashes-123");
+        params.put(PARAMETER_MEMORY_TYPE, "type_with_underscores");
         params.put(PARAMETER_MEMORY_ID, "memory_with_underscores_456");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -174,12 +198,14 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
         MLDeleteMemoryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("container-with-dashes-123", capturedRequest.getMemoryContainerId());
+        assertEquals("type_with_underscores", capturedRequest.getMemoryType());
         assertEquals("memory_with_underscores_456", capturedRequest.getMemoryId());
     }
 
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
+        params.put(PARAMETER_MEMORY_TYPE, "test-memory-type");
         params.put(PARAMETER_MEMORY_ID, "test-memory-id");
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

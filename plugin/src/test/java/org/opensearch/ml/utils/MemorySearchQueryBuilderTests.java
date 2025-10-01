@@ -5,17 +5,29 @@
 
 package org.opensearch.ml.utils;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.query.WrapperQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 
 public class MemorySearchQueryBuilderTests {
 
@@ -66,9 +78,9 @@ public class MemorySearchQueryBuilderTests {
     @Test
     public void testBuildQueryByStorageTypeWithTextEmbedding() throws IOException {
         String queryText = "AI research topics";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("dense-model-789")
             .dimension(768)
@@ -85,9 +97,9 @@ public class MemorySearchQueryBuilderTests {
     @Test
     public void testBuildQueryByStorageTypeWithSparseEncoding() throws IOException {
         String queryText = "computer vision";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-model-999")
             .build();
@@ -98,19 +110,6 @@ public class MemorySearchQueryBuilderTests {
         assertTrue(jsonString.contains("\"neural_sparse\""));
         assertTrue(jsonString.contains("\"query_text\":\"computer vision\""));
         assertTrue(jsonString.contains("\"model_id\":\"sparse-model-999\""));
-    }
-
-    @Test
-    public void testBuildQueryByStorageTypeWithNonSemanticStorage() throws IOException {
-        String queryText = "reinforcement learning";
-        MemoryStorageConfig config = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
-
-        XContentBuilder builder = MemorySearchQueryBuilder.buildQueryByStorageType(queryText, config);
-        String jsonString = builder.toString();
-
-        assertTrue(jsonString.contains("\"match\""));
-        assertTrue(jsonString.contains("\"memory\":\"reinforcement learning\""));
-        assertFalse(jsonString.contains("\"neural\""));
     }
 
     @Test
@@ -130,9 +129,9 @@ public class MemorySearchQueryBuilderTests {
         // Create a config with unsupported type - will fail during build
         assertThrows(
             IllegalArgumentException.class,
-            () -> MemoryStorageConfig
+            () -> MemoryConfiguration
                 .builder()
-                .semanticStorageEnabled(true)
+                .disableHistory(true)
                 .embeddingModelType(FunctionName.KMEANS) // Unsupported type - will throw during build
                 .embeddingModelId("model-123")
                 .build()
@@ -140,93 +139,120 @@ public class MemorySearchQueryBuilderTests {
     }
 
     @Test
-    public void testBuildFactSearchQueryWithTextEmbedding() throws IOException {
-        String fact = "User's name is John";
-        String sessionId = "session-123";
-        MemoryStorageConfig config = MemoryStorageConfig
-            .builder()
-            .semanticStorageEnabled(true)
-            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
-            .embeddingModelId("text-model-456")
-            .dimension(384)
-            .build();
-
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
-        String jsonString = builder.toString();
-
-        // Verify bool query structure
-        assertTrue(jsonString.contains("\"bool\""));
-        assertTrue(jsonString.contains("\"filter\""));
-        assertTrue(jsonString.contains("\"must\""));
-
-        // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-123\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
-
-        // Verify neural query
-        assertTrue(jsonString.contains("\"neural\""));
-        assertTrue(jsonString.contains("\"query_text\":\"User's name is John\""));
-        assertTrue(jsonString.contains("\"model_id\":\"text-model-456\""));
-    }
-
-    @Test
     public void testBuildFactSearchQueryWithSparseEncoding() throws IOException {
         String fact = "Works at TechCorp";
         String sessionId = "session-456";
-        MemoryStorageConfig config = MemoryStorageConfig
+        MemoryConfiguration config = MemoryConfiguration
             .builder()
-            .semanticStorageEnabled(true)
+            .disableHistory(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-model-789")
             .build();
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
-        String jsonString = builder.toString();
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type("semantic")
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
 
-        // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-456\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, config);
 
-        // Verify neural_sparse query
-        assertTrue(jsonString.contains("\"neural_sparse\""));
-        assertTrue(jsonString.contains("\"query_text\":\"Works at TechCorp\""));
-        assertTrue(jsonString.contains("\"model_id\":\"sparse-model-789\""));
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        // Verify filter terms
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_FIELD + "." + SESSION_ID_FIELD) && sessionId.equals(term.value()))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_SIZE_FIELD) && term.value().equals(1))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD) && strategy.getId().equals(term.value()))
+        );
+
+        assertEquals(1, boolQuery.must().size());
+        assertTrue(boolQuery.must().get(0) instanceof WrapperQueryBuilder);
+        WrapperQueryBuilder wrapper = (WrapperQueryBuilder) boolQuery.must().get(0);
+        assertTrue(new String(wrapper.source()).contains("\"neural_sparse\""));
     }
 
     @Test
-    public void testBuildFactSearchQueryWithNonSemanticStorage() throws IOException {
-        String fact = "Lives in San Francisco";
-        String sessionId = "session-789";
-        MemoryStorageConfig config = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
-
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
-        String jsonString = builder.toString();
-
-        // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-789\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
-
-        // Verify match query
-        assertTrue(jsonString.contains("\"match\""));
-        assertTrue(jsonString.contains("\"memory\":\"Lives in San Francisco\""));
-        assertFalse(jsonString.contains("\"neural\""));
-    }
-
-    @Test
-    public void testBuildFactSearchQueryWithNullConfig() throws IOException {
+    public void testBuildFactSearchQueryWithTextEmbedding() throws IOException {
         String fact = "Has a PhD in Computer Science";
         String sessionId = "session-999";
 
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, null);
-        String jsonString = builder.toString();
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type("semantic")
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
 
-        // Verify filters
-        assertTrue(jsonString.contains("\"term\":{\"session_id\":\"session-999\"}"));
-        assertTrue(jsonString.contains("\"term\":{\"memory_type\":\"FACT\"}"));
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(
+                strategy,
+                fact,
+                Map.of(SESSION_ID_FIELD, sessionId),
+                null,
+                MemoryConfiguration
+                    .builder()
+                    .llmId("llm_id1")
+                    .embeddingModelId("embedding_model1")
+                    .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+                    .dimension(512)
+                    .build()
+            );
 
-        // Verify match query (fallback for null config)
-        assertTrue(jsonString.contains("\"match\""));
-        assertTrue(jsonString.contains("\"memory\":\"Has a PhD in Computer Science\""));
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_FIELD + "." + SESSION_ID_FIELD) && sessionId.equals(term.value()))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_SIZE_FIELD) && term.value().equals(1))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD) && strategy.getId().equals(term.value()))
+        );
+
+        assertEquals(1, boolQuery.must().size());
+        assertTrue(boolQuery.must().get(0) instanceof WrapperQueryBuilder);
+        WrapperQueryBuilder wrapper = (WrapperQueryBuilder) boolQuery.must().get(0);
+        assertTrue(new String(wrapper.source()).contains("\"neural\""));
     }
 
     @Test
@@ -236,9 +262,9 @@ public class MemorySearchQueryBuilderTests {
         // Create a config with unsupported type - will fail during build
         assertThrows(
             IllegalArgumentException.class,
-            () -> MemoryStorageConfig
+            () -> MemoryConfiguration
                 .builder()
-                .semanticStorageEnabled(true)
+                .disableHistory(true)
                 .embeddingModelType(FunctionName.LINEAR_REGRESSION) // Unsupported type - will throw during build
                 .embeddingModelId("model-test")
                 .build()
@@ -263,35 +289,6 @@ public class MemorySearchQueryBuilderTests {
         assertTrue(matchJson.contains("Query with"));
         assertTrue(matchJson.contains("quotes"));
         assertTrue(matchJson.contains("newlines"));
-    }
-
-    @Test
-    public void testBuildFactSearchQueryStructure() throws IOException {
-        // Test the exact structure of the fact search query
-        String fact = "Simple fact";
-        String sessionId = "sess-123";
-        MemoryStorageConfig config = MemoryStorageConfig
-            .builder()
-            .semanticStorageEnabled(true)
-            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
-            .embeddingModelId("model-123")
-            .dimension(768)  // Add required dimension for TEXT_EMBEDDING
-            .build();
-
-        XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
-        String jsonString = builder.toString();
-
-        // Verify the query doesn't have a "query" wrapper (as per comment in code)
-        assertFalse(jsonString.startsWith("{\"query\":"));
-
-        // Verify it starts with bool
-        assertTrue(jsonString.startsWith("{\"bool\":"));
-
-        // Verify both filter and must sections exist
-        assertTrue(jsonString.contains("\"filter\":{\"bool\":{\"must\":["));
-        // The JSON structure has changed - filter and must are at different levels
-        // Just verify both sections exist rather than checking exact structure
-        assertTrue(jsonString.contains("\"must\":[{"));
     }
 
     @Test
