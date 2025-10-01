@@ -9,8 +9,9 @@ package org.opensearch.ml.common.memorycontainer;
  * Enum representing the type of memory entry
  */
 public enum MemoryType {
-    RAW_MESSAGE("RAW_MESSAGE"),
-    FACT("FACT");
+    SEMANTIC("SEMANTIC"),
+    USER_PREFERENCE("USER_PREFERENCE"),
+    SUMMARY("SUMMARY");
 
     private final String value;
 
@@ -39,7 +40,7 @@ public enum MemoryType {
             }
         }
 
-        throw new IllegalArgumentException("Invalid memory type: " + value + ". Must be either RAW_MESSAGE or FACT");
+        throw new IllegalArgumentException("Invalid memory type: " + value + ". Must be SEMANTIC, USER_PREFERENCE, or SUMMARY");
     }
 
     @Override

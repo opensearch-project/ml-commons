@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.TestHelper.createTestContent;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,6 +33,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
 
 public class MLAddMemoriesInputTest {
 
@@ -38,43 +42,67 @@ public class MLAddMemoriesInputTest {
     private MLAddMemoriesInput inputNoOptionals;
     private List<MessageInput> testMessages;
     private Map<String, String> testTags;
+    private Map<String, Object> structuredData;
+    private Map<String, String> metadata;
+    private Map<String, String> namespace;
 
     @Before
     public void setUp() {
         testMessages = Arrays
             .asList(
-                new MessageInput("user", "Hello, how are you?"),
-                new MessageInput("assistant", "I'm doing well, thank you!"),
-                new MessageInput("user", "What can you help me with?")
+                MessageInput.builder().role("user").content(createTestContent("Hello, how are you?")).build(),
+                MessageInput.builder().role("assistant").content(createTestContent("I'm doing well, thank you!")).build(),
+                MessageInput.builder().role("user").content(createTestContent("What can you help me with?")).build()
             );
 
         testTags = new HashMap<>();
         testTags.put("topic", "greeting");
         testTags.put("priority", "low");
 
+        structuredData = new HashMap<>();
+        structuredData.put("key1", "value1");
+
+        metadata = new HashMap<>();
+        metadata.put("metadata_key1", "metadata_value1");
+
+        namespace = new HashMap<>();
+        namespace.put(SESSION_ID_FIELD, "session-456");
+        namespace.put("agent_id", "agent-789");
+
         // Input with all fields
         inputWithAllFields = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
+            .memoryType(WorkingMemoryType.CONVERSATIONAL)
             .messages(testMessages)
-            .sessionId("session-456")
-            .agentId("agent-789")
+            .binaryData("test binary data")
+            .structuredData(structuredData)
+            .metadata(metadata)
+            .namespace(namespace)
             .infer(true)
             .tags(testTags)
+            .ownerId("owner-123")
             .build();
 
         // Minimal input (only required fields)
-        inputMinimal = MLAddMemoriesInput.builder().messages(Arrays.asList(new MessageInput(null, "Single message"))).build();
+        inputMinimal = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Single message")).build()))
+            .ownerId("owner-minimal")
+            .build();
 
         // Input without optional fields
-        inputNoOptionals = new MLAddMemoriesInput(
-            "container-999",
-            Arrays.asList(new MessageInput("user", "Test message")),
-            null,
-            null,
-            null,
-            null
-        );
+        inputNoOptionals = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-999")
+            .memoryType(WorkingMemoryType.CONVERSATIONAL)
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Test message")).build()))
+            .namespace(Map.of(SESSION_ID_FIELD, "session-456", "agent_id", "agent-789"))
+            .infer(true)
+            .tags(testTags)
+            .ownerId("owner-999")
+            .build();
     }
 
     @Test
@@ -85,46 +113,21 @@ public class MLAddMemoriesInputTest {
         assertEquals(3, inputWithAllFields.getMessages().size());
         assertEquals("session-456", inputWithAllFields.getSessionId());
         assertEquals("agent-789", inputWithAllFields.getAgentId());
-        assertEquals(Boolean.TRUE, inputWithAllFields.getInfer());
+        assertEquals(Boolean.TRUE, inputWithAllFields.isInfer());
         assertEquals(testTags, inputWithAllFields.getTags());
+        assertEquals("owner-123", inputWithAllFields.getOwnerId());
     }
 
     @Test
     public void testBuilderMinimal() {
         assertNotNull(inputMinimal);
-        assertNull(inputMinimal.getMemoryContainerId());
+        assertEquals("container-123", inputMinimal.getMemoryContainerId());
         assertEquals(1, inputMinimal.getMessages().size());
         assertNull(inputMinimal.getSessionId());
         assertNull(inputMinimal.getAgentId());
-        assertNull(inputMinimal.getInfer());
+        assertFalse(inputMinimal.isInfer());
         assertNull(inputMinimal.getTags());
-    }
-
-    @Test
-    public void testConstructorValidation() {
-        // Test null messages
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput("container-1", null, null, null, null, null)
-        );
-        assertEquals("Messages list cannot be empty", exception.getMessage());
-
-        // Test empty messages
-        exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput("container-1", new ArrayList<>(), null, null, null, null)
-        );
-        assertEquals("Messages list cannot be empty", exception.getMessage());
-
-        // Test that limit is removed - should be able to create with many messages
-        List<MessageInput> manyMessages = new ArrayList<>();
-        for (int i = 0; i < 100; i++) { // Test with 100 messages
-            manyMessages.add(new MessageInput("user", "Message " + i));
-        }
-        // Should not throw exception anymore
-        MLAddMemoriesInput inputWithManyMessages = new MLAddMemoriesInput("container-1", manyMessages, null, null, null, null);
-        assertNotNull(inputWithManyMessages);
-        assertEquals(100, inputWithManyMessages.getMessages().size());
+        assertEquals("owner-minimal", inputMinimal.getOwnerId());
     }
 
     @Test
@@ -145,8 +148,9 @@ public class MLAddMemoriesInputTest {
         }
         assertEquals(inputWithAllFields.getSessionId(), deserialized.getSessionId());
         assertEquals(inputWithAllFields.getAgentId(), deserialized.getAgentId());
-        assertEquals(inputWithAllFields.getInfer(), deserialized.getInfer());
+        assertEquals(inputWithAllFields.isInfer(), deserialized.isInfer());
         assertEquals(inputWithAllFields.getTags(), deserialized.getTags());
+        // Note: ownerId is not serialized in the current implementation
     }
 
     @Test
@@ -157,12 +161,13 @@ public class MLAddMemoriesInputTest {
         StreamInput in = out.bytes().streamInput();
         MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
-        assertNull(deserialized.getMemoryContainerId());
+        assertEquals("container-123", deserialized.getMemoryContainerId());
         assertEquals(1, deserialized.getMessages().size());
         assertNull(deserialized.getSessionId());
         assertNull(deserialized.getAgentId());
-        assertNull(deserialized.getInfer());
+        assertFalse(deserialized.isInfer());
         assertNull(deserialized.getTags());
+        // Note: ownerId is not serialized in the current implementation
     }
 
     @Test
@@ -170,8 +175,10 @@ public class MLAddMemoriesInputTest {
         // Test with empty tags
         MLAddMemoriesInput inputEmptyTags = MLAddMemoriesInput
             .builder()
-            .messages(Arrays.asList(new MessageInput("user", "Test")))
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Test")).build()))
             .tags(new HashMap<>())
+            .ownerId("owner-empty-tags")
             .build();
 
         BytesStreamOutput out = new BytesStreamOutput();
@@ -183,6 +190,82 @@ public class MLAddMemoriesInputTest {
     }
 
     @Test
+    public void testValidateMethod() {
+        // Test null memoryContainerId
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new MLAddMemoriesInput(
+                null,
+                WorkingMemoryType.CONVERSATIONAL,
+                testMessages,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                "owner-1"
+            )
+        );
+        assertEquals("No memory container id provided", exception.getMessage());
+
+        // Test null messages with infer=true
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new MLAddMemoriesInput(
+                "container-1",
+                WorkingMemoryType.CONVERSATIONAL,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                "owner-1"
+            )
+        );
+        assertEquals("No messages provided when inferring memory", exception.getMessage());
+
+        // Test empty messages with infer=true
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> new MLAddMemoriesInput(
+                "container-1",
+                WorkingMemoryType.CONVERSATIONAL,
+                new ArrayList<>(),
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                "owner-1"
+            )
+        );
+        assertEquals("No messages provided when inferring memory", exception.getMessage());
+
+        // Test valid case - null messages with infer=false should pass
+        MLAddMemoriesInput validInput = new MLAddMemoriesInput(
+            "container-1",
+            WorkingMemoryType.CONVERSATIONAL,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            "owner-1"
+        );
+        assertNotNull(validInput);
+    }
+
+    @Test
     public void testToXContent() throws IOException {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         inputWithAllFields.toXContent(builder, EMPTY_PARAMS);
@@ -191,11 +274,12 @@ public class MLAddMemoriesInputTest {
         assertTrue(jsonString.contains("\"memory_container_id\":\"container-123\""));
         assertTrue(jsonString.contains("\"messages\":["));
         assertTrue(jsonString.contains("\"role\":\"user\""));
-        assertTrue(jsonString.contains("\"content\":\"Hello, how are you?\""));
+        assertTrue(jsonString.contains("\"content\":"));
         assertTrue(jsonString.contains("\"session_id\":\"session-456\""));
         assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
         assertTrue(jsonString.contains("\"infer\":true"));
         assertTrue(jsonString.contains("\"topic\":\"greeting\""));
+        assertTrue(jsonString.contains("\"owner_id\":\"owner-123\""));
     }
 
     @Test
@@ -204,13 +288,14 @@ public class MLAddMemoriesInputTest {
         inputMinimal.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
-        assertTrue(!jsonString.contains("\"memory_container_id\""));
+        assertTrue(jsonString.contains("\"memory_container_id\""));
         assertTrue(jsonString.contains("\"messages\":["));
-        assertTrue(jsonString.contains("\"content\":\"Single message\""));
+        assertTrue(jsonString.contains("\"content\":"));
         assertTrue(!jsonString.contains("\"session_id\""));
         assertTrue(!jsonString.contains("\"agent_id\""));
-        assertTrue(!jsonString.contains("\"infer\""));
+        assertTrue(jsonString.contains("\"infer\":false"));
         assertTrue(!jsonString.contains("\"tags\""));
+        assertTrue(jsonString.contains("\"owner_id\":\"owner-minimal\""));
     }
 
     @Test
@@ -218,11 +303,10 @@ public class MLAddMemoriesInputTest {
         String jsonString = "{"
             + "\"memory_container_id\":\"container-123\","
             + "\"messages\":["
-            + "{\"role\":\"user\",\"content\":\"Test message 1\"},"
-            + "{\"role\":\"assistant\",\"content\":\"Test response\"}"
+            + "{\"role\":\"user\",\"content\":[{\"type\":\"text\", \"text\": \"Test message 1\"}]},"
+            + "{\"role\":\"assistant\",\"content\":[{\"type\":\"text\", \"text\": \"Test response\"}]}"
             + "],"
-            + "\"session_id\":\"session-789\","
-            + "\"agent_id\":\"agent-456\","
+            + "\"namespace\": {\"session_id\":\"session-789\", \"agent_id\":\"agent-456\"},"
             + "\"infer\":false,"
             + "\"tags\":{\"key\":\"value\"}"
             + "}";
@@ -232,40 +316,46 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "container-123");
 
         assertEquals("container-123", parsed.getMemoryContainerId());
         assertEquals(2, parsed.getMessages().size());
         assertEquals("user", parsed.getMessages().get(0).getRole());
-        assertEquals("Test message 1", parsed.getMessages().get(0).getContent());
+        assertEquals("Test message 1", parsed.getMessages().get(0).getContent().get(0).get("text"));
         assertEquals("session-789", parsed.getSessionId());
         assertEquals("agent-456", parsed.getAgentId());
-        assertEquals(Boolean.FALSE, parsed.getInfer());
+        assertEquals(Boolean.FALSE, parsed.isInfer());
         assertEquals(1, parsed.getTags().size());
         assertEquals("value", parsed.getTags().get("key"));
     }
 
     @Test
     public void testParseMinimal() throws IOException {
-        String jsonString = "{" + "\"messages\":[" + "{\"content\":\"Minimal message\"}" + "]" + "}";
+        String jsonString = "{"
+            + "\"memory_container_id\":\"container-123\","
+            + "\"messages\":["
+            + "{\"role\":\"user\", \"content\":[{\"type\":\"text\", \"text\": \"Minimal message\"}]}"
+            + "]"
+            + "}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
 
-        assertNull(parsed.getMemoryContainerId());
+        assertNotNull(parsed.getMemoryContainerId());
         assertEquals(1, parsed.getMessages().size());
-        assertEquals("Minimal message", parsed.getMessages().get(0).getContent());
-        assertNull(parsed.getMessages().get(0).getRole());
+        assertEquals("Minimal message", parsed.getMessages().get(0).getContent().get(0).get("text"));
+        assertEquals("user", parsed.getMessages().get(0).getRole());
     }
 
     @Test
     public void testParseWithUnknownFields() throws IOException {
         String jsonString = "{"
-            + "\"messages\":[{\"content\":\"Test\"}],"
+            + "\"messages\":[{\"role\":\"user\", \"content\":[{\"type\":\"text\", \"text\": \"Test\"}]}],"
+            + "\"memory_container_id\":\"container-123\","
             + "\"unknown_field\":\"ignored\","
             + "\"another_unknown\":123"
             + "}";
@@ -275,27 +365,33 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
 
         assertEquals(1, parsed.getMessages().size());
-        assertEquals("Test", parsed.getMessages().get(0).getContent());
+        assertEquals("Test", parsed.getMessages().get(0).getContent().get(0).get("text"));
     }
 
     @Test
     public void testSetters() {
-        MLAddMemoriesInput input = MLAddMemoriesInput.builder().messages(Arrays.asList(new MessageInput("user", "Initial"))).build();
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Initial")).build()))
+            .ownerId("owner-setters")
+            .build();
 
         input.setMemoryContainerId("new-container");
-        input.setSessionId("new-session");
-        input.setAgentId("new-agent");
+        input.setNamespace(Map.of(SESSION_ID_FIELD, "new-session", "agent_id", "new-agent"));
         input.setInfer(true);
         input.setTags(testTags);
+        input.setOwnerId("new-owner");
 
         assertEquals("new-container", input.getMemoryContainerId());
         assertEquals("new-session", input.getSessionId());
         assertEquals("new-agent", input.getAgentId());
-        assertEquals(Boolean.TRUE, input.getInfer());
+        assertEquals(Boolean.TRUE, input.isInfer());
         assertEquals(testTags, input.getTags());
+        assertEquals("new-owner", input.getOwnerId());
     }
 
     @Test
@@ -303,11 +399,16 @@ public class MLAddMemoriesInputTest {
         // Test that we can handle a large number of messages now that limit is removed
         List<MessageInput> manyMessages = new ArrayList<>();
         for (int i = 0; i < 1000; i++) { // Test with 1000 messages
-            manyMessages.add(new MessageInput("user", "Message " + i));
+            manyMessages.add(MessageInput.builder().role("user").content(createTestContent("Message " + i)).build());
         }
 
         // Should succeed with large number of messages
-        MLAddMemoriesInput input = new MLAddMemoriesInput("container-1", manyMessages, null, null, null, null);
+        MLAddMemoriesInput input = MLAddMemoriesInput
+            .builder()
+            .memoryContainerId("container-1")
+            .messages(manyMessages)
+            .ownerId("owner-large")
+            .build();
         assertEquals(1000, input.getMessages().size());
     }
 
@@ -318,16 +419,17 @@ public class MLAddMemoriesInputTest {
 
         List<MessageInput> specialMessages = Arrays
             .asList(
-                new MessageInput("user", "Message with\n\ttabs and \"quotes\""),
-                new MessageInput("assistant", "Response with unicode 🚀✨")
+                MessageInput.builder().role("user").content(createTestContent("Message with\n\ttabs and \"quotes\"")).build(),
+                MessageInput.builder().role("assistant").content(createTestContent("Response with unicode 🚀✨")).build()
             );
 
         MLAddMemoriesInput specialInput = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-with-special-chars")
             .messages(specialMessages)
-            .sessionId("session-🔥")
+            .namespace(Map.of(SESSION_ID_FIELD, "session-🔥"))
             .tags(specialTags)
+            .ownerId("owner-special")
             .build();
 
         // Test serialization round trip
@@ -353,14 +455,14 @@ public class MLAddMemoriesInputTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
 
         // Verify all fields match
         assertEquals(inputWithAllFields.getMemoryContainerId(), parsed.getMemoryContainerId());
         assertEquals(inputWithAllFields.getMessages().size(), parsed.getMessages().size());
         assertEquals(inputWithAllFields.getSessionId(), parsed.getSessionId());
         assertEquals(inputWithAllFields.getAgentId(), parsed.getAgentId());
-        assertEquals(inputWithAllFields.getInfer(), parsed.getInfer());
+        assertEquals(inputWithAllFields.isInfer(), parsed.isInfer());
         assertEquals(inputWithAllFields.getTags(), parsed.getTags());
     }
 }

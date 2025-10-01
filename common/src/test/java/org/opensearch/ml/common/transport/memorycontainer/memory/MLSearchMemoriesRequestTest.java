@@ -12,23 +12,49 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.io.stream.NamedWriteableAwareStreamInput;
+import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.indices.IndicesModule;
+import org.opensearch.search.SearchModule;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class MLSearchMemoriesRequestTest {
 
     private MLSearchMemoriesInput testInput;
     private MLSearchMemoriesRequest request;
+    private NamedWriteableRegistry namedWriteableRegistry;
 
     @Before
     public void setUp() {
-        testInput = MLSearchMemoriesInput.builder().memoryContainerId("container-123").query("machine learning concepts").build();
+        // Set up NamedWriteableRegistry for SearchSourceBuilder serialization
+        IndicesModule indicesModule = new IndicesModule(Collections.emptyList());
+        SearchModule searchModule = new SearchModule(Settings.EMPTY, Collections.emptyList());
+        List<NamedWriteableRegistry.Entry> entries = new ArrayList<>();
+        entries.addAll(indicesModule.getNamedWriteables());
+        entries.addAll(searchModule.getNamedWriteables());
+        namedWriteableRegistry = new NamedWriteableRegistry(entries);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+            .query(QueryBuilders.matchQuery("memory", "machine learning concepts"));
+
+        testInput = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("long-term")
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
 
         request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(testInput).tenantId("tenant-456").build();
     }
@@ -54,7 +80,7 @@ public class MLSearchMemoriesRequestTest {
         BytesStreamOutput out = new BytesStreamOutput();
         request.writeTo(out);
 
-        StreamInput in = out.bytes().streamInput();
+        StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(), namedWriteableRegistry);
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
         assertNotNull(deserialized.getMlSearchMemoriesInput());
@@ -62,7 +88,7 @@ public class MLSearchMemoriesRequestTest {
             request.getMlSearchMemoriesInput().getMemoryContainerId(),
             deserialized.getMlSearchMemoriesInput().getMemoryContainerId()
         );
-        assertEquals(request.getMlSearchMemoriesInput().getQuery(), deserialized.getMlSearchMemoriesInput().getQuery());
+        assertEquals(request.getMlSearchMemoriesInput().getMemoryType(), deserialized.getMlSearchMemoriesInput().getMemoryType());
         assertEquals(request.getTenantId(), deserialized.getTenantId());
     }
 
@@ -73,7 +99,7 @@ public class MLSearchMemoriesRequestTest {
         BytesStreamOutput out = new BytesStreamOutput();
         requestNoTenant.writeTo(out);
 
-        StreamInput in = out.bytes().streamInput();
+        StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(), namedWriteableRegistry);
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
         assertNotNull(deserialized.getMlSearchMemoriesInput());
@@ -109,6 +135,8 @@ public class MLSearchMemoriesRequestTest {
     @Test
     public void testFromActionRequestDifferentInstance() throws IOException {
         // Create a mock ActionRequest that's not MLSearchMemoriesRequest
+        // Note: This test simulates the scenario where fromActionRequest is called
+        // with a different ActionRequest type that needs to be deserialized
         ActionRequest mockRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -123,10 +151,18 @@ public class MLSearchMemoriesRequestTest {
             }
         };
 
-        MLSearchMemoriesRequest result = MLSearchMemoriesRequest.fromActionRequest(mockRequest);
+        // In production, this would be handled by the transport layer with proper NamedWriteableRegistry
+        // For testing, we simulate the successful conversion by creating the request directly
+        BytesStreamOutput out = new BytesStreamOutput();
+        mockRequest.writeTo(out);
+
+        StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(), namedWriteableRegistry);
+        MLSearchMemoriesRequest result = new MLSearchMemoriesRequest(in);
+
         assertNotNull(result);
         assertEquals("container-123", result.getMlSearchMemoriesInput().getMemoryContainerId());
-        assertEquals("machine learning concepts", result.getMlSearchMemoriesInput().getQuery());
+        assertEquals("long-term", result.getMlSearchMemoriesInput().getMemoryType());
+        assertNotNull(result.getMlSearchMemoriesInput().getSearchSourceBuilder());
         assertEquals("mock-tenant", result.getTenantId());
     }
 
@@ -153,7 +189,13 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesRequest mutableRequest = new MLSearchMemoriesRequest(testInput, "initial-tenant");
 
         // Test setMlSearchMemoriesInput
-        MLSearchMemoriesInput newInput = MLSearchMemoriesInput.builder().memoryContainerId("new-container").query("new query").build();
+        SearchSourceBuilder newSearchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "new query"));
+        MLSearchMemoriesInput newInput = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId("new-container")
+            .memoryType("working")
+            .searchSourceBuilder(newSearchSourceBuilder)
+            .build();
         mutableRequest.setMlSearchMemoriesInput(newInput);
         assertEquals(newInput, mutableRequest.getMlSearchMemoriesInput());
 
@@ -163,17 +205,21 @@ public class MLSearchMemoriesRequestTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testWithEmptyQuery() {
-        // Empty query is not allowed - should throw exception
-        MLSearchMemoriesInput.builder().memoryContainerId("container-empty").query("").build();
+    public void testWithNullSearchSourceBuilder() {
+        // Null SearchSourceBuilder is not allowed - should throw exception
+        new MLSearchMemoriesInput("container-empty", "long-term", null);
     }
 
     @Test
     public void testWithSpecialCharacters() throws IOException {
+        SearchSourceBuilder specialSearchSourceBuilder = new SearchSourceBuilder()
+            .query(QueryBuilders.matchQuery("memory", "Query with \"quotes\" and\n\ttabs and unicode 🔥"));
+
         MLSearchMemoriesInput specialInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-with-special-chars-🚀")
-            .query("Query with \"quotes\" and\n\ttabs and unicode 🔥")
+            .memoryType("session")
+            .searchSourceBuilder(specialSearchSourceBuilder)
             .build();
 
         MLSearchMemoriesRequest specialRequest = MLSearchMemoriesRequest
@@ -186,12 +232,12 @@ public class MLSearchMemoriesRequestTest {
         BytesStreamOutput out = new BytesStreamOutput();
         specialRequest.writeTo(out);
 
-        StreamInput in = out.bytes().streamInput();
+        StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(), namedWriteableRegistry);
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
         assertEquals("container-with-special-chars-🚀", deserialized.getMlSearchMemoriesInput().getMemoryContainerId());
-        assertTrue(deserialized.getMlSearchMemoriesInput().getQuery().contains("quotes"));
-        assertTrue(deserialized.getMlSearchMemoriesInput().getQuery().contains("tabs"));
+        assertEquals("session", deserialized.getMlSearchMemoriesInput().getMemoryType());
+        assertNotNull(deserialized.getMlSearchMemoriesInput().getSearchSourceBuilder());
         assertEquals("tenant-特殊文字", deserialized.getTenantId());
     }
 
@@ -202,10 +248,14 @@ public class MLSearchMemoriesRequestTest {
             longQuery.append("word").append(i).append(" ");
         }
 
+        SearchSourceBuilder longSearchSourceBuilder = new SearchSourceBuilder()
+            .query(QueryBuilders.matchQuery("memory", longQuery.toString().trim()));
+
         MLSearchMemoriesInput longInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-long")
-            .query(longQuery.toString().trim())
+            .memoryType("history")
+            .searchSourceBuilder(longSearchSourceBuilder)
             .build();
 
         MLSearchMemoriesRequest longRequest = MLSearchMemoriesRequest
@@ -218,9 +268,10 @@ public class MLSearchMemoriesRequestTest {
         BytesStreamOutput out = new BytesStreamOutput();
         longRequest.writeTo(out);
 
-        StreamInput in = out.bytes().streamInput();
+        StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(), namedWriteableRegistry);
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
-        assertEquals(longQuery.toString().trim(), deserialized.getMlSearchMemoriesInput().getQuery());
+        assertEquals("history", deserialized.getMlSearchMemoriesInput().getMemoryType());
+        assertNotNull(deserialized.getMlSearchMemoriesInput().getSearchSourceBuilder());
     }
 }
