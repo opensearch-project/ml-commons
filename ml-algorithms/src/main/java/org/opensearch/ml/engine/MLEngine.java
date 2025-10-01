@@ -194,13 +194,17 @@ public class MLEngine {
             if (executable == null) {
                 throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
             }
-            executable.execute(input, listener, channel);
+            executable.execute(input, listener);
         } else {
             Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
             if (executable == null) {
                 throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
             }
-            executable.execute(input, listener, channel);
+            if (channel != null) {
+                executable.execute(input, listener, channel);
+                return;
+            }
+            executable.execute(input, listener);
         }
     }
 
