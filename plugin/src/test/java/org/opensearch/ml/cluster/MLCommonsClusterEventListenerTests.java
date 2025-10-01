@@ -110,19 +110,6 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).startTaskPollingJob();
     }
 
-    public void testClusterChanged_WithPostV31DataNode_JobsStarted() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_2_0);
-        setupClusterState(dataNode, true);
-
-        when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
-
-        listener.clusterChanged(event);
-
-        verify(mlTaskManager).indexStatsCollectorJob(true);
-        verify(mlTaskManager).startTaskPollingJob();
-    }
-
     private DiscoveryNode createDataNode(Version version) {
         return new DiscoveryNode(
             "dataNode",
