@@ -29,6 +29,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryRequest;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryResponse;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
@@ -41,7 +42,8 @@ import lombok.extern.log4j.Log4j2;
  * Transport action for deleting memories by query
  */
 @Log4j2
-public class TransportDeleteMemoriesByQueryAction extends HandledTransportAction<MLDeleteMemoriesByQueryRequest, BulkByScrollResponse> {
+public class TransportDeleteMemoriesByQueryAction extends
+    HandledTransportAction<MLDeleteMemoriesByQueryRequest, MLDeleteMemoriesByQueryResponse> {
 
     private final Client client;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -62,7 +64,11 @@ public class TransportDeleteMemoriesByQueryAction extends HandledTransportAction
     }
 
     @Override
-    protected void doExecute(Task task, MLDeleteMemoriesByQueryRequest request, ActionListener<BulkByScrollResponse> actionListener) {
+    protected void doExecute(
+        Task task,
+        MLDeleteMemoriesByQueryRequest request,
+        ActionListener<MLDeleteMemoriesByQueryResponse> actionListener
+    ) {
         // Step 1: Check if agentic memory feature is enabled
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
             actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
@@ -102,15 +108,29 @@ public class TransportDeleteMemoriesByQueryAction extends HandledTransportAction
                 return;
             }
 
-            // Step 5: Build the DeleteByQueryRequest
+            // Step 5: Validate query is provided
+            QueryBuilder query = request.getQuery();
+            if (query == null) {
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Query parameter is required for delete by query operation. "
+                                + "To delete all documents, explicitly provide a match_all query: {\"query\": {\"match_all\": {}}}",
+                            RestStatus.BAD_REQUEST
+                        )
+                    );
+                return;
+            }
+
+            // Step 6: Build the DeleteByQueryRequest
             DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(memoryIndexName);
 
-            // Step 6: Apply query with owner filtering for non-admin users
-            QueryBuilder finalQuery = buildFilteredQuery(request.getQuery(), user);
+            // Step 7: Apply query with owner filtering for non-admin users
+            QueryBuilder finalQuery = buildFilteredQuery(query, user);
             deleteByQueryRequest.setQuery(finalQuery);
             deleteByQueryRequest.setRefresh(true);
 
-            // Step 7: Execute the delete by query
+            // Step 8: Execute the delete by query
             executeDeleteByQuery(container.getConfiguration(), deleteByQueryRequest, actionListener);
 
         }, error -> {
@@ -167,7 +187,7 @@ public class TransportDeleteMemoriesByQueryAction extends HandledTransportAction
     private void executeDeleteByQuery(
         MemoryConfiguration configuration,
         DeleteByQueryRequest deleteByQueryRequest,
-        ActionListener<BulkByScrollResponse> actionListener
+        ActionListener<MLDeleteMemoriesByQueryResponse> actionListener
     ) {
         // Wrap the listener to handle response and log results
         ActionListener<BulkByScrollResponse> wrappedListener = ActionListener.wrap(response -> {
@@ -183,7 +203,8 @@ public class TransportDeleteMemoriesByQueryAction extends HandledTransportAction
             }
 
             log.info("Delete by query completed. Deleted {} documents in {} ms", response.getDeleted(), response.getTook().millis());
-            actionListener.onResponse(response);
+            // Wrap the BulkByScrollResponse in our response wrapper
+            actionListener.onResponse(new MLDeleteMemoriesByQueryResponse(response));
         }, error -> {
             log.error("Failed to execute delete by query", error);
             actionListener.onFailure(error);
