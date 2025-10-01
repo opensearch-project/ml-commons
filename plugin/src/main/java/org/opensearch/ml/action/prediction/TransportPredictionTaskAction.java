@@ -211,7 +211,13 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                         }
                     }
-                }, e -> { handleError(e, mlModel.getModelId(), wrappedListener); })
+                }, e -> {
+                    // Prefer the id from the request (always present), fall back to model/getModelId
+                    String safeId = mlPredictionTaskRequest.getModelId();
+                    if (safeId == null)
+                        safeId = mlModel.getModelId();
+                    handleError(e, safeId, wrappedListener);
+                })
             );
     }
 
