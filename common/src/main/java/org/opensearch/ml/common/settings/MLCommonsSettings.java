@@ -470,7 +470,7 @@ public final class MLCommonsSettings {
 
     // Feature flag for Agentic memory APIs
     public static final Setting<Boolean> ML_COMMONS_AGENTIC_MEMORY_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_memory_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_memory_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
         "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
 
