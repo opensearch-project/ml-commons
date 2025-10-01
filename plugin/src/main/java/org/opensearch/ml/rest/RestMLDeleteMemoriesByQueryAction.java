@@ -9,27 +9,19 @@ import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBui
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DELETE_MEMORIES_BY_QUERY_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Locale;
 
-import org.opensearch.OpenSearchStatusException;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryRequest;
 import org.opensearch.rest.BaseRestHandler;
-import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableList;
@@ -57,14 +49,9 @@ public class RestMLDeleteMemoriesByQueryAction extends BaseRestHandler {
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        // Check if agentic memory feature is enabled
-        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
-            throw new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
-        }
-
         // Extract path parameters
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        String memoryType = getMemoryType(request);
+        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
 
         // Parse query from request body
         QueryBuilder query = null;
@@ -74,80 +61,11 @@ public class RestMLDeleteMemoriesByQueryAction extends BaseRestHandler {
             }
         }
 
-        // If no query provided, default to match_all
-        if (query == null) {
-            query = QueryBuilders.matchAllQuery();
-        }
-
         // Create the delete by query request
         MLDeleteMemoriesByQueryRequest deleteRequest = new MLDeleteMemoriesByQueryRequest(memoryContainerId, memoryType, query);
 
-        // Execute the action and return response
-        return channel -> client.execute(MLDeleteMemoriesByQueryAction.INSTANCE, deleteRequest, ActionListener.wrap(response -> {
-            try {
-                XContentBuilder builder = channel.newBuilder();
-                // Build custom response format
-                builder.startObject();
-                builder.field("took", response.getTook().millis());
-                builder.field("timed_out", response.isTimedOut());
-                builder.field("deleted", response.getDeleted());
-                builder.field("batches", response.getBatches());
-                builder.field("version_conflicts", response.getVersionConflicts());
-                builder.field("noops", response.getNoops());
-
-                // Add retries information
-                builder.startObject("retries");
-                builder.field("bulk", response.getBulkRetries());
-                builder.field("search", response.getSearchRetries());
-                builder.endObject();
-
-                builder.field("throttled_millis", response.getStatus().getThrottled().millis());
-                builder.field("requests_per_second", response.getStatus().getRequestsPerSecond());
-                builder.field("throttled_until_millis", response.getStatus().getThrottledUntil().millis());
-
-                // Add failures if any
-                if (response.getBulkFailures() != null && !response.getBulkFailures().isEmpty()) {
-                    builder.startArray("bulk_failures");
-                    for (var failure : response.getBulkFailures()) {
-                        builder.startObject();
-                        builder.field("index", failure.getIndex());
-                        builder.field("id", failure.getId());
-                        builder.field("cause", failure.getCause().getMessage());
-                        builder.field("status", failure.getStatus());
-                        builder.endObject();
-                    }
-                    builder.endArray();
-                }
-
-                if (response.getSearchFailures() != null && !response.getSearchFailures().isEmpty()) {
-                    builder.startArray("search_failures");
-                    for (var failure : response.getSearchFailures()) {
-                        failure.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                    }
-                    builder.endArray();
-                }
-
-                builder.endObject();
-                channel.sendResponse(new BytesRestResponse(RestStatus.OK, builder));
-            } catch (Exception e) {
-                channel.sendResponse(new BytesRestResponse(RestStatus.INTERNAL_SERVER_ERROR, e.getMessage()));
-            }
-        }, e -> {
-            try {
-                channel.sendResponse(new BytesRestResponse(RestStatus.INTERNAL_SERVER_ERROR, e.getMessage()));
-            } catch (Exception ex) {
-                // Log error if needed
-            }
-        }));
-    }
-
-    private String getMemoryType(RestRequest request) {
-        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
-        if (memoryType != null) {
-            // Normalize memory type to lowercase
-            memoryType = memoryType.toLowerCase(Locale.ROOT);
-        }
-        return memoryType;
+        // Execute the action and return response using RestToXContentListener
+        return channel -> client.execute(MLDeleteMemoriesByQueryAction.INSTANCE, deleteRequest, new RestToXContentListener<>(channel));
     }
 
     private QueryBuilder parseQuery(XContentParser parser) throws IOException {
