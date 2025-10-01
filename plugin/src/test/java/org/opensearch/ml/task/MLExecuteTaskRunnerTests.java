@@ -8,6 +8,7 @@ package org.opensearch.ml.task;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -36,6 +37,7 @@ import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
@@ -93,7 +95,7 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)), encryptor);
+        mlEngine = spy(new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)), encryptor));
         when(threadPool.executor(anyString())).thenReturn(executorService);
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);
@@ -146,7 +148,14 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
         );
     }
 
-    public void testExecuteTask_Success() {
+    public void testExecuteTask_Success() throws Exception {
+        Output mockOutput = mock(Output.class);
+        doAnswer(invocation -> {
+            ActionListener<Output> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(mockOutput);
+            return null;
+        }).when(mlEngine).execute(any(), any(), any());
+
         taskRunner.executeTask(mlExecuteTaskRequest, listener);
         verify(listener).onResponse(any(MLExecuteTaskResponse.class));
     }

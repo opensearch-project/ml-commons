@@ -39,6 +39,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -81,7 +82,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
     @SuppressWarnings("removal")
     @Override
-    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;

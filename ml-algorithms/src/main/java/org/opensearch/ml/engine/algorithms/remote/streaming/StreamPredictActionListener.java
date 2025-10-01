@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.remote;
+package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +27,24 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
         ActionListener<Response> {
 
     private final TransportChannel channel;
+    private final ActionListener<Response> agentListener;
+    private final String memoryId;
+    private final String parentInteractionId;
 
     public StreamPredictActionListener(TransportChannel channel) {
+        this(channel, null, null, null);
+    }
+
+    public StreamPredictActionListener(
+        TransportChannel channel,
+        ActionListener<Response> agentListener,
+        String memoryId,
+        String parentInteractionId
+    ) {
         this.channel = channel;
+        this.agentListener = agentListener;
+        this.memoryId = memoryId;
+        this.parentInteractionId = parentInteractionId;
     }
 
     /**
@@ -40,7 +56,11 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
      */
     public void onStreamResponse(Response response, boolean isLastBatch) {
         assert response != null;
-        channel.sendResponseBatch(response);
+
+        // Add metadata to all responses
+        Response responseWithMetadata = addMetadataToResponse(response);
+
+        channel.sendResponseBatch(responseWithMetadata);
         if (isLastBatch) {
             channel.completeStream();
         }
@@ -54,7 +74,11 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
      */
     @Override
     public final void onResponse(Response response) {
-        onStreamResponse(response, true);
+        onStreamResponse(response, false);
+
+        if (agentListener != null) {
+            agentListener.onResponse(response);
+        }
     }
 
     @Override
@@ -70,6 +94,38 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
                 log.error("Failed to complete stream", streamException);
             }
         }
+    }
+
+    private Response addMetadataToResponse(Response response) {
+        if (!(response instanceof MLTaskResponse)) {
+            return response;
+        }
+
+        // Only add metadata for agent streaming
+        if (agentListener == null) {
+            return response;
+        }
+
+        MLTaskResponse mlResponse = (MLTaskResponse) response;
+        if (mlResponse.getOutput() instanceof ModelTensorOutput) {
+            ModelTensorOutput output = (ModelTensorOutput) mlResponse.getOutput();
+            List<ModelTensors> updatedOutputs = new ArrayList<>();
+
+            // TODO: refactor this to handle other types of agents
+            for (ModelTensors tensors : output.getMlModelOutputs()) {
+                List<ModelTensor> updatedTensors = new ArrayList<>();
+
+                updatedTensors.add(ModelTensor.builder().name("memory_id").result(memoryId).build());
+                updatedTensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
+
+                updatedTensors.addAll(tensors.getMlModelTensors());
+                updatedOutputs.add(ModelTensors.builder().mlModelTensors(updatedTensors).build());
+            }
+
+            ModelTensorOutput updatedOutput = ModelTensorOutput.builder().mlModelOutputs(updatedOutputs).build();
+            return (Response) new MLTaskResponse(updatedOutput);
+        }
+        return response;
     }
 
     private MLTaskResponse createErrorResponse(Exception error) {
