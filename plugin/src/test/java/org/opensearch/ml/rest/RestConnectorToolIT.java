@@ -160,15 +160,17 @@ public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     }
 
     private String parseResponseFromResponse(Response response) throws IOException, ParseException {
-        Map responseInMap = parseResponseToMap(response);
-        Optional<String> optionalResult = Optional
+        Map<String, Object> responseInMap = parseResponseToMap(response);
+        return Optional
             .ofNullable(responseInMap)
-            .map(m -> (List) m.get(ModelTensorOutput.INFERENCE_RESULT_FIELD))
-            .map(l -> (Map) l.get(0))
-            .map(m -> (List) m.get(ModelTensors.OUTPUT_FIELD))
-            .map(l -> (Map) l.get(0))
-            .map(m -> (Map) (m.get(DATA_AS_MAP_FIELD)))
-            .map(m -> (String) (m.get("response")));
-        return optionalResult.get();
+            .map(m -> (List<Object>) m.get(ModelTensorOutput.INFERENCE_RESULT_FIELD))
+            .filter(l -> !l.isEmpty())
+            .map(l -> (Map<String, Object>) l.get(0))
+            .map(m -> (List<Object>) m.get(ModelTensors.OUTPUT_FIELD))
+            .filter(l -> !l.isEmpty())
+            .map(l -> (Map<String, Object>) l.get(0))
+            .map(m -> (Map<String, Object>) m.get(DATA_AS_MAP_FIELD))
+            .map(m -> (String) m.get("response"))
+            .orElseThrow(() -> new AssertionError("Unable to parse response from agent execution"));
     }
 }
