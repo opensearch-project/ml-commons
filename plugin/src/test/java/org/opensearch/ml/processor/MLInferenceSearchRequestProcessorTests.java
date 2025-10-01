@@ -8,6 +8,7 @@ package org.opensearch.ml.processor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
@@ -2565,6 +2566,94 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
             "Please provide at least one non-empty output_map or optional_output_map for ML Inference Search Request Processor",
             exception.getMessage()
         );
+    }
+
+    /**
+     * Tests mean pooling transformation in search request processor
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_MeanPoolingTransformation() throws Exception {
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String multiVectorField = "ext.ml_inference.multi_vectors";
+        String knnVectorField = "ext.ml_inference.knn_vector";
+
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        inputMap.add(input);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(multiVectorField, "image_embeddings[0]");
+        output.put(knnVectorField, "image_embeddings[0].meanPooling()");
+        outputMap.add(output);
+
+        MLInferenceSearchRequestProcessor processor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            null,
+            inputMap,
+            outputMap,
+            null,
+            null,
+            null,
+            1,
+            "tag",
+            "description",
+            false,
+            "REMOTE",
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        String inputQuery = "{\"query\":{\"term\":{\"text\":{\"value\":\"foo\",\"boost\":1.0}}}}";
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+
+        // Mock nested array structure for image embeddings
+        List<List<Double>> imageEmbeddings = Arrays
+            .asList(Arrays.asList(1.0, 2.0, 3.0), Arrays.asList(4.0, 5.0, 6.0), Arrays.asList(7.0, 8.0, 9.0));
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("image_embeddings", Arrays.asList(imageEmbeddings));
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(dataAsMap).build();
+
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+
+        ModelTensorOutput mlOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        MLTaskResponse response = MLTaskResponse.builder().output(mlOutput).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        PipelineProcessingContext requestContext = new PipelineProcessingContext();
+        ActionListener<SearchRequest> listener = mock(ActionListener.class);
+
+        processor.processRequestAsync(request, requestContext, listener);
+
+        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+
+        SearchRequest capturedRequest = argumentCaptor.getValue();
+
+        // Verify multi_vectors contains the original nested array
+        assertEquals(imageEmbeddings, requestContext.getAttribute(multiVectorField));
+
+        // Verify knn_vector contains the mean pooled result
+        List<Float> meanPooled = (List<Float>) requestContext.getAttribute(knnVectorField);
+        assertEquals(3, meanPooled.size());
+        assertEquals(4.0, meanPooled.get(0), 0.001); // (1+4+7)/3
+        assertEquals(5.0, meanPooled.get(1), 0.001); // (2+5+8)/3
+        assertEquals(6.0, meanPooled.get(2), 0.001); // (3+6+9)/3
     }
 
 }
