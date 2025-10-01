@@ -39,7 +39,7 @@ dependencies {
 	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation group: 'org.json', name: 'json', version: '20231013'
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
 }
 
