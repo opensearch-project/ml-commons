@@ -53,6 +53,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
@@ -71,17 +72,12 @@ public interface RemoteConnectorExecutor {
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
         // Check for streaming
         if (channel != null) {
-            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new ActionListener<Tuple<Integer, ModelTensors>>() {
-                @Override
-                public void onResponse(Tuple<Integer, ModelTensors> response) {
-                    actionListener.onResponse(new MLTaskResponse(new ModelTensorOutput(Arrays.asList(response.v2()))));
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    actionListener.onFailure(e);
-                }
-            }, channel);
+            ActionListener<Tuple<Integer, ModelTensors>> streamingListener = ActionListener.wrap(response -> {
+                ModelTensors tensors = response.v2();
+                MLTaskResponse mlResponse = new MLTaskResponse(new ModelTensorOutput(Arrays.asList(tensors)));
+                actionListener.onResponse(mlResponse);
+            }, actionListener::onFailure);
+            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), streamingListener, actionListener, channel);
             return;
         }
 
@@ -115,18 +111,11 @@ public interface RemoteConnectorExecutor {
                             .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
                             .build(),
                         new ExecutionContext(sequence++),
-                        groupedActionListener,
-                        null
+                        groupedActionListener
                     );
                 }
             } else {
-                preparePayloadAndInvoke(
-                    action,
-                    mlInput,
-                    new ExecutionContext(0),
-                    new GroupedActionListener<>(tensorActionListener, 1),
-                    null
-                );
+                preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), new GroupedActionListener<>(tensorActionListener, 1));
             }
         } catch (Exception e) {
             actionListener.onFailure(e);
@@ -208,7 +197,17 @@ public interface RemoteConnectorExecutor {
         String action,
         MLInput mlInput,
         ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        preparePayloadAndInvoke(action, mlInput, executionContext, actionListener, null, null);
+    }
+
+    default void preparePayloadAndInvoke(
+        String action,
+        MLInput mlInput,
+        ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener,
+        ActionListener<MLTaskResponse> agentListener,
         TransportChannel channel
     ) {
         Connector connector = getConnector();
@@ -271,7 +270,16 @@ public interface RemoteConnectorExecutor {
             if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
             } else if (parameters.containsKey("stream")) {
-                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(channel);
+                String memoryId = parameters.get("memory_id");
+                String parentInteractionId = parameters.get("parent_interaction_id");
+                // TODO: find a better way to differentiate agent and predict request
+                boolean isAgentRequest = (memoryId != null || parentInteractionId != null);
+                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(
+                    channel,
+                    isAgentRequest ? agentListener : null,
+                    memoryId,
+                    parentInteractionId
+                );
                 invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, streamListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);

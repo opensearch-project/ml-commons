@@ -516,7 +516,7 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void testBuildOKHttpRequestPOST_WithPayload() {
+    public void testBuildOKHttpStreamingRequest_WithPayload() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -540,7 +540,7 @@ public class ConnectorUtilsTest {
         Map<String, String> parameters = ImmutableMap.of("input", "test input");
         String payload = "{\"input\": \"test input\"}";
 
-        Request request = ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, payload);
+        Request request = ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, payload);
 
         assertEquals("POST", request.method());
         assertEquals("http://test.com/mock", request.url().toString());
@@ -552,7 +552,7 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void testBuildOKHttpRequestPOST_NullPayload() {
+    public void testBuildOKHttpStreamingRequest_NullPayload() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Content length is 0. Aborting request to remote model");
 
@@ -573,11 +573,11 @@ public class ConnectorUtilsTest {
             .build();
 
         Map<String, String> parameters = new HashMap<>();
-        ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, null);
+        ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, null);
     }
 
     @Test
-    public void testBuildOKHttpRequestPOST_NoHeaders() {
+    public void testBuildOKHttpStreamingRequest_NoHeaders() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -597,7 +597,7 @@ public class ConnectorUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         String payload = "{\"input\": \"test input\"}";
 
-        Request request = ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, payload);
+        Request request = ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, payload);
 
         assertEquals("POST", request.method());
         assertEquals("http://test.com/mock", request.url().toString());
@@ -608,7 +608,7 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void testBuildOKHttpRequestPOST_WithParameters() {
+    public void testBuildOKHttpStreamingRequest_WithParameters() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -628,7 +628,7 @@ public class ConnectorUtilsTest {
         Map<String, String> parameters = ImmutableMap.of("model", "gpt-3.5", "input", "test input");
         String payload = "{\"input\": \"test input\"}";
 
-        Request request = ConnectorUtils.buildOKHttpRequestPOST(PREDICT.name(), connector, parameters, payload);
+        Request request = ConnectorUtils.buildOKHttpStreamingRequest(PREDICT.name(), connector, parameters, payload);
 
         assertEquals("POST", request.method());
         assertEquals("http://test.com/mock/gpt-3.5", request.url().toString());
