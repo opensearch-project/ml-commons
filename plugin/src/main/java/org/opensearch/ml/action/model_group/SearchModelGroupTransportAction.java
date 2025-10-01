@@ -6,7 +6,10 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
+
+import java.util.Collections;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -17,6 +20,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
@@ -26,6 +30,8 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -82,23 +88,52 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
+            // If resource-sharing feature is enabled, we fetch accessible model-groups and restrict the search to those model-groups only.
+            if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+                // If a model-group is shared, then it will have been shared at-least at read access, hence the final result is guaranteed
+                // to only contain model-groups that the user at-least has read access to.
+                addAccessibleModelGroupsFilterAndSearch(tenantId, request, doubleWrappedListener);
+                return;
+            }
             if (!modelAccessControlHelper.skipModelAccessControl(user)) {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by {}", user.getBackendRoles());
             }
-            SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest
-                .builder()
-                .indices(request.indices())
-                .searchSourceBuilder(request.source())
-                .tenantId(tenantId)
-                .build();
-            sdkClient
-                .searchDataObjectAsync(searchDataObjecRequest)
-                .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
+            search(tenantId, request, doubleWrappedListener);
         } catch (Exception e) {
             log.error("Failed to search", e);
             listener.onFailure(e);
         }
+    }
+
+    private void addAccessibleModelGroupsFilterAndSearch(
+        String tenantId,
+        SearchRequest request,
+        ActionListener<SearchResponse> wrappedListener
+    ) {
+        SearchSourceBuilder sourceBuilder = request.source() != null ? request.source() : new SearchSourceBuilder();
+        ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        // filter by accessible model-groups
+        rsc.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
+            sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), ids));
+            request.source(sourceBuilder);
+            search(tenantId, request, wrappedListener);
+        }, e -> {
+            // Fail-safe: deny-all and still return a response
+            sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), Collections.emptySet()));
+            request.source(sourceBuilder);
+            search(tenantId, request, wrappedListener);
+        }));
+    }
+
+    private void search(String tenantId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+            .builder()
+            .indices(request.indices())
+            .searchSourceBuilder(request.source())
+            .tenantId(tenantId)
+            .build();
+        sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
     }
 }

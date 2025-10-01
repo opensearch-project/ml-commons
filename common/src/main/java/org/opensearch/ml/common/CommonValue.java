@@ -79,6 +79,9 @@ public class CommonValue {
     public static final String ML_INDEX_INSIGHT_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_config.json";
     public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
 
+    // Resource type used in resource-access-control
+    public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
+
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
     public static final Version VERSION_2_12_0 = Version.fromString("2.12.0");

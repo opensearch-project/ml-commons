@@ -178,10 +178,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
         updateControllerRequest = MLUpdateControllerRequest.builder().updateControllerInput(updatedController).build();
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -243,10 +243,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateControllerWithModelAccessControlNoPermission() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -268,10 +268,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -285,10 +285,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testUpdateControllerWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -307,10 +307,10 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Permission denied: Unable to create the model controller for the model. Details: "));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         updateControllerTransportAction.doExecute(null, updateControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -453,7 +453,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
     public void testUpdateControllerWithDeploySuccessNullFailures() {
         when(mlModelCacheHelper.isModelDeployed("testModelId")).thenReturn(true);
         doAnswer(invocation -> {
-            ActionListener<MLDeployControllerNodesResponse> listener = invocation.getArgument(2);
+            ActionListener<MLDeployControllerNodesResponse> listener = invocation.getArgument(3);
             listener.onResponse(mlDeployControllerNodesResponse);
             return null;
         }).when(client).execute(eq(MLDeployControllerAction.INSTANCE), any(), any());
