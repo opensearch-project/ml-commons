@@ -7,6 +7,9 @@ package org.opensearch.ml.action.handler;
 
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.getResourceSharingClient;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
@@ -38,7 +41,6 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -147,11 +149,13 @@ public class MLSearchHandler {
                     mlFeatureEnabledSetting.isMultiTenancyEnabled(),
                     CommonValue.ML_MODEL_GROUP_INDEX
                 );
-            boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
-            if (rsClientPresent && user != null && modelAccessControlHelper.modelAccessControlEnabled() && hasModelGroupIndex) {
+            if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)
+                && user != null
+                && modelAccessControlHelper.modelAccessControlEnabled()
+                && hasModelGroupIndex) {
                 // RSC fast-path: get accessible group IDs → gate models (IDs or missing)
-                ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+                ResourceSharingClient rsc = getResourceSharingClient();
                 rsc.getAccessibleResourceIds(CommonValue.ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
                     SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
                     gated.query(rewriteQueryBuilderRSC(gated.query(), ids)); // ids may be empty → "missing only"

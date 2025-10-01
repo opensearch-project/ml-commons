@@ -9,6 +9,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import java.util.Collections;
@@ -98,8 +99,8 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
-            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
+            ResourceSharingClient resourceSharingClient = getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -173,8 +174,8 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
-            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
+            ResourceSharingClient resourceSharingClient = getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -286,6 +287,20 @@ public class ModelAccessControlHelper {
                     wrappedListener.onResponse(true);
             }
         }
+    }
+
+    /**
+     * Checks whether to utilize new ResourceAuthz
+     * @param resourceType for which to decide whether to use resource authz
+     * @return true if the resource-sharing feature is enabled, false otherwise.
+     */
+    public static boolean shouldUseResourceAuthz(String resourceType) {
+        var client = getResourceSharingClient();
+        return client != null && client.isFeatureEnabledForType(resourceType);
+    }
+
+    public static ResourceSharingClient getResourceSharingClient() {
+        return ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     public boolean skipModelAccessControl(User user) {

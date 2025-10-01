@@ -8,6 +8,8 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -27,7 +29,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
@@ -186,7 +187,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     ) {
         // if resource sharing feature is enabled, security plugin will have automatically evaluated access to this model group, hence no
         // need to validate again
-        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+        if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
             wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
             return;
         }
