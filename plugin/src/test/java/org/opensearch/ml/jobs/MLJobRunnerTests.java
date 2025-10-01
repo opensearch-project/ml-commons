@@ -73,4 +73,11 @@ public class MLJobRunnerTests {
         when(jobParameter.getJobType()).thenReturn(null);
         jobRunner.runJob(jobParameter, jobExecutionContext);
     }
+
+    @Test(expected = IllegalStateException.class)
+    public void testRunJobWithDisabledJob() {
+        when(jobParameter.isEnabled()).thenReturn(false);
+        when(jobParameter.getJobType()).thenReturn(MLJobType.STATS_COLLECTOR);
+        jobRunner.runJob(jobParameter, jobExecutionContext);
+    }
 }

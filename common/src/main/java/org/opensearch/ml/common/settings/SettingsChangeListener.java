@@ -18,5 +18,20 @@ public interface SettingsChangeListener {
      *                    <li><code>false</code> if multi-tenancy is disabled</li>
      *                  </ul>
      */
-    void onMultiTenancyEnabledChanged(boolean isEnabled);
+    default void onMultiTenancyEnabledChanged(boolean isEnabled) {
+        // do nothing
+    }
+
+    /**
+     * Callback method that gets triggered when the static metric collection setting changes.
+     *
+     * @param isEnabled A boolean value indicating the new state of the static metric collection setting:
+     *                  <ul>
+     *                    <li><code>true</code> if static metric collection is enabled</li>
+     *                    <li><code>false</code> if static metric collection is disabled</li>
+     *                  </ul>
+     */
+    default void onStaticMetricCollectionEnabledChanged(boolean isEnabled) {
+        // do nothing
+    }
 }
