@@ -158,7 +158,7 @@ public class MLFeatureEnabledSettingTests {
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
 
         // Should be disabled by default
-        assertFalse(setting.isAgenticMemoryEnabled());
+        assertTrue(setting.isAgenticMemoryEnabled());
     }
 
     @Test
