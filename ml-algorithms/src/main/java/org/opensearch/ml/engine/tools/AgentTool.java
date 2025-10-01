@@ -15,11 +15,13 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 
@@ -52,6 +54,9 @@ public class AgentTool implements Tool {
     @Setter
     private Map<String, Object> attributes;
 
+    @Setter
+    private Parser outputParser;
+
     public AgentTool(Client client, String agentId) {
         if (agentId == null || agentId.isBlank()) {
             throw new IllegalArgumentException("Agent ID cannot be null or empty");
@@ -79,7 +84,7 @@ public class AgentTool implements Tool {
             ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
             client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
                 ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
-                listener.onResponse((T) output);
+                listener.onResponse((T) outputParser.parse(output));
             }, e -> {
                 log.error("Failed to run agent " + agentId, e);
                 listener.onFailure(e);
@@ -138,8 +143,10 @@ public class AgentTool implements Tool {
         }
 
         @Override
-        public AgentTool create(Map<String, Object> map) {
-            return new AgentTool(client, (String) map.get("agent_id"));
+        public AgentTool create(Map<String, Object> params) {
+            AgentTool agentTool = new AgentTool(client, (String) params.get("agent_id"));
+            agentTool.setOutputParser(ToolParser.createFromToolParams(params));
+            return agentTool;
         }
 
         @Override
