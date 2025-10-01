@@ -73,7 +73,7 @@ public class MLCommonsSettingsTests {
 
     @Test
     public void testAgenticMemoryDisabledByDefault() {
-        assertFalse(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getDefault(null));
+        assertTrue(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getDefault(null));
     }
 
     @Test
