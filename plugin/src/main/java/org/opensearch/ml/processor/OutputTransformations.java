@@ -145,24 +145,4 @@ public class OutputTransformations {
         }
         return value;
     }
-
-    /**
-     * Helper method to get and transform model output value
-     * @param modelOutputFieldName The field name that may contain transformation suffix
-     * @param getModelOutputValueFunction Function to get the raw model output value
-     * @return The transformed model output value
-     */
-    public static Object getTransformedModelOutput(
-        String modelOutputFieldName,
-        java.util.function.Function<String, Object> getModelOutputValueFunction
-    ) {
-        String baseFieldName = getBaseFieldName(modelOutputFieldName);
-        Object modelOutputValue = getModelOutputValueFunction.apply(baseFieldName);
-
-        if (hasTransformation(modelOutputFieldName)) {
-            modelOutputValue = applyTransformation(modelOutputFieldName, modelOutputValue);
-        }
-
-        return modelOutputValue;
-    }
 }
