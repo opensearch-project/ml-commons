@@ -26,8 +26,7 @@ public class AGUIInputConverter {
     public static boolean isAGUIInput(String inputJson) {
         try {
             JsonObject jsonObj = JsonParser.parseString(inputJson).getAsJsonObject();
-            return jsonObj.has("threadId") && jsonObj.has("runId") &&
-                   jsonObj.has("messages") && jsonObj.has("tools");
+            return jsonObj.has("threadId") && jsonObj.has("runId") && jsonObj.has("messages") && jsonObj.has("tools");
         } catch (Exception e) {
             log.debug("Failed to parse input as JSON for AG-UI detection", e);
             return false;
@@ -70,9 +69,7 @@ public class AGUIInputConverter {
             if (forwardedProps != null) {
                 parameters.put("agui_forwarded_props", gson.toJson(forwardedProps));
             }
-            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder()
-                .parameters(parameters)
-                .build();
+            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
             AgentMLInput agentMLInput = new AgentMLInput(
                 agentId,
                 tenantId,
@@ -128,13 +125,20 @@ public class AGUIInputConverter {
             String contextJson = parameters.get("agui_context");
             String forwardedPropsJson = parameters.get("agui_forwarded_props");
 
-            if (threadId != null) aguiInput.addProperty("threadId", threadId);
-            if (runId != null) aguiInput.addProperty("runId", runId);
-            if (stateJson != null) aguiInput.add("state", JsonParser.parseString(stateJson));
-            if (messagesJson != null) aguiInput.add("messages", JsonParser.parseString(messagesJson));
-            if (toolsJson != null) aguiInput.add("tools", JsonParser.parseString(toolsJson));
-            if (contextJson != null) aguiInput.add("context", JsonParser.parseString(contextJson));
-            if (forwardedPropsJson != null) aguiInput.add("forwardedProps", JsonParser.parseString(forwardedPropsJson));
+            if (threadId != null)
+                aguiInput.addProperty("threadId", threadId);
+            if (runId != null)
+                aguiInput.addProperty("runId", runId);
+            if (stateJson != null)
+                aguiInput.add("state", JsonParser.parseString(stateJson));
+            if (messagesJson != null)
+                aguiInput.add("messages", JsonParser.parseString(messagesJson));
+            if (toolsJson != null)
+                aguiInput.add("tools", JsonParser.parseString(toolsJson));
+            if (contextJson != null)
+                aguiInput.add("context", JsonParser.parseString(contextJson));
+            if (forwardedPropsJson != null)
+                aguiInput.add("forwardedProps", JsonParser.parseString(forwardedPropsJson));
 
         } catch (Exception e) {
             log.error("Failed to reconstruct AG-UI input from parameters", e);
