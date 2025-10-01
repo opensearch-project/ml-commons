@@ -25,7 +25,6 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
-import org.opensearch.ml.engine.algorithms.remote.ExecutionContext;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -42,18 +41,11 @@ import okhttp3.sse.EventSources;
 public class HttpStreamingHandler extends BaseStreamingHandler {
 
     private final Connector connector;
-    private final ExecutionContext context;
     private OkHttpClient okHttpClient;
     private String llmInterface;
 
-    public HttpStreamingHandler(
-        String llmInterface,
-        Connector connector,
-        ExecutionContext context,
-        ConnectorClientConfig connectorClientConfig
-    ) {
+    public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
         this.connector = connector;
-        this.context = context;
         this.llmInterface = llmInterface;
 
         // Get connector client configuration

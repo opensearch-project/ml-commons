@@ -13,7 +13,6 @@ import java.lang.reflect.Constructor;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.engine.algorithms.remote.ExecutionContext;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
@@ -23,14 +22,13 @@ public class StreamingHandlerFactory {
         String llmInterface,
         Connector connector,
         SdkAsyncHttpClient httpClient,
-        ExecutionContext context,
         ConnectorClientConfig connectorClientConfig
     ) {
         switch (llmInterface.toLowerCase()) {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
-                return createHttpHandler(llmInterface, connector, context, connectorClientConfig);
+                return createHttpHandler(llmInterface, connector, connectorClientConfig);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
@@ -53,9 +51,8 @@ public class StreamingHandlerFactory {
     private static StreamingHandler createHttpHandler(
         String llmInterface,
         Connector connector,
-        ExecutionContext context,
         ConnectorClientConfig connectorClientConfig
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, context, connectorClientConfig);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig);
     }
 }

@@ -161,7 +161,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             validateLLMInterface(llmInterface);
 
             StreamingHandler handler = StreamingHandlerFactory
-                .createHandler(llmInterface, connector, null, executionContext, super.getConnectorClientConfig());
+                .createHandler(llmInterface, connector, null, super.getConnectorClientConfig());
             handler.startStream(action, parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);

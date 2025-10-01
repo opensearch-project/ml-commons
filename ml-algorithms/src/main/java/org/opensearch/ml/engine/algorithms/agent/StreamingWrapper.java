@@ -67,6 +67,7 @@ public class StreamingWrapper {
                 .algorithm(FunctionName.REMOTE)
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build())
                 .build(),
+            // TODO: handle agent streaming in multi-node
             !isStreaming, // set dispatchTask to false for streaming
             null,
             tenantId
@@ -77,19 +78,20 @@ public class StreamingWrapper {
         if (isStreaming) {
             ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
             client.execute(MLPredictionStreamTaskAction.INSTANCE, request, listener);
-        } else {
-            client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
+            return;
         }
+        client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
     }
 
     public void sendCompletionChunk(String sessionId, String parentInteractionId) {
-        if (isStreaming) {
-            MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
-            try {
-                channel.sendResponseBatch(completionChunk);
-            } catch (Exception e) {
-                log.warn("Failed to send completion chunk: {}", e.getMessage());
-            }
+        if (!isStreaming) {
+            return;
+        }
+        MLTaskResponse completionChunk = createStreamChunk("", sessionId, parentInteractionId, true);
+        try {
+            channel.sendResponseBatch(completionChunk);
+        } catch (Exception e) {
+            log.warn("Failed to send completion chunk: {}", e.getMessage());
         }
     }
 

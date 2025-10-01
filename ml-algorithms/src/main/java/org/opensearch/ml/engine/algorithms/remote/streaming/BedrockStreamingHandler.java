@@ -139,6 +139,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         }
     }
 
+    @Override
+    public void handleError(Throwable error, StreamPredictActionListener<MLTaskResponse, ?> listener) {
+        log.error("HTTP streaming error", error);
+        listener.onFailure(new MLException("Fail to execute streaming", error));
+    }
+
     private boolean isThrottlingError(Throwable error) {
         return error.getMessage().contains("throttling")
             || error.getMessage().contains("TooManyRequestsException")
@@ -217,12 +223,6 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 // Stream already completed
                 break;
         }
-    }
-
-    @Override
-    public void handleError(Throwable error, StreamPredictActionListener<MLTaskResponse, ?> listener) {
-        log.error("HTTP streaming error", error);
-        listener.onFailure(new MLException("Fail to execute streaming", error));
     }
 
     // TODO: refactor the event type checker methods
