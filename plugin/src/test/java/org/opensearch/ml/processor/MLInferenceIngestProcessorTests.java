@@ -2138,7 +2138,7 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
         assertEquals(imageEmbeddings, ingestDocument.getFieldValue("multi_vectors", Object.class));
 
         // Verify knn_vector contains the mean pooled result
-        List<Double> meanPooled = (List<Double>) ingestDocument.getFieldValue("knn_vector", Object.class);
+        List<Float> meanPooled = (List<Float>) ingestDocument.getFieldValue("knn_vector", Object.class);
         assertEquals(3, meanPooled.size());
         assertEquals(4.0, meanPooled.get(0), 0.001); // (1+4+7)/3
         assertEquals(5.0, meanPooled.get(1), 0.001); // (2+5+8)/3

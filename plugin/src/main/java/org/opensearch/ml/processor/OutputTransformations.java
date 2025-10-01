@@ -72,9 +72,9 @@ public class OutputTransformations {
         }
 
         // Calculate mean and convert to List
-        List<Double> result = new ArrayList<>();
+        List<Float> result = new ArrayList<>();
         for (int i = 0; i < dimensions; i++) {
-            result.add(meanVector[i] / outerList.size());
+            result.add((float) (meanVector[i] / outerList.size()));
         }
 
         return result;

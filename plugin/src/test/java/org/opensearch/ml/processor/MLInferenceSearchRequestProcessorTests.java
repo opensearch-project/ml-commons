@@ -2649,7 +2649,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         assertEquals(imageEmbeddings, requestContext.getAttribute(multiVectorField));
 
         // Verify knn_vector contains the mean pooled result
-        List<Double> meanPooled = (List<Double>) requestContext.getAttribute(knnVectorField);
+        List<Float> meanPooled = (List<Float>) requestContext.getAttribute(knnVectorField);
         assertEquals(3, meanPooled.size());
         assertEquals(4.0, meanPooled.get(0), 0.001); // (1+4+7)/3
         assertEquals(5.0, meanPooled.get(1), 0.001); // (2+5+8)/3

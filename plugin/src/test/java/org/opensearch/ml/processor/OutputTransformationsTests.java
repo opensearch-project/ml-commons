@@ -41,7 +41,7 @@ public class OutputTransformationsTests extends OpenSearchTestCase {
     public void testApplyMeanPooling_Success() {
         List<List<Double>> input = Arrays.asList(Arrays.asList(1.0, 2.0, 3.0), Arrays.asList(4.0, 5.0, 6.0), Arrays.asList(7.0, 8.0, 9.0));
 
-        List<Double> result = (List<Double>) OutputTransformations.applyMeanPooling(input);
+        List<Float> result = (List<Float>) OutputTransformations.applyMeanPooling(input);
 
         assertEquals(3, result.size());
         assertEquals(4.0, result.get(0), 0.001); // (1+4+7)/3
@@ -52,7 +52,7 @@ public class OutputTransformationsTests extends OpenSearchTestCase {
     public void testApplyMeanPooling_SingleVector() {
         List<List<Double>> input = Arrays.asList(Arrays.asList(1.0, 2.0, 3.0));
 
-        List<Double> result = (List<Double>) OutputTransformations.applyMeanPooling(input);
+        List<Float> result = (List<Float>) OutputTransformations.applyMeanPooling(input);
 
         assertEquals(3, result.size());
         assertEquals(1.0, result.get(0), 0.001);
