@@ -10,6 +10,8 @@ import java.util.List;
 
 /**
  * Utility class for output transformations in ML inference processor
+ *
+ * TODO: Support additional pooling methods like max pooling, min pooling, etc.
  */
 public class OutputTransformations {
 
