@@ -334,7 +334,16 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     try {
                         newQueryField = outputMapEntry.getKey();
                         String modelOutputFieldName = outputMapEntry.getValue();
-                        Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+
+                        // Check if transformation is needed
+                        String baseFieldName = OutputTransformations.getBaseFieldName(modelOutputFieldName);
+                        Object modelOutputValue = getModelOutputValue(mlOutput, baseFieldName, ignoreMissing, fullResponsePath);
+
+                        // Apply transformation if specified
+                        if (OutputTransformations.hasTransformation(modelOutputFieldName)) {
+                            modelOutputValue = OutputTransformations.applyMeanPooling(modelOutputValue);
+                        }
+
                         requestContext.setAttribute(newQueryField, modelOutputValue);
 
                         // if output mapping is using jsonpath starts with $. or use dot path starts with ext.
@@ -359,7 +368,16 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
                     String newQueryField = outputMapEntry.getKey();
                     String modelOutputFieldName = outputMapEntry.getValue();
-                    Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+
+                    // Check if transformation is needed
+                    String baseFieldName = OutputTransformations.getBaseFieldName(modelOutputFieldName);
+                    Object modelOutputValue = getModelOutputValue(mlOutput, baseFieldName, ignoreMissing, fullResponsePath);
+
+                    // Apply transformation if specified
+                    if (OutputTransformations.hasTransformation(modelOutputFieldName)) {
+                        modelOutputValue = OutputTransformations.applyMeanPooling(modelOutputValue);
+                    }
+
                     if (modelOutputValue instanceof Map) {
                         modelOutputValue = toJson(modelOutputValue);
                     }
