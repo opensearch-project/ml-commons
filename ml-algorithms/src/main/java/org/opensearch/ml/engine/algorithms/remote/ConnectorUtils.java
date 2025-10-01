@@ -386,7 +386,7 @@ public class ConnectorUtils {
         return builder.build();
     }
 
-    public static Request buildOKHttpRequestPOST(String action, Connector connector, Map<String, String> parameters, String payload) {
+    public static Request buildOKHttpStreamingRequest(String action, Connector connector, Map<String, String> parameters, String payload) {
         okhttp3.RequestBody requestBody;
         if (payload != null) {
             requestBody = okhttp3.RequestBody.create(payload, MediaType.parse("application/json; charset=utf-8"));
@@ -395,6 +395,18 @@ public class ConnectorUtils {
         }
 
         String endpoint = connector.getActionEndpoint(action, parameters);
+        URI uri;
+        try {
+            uri = URI.create(endpoint);
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+                e
+            );
+        }
         Request.Builder requestBuilder = new Request.Builder();
         Map<String, String> headers = connector.getDecryptedHeaders();
         if (headers != null) {
@@ -402,6 +414,8 @@ public class ConnectorUtils {
                 requestBuilder.addHeader(key, headers.get(key));
             }
         }
+
+        // Add SSE-specific headers
         requestBuilder.addHeader("Accept-Encoding", "");
         requestBuilder.addHeader("Accept", "text/event-stream");
         requestBuilder.addHeader("Cache-Control", "no-cache");

@@ -271,7 +271,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -307,7 +307,7 @@ public class MLAgentExecutorTest {
             ActionListener<List<ModelTensor>> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -345,7 +345,7 @@ public class MLAgentExecutorTest {
             ActionListener<List<ModelTensors>> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -379,7 +379,7 @@ public class MLAgentExecutorTest {
             ActionListener<List<String>> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -413,7 +413,7 @@ public class MLAgentExecutorTest {
             ActionListener<String> listener = invocation.getArgument(2);
             listener.onResponse("response");
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -451,7 +451,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensorOutput> listener = invocation.getArgument(2);
             listener.onResponse(modelTensorOutput);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
             // Extract the ActionListener argument from the method invocation
@@ -485,7 +485,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1088,7 +1088,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         // Execute the agent
         mlAgentExecutorWithEnabledSearch.execute(getAgentMLInput(), agentActionListener);
@@ -1179,7 +1179,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1218,7 +1218,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(testException);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1292,7 +1292,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1380,7 +1380,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(testException);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1523,7 +1523,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Test failure"));
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1563,7 +1563,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Test failure"));
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {

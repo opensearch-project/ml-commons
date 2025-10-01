@@ -422,6 +422,22 @@ public class TestHelper {
             .build();
     }
 
+    public static RestRequest getExecuteAgentStreamRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
+            + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
+            + "\"tools\":[{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\","
+            + "\"description\":\"Use this tool to get OpenSearch index information: "
+            + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
+            + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+            .build();
+    }
+
     public static RestRequest getExecuteToolRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_TOOL_NAME, "TestTool");

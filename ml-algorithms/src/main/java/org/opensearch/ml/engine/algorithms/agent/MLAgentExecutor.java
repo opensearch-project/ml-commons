@@ -84,6 +84,7 @@ import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -147,10 +148,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     }
 
     @Override
-    public void execute(Input input, ActionListener<Output> listener) {
-        if (!(input instanceof AgentMLInput agentMLInput)) {
+    public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) {
+        if (!(input instanceof AgentMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }
+        AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
         String tenantId = agentMLInput.getTenantId();
         Boolean isAsync = agentMLInput.getIsAsync();
@@ -278,7 +280,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         isAsync,
                                                                         outputs,
                                                                         modelTensors,
-                                                                        mlAgent
+                                                                        mlAgent,
+                                                                        channel
                                                                     );
                                                                 }, e -> {
                                                                     log.error("Failed to get existing interaction for regeneration", e);
@@ -294,7 +297,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                             isAsync,
                                                             outputs,
                                                             modelTensors,
-                                                            mlAgent
+                                                            mlAgent,
+                                                            channel
                                                         );
                                                     }
                                                 }, ex -> {
@@ -325,7 +329,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         outputs,
                                                                         modelTensors,
                                                                         listener,
-                                                                        createdMemory
+                                                                        createdMemory,
+                                                                        channel
                                                                     ),
                                                                     ex -> {
                                                                         log.error("Failed to find memory with memory_id: {}", memoryId, ex);
@@ -336,7 +341,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     return;
                                                 }
                                             }
-
                                             executeAgent(
                                                 inputDataSet,
                                                 mlTask,
@@ -346,7 +350,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 outputs,
                                                 modelTensors,
                                                 listener,
-                                                null
+                                                null,
+                                                channel
                                             );
                                         }
                                     } catch (Exception e) {
@@ -389,7 +394,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         boolean isAsync,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
-        MLAgent mlAgent
+        MLAgent mlAgent,
+        TransportChannel channel
     ) {
         String appType = mlAgent.getAppType();
         String question = inputDataSet.getParameters().get(QUESTION);
@@ -423,7 +429,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     outputs,
                                     modelTensors,
                                     listener,
-                                    memory
+                                    memory,
+                                    channel
                                 ),
                                 e -> {
                                     log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
@@ -432,7 +439,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             )
                     );
             } else {
-                executeAgent(inputDataSet, mlTask, isAsync, memory.getConversationId(), mlAgent, outputs, modelTensors, listener, memory);
+                executeAgent(
+                    inputDataSet,
+                    mlTask,
+                    isAsync,
+                    memory.getConversationId(),
+                    mlAgent,
+                    outputs,
+                    modelTensors,
+                    listener,
+                    memory,
+                    channel
+                );
             }
         }, ex -> {
             log.error("Failed to create parent interaction", ex);
@@ -449,7 +467,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
-        ConversationIndexMemory memory
+        ConversationIndexMemory memory,
+        TransportChannel channel
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
@@ -501,7 +520,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     memory
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
-                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
             }, e -> {
                 log.error("Failed to create task for agent async execution", e);
                 listener.onFailure(e);
@@ -515,7 +534,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 parentInteractionId,
                 memory
             );
-            mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+            mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
         }
     }
 
