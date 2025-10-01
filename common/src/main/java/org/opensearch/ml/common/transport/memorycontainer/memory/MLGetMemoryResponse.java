@@ -5,19 +5,29 @@
 
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.memorycontainer.MLMemoryHistory;
+import org.opensearch.ml.common.memorycontainer.MLMemorySession;
+import org.opensearch.ml.common.memorycontainer.MLWorkingMemory;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -26,26 +36,103 @@ import lombok.ToString;
 @Getter
 @ToString
 public class MLGetMemoryResponse extends ActionResponse implements ToXContentObject {
-    MLMemory mlMemory;
+    MLMemorySession session;
+    MLWorkingMemory workingMemory;
+    MLMemory longTermMemory;
+    MLMemoryHistory memoryHistory;
 
     @Builder
-    public MLGetMemoryResponse(MLMemory mlMemory) {
-        this.mlMemory = mlMemory;
+    public MLGetMemoryResponse(
+        MLMemorySession session,
+        MLWorkingMemory workingMemory,
+        MLMemory longTermMemory,
+        MLMemoryHistory memoryHistory
+    ) {
+        this.session = session;
+        this.workingMemory = workingMemory;
+        this.longTermMemory = longTermMemory;
+        this.memoryHistory = memoryHistory;
     }
 
     public MLGetMemoryResponse(StreamInput in) throws IOException {
         super(in);
-        mlMemory = new MLMemory(in);
+        if (in.readBoolean()) {
+            session = new MLMemorySession(in);
+        }
+        if (in.readBoolean()) {
+            workingMemory = new MLWorkingMemory(in);
+        }
+        if (in.readBoolean()) {
+            longTermMemory = new MLMemory(in);
+        }
+        if (in.readBoolean()) {
+            memoryHistory = new MLMemoryHistory(in);
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        mlMemory.writeTo(out);
+        if (session != null) {
+            out.writeBoolean(true);
+            session.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (workingMemory != null) {
+            out.writeBoolean(true);
+            workingMemory.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (longTermMemory != null) {
+            out.writeBoolean(true);
+            longTermMemory.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (memoryHistory != null) {
+            out.writeBoolean(true);
+            memoryHistory.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+    }
+
+    public static MLGetMemoryResponse fromGetResponse(GetResponse getResponse, String memoryType) {
+        try (
+            XContentParser parser = jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
+        ) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            switch (memoryType) {
+                case "session":
+                    return MLGetMemoryResponse.builder().session(MLMemorySession.parse(parser)).build();
+                case "working":
+                    return MLGetMemoryResponse.builder().workingMemory(MLWorkingMemory.parse(parser)).build();
+                case "long-term":
+                    return MLGetMemoryResponse.builder().longTermMemory(MLMemory.parse(parser)).build();
+                case "history":
+                    return MLGetMemoryResponse.builder().memoryHistory(MLMemoryHistory.parse(parser)).build();
+                default:
+                    throw new IllegalArgumentException("Invalid memory type: " + memoryType);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
-        return mlMemory.toXContent(xContentBuilder, params);
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        if (session != null) {
+            session.toXContent(builder, params);
+        } else if (workingMemory != null) {
+            workingMemory.toXContent(builder, params);
+        } else if (longTermMemory != null) {
+            longTermMemory.toXContent(builder, params);
+        } else if (memoryHistory != null) {
+            memoryHistory.toXContent(builder, params);
+        }
+        return builder;
     }
 
     public static MLGetMemoryResponse fromActionResponse(ActionResponse actionResponse) {

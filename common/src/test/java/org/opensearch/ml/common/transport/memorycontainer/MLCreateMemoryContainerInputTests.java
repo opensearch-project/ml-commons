@@ -23,23 +23,23 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
 public class MLCreateMemoryContainerInputTests {
 
     private MLCreateMemoryContainerInput inputWithAllFields;
     private MLCreateMemoryContainerInput inputMinimal;
-    private MemoryStorageConfig testMemoryStorageConfig;
+    private MemoryConfiguration testMemoryStorageConfig;
 
     @Before
     public void setUp() {
         // Create test memory storage config
-        testMemoryStorageConfig = MemoryStorageConfig
+        testMemoryStorageConfig = MemoryConfiguration
             .builder()
-            .memoryIndexName("test-memory-index")
+            .indexPrefix("test-memory-index")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("test-embedding-model")
-            .llmModelId("test-llm-model")
+            .llmId("test-llm-model")
             .dimension(768)
             .maxInferSize(8)
             .build();
@@ -49,7 +49,7 @@ public class MLCreateMemoryContainerInputTests {
             .builder()
             .name("test-memory-container")
             .description("Test memory container description")
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .tenantId("test-tenant")
             .build();
 
@@ -62,7 +62,7 @@ public class MLCreateMemoryContainerInputTests {
         assertNotNull(inputWithAllFields);
         assertEquals("test-memory-container", inputWithAllFields.getName());
         assertEquals("Test memory container description", inputWithAllFields.getDescription());
-        assertEquals(testMemoryStorageConfig, inputWithAllFields.getMemoryStorageConfig());
+        assertEquals(testMemoryStorageConfig, inputWithAllFields.getConfiguration());
         assertEquals("test-tenant", inputWithAllFields.getTenantId());
     }
 
@@ -71,32 +71,39 @@ public class MLCreateMemoryContainerInputTests {
         assertNotNull(inputMinimal);
         assertEquals("minimal-container", inputMinimal.getName());
         assertNull(inputMinimal.getDescription());
-        assertNull(inputMinimal.getMemoryStorageConfig());
+        assertNotNull(inputMinimal.getConfiguration());
         assertNull(inputMinimal.getTenantId());
     }
 
     @Test
     public void testConstructorWithAllParameters() {
-        MLCreateMemoryContainerInput input = new MLCreateMemoryContainerInput(
-            "param-container",
-            "param description",
-            testMemoryStorageConfig,
-            "param-tenant"
-        );
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("param-container")
+            .description("param description")
+            .configuration(testMemoryStorageConfig)
+            .tenantId("param-tenant")
+            .build();
 
         assertEquals("param-container", input.getName());
         assertEquals("param description", input.getDescription());
-        assertEquals(testMemoryStorageConfig, input.getMemoryStorageConfig());
+        assertEquals(testMemoryStorageConfig, input.getConfiguration());
         assertEquals("param-tenant", input.getTenantId());
     }
 
     @Test
     public void testConstructorWithNullOptionalFields() {
-        MLCreateMemoryContainerInput input = new MLCreateMemoryContainerInput("null-optional-container", null, null, null);
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput
+            .builder()
+            .name("null-optional-container")
+            .description(null)
+            .configuration(null)
+            .tenantId(null)
+            .build();
 
         assertEquals("null-optional-container", input.getName());
         assertNull(input.getDescription());
-        assertNull(input.getMemoryStorageConfig());
+        assertNotNull(input.getConfiguration());
         assertNull(input.getTenantId());
     }
 
@@ -111,12 +118,13 @@ public class MLCreateMemoryContainerInputTests {
 
     @Test(expected = IllegalArgumentException.class)
     public void testConstructorWithNullNameDirectConstructor() {
-        new MLCreateMemoryContainerInput(
-            null, // This should throw IllegalArgumentException
-            "test description",
-            testMemoryStorageConfig,
-            "test-tenant"
-        );
+        MLCreateMemoryContainerInput
+            .builder()
+            .name(null)
+            .description("param description")
+            .configuration(testMemoryStorageConfig)
+            .tenantId("test-tenant")
+            .build();
     }
 
     @Test
@@ -129,7 +137,14 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals(inputWithAllFields.getName(), parsedInput.getName());
         assertEquals(inputWithAllFields.getDescription(), parsedInput.getDescription());
-        assertEquals(inputWithAllFields.getMemoryStorageConfig(), parsedInput.getMemoryStorageConfig());
+        assertEquals(inputWithAllFields.getConfiguration().getIndexPrefix(), parsedInput.getConfiguration().getIndexPrefix());
+        assertEquals(inputWithAllFields.getConfiguration().getEmbeddingModelId(), parsedInput.getConfiguration().getEmbeddingModelId());
+        assertEquals(inputWithAllFields.getConfiguration().getEmbeddingModelType(), parsedInput.getConfiguration().getEmbeddingModelType());
+        assertEquals(inputWithAllFields.getConfiguration().getDimension(), parsedInput.getConfiguration().getDimension());
+        assertEquals(inputWithAllFields.getConfiguration().getMaxInferSize(), parsedInput.getConfiguration().getMaxInferSize());
+        assertEquals(inputWithAllFields.getConfiguration().getLlmId(), parsedInput.getConfiguration().getLlmId());
+        assertEquals(inputWithAllFields.getConfiguration().isDisableHistory(), parsedInput.getConfiguration().isDisableHistory());
+        assertEquals(inputWithAllFields.getConfiguration().isDisableSession(), parsedInput.getConfiguration().isDisableSession());
         assertEquals(inputWithAllFields.getTenantId(), parsedInput.getTenantId());
     }
 
@@ -143,7 +158,7 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals(inputMinimal.getName(), parsedInput.getName());
         assertNull(parsedInput.getDescription());
-        assertNull(parsedInput.getMemoryStorageConfig());
+        assertNotNull(parsedInput.getConfiguration());
         assertNull(parsedInput.getTenantId());
     }
 
@@ -158,9 +173,9 @@ public class MLCreateMemoryContainerInputTests {
         assertTrue(jsonStr.contains("\"name\":\"test-memory-container\""));
         assertTrue(jsonStr.contains("\"description\":\"Test memory container description\""));
         assertTrue(jsonStr.contains("\"tenant_id\":\"test-tenant\""));
-        assertTrue(jsonStr.contains("\"memory_storage_config\""));
+        assertTrue(jsonStr.contains("\"configuration\""));
         // Verify memory storage config fields are nested
-        assertTrue(jsonStr.contains("\"memory_index_name\":\"test-memory-index\""));
+        assertTrue(jsonStr.contains("\"index_prefix\":\"test-memory-index\""));
         assertTrue(jsonStr.contains("\"embedding_model_type\":\"TEXT_EMBEDDING\""));
     }
 
@@ -175,7 +190,7 @@ public class MLCreateMemoryContainerInputTests {
         assertTrue(jsonStr.contains("\"name\":\"minimal-container\""));
         // Verify optional fields are not present
         assertFalse(jsonStr.contains("\"description\""));
-        assertFalse(jsonStr.contains("\"memory_storage_config\""));
+        assertTrue(jsonStr.contains("\"configuration\""));
         assertFalse(jsonStr.contains("\"tenant_id\""));
     }
 
@@ -185,12 +200,12 @@ public class MLCreateMemoryContainerInputTests {
             + "\"name\":\"parsed-container\","
             + "\"description\":\"parsed description\","
             + "\"tenant_id\":\"parsed-tenant\","
-            + "\"memory_storage_config\":{"
-            + "\"memory_index_name\":\"parsed-index\","
+            + "\"configuration\":{"
+            + "\"index_prefix\":\"parsed-index\","
             + "\"embedding_model_type\":\"TEXT_EMBEDDING\","
             + "\"embedding_model_id\":\"parsed-embedding-model\","
-            + "\"llm_model_id\":\"parsed-llm-model\","
-            + "\"dimension\":512,"
+            + "\"llm_id\":\"parsed-llm-model\","
+            + "\"embedding_dimension\":512,"
             + "\"max_infer_size\":7"
             + "}"
             + "}";
@@ -204,13 +219,13 @@ public class MLCreateMemoryContainerInputTests {
         assertEquals("parsed-container", parsedInput.getName());
         assertEquals("parsed description", parsedInput.getDescription());
         assertEquals("parsed-tenant", parsedInput.getTenantId());
-        assertNotNull(parsedInput.getMemoryStorageConfig());
-        assertEquals("parsed-index", parsedInput.getMemoryStorageConfig().getMemoryIndexName());
-        assertEquals(FunctionName.TEXT_EMBEDDING, parsedInput.getMemoryStorageConfig().getEmbeddingModelType());
-        assertEquals("parsed-embedding-model", parsedInput.getMemoryStorageConfig().getEmbeddingModelId());
-        assertEquals("parsed-llm-model", parsedInput.getMemoryStorageConfig().getLlmModelId());
-        assertEquals(Integer.valueOf(512), parsedInput.getMemoryStorageConfig().getDimension());
-        assertEquals(Integer.valueOf(7), parsedInput.getMemoryStorageConfig().getMaxInferSize());
+        assertNotNull(parsedInput.getConfiguration());
+        assertEquals("parsed-index", parsedInput.getConfiguration().getIndexPrefix());
+        assertEquals(FunctionName.TEXT_EMBEDDING, parsedInput.getConfiguration().getEmbeddingModelType());
+        assertEquals("parsed-embedding-model", parsedInput.getConfiguration().getEmbeddingModelId());
+        assertEquals("parsed-llm-model", parsedInput.getConfiguration().getLlmId());
+        assertEquals(Integer.valueOf(512), parsedInput.getConfiguration().getDimension());
+        assertEquals(Integer.valueOf(7), parsedInput.getConfiguration().getMaxInferSize());
     }
 
     @Test
@@ -225,7 +240,7 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals("minimal-parsed-container", parsedInput.getName());
         assertNull(parsedInput.getDescription());
-        assertNull(parsedInput.getMemoryStorageConfig());
+        assertNotNull(parsedInput.getConfiguration());
         assertNull(parsedInput.getTenantId());
     }
 
@@ -247,7 +262,7 @@ public class MLCreateMemoryContainerInputTests {
         assertEquals("unknown-fields-container", parsedInput.getName());
         assertEquals("test description", parsedInput.getDescription());
         // Unknown fields should be ignored
-        assertNull(parsedInput.getMemoryStorageConfig());
+        assertNotNull(parsedInput.getConfiguration());
         assertNull(parsedInput.getTenantId());
     }
 
@@ -267,7 +282,7 @@ public class MLCreateMemoryContainerInputTests {
         assertEquals(inputWithAllFields.getName(), parsedInput.getName());
         assertEquals(inputWithAllFields.getDescription(), parsedInput.getDescription());
         assertEquals(inputWithAllFields.getTenantId(), parsedInput.getTenantId());
-        assertEquals(inputWithAllFields.getMemoryStorageConfig(), parsedInput.getMemoryStorageConfig());
+        assertEquals(inputWithAllFields.getConfiguration(), parsedInput.getConfiguration());
     }
 
     @Test
@@ -276,7 +291,7 @@ public class MLCreateMemoryContainerInputTests {
             .builder()
             .name("test-container")
             .description("test description")
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .tenantId("test-tenant")
             .build();
 
@@ -284,7 +299,7 @@ public class MLCreateMemoryContainerInputTests {
             .builder()
             .name("test-container")
             .description("test description")
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .tenantId("test-tenant")
             .build();
 
@@ -292,7 +307,7 @@ public class MLCreateMemoryContainerInputTests {
             .builder()
             .name("different-container")
             .description("test description")
-            .memoryStorageConfig(testMemoryStorageConfig)
+            .configuration(testMemoryStorageConfig)
             .tenantId("test-tenant")
             .build();
 
@@ -309,13 +324,13 @@ public class MLCreateMemoryContainerInputTests {
         // Test setters
         input.setName("new-name");
         input.setDescription("new-description");
-        input.setMemoryStorageConfig(testMemoryStorageConfig);
+        input.setConfiguration(testMemoryStorageConfig);
         input.setTenantId("new-tenant");
 
         // Test getters
         assertEquals("new-name", input.getName());
         assertEquals("new-description", input.getDescription());
-        assertEquals(testMemoryStorageConfig, input.getMemoryStorageConfig());
+        assertEquals(testMemoryStorageConfig, input.getConfiguration());
         assertEquals("new-tenant", input.getTenantId());
     }
 
@@ -330,7 +345,7 @@ public class MLCreateMemoryContainerInputTests {
         assertEquals("modified-name", modifiedInput.getName());
         assertEquals("modified description", modifiedInput.getDescription());
         // Other fields should remain the same
-        assertEquals(inputWithAllFields.getMemoryStorageConfig(), modifiedInput.getMemoryStorageConfig());
+        assertEquals(inputWithAllFields.getConfiguration(), modifiedInput.getConfiguration());
         assertEquals(inputWithAllFields.getTenantId(), modifiedInput.getTenantId());
     }
 
@@ -339,7 +354,7 @@ public class MLCreateMemoryContainerInputTests {
         // Test that field constants are correctly defined
         assertEquals("name", MLCreateMemoryContainerInput.NAME_FIELD);
         assertEquals("description", MLCreateMemoryContainerInput.DESCRIPTION_FIELD);
-        assertEquals("memory_storage_config", MLCreateMemoryContainerInput.MEMORY_STORAGE_CONFIG_FIELD);
+        assertEquals("configuration", MLCreateMemoryContainerInput.MEMORY_CONFIG_FIELD);
     }
 
     @Test
@@ -347,9 +362,9 @@ public class MLCreateMemoryContainerInputTests {
         String jsonStr = "{"
             + "\"name\":\"partial-config-container\","
             + "\"description\":\"test with partial config\","
-            + "\"memory_storage_config\":{"
-            + "\"memory_index_name\":\"partial-index\","
-            + "\"llm_model_id\":\"partial-llm-model\""
+            + "\"configuration\":{"
+            + "\"index_prefix\":\"partial-index\","
+            + "\"llm_id\":\"partial-llm-model\""
             + "}"
             + "}";
 
@@ -361,11 +376,10 @@ public class MLCreateMemoryContainerInputTests {
 
         assertEquals("partial-config-container", parsedInput.getName());
         assertEquals("test with partial config", parsedInput.getDescription());
-        assertNotNull(parsedInput.getMemoryStorageConfig());
-        assertEquals("partial-index", parsedInput.getMemoryStorageConfig().getMemoryIndexName());
-        assertEquals("partial-llm-model", parsedInput.getMemoryStorageConfig().getLlmModelId());
+        assertNotNull(parsedInput.getConfiguration());
+        assertEquals("partial-index", parsedInput.getConfiguration().getIndexPrefix());
+        assertEquals("partial-llm-model", parsedInput.getConfiguration().getLlmId());
         // Semantic storage should be disabled due to missing embedding config
-        assertFalse(parsedInput.getMemoryStorageConfig().isSemanticStorageEnabled());
     }
 
     @Test

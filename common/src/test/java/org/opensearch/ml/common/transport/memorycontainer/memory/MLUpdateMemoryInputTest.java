@@ -12,6 +12,8 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -32,51 +34,60 @@ public class MLUpdateMemoryInputTest {
 
     @Before
     public void setUp() {
-        inputNormal = MLUpdateMemoryInput.builder().text("Updated memory content").build();
+        Map<String, Object> normalContent = new HashMap<>();
+        normalContent.put("text", "Updated memory content");
+        inputNormal = MLUpdateMemoryInput.builder().updateContent(normalContent).build();
 
-        inputWithWhitespace = MLUpdateMemoryInput.builder().text("  Text with surrounding spaces  ").build();
+        Map<String, Object> whitespaceContent = new HashMap<>();
+        whitespaceContent.put("text", "  Text with surrounding spaces  ");
+        inputWithWhitespace = MLUpdateMemoryInput.builder().updateContent(whitespaceContent).build();
     }
 
     @Test
     public void testBuilderNormal() {
         assertNotNull(inputNormal);
-        assertEquals("Updated memory content", inputNormal.getText());
+        assertEquals("Updated memory content", inputNormal.getUpdateContent().get("text"));
     }
 
     @Test
     public void testBuilderWithWhitespace() {
         assertNotNull(inputWithWhitespace);
-        // Should be trimmed
-        assertEquals("Text with surrounding spaces", inputWithWhitespace.getText());
+        assertEquals("  Text with surrounding spaces  ", inputWithWhitespace.getUpdateContent().get("text"));
     }
 
     @Test
     public void testConstructor() {
-        MLUpdateMemoryInput input = new MLUpdateMemoryInput("Test text");
-        assertEquals("Test text", input.getText());
+        Map<String, Object> content = new HashMap<>();
+        content.put("text", "Test text");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(content).build();
+        assertEquals("Test text", input.getUpdateContent().get("text"));
     }
 
     @Test
-    public void testConstructorWithTrimming() {
-        MLUpdateMemoryInput input = new MLUpdateMemoryInput("  Trimmed text  ");
-        assertEquals("Trimmed text", input.getText());
+    public void testConstructorWithMultipleFields() {
+        Map<String, Object> content = new HashMap<>();
+        content.put("text", "Test text");
+        content.put("metadata", "some metadata");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(content).build();
+        assertEquals("Test text", input.getUpdateContent().get("text"));
+        assertEquals("some metadata", input.getUpdateContent().get("metadata"));
     }
 
     @Test
-    public void testConstructorWithNullText() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MLUpdateMemoryInput((String) null));
+    public void testConstructorWithNullContent() {
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLUpdateMemoryInput.builder().updateContent(null).build()
+        );
         assertEquals("Text cannot be null or empty", exception.getMessage());
     }
 
     @Test
-    public void testConstructorWithEmptyText() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MLUpdateMemoryInput(""));
-        assertEquals("Text cannot be null or empty", exception.getMessage());
-    }
-
-    @Test
-    public void testConstructorWithWhitespaceOnlyText() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MLUpdateMemoryInput("   "));
+    public void testConstructorWithEmptyContent() {
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MLUpdateMemoryInput.builder().updateContent(new HashMap<>()).build()
+        );
         assertEquals("Text cannot be null or empty", exception.getMessage());
     }
 
@@ -87,7 +98,7 @@ public class MLUpdateMemoryInputTest {
         StreamInput in = out.bytes().streamInput();
         MLUpdateMemoryInput deserialized = new MLUpdateMemoryInput(in);
 
-        assertEquals(inputNormal.getText(), deserialized.getText());
+        assertEquals(inputNormal.getUpdateContent(), deserialized.getUpdateContent());
     }
 
     @Test
@@ -110,7 +121,7 @@ public class MLUpdateMemoryInputTest {
 
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
 
-        assertEquals("Parsed memory text", parsed.getText());
+        assertEquals("Parsed memory text", parsed.getUpdateContent().get("text"));
     }
 
     @Test
@@ -124,21 +135,27 @@ public class MLUpdateMemoryInputTest {
 
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
 
-        assertEquals("Valid text", parsed.getText());
+        assertEquals("Valid text", parsed.getUpdateContent().get("text"));
     }
 
     @Test
     public void testSetter() {
-        MLUpdateMemoryInput input = new MLUpdateMemoryInput("Initial text");
-        input.setText("Updated text");
-        assertEquals("Updated text", input.getText());
+        Map<String, Object> initialContent = new HashMap<>();
+        initialContent.put("text", "Initial text");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(initialContent).build();
+
+        Map<String, Object> updatedContent = new HashMap<>();
+        updatedContent.put("text", "Updated text");
+        input.setUpdateContent(updatedContent);
+
+        assertEquals("Updated text", input.getUpdateContent().get("text"));
     }
 
     @Test
     public void testSpecialCharactersInText() throws IOException {
-        MLUpdateMemoryInput specialInput = new MLUpdateMemoryInput(
-            "Text with\n\ttabs,\nnewlines, \"quotes\", 'single quotes', and unicode 🚀✨"
-        );
+        Map<String, Object> specialContent = new HashMap<>();
+        specialContent.put("text", "Text with\n\ttabs,\nnewlines, \"quotes\", 'single quotes', and unicode 🚀✨");
+        MLUpdateMemoryInput specialInput = MLUpdateMemoryInput.builder().updateContent(specialContent).build();
 
         // Test serialization round trip
         BytesStreamOutput out = new BytesStreamOutput();
@@ -146,7 +163,7 @@ public class MLUpdateMemoryInputTest {
         StreamInput in = out.bytes().streamInput();
         MLUpdateMemoryInput deserialized = new MLUpdateMemoryInput(in);
 
-        assertEquals(specialInput.getText(), deserialized.getText());
+        assertEquals(specialInput.getUpdateContent(), deserialized.getUpdateContent());
 
         // Test XContent
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
@@ -166,7 +183,9 @@ public class MLUpdateMemoryInputTest {
             longText.append("This is sentence ").append(i).append(". ");
         }
 
-        MLUpdateMemoryInput longInput = new MLUpdateMemoryInput(longText.toString().trim());
+        Map<String, Object> longContent = new HashMap<>();
+        longContent.put("text", longText.toString().trim());
+        MLUpdateMemoryInput longInput = MLUpdateMemoryInput.builder().updateContent(longContent).build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
@@ -174,7 +193,7 @@ public class MLUpdateMemoryInputTest {
         StreamInput in = out.bytes().streamInput();
         MLUpdateMemoryInput deserialized = new MLUpdateMemoryInput(in);
 
-        assertEquals(longInput.getText(), deserialized.getText());
+        assertEquals(longInput.getUpdateContent(), deserialized.getUpdateContent());
     }
 
     @Test
@@ -192,15 +211,17 @@ public class MLUpdateMemoryInputTest {
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
 
         // Verify field matches
-        assertEquals(inputNormal.getText(), parsed.getText());
+        assertEquals(inputNormal.getUpdateContent(), parsed.getUpdateContent());
     }
 
     @Test
     public void testMultilineText() throws IOException {
         String multilineText = "Line 1\nLine 2\nLine 3\nWith multiple lines";
-        MLUpdateMemoryInput multilineInput = new MLUpdateMemoryInput(multilineText);
+        Map<String, Object> multilineContent = new HashMap<>();
+        multilineContent.put("text", multilineText);
+        MLUpdateMemoryInput multilineInput = MLUpdateMemoryInput.builder().updateContent(multilineContent).build();
 
-        assertEquals(multilineText, multilineInput.getText());
+        assertEquals(multilineText, multilineInput.getUpdateContent().get("text"));
 
         // Test XContent handling
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
@@ -214,26 +235,30 @@ public class MLUpdateMemoryInputTest {
         parser.nextToken();
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
 
-        assertEquals(multilineText, parsed.getText());
+        assertEquals(multilineText, parsed.getUpdateContent().get("text"));
     }
 
     @Test
     public void testSingleCharacterText() {
-        MLUpdateMemoryInput singleChar = new MLUpdateMemoryInput("A");
-        assertEquals("A", singleChar.getText());
+        Map<String, Object> singleCharContent = new HashMap<>();
+        singleCharContent.put("text", "A");
+        MLUpdateMemoryInput singleChar = MLUpdateMemoryInput.builder().updateContent(singleCharContent).build();
+        assertEquals("A", singleChar.getUpdateContent().get("text"));
     }
 
     @Test
     public void testTextWithOnlySpecialCharacters() {
         String specialOnly = "!@#$%^&*()_+-=[]{}|;':\",./<>?";
-        MLUpdateMemoryInput specialInput = new MLUpdateMemoryInput(specialOnly);
-        assertEquals(specialOnly, specialInput.getText());
+        Map<String, Object> specialContent = new HashMap<>();
+        specialContent.put("text", specialOnly);
+        MLUpdateMemoryInput specialInput = MLUpdateMemoryInput.builder().updateContent(specialContent).build();
+        assertEquals(specialOnly, specialInput.getUpdateContent().get("text"));
     }
 
     @Test
-    public void testParseWithMissingTextField() throws IOException {
-        // Parse with missing text field should throw exception when building
-        String jsonString = "{\"other_field\":\"value\"}";
+    public void testParseWithEmptyContent() throws IOException {
+        // Parse with empty content should throw exception when building
+        String jsonString = "{}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -244,15 +269,30 @@ public class MLUpdateMemoryInputTest {
     }
 
     @Test
-    public void testSimpleJsonStructure() throws IOException {
-        // Verify the JSON structure is simple: just {"text": "..."}
+    public void testComplexUpdateContent() throws IOException {
+        // Test with multiple fields in update content (avoiding nested Maps for XContent compatibility)
+        Map<String, Object> complexContent = new HashMap<>();
+        complexContent.put("text", "Updated text");
+        complexContent.put("metadata", "some metadata value");
+        complexContent.put("tags", "important");
+
+        MLUpdateMemoryInput complexInput = MLUpdateMemoryInput.builder().updateContent(complexContent).build();
+
+        // Test serialization
+        BytesStreamOutput out = new BytesStreamOutput();
+        complexInput.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        MLUpdateMemoryInput deserialized = new MLUpdateMemoryInput(in);
+
+        assertEquals(complexContent, deserialized.getUpdateContent());
+
+        // Test XContent
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputNormal.toXContent(builder, EMPTY_PARAMS);
+        complexInput.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
-        // Should be a simple object with just one field
-        assertTrue(jsonString.startsWith("{\"text\":"));
-        assertTrue(jsonString.endsWith("\"}"));
-        assertEquals(1, jsonString.split("\":").length - 1); // Only one field
+        assertTrue(jsonString.contains("\"text\":\"Updated text\""));
+        assertTrue(jsonString.contains("\"metadata\""));
+        assertTrue(jsonString.contains("\"tags\""));
     }
 }

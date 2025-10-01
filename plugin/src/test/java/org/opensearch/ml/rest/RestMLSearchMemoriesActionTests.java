@@ -13,8 +13,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEARCH_MEMORIES_PATH;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +39,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemorie
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchModule;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
@@ -179,11 +182,14 @@ public class RestMLSearchMemoriesActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequest(RestRequest.Method method) {
-        String requestContent = "{\"query\":\"test search query\"}";
+        String requestContent = "{\"query\": {\"match_all\": {}} }";
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
+        params.put(PARAMETER_MEMORY_TYPE, "working");
 
-        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(
+            new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents())
+        )
             .withMethod(method)
             .withPath(SEARCH_MEMORIES_PATH)
             .withParams(params)

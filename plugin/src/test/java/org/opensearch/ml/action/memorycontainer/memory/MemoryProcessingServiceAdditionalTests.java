@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -22,8 +23,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -45,19 +47,23 @@ public class MemoryProcessingServiceAdditionalTests {
     @Mock
     private ActionListener<List<MemoryDecision>> decisionsListener;
 
+    private MemoryStrategy memoryStrategy;
+
     private MemoryProcessingService memoryProcessingService;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
     }
 
     @Test
     public void testExtractFactsFromConversation_NonModelTensorOutput() {
-        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content("My name is John").role("user").build());
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
+        List<MessageInput> messages = Arrays
+            .asList(MessageInput.builder().content(createTestContent("My name is John")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         when(mockResponse.getOutput()).thenReturn(mock(org.opensearch.ml.common.output.MLOutput.class));
@@ -68,7 +74,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
@@ -78,8 +84,8 @@ public class MemoryProcessingServiceAdditionalTests {
     public void testMakeMemoryDecisions_NoResponseContent() {
         List<String> facts = Arrays.asList("User name is John");
         List<FactSearchResult> searchResults = Arrays.asList();
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getLlmModelId()).thenReturn("llm-model-123");
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
