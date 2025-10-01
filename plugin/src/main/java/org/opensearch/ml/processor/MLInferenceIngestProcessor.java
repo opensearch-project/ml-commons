@@ -401,7 +401,7 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
 
         // Apply transformation if specified
         if (OutputTransformations.hasTransformation(modelOutputFieldName)) {
-            modelOutputValue = OutputTransformations.applyMeanPooling(modelOutputValue);
+            modelOutputValue = OutputTransformations.applyTransformation(modelOutputFieldName, modelOutputValue);
         }
 
         Map<String, Object> ingestDocumentSourceAndMetaData = new HashMap<>();

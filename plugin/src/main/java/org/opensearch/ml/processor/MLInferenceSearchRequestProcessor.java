@@ -341,7 +341,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
 
                         // Apply transformation if specified
                         if (OutputTransformations.hasTransformation(modelOutputFieldName)) {
-                            modelOutputValue = OutputTransformations.applyMeanPooling(modelOutputValue);
+                            modelOutputValue = OutputTransformations.applyTransformation(modelOutputFieldName, modelOutputValue);
                         }
 
                         requestContext.setAttribute(newQueryField, modelOutputValue);
@@ -375,7 +375,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
 
                     // Apply transformation if specified
                     if (OutputTransformations.hasTransformation(modelOutputFieldName)) {
-                        modelOutputValue = OutputTransformations.applyMeanPooling(modelOutputValue);
+                        modelOutputValue = OutputTransformations.applyTransformation(modelOutputFieldName, modelOutputValue);
                     }
 
                     if (modelOutputValue instanceof Map) {
