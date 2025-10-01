@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -20,6 +21,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
@@ -83,6 +85,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest.fromActionRequest(request);
         String memoryContainerId = deleteRequest.getMemoryContainerId();
         String tenantId = deleteRequest.getTenantId();
+        boolean deleteAllMemories = deleteRequest.isDeleteAllMemories();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
@@ -101,11 +104,17 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
             }
 
             // Delete memory container
-            deleteMemoryContainer(memoryContainerId, tenantId, actionListener);
+            deleteMemoryContainer(memoryContainerId, container, tenantId, deleteAllMemories, actionListener);
         }, actionListener::onFailure));
     }
 
-    private void deleteMemoryContainer(String memoryContainerId, String tenantId, ActionListener<DeleteResponse> listener) {
+    private void deleteMemoryContainer(
+        String memoryContainerId,
+        MLMemoryContainer container,
+        String tenantId,
+        boolean deleteAllMemories,
+        ActionListener<DeleteResponse> listener
+    ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest
                 .builder()
@@ -115,7 +124,16 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 .build();
             sdkClient
                 .deleteDataObjectAsync(deleteRequest)
-                .whenComplete((deleteResponse, throwable) -> handleDeleteResponse(deleteResponse, throwable, deleteRequest.id(), listener));
+                .whenComplete(
+                    (deleteResponse, throwable) -> handleDeleteResponse(
+                        deleteResponse,
+                        throwable,
+                        deleteRequest.id(),
+                        deleteAllMemories,
+                        container,
+                        listener
+                    )
+                );
         } catch (Exception e) {
             log.error("Failed to delete Memory Container: {}", memoryContainerId, e);
             listener.onFailure(e);
@@ -126,6 +144,8 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         DeleteDataObjectResponse response,
         Throwable throwable,
         String memoryContainerId,
+        boolean deleteAllMemories,
+        MLMemoryContainer container,
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
@@ -135,8 +155,19 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         } else {
             try {
                 DeleteResponse deleteResponse = response.deleteResponse();
-                log.debug("Completed Delete Memory Container Request, memory container id:{} deleted", response.id());
-                actionListener.onResponse(deleteResponse);
+                if (deleteAllMemories) {
+                    String indexPattern = container.getConfiguration().getFinalMemoryIndexPrefix() + "*";
+                    DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indexPattern);
+                    memoryContainerHelper.deleteIndex(container.getConfiguration(), deleteIndexRequest, ActionListener.wrap(r -> {
+                        actionListener.onResponse(deleteResponse);
+                    }, e -> {
+                        log.warn("Failed to delete memory indices for memory container " + memoryContainerId);
+                        actionListener.onFailure(e);
+                    }));
+                } else {
+                    log.debug("Completed Delete Memory Container Request, memory container id:{} deleted", response.id());
+                    actionListener.onResponse(deleteResponse);
+                }
             } catch (Exception e) {
                 actionListener.onFailure(e);
             }

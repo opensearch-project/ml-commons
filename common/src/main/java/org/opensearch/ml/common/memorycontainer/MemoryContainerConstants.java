@@ -96,6 +96,7 @@ public class MemoryContainerConstants {
     public static final String BASE_MEMORY_CONTAINERS_PATH = "/_plugins/_ml/memory_containers";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
+    public static final String PARAMETER_DELETE_ALL_MEMORIES = "delete_all_memories";
     public static final String PARAMETER_MEMORY_TYPE = "memory_type";
     public static final String PARAMETER_MEMORY_ID = "memory_id";
     public static final String PARAMETER_WORKING_MEMORY_ID = "working_memory_id";
