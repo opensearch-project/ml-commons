@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.util.Locale;
@@ -18,15 +17,11 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.reindex.BulkByScrollResponse;
-import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -130,7 +125,7 @@ public class TransportDeleteMemoriesByQueryAction extends
             DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(memoryIndexName);
 
             // Step 7: Apply query with owner filtering for non-admin users
-            QueryBuilder finalQuery = buildFilteredQuery(query, user);
+            QueryBuilder finalQuery = memoryContainerHelper.addOwnerIdFilter(user, query);
             deleteByQueryRequest.setQuery(finalQuery);
             deleteByQueryRequest.setRefresh(true);
 
@@ -169,23 +164,6 @@ public class TransportDeleteMemoriesByQueryAction extends
     }
 
     /**
-     * Build a filtered query that includes owner filtering for non-admin users
-     */
-    private QueryBuilder buildFilteredQuery(QueryBuilder userQuery, User user) {
-        // If security is disabled or user is admin, use the original query
-        if (user == null || (user.getRoles() != null && user.getRoles().contains("all_access"))) {
-            return userQuery;
-        }
-
-        // For non-admin users, add owner filter
-        BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
-        filteredQuery.must(userQuery);
-        filteredQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, user.getName()));
-
-        return filteredQuery;
-    }
-
-    /**
      * Execute the delete by query request, handling system indices appropriately
      */
     private void executeDeleteByQuery(
@@ -214,21 +192,7 @@ public class TransportDeleteMemoriesByQueryAction extends
             actionListener.onFailure(error);
         });
 
-        // Execute with appropriate context based on system index setting
-        if (configuration.isUseSystemIndex()) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client
-                    .execute(
-                        DeleteByQueryAction.INSTANCE,
-                        deleteByQueryRequest,
-                        ActionListener.runBefore(wrappedListener, context::restore)
-                    );
-            } catch (Exception e) {
-                log.error("Failed to execute delete by query on system index", e);
-                actionListener.onFailure(e);
-            }
-        } else {
-            client.execute(DeleteByQueryAction.INSTANCE, deleteByQueryRequest, wrappedListener);
-        }
+        // Use the helper method to execute with appropriate context
+        memoryContainerHelper.deleteDataByQuery(configuration, deleteByQueryRequest, wrappedListener);
     }
 }

@@ -47,6 +47,9 @@ import org.opensearch.index.query.NestedQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
+import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -315,6 +318,30 @@ public class MemoryContainerHelper {
         }
     }
 
+    /**
+     * Execute delete by query with proper system index handling
+     *
+     * @param configuration memory configuration
+     * @param deleteByQueryRequest the delete by query request
+     * @param listener action listener for the result
+     */
+    public void deleteDataByQuery(
+        MemoryConfiguration configuration,
+        DeleteByQueryRequest deleteByQueryRequest,
+        ActionListener<BulkByScrollResponse> listener
+    ) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.execute(DeleteByQueryAction.INSTANCE, deleteByQueryRequest, ActionListener.runBefore(listener, context::restore));
+            } catch (Exception e) {
+                log.error("Failed to execute delete by query on system index", e);
+                listener.onFailure(e);
+            }
+        } else {
+            client.execute(DeleteByQueryAction.INSTANCE, deleteByQueryRequest, listener);
+        }
+    }
+
     public boolean isAdminUser(User user) {
         return user != null && (!CollectionUtils.isEmpty(user.getRoles()) && user.getRoles().contains("all_access"));
     }
@@ -356,6 +383,28 @@ public class MemoryContainerHelper {
             searchSourceBuilder.query(rewriteQuery);
         }
         return searchSourceBuilder;
+    }
+
+    /**
+     * Add owner ID filter to a QueryBuilder for non-admin users.
+     * For admin users or when security is disabled, returns the original query.
+     *
+     * @param user The current user (can be null if security is disabled)
+     * @param query The original query to filter
+     * @return The filtered query with owner restrictions for non-admin users
+     */
+    public QueryBuilder addOwnerIdFilter(User user, QueryBuilder query) {
+        // If security is disabled or user is admin, use the original query
+        if (user == null || isAdminUser(user)) {
+            return query;
+        }
+
+        // For non-admin users, add owner filter
+        BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+        filteredQuery.must(query);
+        filteredQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, user.getName()));
+
+        return filteredQuery;
     }
 
     public String getOwnerId(User user) {
