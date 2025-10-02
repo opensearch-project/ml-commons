@@ -7,6 +7,7 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
@@ -201,17 +202,17 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
             if (AccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
-                source.put(MLModelGroup.BACKEND_ROLES_FIELD, ImmutableList.of());
+                source.put(BACKEND_ROLES_FIELD, ImmutableList.of());
             }
         } else if (updateModelGroupInput.getBackendRoles() != null
             || Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
             source.put(MLModelGroup.ACCESS, AccessMode.RESTRICTED.getValue());
         }
         if (updateModelGroupInput.getBackendRoles() != null) {
-            source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
+            source.put(BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
         }
         if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
-            source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
+            source.put(BACKEND_ROLES_FIELD, user.getBackendRoles());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());

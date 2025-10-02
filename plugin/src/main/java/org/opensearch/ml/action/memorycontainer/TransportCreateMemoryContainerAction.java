@@ -94,6 +94,7 @@ public class TransportCreateMemoryContainerAction extends
     @Override
     protected void doExecute(Task task, MLCreateMemoryContainerRequest request, ActionListener<MLCreateMemoryContainerResponse> listener) {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            log.warn("Agentic memory feature is disabled. Request denied.");
             listener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
             return;
         }
@@ -307,6 +308,11 @@ public class TransportCreateMemoryContainerAction extends
                                 log.info("Successfully created memory container with ID: {}", generatedId);
                                 listener.onResponse(generatedId);
                             } else {
+                                log
+                                    .error(
+                                        "Failed to create memory container - unexpected index response result: {}",
+                                        indexResponse.getResult()
+                                    );
                                 listener.onFailure(new RuntimeException("Failed to create memory container"));
                             }
                         } catch (Exception e) {
@@ -329,6 +335,7 @@ public class TransportCreateMemoryContainerAction extends
                     && !("semantic".equalsIgnoreCase(type)
                         || "user_preference".equalsIgnoreCase(type)
                         || "summary".equalsIgnoreCase(type))) {
+                    log.error("Invalid strategy type provided: {}. Must be one of: semantic, user_preference, summary", type);
                     listener.onFailure(new IllegalArgumentException(String.format(INVALID_STRATEGY_TYPE_ERROR, type)));
                     return;
                 }
