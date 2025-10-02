@@ -23,6 +23,9 @@
         }
       }
     },
+    "message_id": {
+      "type": "integer"
+    },
     "binary_data": {
       "type": "binary"
     },

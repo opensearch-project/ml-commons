@@ -62,6 +62,7 @@ public class MemoryContainerConstants {
     public static final String MEMORY_FIELD = "memory";
     public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";
     public static final String METADATA_FIELD = "metadata";
+    public static final String AGENTS_FIELD = "agents";
     public static final String TAGS_FIELD = "tags";
     public static final String STRATEGY_ID_FIELD = "strategy_id";
     public static final String MEMORY_ID_FIELD = "memory_id";
@@ -75,6 +76,7 @@ public class MemoryContainerConstants {
     // Request body field names (different from storage field names)
     public static final String MESSAGE_FIELD = "message";
     public static final String MESSAGES_FIELD = "messages";
+    public static final String MESSAGE_ID_FIELD = "message_id";
     public static final String CONTENT_TEXT_FIELD = "content_text";
     public static final String CONTENT_FIELD = "content";
     public static final String INFER_FIELD = "infer";
@@ -98,6 +100,7 @@ public class MemoryContainerConstants {
     public static final String PARAMETER_MEMORY_ID = "memory_id";
     public static final String PARAMETER_WORKING_MEMORY_ID = "working_memory_id";
     public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
+    public static final String SESSIONS_PATH = MEMORIES_PATH + "/sessions";
     public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_search";
     public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String UPDATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}";

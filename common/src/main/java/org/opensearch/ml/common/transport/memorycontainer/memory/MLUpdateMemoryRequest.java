@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -67,6 +68,9 @@ public class MLUpdateMemoryRequest extends ActionRequest {
         }
         if (memoryType == null) {
             exception = addValidationError("Memory type can't be null", exception);
+        }
+        if (!VALID_MEMORY_TYPES.contains(memoryType)) {
+            exception = addValidationError("Invalid memory type", exception);
         }
         if (memoryId == null) {
             exception = addValidationError("Memory id can't be null", exception);
