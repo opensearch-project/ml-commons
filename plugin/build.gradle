@@ -90,10 +90,10 @@ dependencies {
     implementation group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: "${versions.commonslang}"
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.15.1'
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     implementation ('com.jayway.jsonpath:json-path:2.9.0') {
         exclude group: 'net.minidev', module: 'json-smart'
     }
@@ -473,7 +473,7 @@ configurations.all {
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
-    resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
+    resolutionStrategy.force 'org.apache.commons:commons-text:1.14.0'
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.httpcomponents:httpcore:4.4.15'
     resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
