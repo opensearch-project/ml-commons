@@ -143,7 +143,7 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
 
         // If model not in cache, validate it exists before start streaming
         if (!functionName.isPresent()) {
-            validateModelExists(modelId, request);
+            validateModelExists(modelId, request, client);
         }
 
         return channel -> {
@@ -193,16 +193,18 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
         };
     }
 
-    private void validateModelExists(String modelId, RestRequest request) throws IOException {
+    private void validateModelExists(String modelId, RestRequest request, NodeClient client) throws IOException {
         try {
             CompletableFuture<MLModel> future = new CompletableFuture<>();
 
-            modelManager
-                .getModel(
-                    modelId,
-                    getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
-                    ActionListener.wrap(future::complete, future::completeExceptionally)
-                );
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                modelManager
+                    .getModel(
+                        modelId,
+                        getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
+                        ActionListener.runBefore(ActionListener.wrap(future::complete, future::completeExceptionally), context::restore)
+                    );
+            }
 
             // Wait for validation
             future.get(5, SECONDS);
