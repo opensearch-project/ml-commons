@@ -25,7 +25,7 @@ dependencies {
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}")
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'
