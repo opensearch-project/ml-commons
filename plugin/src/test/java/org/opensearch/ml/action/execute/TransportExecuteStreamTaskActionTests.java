@@ -83,6 +83,8 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+        when(transportService.getThreadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         mlExecuteTaskRequest = MLExecuteTaskRequest.builder().functionName(FunctionName.AGENT).input(mock(Input.class)).build();
 
