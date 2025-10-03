@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -218,7 +219,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesInput specialInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-with-special-chars-🚀")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .searchSourceBuilder(specialSearchSourceBuilder)
             .build();
 
@@ -236,7 +237,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
         assertEquals("container-with-special-chars-🚀", deserialized.getMlSearchMemoriesInput().getMemoryContainerId());
-        assertEquals("session", deserialized.getMlSearchMemoriesInput().getMemoryType());
+        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, deserialized.getMlSearchMemoriesInput().getMemoryType());
         assertNotNull(deserialized.getMlSearchMemoriesInput().getSearchSourceBuilder());
         assertEquals("tenant-特殊文字", deserialized.getTenantId());
     }

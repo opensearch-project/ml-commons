@@ -7,6 +7,10 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -105,13 +109,13 @@ public class MLGetMemoryResponse extends ActionResponse implements ToXContentObj
         ) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
             switch (memoryType) {
-                case "session":
+                case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
                     return MLGetMemoryResponse.builder().session(MLMemorySession.parse(parser)).build();
-                case "working":
+                case MEM_CONTAINER_MEMORY_TYPE_WORKING:
                     return MLGetMemoryResponse.builder().workingMemory(MLWorkingMemory.parse(parser)).build();
-                case "long-term":
+                case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
                     return MLGetMemoryResponse.builder().longTermMemory(MLMemory.parse(parser)).build();
-                case "history":
+                case MEM_CONTAINER_MEMORY_TYPE_HISTORY:
                     return MLGetMemoryResponse.builder().memoryHistory(MLMemoryHistory.parse(parser)).build();
                 default:
                     throw new IllegalArgumentException("Invalid memory type: " + memoryType);
