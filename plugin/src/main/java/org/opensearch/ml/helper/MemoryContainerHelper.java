@@ -346,6 +346,32 @@ public class MemoryContainerHelper {
         return user != null && (!CollectionUtils.isEmpty(user.getRoles()) && user.getRoles().contains("all_access"));
     }
 
+    /**
+     * Generic helper method to apply a filter to a SearchSourceBuilder.
+     * Handles three cases:
+     * 1. If no existing query, use the filter as the query
+     * 2. If existing query is BoolQueryBuilder, add filter to it
+     * 3. Otherwise, wrap existing query in a BoolQueryBuilder with the filter
+     *
+     * @param searchSourceBuilder The search source builder to modify
+     * @param filterQuery The filter query to apply
+     * @return The modified search source builder
+     */
+    private SearchSourceBuilder applyFilterToSearchSource(SearchSourceBuilder searchSourceBuilder, QueryBuilder filterQuery) {
+        QueryBuilder query = searchSourceBuilder.query();
+        if (query == null) {
+            searchSourceBuilder.query(filterQuery);
+        } else if (query instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) query).filter(filterQuery);
+        } else {
+            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
+            rewriteQuery.must(query);
+            rewriteQuery.filter(filterQuery);
+            searchSourceBuilder.query(rewriteQuery);
+        }
+        return searchSourceBuilder;
+    }
+
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termsQuery(BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
@@ -353,36 +379,15 @@ public class MemoryContainerHelper {
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery("owner.name.keyword", user.getName());
         NestedQueryBuilder nestedOwnerQuery = QueryBuilders.nestedQuery(OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
         boolQueryBuilder.should(nestedOwnerQuery);
-        QueryBuilder query = searchSourceBuilder.query();
-        if (query == null) {
-            searchSourceBuilder.query(boolQueryBuilder);
-        } else if (query instanceof BoolQueryBuilder) {
-            ((BoolQueryBuilder) query).filter(boolQueryBuilder);
-        } else {
-            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
-            rewriteQuery.must(query);
-            rewriteQuery.filter(boolQueryBuilder);
-            searchSourceBuilder.query(rewriteQuery);
-        }
-        return searchSourceBuilder;
+
+        return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
     }
 
     public SearchSourceBuilder addOwnerIdFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
 
-        QueryBuilder query = searchSourceBuilder.query();
-        if (query == null) {
-            searchSourceBuilder.query(boolQueryBuilder);
-        } else if (query instanceof BoolQueryBuilder) {
-            ((BoolQueryBuilder) query).filter(boolQueryBuilder);
-        } else {
-            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
-            rewriteQuery.must(query);
-            rewriteQuery.filter(boolQueryBuilder);
-            searchSourceBuilder.query(rewriteQuery);
-        }
-        return searchSourceBuilder;
+        return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
     }
 
     /**

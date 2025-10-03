@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGE_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
@@ -201,6 +202,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params, boolean withTimeStamp) throws IOException {
         builder.startObject();
+        if (memoryContainerId != null) {
+            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        }
         builder.field(WORKING_MEMORY_TYPE_FIELD, memoryType);
         if (messages != null && messages.size() > 0) {
             builder.startArray(MESSAGES_FIELD);
@@ -263,6 +267,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
+                case MEMORY_CONTAINER_ID_FIELD:
+                    memoryContainerId = parser.text();
+                    break;
                 case WORKING_MEMORY_TYPE_FIELD:
                     memoryType = parser.text();
                     break;
