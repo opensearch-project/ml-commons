@@ -72,6 +72,7 @@ public class CommonValue {
     public static final String ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH = "index-mappings/ml_memory_container.json";
     public static final String ML_MEMORY_SESSION_INDEX_MAPPING_PATH = "index-mappings/ml_memory_sessions.json";
     public static final String ML_WORKING_MEMORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_working.json";
+    public static final String ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term.json";
     public static final String ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term_history.json";
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";

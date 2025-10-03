@@ -45,49 +45,7 @@ public class MLDeleteMemoriesByQueryResponse extends ActionResponse implements T
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-
-        // Basic statistics
-        builder.field("took", bulkResponse.getTook().millis());
-        builder.field("timed_out", bulkResponse.isTimedOut());
-        builder.field("deleted", bulkResponse.getDeleted());
-        builder.field("batches", bulkResponse.getBatches());
-        builder.field("version_conflicts", bulkResponse.getVersionConflicts());
-        builder.field("noops", bulkResponse.getNoops());
-
-        // Retries information
-        builder.startObject("retries");
-        builder.field("bulk", bulkResponse.getBulkRetries());
-        builder.field("search", bulkResponse.getSearchRetries());
-        builder.endObject();
-
-        // Throttling information
-        builder.field("throttled_millis", bulkResponse.getStatus().getThrottled().millis());
-        builder.field("requests_per_second", bulkResponse.getStatus().getRequestsPerSecond());
-        builder.field("throttled_until_millis", bulkResponse.getStatus().getThrottledUntil().millis());
-
-        // Add bulk failures if any
-        if (bulkResponse.getBulkFailures() != null && !bulkResponse.getBulkFailures().isEmpty()) {
-            builder.startArray("bulk_failures");
-            for (var failure : bulkResponse.getBulkFailures()) {
-                builder.startObject();
-                builder.field("index", failure.getIndex());
-                builder.field("id", failure.getId());
-                builder.field("cause", failure.getCause().getMessage());
-                builder.field("status", failure.getStatus());
-                builder.endObject();
-            }
-            builder.endArray();
-        }
-
-        // Add search failures if any
-        if (bulkResponse.getSearchFailures() != null && !bulkResponse.getSearchFailures().isEmpty()) {
-            builder.startArray("search_failures");
-            for (var failure : bulkResponse.getSearchFailures()) {
-                failure.toXContent(builder, params);
-            }
-            builder.endArray();
-        }
-
+        bulkResponse.toXContent(builder, params);
         builder.endObject();
         return builder;
     }

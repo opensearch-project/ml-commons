@@ -47,7 +47,7 @@ public class RestMLGetMemoryAction extends BaseRestHandler {
     }
 
     @Override
-    public List<Route> routes() {// TODO
+    public List<Route> routes() {
         return ImmutableList.of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, GET_MEMORY_PATH)));
     }
 
