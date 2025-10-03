@@ -7,7 +7,6 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import org.opensearch.action.ActionType;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.update.UpdateResponse;
 
 public class MLUpdateMemoryAction extends ActionType<IndexResponse> {
     public static final MLUpdateMemoryAction INSTANCE = new MLUpdateMemoryAction();

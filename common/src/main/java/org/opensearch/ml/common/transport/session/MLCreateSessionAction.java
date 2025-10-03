@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLCreateSessionAction extends ActionType<MLCreateSessionResponse> {
     public static final MLCreateSessionAction INSTANCE = new MLCreateSessionAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/sessions/create";
+    public static final String NAME = "cluster:admin/opensearch/ml/memory_containers/sessions/create";
 
     private MLCreateSessionAction() {
         super(NAME, MLCreateSessionResponse::new);

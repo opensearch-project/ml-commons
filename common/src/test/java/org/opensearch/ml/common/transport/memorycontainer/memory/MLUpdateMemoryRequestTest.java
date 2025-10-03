@@ -136,7 +136,7 @@ public class MLUpdateMemoryRequestTest {
         ActionRequestValidationException exception = request.validate();
         assertNotNull(exception);
         assertEquals(1, exception.validationErrors().size());
-        assertTrue(exception.validationErrors().get(0).contains("Memory type can't be null"));
+        assertTrue(exception.validationErrors().get(0).contains("Memory type can't be null or empty"));
     }
 
     @Test
@@ -162,7 +162,7 @@ public class MLUpdateMemoryRequestTest {
         assertEquals(4, exception.validationErrors().size());
         assertTrue(exception.validationErrors().get(0).contains("Update memory input can't be null"));
         assertTrue(exception.validationErrors().get(1).contains("Memory container id can't be null"));
-        assertTrue(exception.validationErrors().get(2).contains("Memory type can't be null"));
+        assertTrue(exception.validationErrors().get(2).contains("Memory type can't be null or empty"));
         assertTrue(exception.validationErrors().get(3).contains("Memory id can't be null"));
     }
 
@@ -180,7 +180,7 @@ public class MLUpdateMemoryRequestTest {
         assertNotNull(exception);
         assertEquals(3, exception.validationErrors().size());
         assertTrue(exception.validationErrors().get(0).contains("Memory container id can't be null"));
-        assertTrue(exception.validationErrors().get(1).contains("Memory type can't be null"));
+        assertTrue(exception.validationErrors().get(1).contains("Memory type can't be null or empty"));
         assertTrue(exception.validationErrors().get(2).contains("Memory id can't be null"));
     }
 
@@ -291,9 +291,11 @@ public class MLUpdateMemoryRequestTest {
         assertEquals("", emptyStringRequest.getMemoryType());
         assertEquals("", emptyStringRequest.getMemoryId());
 
-        // Empty strings should pass validation (only null check in validate method)
+        // Empty strings should fail validation (same as null values)
         ActionRequestValidationException exception = emptyStringRequest.validate();
-        assertNull(exception);
+        assertNotNull(exception);
+        assertEquals(1, exception.validationErrors().size());
+        assertTrue(exception.validationErrors().get(0).contains("Memory type can't be null or empty"));
     }
 
     @Test
@@ -381,5 +383,362 @@ public class MLUpdateMemoryRequestTest {
         // Input validation comes first
         assertTrue(exception.validationErrors().get(0).contains("Update memory input can't be null"));
         assertTrue(exception.validationErrors().get(1).contains("Memory id can't be null"));
+    }
+
+    @Test
+    public void testValidateWithInvalidMemoryType() {
+        MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("invalid-type")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertEquals(1, exception.validationErrors().size());
+        assertTrue(exception.validationErrors().get(0).contains("Invalid memory type"));
+    }
+
+    @Test
+    public void testValidateWithValidMemoryTypes() {
+        // Test all valid memory types: "session", "working", "long-term", "history"
+        String[] validTypes = { "session", "working", "long-term", "history" };
+
+        for (String memoryType : validTypes) {
+            MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+                .builder()
+                .memoryContainerId("container-123")
+                .memoryType(memoryType)
+                .memoryId("memory-456")
+                .mlUpdateMemoryInput(testInput)
+                .build();
+
+            ActionRequestValidationException exception = request.validate();
+            assertNull("Memory type '" + memoryType + "' should be valid", exception);
+        }
+    }
+
+    // Additional tests to specifically cover lines 69-73 in MLUpdateMemoryRequest.validate()
+    @Test
+    public void testValidateMemoryTypeNullOrEmpty_Line69() {
+        // Test line 69: if (memoryType == null || memoryType.isEmpty())
+
+        // Test null memory type
+        MLUpdateMemoryRequest requestWithNull = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType(null)
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException exceptionNull = requestWithNull.validate();
+        assertNotNull(exceptionNull);
+        assertTrue(exceptionNull.validationErrors().stream().anyMatch(error -> error.contains("Memory type can't be null or empty")));
+
+        // Test empty memory type
+        MLUpdateMemoryRequest requestWithEmpty = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException exceptionEmpty = requestWithEmpty.validate();
+        assertNotNull(exceptionEmpty);
+        assertTrue(exceptionEmpty.validationErrors().stream().anyMatch(error -> error.contains("Memory type can't be null or empty")));
+    }
+
+    @Test
+    public void testValidateInvalidMemoryType_Lines71to73() {
+        // Test lines 71-73: } else if (!VALID_MEMORY_TYPES.contains(memoryType)) {
+        // exception = addValidationError("Invalid memory type", exception);
+        // }
+
+        String[] invalidTypes = { "invalid", "unknown", "bad-type", "LONG-TERM", "Session", "WORKING" };
+
+        for (String invalidType : invalidTypes) {
+            MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+                .builder()
+                .memoryContainerId("container-123")
+                .memoryType(invalidType)
+                .memoryId("memory-456")
+                .mlUpdateMemoryInput(testInput)
+                .build();
+
+            ActionRequestValidationException exception = request.validate();
+            assertNotNull("Memory type '" + invalidType + "' should be invalid", exception);
+            assertTrue(
+                "Should contain 'Invalid memory type' error for: " + invalidType,
+                exception.validationErrors().stream().anyMatch(error -> error.contains("Invalid memory type"))
+            );
+        }
+    }
+
+    @Test
+    public void testValidateMemoryTypeValidation_BothBranches() {
+        // Test that valid memory types pass through the validation without errors
+        // This ensures the else-if condition on line 71 works correctly for valid types
+
+        String[] validTypes = { "session", "working", "long-term", "history" };
+
+        for (String validType : validTypes) {
+            MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+                .builder()
+                .memoryContainerId("container-123")
+                .memoryType(validType)
+                .memoryId("memory-456")
+                .mlUpdateMemoryInput(testInput)
+                .build();
+
+            ActionRequestValidationException exception = request.validate();
+            // Should be null since all other fields are valid
+            assertNull("Valid memory type '" + validType + "' should not produce validation errors", exception);
+        }
+    }
+
+    @Test
+    public void testValidateMemoryTypeWhitespaceOnly() {
+        // Test memory type with only whitespace (should be treated as empty)
+        MLUpdateMemoryRequest requestWithWhitespace = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("   ")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException exception = requestWithWhitespace.validate();
+        assertNotNull(exception);
+        // Whitespace-only string should be treated as invalid memory type (not empty)
+        assertTrue(exception.validationErrors().stream().anyMatch(error -> error.contains("Invalid memory type")));
+    }
+
+    // Additional tests to ensure 100% coverage
+
+    @Test
+    public void testConstructorWithStreamInput() throws IOException {
+        // Test the StreamInput constructor directly
+        BytesStreamOutput out = new BytesStreamOutput();
+        requestNormal.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+
+        // Create new instance using StreamInput constructor
+        MLUpdateMemoryRequest fromStream = new MLUpdateMemoryRequest(in);
+
+        assertEquals(requestNormal.getMemoryContainerId(), fromStream.getMemoryContainerId());
+        assertEquals(requestNormal.getMemoryType(), fromStream.getMemoryType());
+        assertEquals(requestNormal.getMemoryId(), fromStream.getMemoryId());
+        assertNotNull(fromStream.getMlUpdateMemoryInput());
+        assertEquals(requestNormal.getMlUpdateMemoryInput().getUpdateContent(), fromStream.getMlUpdateMemoryInput().getUpdateContent());
+    }
+
+    @Test
+    public void testBuilderWithAllFieldsSet() {
+        // Test builder with all fields explicitly set
+        Map<String, Object> content = new HashMap<>();
+        content.put("key", "value");
+        MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(content).build();
+
+        MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("test-container")
+            .memoryType("session")
+            .memoryId("test-memory")
+            .mlUpdateMemoryInput(input)
+            .build();
+
+        assertEquals("test-container", request.getMemoryContainerId());
+        assertEquals("session", request.getMemoryType());
+        assertEquals("test-memory", request.getMemoryId());
+        assertEquals(input, request.getMlUpdateMemoryInput());
+    }
+
+    @Test
+    public void testValidateWithEmptyContainerId() {
+        // Test validation with empty container ID (should pass since only null is checked)
+        MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("")
+            .memoryType("session")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException exception = request.validate();
+        // Empty string container ID should be valid (only null is invalid)
+        assertNull(exception);
+    }
+
+    @Test
+    public void testValidateWithEmptyMemoryId() {
+        // Test validation with empty memory ID (should pass since only null is checked)
+        MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("session")
+            .memoryId("")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException exception = request.validate();
+        // Empty string memory ID should be valid (only null is invalid)
+        assertNull(exception);
+    }
+
+    @Test
+    public void testFromActionRequestWithComplexInput() throws IOException {
+        // Test fromActionRequest with a more complex MLUpdateMemoryInput
+        Map<String, Object> complexContent = new HashMap<>();
+        complexContent.put("text", "Complex text content");
+        complexContent.put("metadata", Map.of("key1", "value1", "key2", "value2"));
+        complexContent.put("tags", java.util.Arrays.asList("tag1", "tag2", "tag3"));
+
+        MLUpdateMemoryInput complexInput = MLUpdateMemoryInput.builder().updateContent(complexContent).build();
+
+        MLUpdateMemoryRequest originalRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("complex-container")
+            .memoryType("working")
+            .memoryId("complex-memory")
+            .mlUpdateMemoryInput(complexInput)
+            .build();
+
+        // Test fromActionRequest with the complex request
+        MLUpdateMemoryRequest result = MLUpdateMemoryRequest.fromActionRequest(originalRequest);
+        assertEquals(originalRequest, result);
+
+        // Verify complex content is preserved
+        assertEquals(complexContent, result.getMlUpdateMemoryInput().getUpdateContent());
+    }
+
+    @Test
+    public void testSerializationWithNullInput() throws IOException {
+        // Test serialization when mlUpdateMemoryInput is null
+        // Note: This will fail validation, but we can test serialization separately
+        MLUpdateMemoryRequest requestWithNullInput = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("session")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(null)
+            .build();
+
+        // This should throw an exception during writeTo because mlUpdateMemoryInput.writeTo(out) will fail
+        BytesStreamOutput out = new BytesStreamOutput();
+        try {
+            requestWithNullInput.writeTo(out);
+            // If we get here, the test should fail because writeTo should have thrown an exception
+            assertTrue("Expected NullPointerException when writing null mlUpdateMemoryInput", false);
+        } catch (NullPointerException e) {
+            // Expected behavior - writeTo fails when mlUpdateMemoryInput is null
+            assertTrue(true);
+        }
+    }
+
+    @Test
+    public void testAllValidMemoryTypesIndividually() {
+        // Test each valid memory type individually to ensure complete coverage
+        String[] validTypes = { "session", "working", "long-term", "history" };
+
+        for (String memoryType : validTypes) {
+            MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+                .builder()
+                .memoryContainerId("container-" + memoryType)
+                .memoryType(memoryType)
+                .memoryId("memory-" + memoryType)
+                .mlUpdateMemoryInput(testInput)
+                .build();
+
+            // Test validation passes
+            ActionRequestValidationException exception = request.validate();
+            assertNull("Memory type '" + memoryType + "' should be valid", exception);
+
+            // Test getters
+            assertEquals("container-" + memoryType, request.getMemoryContainerId());
+            assertEquals(memoryType, request.getMemoryType());
+            assertEquals("memory-" + memoryType, request.getMemoryId());
+            assertEquals(testInput, request.getMlUpdateMemoryInput());
+        }
+    }
+
+    @Test
+    public void testValidateReturnsNullForValidRequest() {
+        // Explicitly test that validate() returns null for a completely valid request
+        MLUpdateMemoryRequest validRequest = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("valid-container")
+            .memoryType("session")
+            .memoryId("valid-memory")
+            .mlUpdateMemoryInput(testInput)
+            .build();
+
+        ActionRequestValidationException result = validRequest.validate();
+        assertNull("Valid request should return null from validate()", result);
+    }
+
+    @Test
+    public void testSetterAfterConstruction() {
+        // Test that setter works correctly after object construction
+        Map<String, Object> originalContent = new HashMap<>();
+        originalContent.put("original", "content");
+        MLUpdateMemoryInput originalInput = MLUpdateMemoryInput.builder().updateContent(originalContent).build();
+
+        Map<String, Object> newContent = new HashMap<>();
+        newContent.put("new", "content");
+        MLUpdateMemoryInput newInput = MLUpdateMemoryInput.builder().updateContent(newContent).build();
+
+        MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType("session")
+            .memoryId("memory-456")
+            .mlUpdateMemoryInput(originalInput)
+            .build();
+
+        // Verify original input
+        assertEquals(originalContent, request.getMlUpdateMemoryInput().getUpdateContent());
+
+        // Use setter to change input
+        request.setMlUpdateMemoryInput(newInput);
+
+        // Verify new input
+        assertEquals(newContent, request.getMlUpdateMemoryInput().getUpdateContent());
+    }
+
+    @Test
+    public void testEdgeCaseMemoryTypes() {
+        // Test memory types that are close to valid but not quite
+        String[] edgeCaseTypes = {
+            "Session", // Wrong case
+            "WORKING", // Wrong case
+            "long_term", // Underscore instead of hyphen
+            "longterm", // No separator
+            "sessions", // Plural
+            "work", // Partial
+            " session ", // With spaces
+            "session\n", // With newline
+            "session\t" // With tab
+        };
+
+        for (String memoryType : edgeCaseTypes) {
+            MLUpdateMemoryRequest request = MLUpdateMemoryRequest
+                .builder()
+                .memoryContainerId("container-123")
+                .memoryType(memoryType)
+                .memoryId("memory-456")
+                .mlUpdateMemoryInput(testInput)
+                .build();
+
+            ActionRequestValidationException exception = request.validate();
+            assertNotNull("Memory type '" + memoryType + "' should be invalid", exception);
+            assertTrue(
+                "Should contain 'Invalid memory type' error for: " + memoryType,
+                exception.validationErrors().stream().anyMatch(error -> error.contains("Invalid memory type"))
+            );
+        }
     }
 }

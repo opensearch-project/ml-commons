@@ -66,10 +66,9 @@ public class MLUpdateMemoryRequest extends ActionRequest {
         if (memoryContainerId == null) {
             exception = addValidationError("Memory container id can't be null", exception);
         }
-        if (memoryType == null) {
-            exception = addValidationError("Memory type can't be null", exception);
-        }
-        if (!VALID_MEMORY_TYPES.contains(memoryType)) {
+        if (memoryType == null || memoryType.isEmpty()) {
+            exception = addValidationError("Memory type can't be null or empty", exception);
+        } else if (!VALID_MEMORY_TYPES.contains(memoryType)) {
             exception = addValidationError("Invalid memory type", exception);
         }
         if (memoryId == null) {
