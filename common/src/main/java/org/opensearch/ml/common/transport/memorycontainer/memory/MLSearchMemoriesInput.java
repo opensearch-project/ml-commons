@@ -63,7 +63,7 @@ public class MLSearchMemoriesInput implements ToXContentObject, Writeable {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         if (memoryType != null) {
-            builder.field(MEMORY_TYPE_FIELD, memoryType);
+            builder.field(PARAMETER_MEMORY_ID, memoryType);
         }
         builder.field(QUERY_FIELD, searchSourceBuilder);
         builder.endObject();

@@ -123,7 +123,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
             builder.field(USER_ID_FIELD, userId);
         }
         if (memoryType != null) {
-            builder.field(MEMORY_TYPE_FIELD, memoryType.toString());
+            builder.field(LONG_TERM_MEMORY_TYPE_FIELD, memoryType.toString());
         }
         if (role != null) {
             builder.field(ROLE_FIELD, role);

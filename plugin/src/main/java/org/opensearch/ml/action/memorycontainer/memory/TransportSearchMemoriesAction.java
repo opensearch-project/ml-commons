@@ -126,7 +126,6 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             // Execute search
             ActionListener<SearchResponse> searchResponseActionListener = ActionListener.wrap(response -> {
                 try {
-                    // MLSearchMemoriesResponse searchResponse = parseSearchResponse(response);
                     actionListener.onResponse(response);
                 } catch (Exception e) {
                     log.error("Failed to parse search response", e);

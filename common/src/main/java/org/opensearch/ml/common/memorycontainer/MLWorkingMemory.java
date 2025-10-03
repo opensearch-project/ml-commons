@@ -12,7 +12,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGE_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
@@ -22,6 +21,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_TYPE_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -185,7 +185,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
-        builder.field(MEMORY_TYPE_FIELD, memoryType);
+        builder.field(WORKING_MEMORY_TYPE_FIELD, memoryType);
 
         if (messages != null && !messages.isEmpty()) {
             builder.startArray(MESSAGES_FIELD);
@@ -253,7 +253,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
                 case MEMORY_CONTAINER_ID_FIELD:
                     memoryContainerId = parser.text();
                     break;
-                case MEMORY_TYPE_FIELD:
+                case WORKING_MEMORY_TYPE_FIELD:
                     memoryType = parser.text();
                     break;
                 case MESSAGES_FIELD:

@@ -8,9 +8,9 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
@@ -34,7 +34,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Represents a memory entry in a memory container
+ * Represents a long term memory entry in a memory container
  */
 @Getter
 @Setter
@@ -123,7 +123,7 @@ public class MLMemory implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(MEMORY_FIELD, memory);
-        builder.field(MEMORY_TYPE_FIELD, memoryType.getValue());
+        builder.field(LONG_TERM_MEMORY_TYPE_FIELD, memoryType.getValue());
 
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
@@ -170,7 +170,7 @@ public class MLMemory implements ToXContentObject, Writeable {
                 case MEMORY_FIELD:
                     memory = parser.text();
                     break;
-                case MEMORY_TYPE_FIELD:
+                case LONG_TERM_MEMORY_TYPE_FIELD:
                     memoryType = MemoryType.fromString(parser.text());
                     break;
                 case TAGS_FIELD:
@@ -229,7 +229,7 @@ public class MLMemory implements ToXContentObject, Writeable {
             .of(
                 MEMORY_FIELD,
                 memory,
-                MEMORY_TYPE_FIELD,
+                LONG_TERM_MEMORY_TYPE_FIELD,
                 memoryType.getValue(),
                 CREATED_TIME_FIELD,
                 createdTime.toEpochMilli(),

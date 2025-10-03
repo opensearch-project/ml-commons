@@ -68,7 +68,7 @@ public class MemoryContainerConstants {
     public static final String MEMORY_ACTION_FIELD = "action";
     public static final String MEMORY_BEFORE_FIELD = "before";
     public static final String MEMORY_AFTER_FIELD = "after";
-    public static final String MEMORY_TYPE_FIELD = "memory_type";
+    public static final String LONG_TERM_MEMORY_TYPE_FIELD = "memory_type";
     public static final String WORKING_MEMORY_TYPE_FIELD = "working_memory_type";
     public static final String ROLE_FIELD = "role";
 
@@ -96,6 +96,9 @@ public class MemoryContainerConstants {
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_DELETE_ALL_MEMORIES = "delete_all_memories";
+    /**
+     * Memory type used as API parameter
+     */
     public static final String PARAMETER_MEMORY_TYPE = "memory_type";
     public static final String PARAMETER_MEMORY_ID = "memory_id";
     public static final String PARAMETER_WORKING_MEMORY_ID = "working_memory_id";
