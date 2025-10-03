@@ -12,6 +12,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.Nullable;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
@@ -91,7 +92,10 @@ public class TransportExecuteStreamTaskAction extends HandledTransportAction<Act
             mlExecuteTaskRequest.setDispatchTask(false);
         }
 
-        FunctionName functionName = mlExecuteTaskRequest.getFunctionName();
-        mlExecuteTaskRunner.run(functionName, mlExecuteTaskRequest, streamTransportService, listener);
+        try (ThreadContext.StoredContext context = transportService.getThreadPool().getThreadContext().stashContext()) {
+            ActionListener<MLExecuteTaskResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            FunctionName functionName = mlExecuteTaskRequest.getFunctionName();
+            mlExecuteTaskRunner.run(functionName, mlExecuteTaskRequest, streamTransportService, wrappedListener);
+        }
     }
 }
