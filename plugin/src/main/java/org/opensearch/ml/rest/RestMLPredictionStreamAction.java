@@ -28,6 +28,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lease.Releasable;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -143,7 +144,9 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
 
         // If model not in cache, validate it exists before start streaming
         if (!functionName.isPresent()) {
-            validateModelExists(modelId, request, client);
+            if (!isModelValid(modelId, request, client)) {
+                throw new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND);
+            }
         }
 
         return channel -> {
@@ -193,7 +196,7 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
         };
     }
 
-    private void validateModelExists(String modelId, RestRequest request, NodeClient client) throws IOException {
+    private boolean isModelValid(String modelId, RestRequest request, NodeClient client) throws IOException {
         try {
             CompletableFuture<MLModel> future = new CompletableFuture<>();
 
@@ -206,11 +209,13 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
                     );
             }
 
+            // TODO: make this async
             // Wait for validation
             future.get(5, SECONDS);
-
+            return true;
         } catch (Exception e) {
-            throw (RuntimeException) (e.getCause());
+            log.error("Failed to validate model {}", e.getMessage());
+            return false;
         }
     }
 
