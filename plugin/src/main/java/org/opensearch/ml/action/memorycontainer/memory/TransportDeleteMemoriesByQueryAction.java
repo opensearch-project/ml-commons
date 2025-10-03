@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
@@ -151,13 +155,13 @@ public class TransportDeleteMemoriesByQueryAction extends
         String normalizedType = memoryType.toLowerCase(Locale.ROOT);
 
         switch (normalizedType) {
-            case "session":
+            case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
                 return config.isDisableSession() ? null : config.getSessionIndexName();
-            case "working":
+            case MEM_CONTAINER_MEMORY_TYPE_WORKING:
                 return config.getWorkingMemoryIndexName();
-            case "long_term":
+            case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
                 return config.getLongMemoryIndexName();
-            case "history":
+            case MEM_CONTAINER_MEMORY_TYPE_HISTORY:
                 return config.isDisableHistory() ? null : config.getLongMemoryHistoryIndexName();
             default:
                 return null;
