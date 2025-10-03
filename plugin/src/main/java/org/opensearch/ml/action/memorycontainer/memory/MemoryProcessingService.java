@@ -73,6 +73,7 @@ public class MemoryProcessingService {
             || "summary".equalsIgnoreCase(strategy.getType())) {
             extractFactsFromConversation(messages, strategy, memoryConfig, listener);
         } else {
+            log.error("Unsupported memory strategy type: {}", strategy.getType());
             listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
         }
     }
@@ -108,6 +109,7 @@ public class MemoryProcessingService {
             if (customPrompt == null || customPrompt.toString().trim().isEmpty()) {
                 stringParameters.put("system_prompt", defaultPrompt);
             } else if (!validatePromptFormat(customPrompt.toString())) {
+                log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");
                 listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
                 return;
             } else {
@@ -186,6 +188,7 @@ public class MemoryProcessingService {
         ActionListener<List<MemoryDecision>> listener
     ) {
         if (memoryConfig == null || memoryConfig.getLlmId() == null) {
+            log.error("LLM model is required for memory decisions but not configured");
             listener.onFailure(new IllegalStateException("LLM model is required for memory decisions"));
             return;
         }

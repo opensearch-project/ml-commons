@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
 

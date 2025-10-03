@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
 import java.io.IOException;
@@ -31,7 +32,6 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String MEMORY_CONFIG_FIELD = "configuration";
-    public static final String BACKEND_ROLES_FIELD = "backend_roles";
 
     private String name;
     private String description;

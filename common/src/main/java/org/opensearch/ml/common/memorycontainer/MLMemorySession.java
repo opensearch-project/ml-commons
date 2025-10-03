@@ -32,7 +32,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Input data for adding memory to a memory container
+ * Represents a session record in the memory container system.
+ * Contains session metadata including owner, summary, creation time, and associated namespace.
  */
 @Getter
 @Setter

@@ -6,11 +6,18 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
+import java.io.IOException;
+
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerSearchAction;
+import org.opensearch.rest.RestRequest;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableList;
 
@@ -34,5 +41,13 @@ public class RestMLSearchMemoryContainerAction extends AbstractMLSearchAction<ML
     @Override
     public String getName() {
         return ML_SEARCH_MODEL_GROUP_ACTION;
+    }
+
+    @Override
+    protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            throw new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN);
+        }
+        return super.prepareRequest(request, client);
     }
 }
