@@ -27,17 +27,22 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     String memoryContainerId;
 
     @Getter
+    boolean deleteAllMemories;
+
+    @Getter
     String tenantId;
 
     @Builder
-    public MLMemoryContainerDeleteRequest(String memoryContainerId, String tenantId) {
+    public MLMemoryContainerDeleteRequest(String memoryContainerId, boolean deleteAllMemories, String tenantId) {
         this.memoryContainerId = memoryContainerId;
+        this.deleteAllMemories = deleteAllMemories;
         this.tenantId = tenantId;
     }
 
     public MLMemoryContainerDeleteRequest(StreamInput input) throws IOException {
         super(input);
         this.memoryContainerId = input.readString();
+        this.deleteAllMemories = input.readBoolean();
         this.tenantId = input.readOptionalString();
     }
 
@@ -45,6 +50,7 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(memoryContainerId);
+        output.writeBoolean(deleteAllMemories);
         output.writeOptionalString(tenantId);
     }
 

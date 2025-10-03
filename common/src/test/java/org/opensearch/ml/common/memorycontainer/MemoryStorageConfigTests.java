@@ -417,4 +417,66 @@ public class MemoryStorageConfigTests {
             .dimension(768)
             .build();
     }
+
+    // Tests for getFinalMemoryIndexPrefix method
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixWithSystemIndexEnabled() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix").useSystemIndex(true).build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertEquals(".plugins-ml-am-test-prefix-memory-", result);
+    }
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixWithSystemIndexDisabled() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("custom-prefix").useSystemIndex(false).build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertEquals("custom-prefix-memory-", result);
+    }
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixWithNullIndexPrefixAndSystemIndexEnabled() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix(null).useSystemIndex(true).build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertEquals(".plugins-ml-am-default-memory-", result);
+    }
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixWithEmptyIndexPrefixAndSystemIndexEnabled() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix(" ").useSystemIndex(true).build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertEquals(".plugins-ml-am-default-memory-", result);
+    }
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixWithNullIndexPrefixAndSystemIndexDisabled() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix(null).useSystemIndex(false).build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertNotNull(result);
+        assertEquals(16, result.length());
+        assertTrue(result.endsWith("-memory-"));
+    }
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixWithSpecialCharacters() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix_123").useSystemIndex(true).build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertEquals(".plugins-ml-am-test-prefix_123-memory-", result);
+    }
+
+    @Test
+    public void testGetFinalMemoryIndexPrefixDefaultUseSystemIndexValue() {
+        // Test that useSystemIndex defaults to true
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("default-test").build();
+
+        String result = config.getFinalMemoryIndexPrefix();
+        assertEquals(".plugins-ml-am-default-test-memory-", result);
+        assertTrue(config.isUseSystemIndex()); // Verify default value
+    }
 }
