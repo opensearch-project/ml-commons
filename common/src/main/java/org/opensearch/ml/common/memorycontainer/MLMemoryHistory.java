@@ -36,7 +36,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Input data for adding memory to a memory container
+ * Represents a history record of memory operations (create, update, delete) in the memory container.
+ * Tracks changes to memories with before/after states and timestamps for auditing purposes.
  */
 @Getter
 @Setter

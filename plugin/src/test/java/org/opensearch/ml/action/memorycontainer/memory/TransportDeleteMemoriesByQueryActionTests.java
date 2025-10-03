@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,12 +35,12 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
-import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -142,14 +143,14 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         // Mock checkMemoryContainerAccess
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
-        // Mock DeleteByQueryAction execution
+        // Mock deleteDataByQuery in memoryContainerHelper
         BulkByScrollResponse bulkResponse = new BulkByScrollResponse(Collections.emptyList(), null);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -157,7 +158,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(any(), eq(mockContainer));
-        verify(client, times(1)).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        verify(memoryContainerHelper, times(1)).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
         verify(actionListener, times(1)).onResponse(any(MLDeleteMemoriesByQueryResponse.class));
         verify(actionListener, never()).onFailure(any());
     }
@@ -269,8 +270,8 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         assertTrue(capturedError.getMessage().contains("Query parameter is required"));
         assertTrue(capturedError.getMessage().contains("match_all"));
 
-        // Verify that DeleteByQueryAction was never called
-        verify(client, never()).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        // Verify that deleteDataByQuery was never called
+        verify(memoryContainerHelper, never()).deleteDataByQuery(any(), any(), any());
     }
 
     @Test
@@ -340,14 +341,14 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
 
         // Assert
-        // For system indices, ThreadContext.stashContext() should be used (verified by successful execution)
-        verify(client, times(1)).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        // For system indices, the helper method handles ThreadContext.stashContext()
+        verify(memoryContainerHelper, times(1)).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
         verify(actionListener, times(1)).onResponse(any(MLDeleteMemoriesByQueryResponse.class));
     }
 
@@ -370,12 +371,12 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
-        // Mock DeleteByQueryAction failure
+        // Mock deleteDataByQuery failure in helper
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Delete failed"));
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -413,6 +414,12 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
+        // Mock addOwnerIdFilter to return the original query for admin users
+        when(memoryContainerHelper.addOwnerIdFilter(any(User.class), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            // For admin users with all_access, return the original query
+            return invocation.getArgument(1);
+        });
+
         ArgumentCaptor<DeleteByQueryRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteByQueryRequest.class);
         BulkByScrollResponse bulkResponse = new BulkByScrollResponse(Collections.emptyList(), null);
 
@@ -420,7 +427,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), deleteRequestCaptor.capture(), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), deleteRequestCaptor.capture(), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -462,7 +469,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
                 ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
                 listener.onResponse(bulkResponse);
                 return null;
-            }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+            }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
 
             // Act
             transportAction.doExecute(task, request, actionListener);
@@ -497,6 +504,17 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
+        // Mock addOwnerIdFilter to simulate adding owner filter for non-admin users
+        when(memoryContainerHelper.addOwnerIdFilter(any(User.class), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            // Simulate adding owner filter for non-admin users
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, user.getName()));
+            return filteredQuery;
+        });
+
         ArgumentCaptor<DeleteByQueryRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteByQueryRequest.class);
         BulkByScrollResponse bulkResponse = new BulkByScrollResponse(Collections.emptyList(), null);
 
@@ -504,7 +522,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), deleteRequestCaptor.capture(), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), deleteRequestCaptor.capture(), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -540,6 +558,12 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
+        // Mock addOwnerIdFilter to return original query for null user (security disabled)
+        when(memoryContainerHelper.addOwnerIdFilter(any(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            // For null user (security disabled), return the original query
+            return invocation.getArgument(1);
+        });
+
         ArgumentCaptor<DeleteByQueryRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteByQueryRequest.class);
         BulkByScrollResponse bulkResponse = new BulkByScrollResponse(Collections.emptyList(), null);
 
@@ -547,7 +571,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), deleteRequestCaptor.capture(), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), deleteRequestCaptor.capture(), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -679,7 +703,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -722,12 +746,12 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
-        // Mock DeleteByQueryAction to throw an exception during system index processing
+        // Mock deleteDataByQuery to throw an exception during system index processing
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("System index operation failed"));
             return null;
-        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(DeleteByQueryRequest.class), any());
+        }).when(memoryContainerHelper).deleteDataByQuery(any(MemoryConfiguration.class), any(DeleteByQueryRequest.class), any());
 
         // Act
         transportAction.doExecute(task, request, actionListener);

@@ -459,7 +459,8 @@ public class MLAddMemoriesInputTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
+        // Use the same container ID as the original for round-trip testing
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, inputWithAllFields.getMemoryContainerId());
 
         // Verify all fields match
         assertEquals(inputWithAllFields.getMemoryContainerId(), parsed.getMemoryContainerId());
@@ -739,9 +740,8 @@ public class MLAddMemoriesInputTest {
 
     @Test
     public void testParseWithAllFields() throws IOException {
-        // Test parsing with all possible fields
+        // Test parsing with all possible fields (memory_container_id removed - comes from URL path)
         String jsonString = "{"
-            + "\"memory_container_id\":\"container-parse\","
             + "\"working_memory_type\":\"data\","
             + "\"messages\":["
             + "{\"role\":\"user\",\"content\":[{\"type\":\"text\", \"text\": \"Test message\"}]}"
@@ -764,7 +764,7 @@ public class MLAddMemoriesInputTest {
 
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "override-container");
 
-        assertEquals("container-parse", parsed.getMemoryContainerId()); // Should use parsed value, not override
+        assertEquals("override-container", parsed.getMemoryContainerId()); // Should use parameter value (security: no parsing from body)
         assertEquals(WorkingMemoryType.DATA, parsed.getMemoryType());
         assertEquals(1, parsed.getMessages().size());
         assertEquals(Integer.valueOf(123), parsed.getMessageId());
@@ -795,7 +795,7 @@ public class MLAddMemoriesInputTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, null);
+        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "test-container");
 
         assertEquals(WorkingMemoryType.CONVERSATIONAL, parsed.getMemoryType());
     }
@@ -922,7 +922,7 @@ public class MLAddMemoriesInputTest {
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         // Verify required fields are present
-        assertTrue(jsonString.contains("\"memory_container_id\":\"container-123\""));
+        // memory_container_id is not serialized to JSON (comes from URL path)
         assertTrue(jsonString.contains("\"working_memory_type\":\"conversational\""));
         assertTrue(jsonString.contains("\"messages\":["));
         assertTrue(jsonString.contains("\"infer\":false"));

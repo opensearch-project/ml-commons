@@ -7,8 +7,8 @@ package org.opensearch.ml.helper;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
@@ -47,6 +47,9 @@ import org.opensearch.index.query.NestedQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
+import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -315,8 +318,58 @@ public class MemoryContainerHelper {
         }
     }
 
+    /**
+     * Execute delete by query with proper system index handling
+     *
+     * @param configuration memory configuration
+     * @param deleteByQueryRequest the delete by query request
+     * @param listener action listener for the result
+     */
+    public void deleteDataByQuery(
+        MemoryConfiguration configuration,
+        DeleteByQueryRequest deleteByQueryRequest,
+        ActionListener<BulkByScrollResponse> listener
+    ) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.execute(DeleteByQueryAction.INSTANCE, deleteByQueryRequest, ActionListener.runBefore(listener, context::restore));
+            } catch (Exception e) {
+                log.error("Failed to execute delete by query on system index", e);
+                listener.onFailure(e);
+            }
+        } else {
+            client.execute(DeleteByQueryAction.INSTANCE, deleteByQueryRequest, listener);
+        }
+    }
+
     public boolean isAdminUser(User user) {
         return user != null && (!CollectionUtils.isEmpty(user.getRoles()) && user.getRoles().contains("all_access"));
+    }
+
+    /**
+     * Generic helper method to apply a filter to a SearchSourceBuilder.
+     * Handles three cases:
+     * 1. If no existing query, use the filter as the query
+     * 2. If existing query is BoolQueryBuilder, add filter to it
+     * 3. Otherwise, wrap existing query in a BoolQueryBuilder with the filter
+     *
+     * @param searchSourceBuilder The search source builder to modify
+     * @param filterQuery The filter query to apply
+     * @return The modified search source builder
+     */
+    private SearchSourceBuilder applyFilterToSearchSource(SearchSourceBuilder searchSourceBuilder, QueryBuilder filterQuery) {
+        QueryBuilder query = searchSourceBuilder.query();
+        if (query == null) {
+            searchSourceBuilder.query(filterQuery);
+        } else if (query instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) query).filter(filterQuery);
+        } else {
+            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
+            rewriteQuery.must(query);
+            rewriteQuery.filter(filterQuery);
+            searchSourceBuilder.query(rewriteQuery);
+        }
+        return searchSourceBuilder;
     }
 
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
@@ -326,36 +379,37 @@ public class MemoryContainerHelper {
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery("owner.name.keyword", user.getName());
         NestedQueryBuilder nestedOwnerQuery = QueryBuilders.nestedQuery(OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
         boolQueryBuilder.should(nestedOwnerQuery);
-        QueryBuilder query = searchSourceBuilder.query();
-        if (query == null) {
-            searchSourceBuilder.query(boolQueryBuilder);
-        } else if (query instanceof BoolQueryBuilder) {
-            ((BoolQueryBuilder) query).filter(boolQueryBuilder);
-        } else {
-            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
-            rewriteQuery.must(query);
-            rewriteQuery.filter(boolQueryBuilder);
-            searchSourceBuilder.query(rewriteQuery);
-        }
-        return searchSourceBuilder;
+
+        return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
     }
 
     public SearchSourceBuilder addOwnerIdFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
 
-        QueryBuilder query = searchSourceBuilder.query();
-        if (query == null) {
-            searchSourceBuilder.query(boolQueryBuilder);
-        } else if (query instanceof BoolQueryBuilder) {
-            ((BoolQueryBuilder) query).filter(boolQueryBuilder);
-        } else {
-            BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
-            rewriteQuery.must(query);
-            rewriteQuery.filter(boolQueryBuilder);
-            searchSourceBuilder.query(rewriteQuery);
+        return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
+    }
+
+    /**
+     * Add owner ID filter to a QueryBuilder for non-admin users.
+     * For admin users or when security is disabled, returns the original query.
+     *
+     * @param user The current user (can be null if security is disabled)
+     * @param query The original query to filter
+     * @return The filtered query with owner restrictions for non-admin users
+     */
+    public QueryBuilder addOwnerIdFilter(User user, QueryBuilder query) {
+        // If security is disabled or user is admin, use the original query
+        if (user == null || isAdminUser(user)) {
+            return query;
         }
-        return searchSourceBuilder;
+
+        // For non-admin users, add owner filter
+        BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+        filteredQuery.must(query);
+        filteredQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, user.getName()));
+
+        return filteredQuery;
     }
 
     public String getOwnerId(User user) {
