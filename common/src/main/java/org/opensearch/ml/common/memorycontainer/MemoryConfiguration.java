@@ -39,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -109,7 +110,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
 
         // Assign values after validation
-        this.indexPrefix = indexPrefix == null ? DEFAULT_MEMORY_INDEX_PREFIX : indexPrefix;
+        this.indexPrefix = buildIndexPrefix(indexPrefix, useSystemIndex);
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmId = llmId;
@@ -131,6 +132,16 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.disableSession = disableSession;
         this.useSystemIndex = useSystemIndex;
         this.tenantId = tenantId;
+    }
+
+    private String buildIndexPrefix(String indexPrefix, boolean useSystemIndex) {
+        if (indexPrefix == null || indexPrefix.isBlank()) {
+            // Generate a unique prefix upfront
+            return useSystemIndex
+                ? DEFAULT_MEMORY_INDEX_PREFIX
+                : UUID.randomUUID().toString().replace("-", "").substring(0, 8).toLowerCase();
+        }
+        return indexPrefix;
     }
 
     public MemoryConfiguration(StreamInput input) throws IOException {
@@ -321,21 +332,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .build();
     }
 
+    public String getFinalMemoryIndexPrefix() {
+        if (useSystemIndex) {
+            return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-";
+        } else {
+            return indexPrefix + "-memory-";
+        }
+    }
+
     public String getIndexName(String memoryType) {
         if (memoryType == null || !VALID_MEMORY_TYPES.contains(memoryType)) {
             return null;
         }
-        if (useSystemIndex) {
-            // When system index, use prefix only if specified
-            if (indexPrefix != null && !indexPrefix.isEmpty()) {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-" + memoryType;
-            } else {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-memory-" + memoryType;
-            }
-        } else {
-            // When not system index, indexPrefix should be container ID if not specified
-            return indexPrefix + "-memory-" + memoryType;
-        }
+        return getFinalMemoryIndexPrefix() + memoryType;
     }
 
     public String getSessionIndexName() {
