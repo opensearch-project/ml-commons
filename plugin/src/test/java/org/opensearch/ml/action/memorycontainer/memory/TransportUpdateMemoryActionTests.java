@@ -16,6 +16,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -689,7 +690,8 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("additional_info", Map.of("key", "value"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "session", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction
+            .constructNewDoc(input, MEM_CONTAINER_MEMORY_TYPE_SESSIONS, new HashMap<>());
 
         assertEquals(3, result.size()); // 2 fields + last_updated_time
         assertEquals("Updated summary", result.get("summary"));
@@ -708,7 +710,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("tags", Map.of("tag1", "value1"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "working", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "working", new HashMap<>());
 
         assertEquals(6, result.size()); // 5 fields + last_updated_time
         assertEquals("New messages", result.get("messages"));
@@ -727,7 +729,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("tags", Map.of("tag1", "value1"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "long-term", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "long-term", new HashMap<>());
 
         assertEquals(3, result.size()); // 2 fields + last_updated_time
         assertEquals("Updated memory text", result.get(MEMORY_FIELD));
@@ -742,7 +744,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("field", "value");
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructUpdateFields(input, "unknown", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "unknown", new HashMap<>());
 
         assertEquals(1, result.size()); // only last_updated_time is added for unknown types
         assertNotNull(result.get("last_updated_time"));

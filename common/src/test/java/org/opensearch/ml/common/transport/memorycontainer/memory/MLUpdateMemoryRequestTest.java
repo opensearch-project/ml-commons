@@ -9,6 +9,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -403,10 +405,8 @@ public class MLUpdateMemoryRequestTest {
 
     @Test
     public void testValidateWithValidMemoryTypes() {
-        // Test all valid memory types: "session", "working", "long-term", "history"
-        String[] validTypes = { "session", "working", "long-term", "history" };
-
-        for (String memoryType : validTypes) {
+        // Test all valid memory types: "sessions", "working", "long-term", "history"
+        for (String memoryType : VALID_MEMORY_TYPES) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
                 .builder()
                 .memoryContainerId("container-123")
@@ -482,10 +482,7 @@ public class MLUpdateMemoryRequestTest {
     public void testValidateMemoryTypeValidation_BothBranches() {
         // Test that valid memory types pass through the validation without errors
         // This ensures the else-if condition on line 71 works correctly for valid types
-
-        String[] validTypes = { "session", "working", "long-term", "history" };
-
-        for (String validType : validTypes) {
+        for (String validType : VALID_MEMORY_TYPES) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
                 .builder()
                 .memoryContainerId("container-123")
@@ -546,13 +543,13 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("test-container")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .memoryId("test-memory")
             .mlUpdateMemoryInput(input)
             .build();
 
         assertEquals("test-container", request.getMemoryContainerId());
-        assertEquals("session", request.getMemoryType());
+        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, request.getMemoryType());
         assertEquals("test-memory", request.getMemoryId());
         assertEquals(input, request.getMlUpdateMemoryInput());
     }
@@ -563,7 +560,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .memoryId("memory-456")
             .mlUpdateMemoryInput(testInput)
             .build();
@@ -579,7 +576,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .memoryId("")
             .mlUpdateMemoryInput(testInput)
             .build();
@@ -622,7 +619,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest requestWithNullInput = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .memoryId("memory-456")
             .mlUpdateMemoryInput(null)
             .build();
@@ -642,9 +639,7 @@ public class MLUpdateMemoryRequestTest {
     @Test
     public void testAllValidMemoryTypesIndividually() {
         // Test each valid memory type individually to ensure complete coverage
-        String[] validTypes = { "session", "working", "long-term", "history" };
-
-        for (String memoryType : validTypes) {
+        for (String memoryType : VALID_MEMORY_TYPES) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
                 .builder()
                 .memoryContainerId("container-" + memoryType)
@@ -671,7 +666,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest validRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("valid-container")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .memoryId("valid-memory")
             .mlUpdateMemoryInput(testInput)
             .build();
@@ -694,7 +689,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("session")
+            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
             .memoryId("memory-456")
             .mlUpdateMemoryInput(originalInput)
             .build();
@@ -717,7 +712,6 @@ public class MLUpdateMemoryRequestTest {
             "WORKING", // Wrong case
             "long_term", // Underscore instead of hyphen
             "longterm", // No separator
-            "sessions", // Plural
             "work", // Partial
             " session ", // With spaces
             "session\n", // With newline

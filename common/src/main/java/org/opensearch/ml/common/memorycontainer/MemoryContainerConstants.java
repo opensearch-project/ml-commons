@@ -107,6 +107,10 @@ public class MemoryContainerConstants {
     public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String DELETE_MEMORIES_BY_QUERY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_delete_by_query";
+    public static final String MEM_CONTAINER_MEMORY_TYPE_SESSIONS = "sessions";
+    public static final String MEM_CONTAINER_MEMORY_TYPE_WORKING = "working";
+    public static final String MEM_CONTAINER_MEMORY_TYPE_LONG_TERM = "long-term";
+    public static final String MEM_CONTAINER_MEMORY_TYPE_HISTORY = "history";
 
     // Memory types are defined in MemoryType enum
 

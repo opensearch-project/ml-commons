@@ -9,8 +9,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.Test;
 import org.opensearch.action.ActionRequestValidationException;
@@ -90,7 +93,11 @@ public class MLDeleteMemoriesByQueryRequestTests {
 
     @Test
     public void testValidation_validMemoryTypes() {
-        String[] validTypes = { "session", "working", "long_term", "history", "SESSION", "WORKING", "LONG_TERM", "HISTORY" };
+        List<String> validTypes = new ArrayList<>();
+        for (String type : VALID_MEMORY_TYPES) {
+            validTypes.add(type);
+            validTypes.add(type.toUpperCase());
+        }
 
         for (String type : validTypes) {
             MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest("container-123", type, new MatchAllQueryBuilder());

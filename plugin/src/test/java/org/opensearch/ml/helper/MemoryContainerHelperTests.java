@@ -15,6 +15,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -273,12 +277,15 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         assertEquals(
-            ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-custom-memory-index-memory-session",
-            helper.getMemoryIndexName(container, "session")
+            ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-custom-memory-index-memory-" + MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
+            helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
         );
 
         config.setUseSystemIndex(false);
-        assertEquals("custom-memory-index-memory-session", helper.getMemoryIndexName(container, "session"));
+        assertEquals(
+            "custom-memory-index-memory-" + MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
+            helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+        );
 
     }
 
@@ -286,7 +293,7 @@ public class MemoryContainerHelperTests {
     public void testGetMemoryIndexNameWithoutConfig() {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
-        assertNotNull(helper.getMemoryIndexName(container, "session"));
+        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS));
     }
 
     @Test
@@ -410,10 +417,10 @@ public class MemoryContainerHelperTests {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix").useSystemIndex(false).build();
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
-        String indexName = helper.getMemoryIndexName(container, "long-term");
+        String indexName = helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_LONG_TERM);
         assertNotNull(indexName);
         assertTrue(indexName.contains("test-prefix"));
-        assertTrue(indexName.contains("long-term"));
+        assertTrue(indexName.contains(MEM_CONTAINER_MEMORY_TYPE_LONG_TERM));
         assertFalse(indexName.startsWith("."));
     }
 
@@ -423,10 +430,10 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         // Test all valid memory types
-        assertNotNull(helper.getMemoryIndexName(container, "session"));
-        assertNotNull(helper.getMemoryIndexName(container, "working"));
-        assertNotNull(helper.getMemoryIndexName(container, "long-term"));
-        assertNotNull(helper.getMemoryIndexName(container, "history"));
+        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS));
+        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_WORKING));
+        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_LONG_TERM));
+        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_HISTORY));
     }
 
     @Test

@@ -124,8 +124,8 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 }
 
                 // Prepare the update
-                Map<String, Object> updateFields = constructUpdateFields(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
-                IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(updateFields);
+                Map<String, Object> newDoc = constructNewDoc(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
+                IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(newDoc);
                 memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, actionListener);
 
             }, actionListener::onFailure);
@@ -134,18 +134,18 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }, actionListener::onFailure));
     }
 
-    public Map<String, Object> constructUpdateFields(MLUpdateMemoryInput input, String memoryType, Map<String, Object> originalDoc) {
+    public Map<String, Object> constructNewDoc(MLUpdateMemoryInput input, String memoryType, Map<String, Object> originalDoc) {
         Map<String, Object> updateFields = new HashMap<>();
         updateFields.putAll(originalDoc);
         Map<String, Object> updateContent = input.getUpdateContent();
         switch (memoryType) {
-            case "session":
+            case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
                 constructSessionMemUpdateFields(updateFields, updateContent);
                 break;
-            case "working":
+            case MEM_CONTAINER_MEMORY_TYPE_WORKING:
                 constructWorkingMemUpdateFields(updateFields, updateContent);
                 break;
-            case "long-term":
+            case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
                 constructLongTermMemUpdateFields(updateFields, updateContent);
                 break;
             default:
