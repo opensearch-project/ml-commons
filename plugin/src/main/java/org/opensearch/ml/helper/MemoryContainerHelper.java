@@ -17,6 +17,7 @@ import java.util.List;
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteRequest;
@@ -27,6 +28,7 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
@@ -286,6 +288,20 @@ public class MemoryContainerHelper {
             }
         } else {
             client.delete(deleteRequest, listener);
+        }
+    }
+
+    public void deleteIndex(
+        MemoryConfiguration configuration,
+        DeleteIndexRequest deleteIndexRequest,
+        ActionListener<AcknowledgedResponse> listener
+    ) {
+        if (configuration.isUseSystemIndex()) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.admin().indices().delete(deleteIndexRequest, ActionListener.runBefore(listener, context::restore));
+            }
+        } else {
+            client.admin().indices().delete(deleteIndexRequest, listener);
         }
     }
 

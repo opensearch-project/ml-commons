@@ -30,7 +30,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -44,7 +46,9 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.IndicesAdminClient;
 
 public class MemoryContainerHelperTests {
 
@@ -67,6 +71,12 @@ public class MemoryContainerHelperTests {
 
     private MemoryContainerHelper helper;
 
+    @Mock
+    private AdminClient adminClient;
+
+    @Mock
+    private IndicesAdminClient indicesAdminClient;
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -79,6 +89,10 @@ public class MemoryContainerHelperTests {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         helper = new MemoryContainerHelper(client, sdkClient, xContentRegistry);
+
+        // Mock the admin client chain
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
     }
 
     @Test
@@ -669,5 +683,43 @@ public class MemoryContainerHelperTests {
         helper.searchData(config, searchRequest, listener);
 
         verify(sdkClient).searchDataObjectAsync(any());
+    }
+
+    @Test
+    public void testDeleteIndexWithSystemIndex() {
+        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
+        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("test-index");
+        ActionListener<AcknowledgedResponse> listener = mock(ActionListener.class);
+
+        helper.deleteIndex(config, deleteIndexRequest, listener);
+
+        verify(indicesAdminClient).delete(any(DeleteIndexRequest.class), any());
+    }
+
+    @Test
+    public void testDeleteIndexWithoutSystemIndex() {
+        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
+        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("test-index");
+        ActionListener<AcknowledgedResponse> listener = mock(ActionListener.class);
+
+        helper.deleteIndex(config, deleteIndexRequest, listener);
+
+        verify(indicesAdminClient).delete(any(DeleteIndexRequest.class), any());
+    }
+
+    @Test
+    public void testDeleteIndexThreadContextHandling() {
+        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
+        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("test-index");
+        ActionListener<AcknowledgedResponse> listener = mock(ActionListener.class);
+
+        helper.deleteIndex(config, deleteIndexRequest, listener);
+
+        // Verify that the client.admin().indices().delete() was called
+        verify(indicesAdminClient).delete(any(DeleteIndexRequest.class), any());
+
+        // Verify that threadPool and threadContext were accessed for system index
+        verify(client).threadPool();
+        verify(threadPool).getThreadContext();
     }
 }
