@@ -433,7 +433,7 @@ public class MemoryStorageConfigTests {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("custom-prefix").useSystemIndex(false).build();
 
         String result = config.getFinalMemoryIndexPrefix();
-        assertEquals("custom-prefix", result);
+        assertEquals("custom-prefix-memory-", result);
     }
 
     @Test
@@ -458,8 +458,8 @@ public class MemoryStorageConfigTests {
 
         String result = config.getFinalMemoryIndexPrefix();
         assertNotNull(result);
-        assertEquals(8, result.length());
-        assertFalse(result.contains("-"));
+        assertEquals(16, result.length());
+        assertTrue(result.endsWith("-memory-"));
     }
 
     @Test

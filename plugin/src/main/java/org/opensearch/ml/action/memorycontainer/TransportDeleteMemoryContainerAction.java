@@ -22,6 +22,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
@@ -156,14 +157,23 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
             try {
                 DeleteResponse deleteResponse = response.deleteResponse();
                 if (deleteAllMemories) {
-                    String indexPattern = container.getConfiguration().getFinalMemoryIndexPrefix() + "*";
-                    DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indexPattern);
-                    memoryContainerHelper.deleteIndex(container.getConfiguration(), deleteIndexRequest, ActionListener.wrap(r -> {
-                        actionListener.onResponse(deleteResponse);
-                    }, e -> {
-                        log.warn("Failed to delete memory indices for memory container " + memoryContainerId);
-                        actionListener.onFailure(e);
-                    }));
+                    MemoryConfiguration configuration = container.getConfiguration();
+                    // Don't use index pattern here to avoid delete other user's index by mistake
+                    DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(
+                        configuration.getSessionIndexName(),
+                        configuration.getWorkingMemoryIndexName(),
+                        configuration.getLongMemoryIndexName(),
+                        configuration.getLongMemoryHistoryIndexName()
+                    );
+                    memoryContainerHelper
+                        .deleteIndex(
+                            configuration,
+                            deleteIndexRequest,
+                            ActionListener.wrap(r -> { actionListener.onResponse(deleteResponse); }, e -> {
+                                log.warn("Failed to delete memory indices for memory container " + memoryContainerId);
+                                actionListener.onFailure(e);
+                            })
+                        );
                 } else {
                     log.debug("Completed Delete Memory Container Request, memory container id:{} deleted", response.id());
                     actionListener.onResponse(deleteResponse);

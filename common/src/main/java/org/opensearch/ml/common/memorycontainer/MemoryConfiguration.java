@@ -332,21 +332,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .build();
     }
 
+    public String getFinalMemoryIndexPrefix() {
+        if (useSystemIndex) {
+            return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-";
+        } else {
+            return indexPrefix + "-memory-";
+        }
+    }
+
     public String getIndexName(String memoryType) {
         if (memoryType == null || !VALID_MEMORY_TYPES.contains(memoryType)) {
             return null;
         }
-        if (useSystemIndex) {
-            // When system index, use prefix only if specified
-            if (indexPrefix != null && !indexPrefix.isEmpty()) {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-" + memoryType;
-            } else {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-memory-" + memoryType;
-            }
-        } else {
-            // When not system index, indexPrefix should be container ID if not specified
-            return indexPrefix + "-memory-" + memoryType;
-        }
+        return getFinalMemoryIndexPrefix() + memoryType;
     }
 
     public String getSessionIndexName() {
