@@ -12,7 +12,9 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DELETE_MEMORIES_BY_QUERY_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 
@@ -128,7 +130,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         MLDeleteMemoriesByQueryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("session", capturedRequest.getMemoryType());
+        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, capturedRequest.getMemoryType());
         assertNotNull(capturedRequest.getQuery());
     }
 
@@ -148,7 +150,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         MLDeleteMemoriesByQueryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("session", capturedRequest.getMemoryType());
+        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, capturedRequest.getMemoryType());
         // Query should be null, transport layer will handle default
         assertNull(capturedRequest.getQuery());
     }
@@ -170,14 +172,14 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         MLDeleteMemoriesByQueryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("session", capturedRequest.getMemoryType());
+        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, capturedRequest.getMemoryType());
         assertNotNull(capturedRequest.getQuery());
         assertTrue(capturedRequest.getQuery().toString().contains("bool"));
     }
 
     @Test
     public void testPrepareRequest_DifferentMemoryTypes() throws Exception {
-        String[] memoryTypes = { "session", "working", "long_term", "history" };
+        String[] memoryTypes = VALID_MEMORY_TYPES.toArray(new String[0]);
         List<MLDeleteMemoriesByQueryRequest> capturedRequests = new ArrayList<>();
 
         // Set up client mock to capture all requests
@@ -252,7 +254,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
     private RestRequest createRestRequest(String queryJson) {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
-        params.put(PARAMETER_MEMORY_TYPE, "session");
+        params.put(PARAMETER_MEMORY_TYPE, MEM_CONTAINER_MEMORY_TYPE_SESSIONS);
 
         FakeRestRequest.Builder requestBuilder = new FakeRestRequest.Builder(xContentRegistry)
             .withMethod(RestRequest.Method.POST)

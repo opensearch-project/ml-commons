@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,10 +16,10 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -41,7 +42,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
+public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRequest, IndexResponse> {
 
     final Client client;
     final SdkClient sdkClient;
@@ -65,7 +66,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> actionListener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<IndexResponse> actionListener) {
         if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
             actionListener
                 .onFailure(
@@ -112,7 +113,8 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                     actionListener.onFailure(new OpenSearchStatusException("Memory not found", RestStatus.NOT_FOUND));
                     return;
                 }
-                String ownerId = (String) getResponse.getSourceAsMap().get(OWNER_ID_FIELD);
+                Map<String, Object> originalDoc = getResponse.getSourceAsMap();
+                String ownerId = (String) originalDoc.get(OWNER_ID_FIELD);
                 if (!memoryContainerHelper.checkMemoryAccess(user, ownerId)) {
                     actionListener
                         .onFailure(
@@ -122,10 +124,9 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 }
 
                 // Prepare the update
-                Map<String, Object> updateFields = constructUpdateFields(updateRequest.getMlUpdateMemoryInput(), memoryType);
-                UpdateRequest updateMemoryRequest = new UpdateRequest(memoryIndexName, memoryId).doc(updateFields);
-
-                memoryContainerHelper.updateData(container.getConfiguration(), updateMemoryRequest, actionListener);
+                Map<String, Object> newDoc = constructNewDoc(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
+                IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(newDoc);
+                memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, actionListener);
 
             }, actionListener::onFailure);
             memoryContainerHelper.getData(container.getConfiguration(), getRequest, getResponseActionListener);
@@ -133,28 +134,36 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }, actionListener::onFailure));
     }
 
-    public Map<String, Object> constructUpdateFields(MLUpdateMemoryInput input, String memoryType) {
+    public Map<String, Object> constructNewDoc(MLUpdateMemoryInput input, String memoryType, Map<String, Object> originalDoc) {
         Map<String, Object> updateFields = new HashMap<>();
+        updateFields.putAll(originalDoc);
         Map<String, Object> updateContent = input.getUpdateContent();
         switch (memoryType) {
-            case "session":
+            case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
                 constructSessionMemUpdateFields(updateFields, updateContent);
                 break;
-            case "working":
+            case MEM_CONTAINER_MEMORY_TYPE_WORKING:
                 constructWorkingMemUpdateFields(updateFields, updateContent);
                 break;
-            case "long-term":
+            case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
                 constructLongTermMemUpdateFields(updateFields, updateContent);
                 break;
             default:
                 break;
         }
+        updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         return updateFields;
     }
 
     public Map<String, Object> constructSessionMemUpdateFields(Map<String, Object> updateFields, Map<String, Object> updateContent) {
         if (updateContent.containsKey(SUMMARY_FIELD)) {
             updateFields.put(SUMMARY_FIELD, updateContent.get(SUMMARY_FIELD));
+        }
+        if (updateContent.containsKey(METADATA_FIELD)) {
+            updateFields.put(METADATA_FIELD, updateContent.get(METADATA_FIELD));
+        }
+        if (updateContent.containsKey(AGENTS_FIELD)) {
+            updateFields.put(AGENTS_FIELD, updateContent.get(AGENTS_FIELD));
         }
         if (updateContent.containsKey(ADDITIONAL_INFO_FIELD)) {
             updateFields.put(ADDITIONAL_INFO_FIELD, updateContent.get(ADDITIONAL_INFO_FIELD));

@@ -21,6 +21,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_PREFIX_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
@@ -59,7 +63,13 @@ import lombok.Setter;
 @EqualsAndHashCode
 public class MemoryConfiguration implements ToXContentObject, Writeable {
 
-    public static final Set<String> VALID_MEMORY_TYPES = Set.of("session", "working", "long-term", "history");
+    public static final Set<String> VALID_MEMORY_TYPES = Set
+        .of(
+            MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
+            MEM_CONTAINER_MEMORY_TYPE_WORKING,
+            MEM_CONTAINER_MEMORY_TYPE_LONG_TERM,
+            MEM_CONTAINER_MEMORY_TYPE_HISTORY
+        );
     private String indexPrefix;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
@@ -329,51 +339,19 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     }
 
     public String getSessionIndexName() {
-        if (useSystemIndex) {
-            if (indexPrefix != null && !indexPrefix.isEmpty()) {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-session";
-            } else {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-memory-session";
-            }
-        } else {
-            return indexPrefix + "-memory-session";
-        }
+        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_SESSIONS);
     }
 
     public String getWorkingMemoryIndexName() {
-        if (useSystemIndex) {
-            if (indexPrefix != null && !indexPrefix.isEmpty()) {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-working";
-            } else {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-memory-working";
-            }
-        } else {
-            return indexPrefix + "-memory-working";
-        }
+        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_WORKING);
     }
 
     public String getLongMemoryIndexName() {
-        if (useSystemIndex) {
-            if (indexPrefix != null && !indexPrefix.isEmpty()) {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-long-term";
-            } else {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-memory-long-term";
-            }
-        } else {
-            return indexPrefix + "-memory-long-term";
-        }
+        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_LONG_TERM);
     }
 
     public String getLongMemoryHistoryIndexName() {
-        if (useSystemIndex) {
-            if (indexPrefix != null && !indexPrefix.isEmpty()) {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-" + indexPrefix + "-memory-history";
-            } else {
-                return ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-memory-history";
-            }
-        } else {
-            return indexPrefix + "-memory-history";
-        }
+        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_HISTORY);
     }
 
     public Map<String, Object> getMemoryIndexMapping(String indexName) {

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
+import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 
@@ -73,10 +74,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
         } else {
             // Validate memory type is one of the allowed values
             String normalizedType = memoryType.toLowerCase(Locale.ROOT);
-            if (!normalizedType.equals("session")
-                && !normalizedType.equals("working")
-                && !normalizedType.equals("long_term")
-                && !normalizedType.equals("history")) {
+            if (!VALID_MEMORY_TYPES.contains(normalizedType)) {
                 validationException = addValidationError(
                     "Invalid memory type. Must be one of: session, working, long_term, history",
                     validationException
