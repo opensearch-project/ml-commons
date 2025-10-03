@@ -335,7 +335,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
         );
         when(mockContainer.getConfiguration()).thenReturn(mockConfig);
-        when(mockConfig.getFinalMemoryIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
+        when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
+        when(mockConfig.getLongMemoryHistoryIndexName()).thenReturn("test-memory-prefix-history");
 
         // Setup delete request with deleteAllMemories = true
         MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
@@ -368,13 +371,18 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         // Execute
         transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
 
-        // Verify deleteIndex was called with correct pattern
+        // Verify deleteIndex was called with correct index names
         ArgumentCaptor<org.opensearch.action.admin.indices.delete.DeleteIndexRequest> deleteIndexCaptor = ArgumentCaptor
             .forClass(org.opensearch.action.admin.indices.delete.DeleteIndexRequest.class);
         verify(memoryContainerHelper).deleteIndex(any(), deleteIndexCaptor.capture(), any());
 
         org.opensearch.action.admin.indices.delete.DeleteIndexRequest capturedRequest = deleteIndexCaptor.getValue();
-        assertEquals("test-memory-prefix*", capturedRequest.indices()[0]);
+        String[] indices = capturedRequest.indices();
+        assertEquals(4, indices.length);
+        assertEquals("test-memory-prefix-sessions", indices[0]);
+        assertEquals("test-memory-prefix-working", indices[1]);
+        assertEquals("test-memory-prefix-long-term", indices[2]);
+        assertEquals("test-memory-prefix-history", indices[3]);
 
         // Verify final success response
         ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
