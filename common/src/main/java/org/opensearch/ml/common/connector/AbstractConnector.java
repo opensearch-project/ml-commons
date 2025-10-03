@@ -40,7 +40,6 @@ public abstract class AbstractConnector implements Connector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";

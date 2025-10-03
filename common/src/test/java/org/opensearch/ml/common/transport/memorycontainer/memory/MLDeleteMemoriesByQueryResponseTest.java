@@ -6,10 +6,11 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -54,6 +55,11 @@ public class MLDeleteMemoriesByQueryResponseTest {
         when(mockBulkResponse.getBulkFailures()).thenReturn(Collections.emptyList());
         when(mockBulkResponse.getSearchFailures()).thenReturn(Collections.emptyList());
 
+        // Additional fields for BulkByScrollResponse.toXContent()
+        when(mockBulkResponse.getTotal()).thenReturn(10L);
+        when(mockBulkResponse.getUpdated()).thenReturn(0L);
+        when(mockBulkResponse.getCreated()).thenReturn(0L);
+
         // Setup status mock
         when(mockStatus.getThrottled()).thenReturn(TimeValue.timeValueMillis(0));
         when(mockStatus.getThrottledUntil()).thenReturn(TimeValue.timeValueMillis(0));
@@ -68,114 +74,20 @@ public class MLDeleteMemoriesByQueryResponseTest {
     }
 
     @Test
-    public void testToXContentBasic() throws IOException {
+    public void testToXContentDelegatesToBulkResponse() throws IOException {
         response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
 
+        // Verify that BulkByScrollResponse.toXContent was called
+        verify(mockBulkResponse).toXContent(any(XContentBuilder.class), any(ToXContent.Params.class));
+
+        String json = BytesReference.bytes(builder).utf8ToString();
         assertNotNull(json);
-        assertTrue(json.contains("\"took\":1000"));
-        assertTrue(json.contains("\"timed_out\":false"));
-        assertTrue(json.contains("\"deleted\":10"));
-        assertTrue(json.contains("\"batches\":1"));
-        assertTrue(json.contains("\"version_conflicts\":0"));
-        assertTrue(json.contains("\"noops\":0"));
-        assertTrue(json.contains("\"retries\""));
-        assertTrue(json.contains("\"bulk\":0"));
-        assertTrue(json.contains("\"search\":0"));
-        assertTrue(json.contains("\"throttled_millis\":0"));
-        assertTrue(json.contains("\"requests_per_second\":-1.0"));
-        assertFalse(json.contains("\"bulk_failures\""));
-        assertFalse(json.contains("\"search_failures\""));
-    }
-
-    @Test
-    public void testToXContentWithTimedOut() throws IOException {
-        when(mockBulkResponse.isTimedOut()).thenReturn(true);
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertTrue(json.contains("\"timed_out\":true"));
-    }
-
-    // Skip tests for bulk/search failures since inner classes don't exist in this version
-    // The code handles them properly but we can't create mock instances for testing
-
-    @Test
-    public void testToXContentWithRetries() throws IOException {
-        when(mockBulkResponse.getBulkRetries()).thenReturn(3L);
-        when(mockBulkResponse.getSearchRetries()).thenReturn(2L);
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertTrue(json.contains("\"bulk\":3"));
-        assertTrue(json.contains("\"search\":2"));
-    }
-
-    @Test
-    public void testToXContentWithThrottling() throws IOException {
-        when(mockStatus.getThrottled()).thenReturn(TimeValue.timeValueMillis(5000));
-        when(mockStatus.getThrottledUntil()).thenReturn(TimeValue.timeValueMillis(10000));
-        when(mockStatus.getRequestsPerSecond()).thenReturn(100.0f);
-
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertTrue(json.contains("\"throttled_millis\":5000"));
-        assertTrue(json.contains("\"throttled_until_millis\":10000"));
-        assertTrue(json.contains("\"requests_per_second\":100.0"));
-    }
-
-    @Test
-    public void testToXContentWithVersionConflicts() throws IOException {
-        when(mockBulkResponse.getVersionConflicts()).thenReturn(5L);
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertTrue(json.contains("\"version_conflicts\":5"));
-    }
-
-    @Test
-    public void testToXContentWithNoops() throws IOException {
-        when(mockBulkResponse.getNoops()).thenReturn(3L);
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertTrue(json.contains("\"noops\":3"));
-    }
-
-    @Test
-    public void testToXContentWithLargeDeleteCount() throws IOException {
-        when(mockBulkResponse.getDeleted()).thenReturn(1000000L);
-        when(mockBulkResponse.getBatches()).thenReturn(100);
-        when(mockBulkResponse.getTook()).thenReturn(TimeValue.timeValueMillis(60000));
-
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertTrue(json.contains("\"deleted\":1000000"));
-        assertTrue(json.contains("\"batches\":100"));
-        assertTrue(json.contains("\"took\":60000"));
+        // Should have opening and closing braces from our wrapper
+        assertTrue(json.startsWith("{"));
+        assertTrue(json.endsWith("}"));
     }
 
     @Test
@@ -199,23 +111,19 @@ public class MLDeleteMemoriesByQueryResponseTest {
     }
 
     @Test
-    public void testToXContentWithNullFailureLists() throws IOException {
-        when(mockBulkResponse.getBulkFailures()).thenReturn(null);
-        when(mockBulkResponse.getSearchFailures()).thenReturn(null);
-
-        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String json = BytesReference.bytes(builder).utf8ToString();
-
-        assertFalse(json.contains("\"bulk_failures\""));
-        assertFalse(json.contains("\"search_failures\""));
-    }
-
-    @Test
     public void testGetBulkResponse() {
         response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
         assertEquals(mockBulkResponse, response.getBulkResponse());
+    }
+
+    @Test
+    public void testWriteTo() throws IOException {
+        response = new MLDeleteMemoriesByQueryResponse(mockBulkResponse);
+        BytesStreamOutput output = new BytesStreamOutput();
+
+        response.writeTo(output);
+
+        // Verify that it delegates to bulkResponse.writeTo
+        verify(mockBulkResponse).writeTo(any());
     }
 }

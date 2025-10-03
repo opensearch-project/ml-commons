@@ -19,7 +19,6 @@ public class MemoryContainerConstants {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "configuration";
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // back_end roles as specified by the owner/admin
 
     // Field names for MemoryConfiguration
     public static final String DISABLE_HISTORY_FIELD = "disable_history";

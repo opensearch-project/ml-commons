@@ -54,7 +54,7 @@
           "type": "integer"
         },
         "strategies": {
-          "type": "object",
+          "type": "nested",
           "properties": {
             "id": {
               "type": "keyword"

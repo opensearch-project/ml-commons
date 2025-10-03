@@ -43,7 +43,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Input data for adding memory to a memory container
+ * Represents working memory (short-term memory) in the memory container system.
+ * Stores conversational messages or data with metadata, namespace, and optional structured/binary data.
  */
 @Getter
 @Setter
@@ -185,7 +186,8 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         builder.field(MEMORY_TYPE_FIELD, memoryType);
-        if (messages != null && messages.size() > 0) {
+
+        if (messages != null && !messages.isEmpty()) {
             builder.startArray(MESSAGES_FIELD);
             for (MessageInput message : messages) {
                 message.toXContent(builder, params);

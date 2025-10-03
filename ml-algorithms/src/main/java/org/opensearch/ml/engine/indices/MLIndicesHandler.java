@@ -7,28 +7,20 @@ package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_SESSION_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_WORKING_MEMORY_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_SEARCH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_ENGINE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_M;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_HISTORY_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
 import static org.opensearch.ml.common.utils.IndexUtils.ALL_NODES_REPLICA_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
@@ -50,8 +42,13 @@ import org.opensearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
@@ -193,6 +190,56 @@ public class MLIndicesHandler {
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
+    /**
+     * Builds the long-term memory index mapping dynamically based on configuration.
+     * Loads base mapping from JSON and adds embedding field configuration if needed.
+     */
+    private String buildLongTermMemoryMapping(MemoryConfiguration memoryConfig) throws IOException {
+        // Get base mapping from JSON file
+        String baseMappingJson = getMapping(ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH);
+
+        // Parse the JSON to extract properties
+        Map<String, Object> mapping = new HashMap<>();
+        Map<String, Object> properties = new HashMap<>();
+
+        // Parse base mapping - we'll rebuild it with additional fields if needed
+        XContentParser parser = XContentHelper
+            .createParser(
+                NamedXContentRegistry.EMPTY,
+                LoggingDeprecationHandler.INSTANCE,
+                new BytesArray(baseMappingJson),
+                XContentType.JSON
+            );
+
+        Map<String, Object> baseMapping = parser.mapOrdered();
+        mapping.put("_meta", baseMapping.get("_meta"));
+        properties.putAll((Map<String, Object>) baseMapping.get("properties"));
+
+        // Add embedding field based on configuration
+        if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+            // Build KNN vector configuration for text embeddings
+            Map<String, Object> knnVector = new HashMap<>();
+            knnVector.put("type", "knn_vector");
+            knnVector.put("dimension", memoryConfig.getDimension());
+
+            Map<String, Object> method = new HashMap<>();
+            method.put("name", KNN_METHOD_NAME);
+            method.put("space_type", KNN_SPACE_TYPE);
+            method.put("engine", KNN_ENGINE);
+            method.put("parameters", Map.of("ef_construction", KNN_EF_CONSTRUCTION, "m", KNN_M));
+            knnVector.put("method", method);
+
+            properties.put(MEMORY_EMBEDDING_FIELD, knnVector);
+        } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+            // Use rank_features for sparse embeddings
+            properties.put(MEMORY_EMBEDDING_FIELD, Map.of("type", "rank_features"));
+        }
+        // If no embedding type, no embedding field is added
+
+        mapping.put("properties", properties);
+        return StringUtils.toJson(mapping);
+    }
+
     public void createLongTermMemoryIndex(
         String pipelineName,
         String indexName,
@@ -200,58 +247,33 @@ public class MLIndicesHandler {
         ActionListener<Boolean> listener
     ) {
         try {
+            // Build the dynamic mapping based on configuration
+            String indexMappings = buildLongTermMemoryMapping(memoryConfig);
+
+            // Build index settings
             Map<String, Object> indexSettings = new HashMap<>();
-            Map<String, Object> indexMappings = new HashMap<>();
 
-            // Build index mappings based on semantic storage config
-            Map<String, Object> properties = new HashMap<>();
-
-            // Common fields for all index types
-            // Use keyword type for ID fields that need exact matching
-            properties.put(OWNER_ID_FIELD, Map.of("type", "keyword"));
-            properties.put(NAMESPACE_FIELD, Map.of("type", "flat_object"));
-            properties.put(NAMESPACE_SIZE_FIELD, Map.of("type", "integer"));
-            properties.put(MEMORY_FIELD, Map.of("type", "text")); // Keep as text for full-text search
-            properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
-            properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
-            properties.put(STRATEGY_ID_FIELD, Map.of("type", "keyword"));
-            properties.put(CREATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
-            properties.put(LAST_UPDATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
-
+            // Add KNN settings for text embeddings
             if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
-                // KNN index configuration
                 indexSettings.put("index.knn", true);
                 indexSettings.put("index.knn.algo_param.ef_search", KNN_EF_SEARCH);
-
-                int dimension = memoryConfig.getDimension();
-
-                Map<String, Object> knnVector = new HashMap<>();
-                knnVector.put("type", "knn_vector");
-                knnVector.put("dimension", dimension);
-
-                Map<String, Object> method = new HashMap<>();
-                method.put("name", KNN_METHOD_NAME);
-                method.put("space_type", KNN_SPACE_TYPE);
-                method.put("engine", KNN_ENGINE);
-                method.put("parameters", Map.of("ef_construction", KNN_EF_CONSTRUCTION, "m", KNN_M));
-                knnVector.put("method", method);
-                properties.put(MEMORY_EMBEDDING_FIELD, knnVector);
-            } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                // Sparse index configuration - use rank_features for sparse embeddings
-                properties.put(MEMORY_EMBEDDING_FIELD, Map.of("type", "rank_features"));
             }
+
+            // Add pipeline if specified
             if (pipelineName != null) {
                 indexSettings.put("default_pipeline", pipelineName);
             }
+
+            // Add custom settings from configuration
             if (!memoryConfig.getIndexSettings().isEmpty() && memoryConfig.getIndexSettings().containsKey(LONG_TERM_MEMORY_INDEX)) {
                 Map<String, Object> configuredIndexSettings = memoryConfig.getMemoryIndexMapping(LONG_TERM_MEMORY_INDEX);
                 indexSettings.putAll(configuredIndexSettings);
             }
 
-            indexMappings.put("properties", properties);
-            initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+            // Initialize index with mapping and settings
+            initIndexIfAbsent(indexName, indexMappings, indexSettings, 1, listener);
         } catch (Exception e) {
-            log.error("Failed to create memory data index", e);
+            log.error("Failed to create long-term memory index", e);
             listener.onFailure(e);
         }
     }
