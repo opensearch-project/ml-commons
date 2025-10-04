@@ -13,6 +13,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -27,6 +32,8 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
@@ -305,5 +312,397 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         Exception exception = captor.getValue();
         assertTrue(exception instanceof RuntimeException);
         assertEquals("Update failed", exception.getMessage());
+    }
+
+    public void testUpdateStrategies_UpdateExistingStrategy() {
+        String containerId = "test-container-id";
+
+        // Create existing strategies
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type("semantic")
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        // Create configuration with existing strategies
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .strategies(existingStrategies)
+            .build();
+
+        // Create update strategy (disable existing)
+        MemoryStrategy updateStrategy = MemoryStrategy.builder().id("semantic_123").enabled(false).build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().strategies(Arrays.asList(updateStrategy)).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        // Mock container with configuration
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock successful update
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testUpdateStrategies_AddNewStrategy() {
+        String containerId = "test-container-id";
+
+        // Create existing strategies
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type("semantic")
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .strategies(existingStrategies)
+            .build();
+
+        // Create new strategy without ID (simulate no ID provided by setting to empty)
+        MemoryStrategy newStrategy = MemoryStrategy
+            .builder()
+            .id(null)
+            .type("user_preference")
+            .namespace(Arrays.asList("session_id"))
+            .strategyConfig(new HashMap<>())
+            .build();
+
+        newStrategy.setId("");  // Simulate no ID provided - merge logic will generate new ID
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().strategies(Arrays.asList(newStrategy)).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testUpdateStrategies_InvalidStrategyId() {
+        String containerId = "test-container-id";
+
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type("semantic")
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .strategies(existingStrategies)
+            .build();
+
+        // Try to update non-existent strategy
+        MemoryStrategy updateStrategy = MemoryStrategy.builder().id("nonexistent_999").enabled(false).build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().strategies(Arrays.asList(updateStrategy)).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exception).status());
+    }
+
+    public void testUpdateStrategies_CannotChangeType() {
+        String containerId = "test-container-id";
+
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type("semantic")
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .strategies(existingStrategies)
+            .build();
+
+        // Try to change strategy type
+        MemoryStrategy updateStrategy = MemoryStrategy
+            .builder()
+            .id("semantic_123")
+            .type("user_preference")  // Try to change type
+            .enabled(false)
+            .build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().strategies(Arrays.asList(updateStrategy)).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+
+        Exception exception = captor.getValue();
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertTrue(exception.getMessage().contains("Cannot change strategy type"));
+    }
+
+    public void testUpdateStrategies_PartialFieldUpdate() {
+        String containerId = "test-container-id";
+
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type("semantic")
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .strategies(existingStrategies)
+            .build();
+
+        // Update only namespace, not enabled
+        MemoryStrategy updateStrategy = MemoryStrategy
+            .builder()
+            .id("semantic_123")
+            .namespace(Arrays.asList("user_id", "session_id"))
+            .build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().strategies(Arrays.asList(updateStrategy)).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
     }
 }
