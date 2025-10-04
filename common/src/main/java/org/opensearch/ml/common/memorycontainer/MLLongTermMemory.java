@@ -10,7 +10,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STRATEGY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
@@ -34,16 +34,16 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Represents a memory entry in a memory container
+ * Represents a long term memory entry in a memory container
  */
 @Getter
 @Setter
 @Builder
-public class MLMemory implements ToXContentObject, Writeable {
+public class MLLongTermMemory implements ToXContentObject, Writeable {
 
     // Core fields
     private String memory;
-    private MemoryType memoryType;
+    private MemoryStrategyType strategyType;
 
     private Map<String, String> namespace;
     private Map<String, String> tags;
@@ -58,9 +58,9 @@ public class MLMemory implements ToXContentObject, Writeable {
     private String strategyId;
 
     @Builder
-    public MLMemory(
+    public MLLongTermMemory(
         String memory,
-        MemoryType memoryType,
+        MemoryStrategyType strategyType,
         Map<String, String> namespace,
         Map<String, String> tags,
         Instant createdTime,
@@ -70,7 +70,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         String strategyId
     ) {
         this.memory = memory;
-        this.memoryType = memoryType;
+        this.strategyType = strategyType;
         this.namespace = namespace;
         this.tags = tags;
         this.createdTime = createdTime;
@@ -80,9 +80,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.strategyId = strategyId;
     }
 
-    public MLMemory(StreamInput in) throws IOException {
+    public MLLongTermMemory(StreamInput in) throws IOException {
         this.memory = in.readString();
-        this.memoryType = in.readEnum(MemoryType.class);
+        this.strategyType = in.readEnum(MemoryStrategyType.class);
         if (in.readBoolean()) {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
@@ -99,7 +99,7 @@ public class MLMemory implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(memory);
-        out.writeEnum(memoryType);
+        out.writeEnum(strategyType);
         if (namespace != null && !namespace.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(namespace, StreamOutput::writeString, StreamOutput::writeString);
@@ -123,7 +123,7 @@ public class MLMemory implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(MEMORY_FIELD, memory);
-        builder.field(MEMORY_TYPE_FIELD, memoryType.getValue());
+        builder.field(MEMORY_STRATEGY_TYPE_FIELD, strategyType.getValue());
 
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
@@ -150,9 +150,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static MLMemory parse(XContentParser parser) throws IOException {
+    public static MLLongTermMemory parse(XContentParser parser) throws IOException {
         String memory = null;
-        MemoryType memoryType = null;
+        MemoryStrategyType strategyType = null;
         Map<String, String> namespace = null;
         Map<String, String> tags = null;
         Instant createdTime = null;
@@ -170,8 +170,8 @@ public class MLMemory implements ToXContentObject, Writeable {
                 case MEMORY_FIELD:
                     memory = parser.text();
                     break;
-                case MEMORY_TYPE_FIELD:
-                    memoryType = MemoryType.fromString(parser.text());
+                case MEMORY_STRATEGY_TYPE_FIELD:
+                    strategyType = MemoryStrategyType.fromString(parser.text());
                     break;
                 case TAGS_FIELD:
                     tags = StringUtils.getParameterMap(parser.map());
@@ -207,10 +207,10 @@ public class MLMemory implements ToXContentObject, Writeable {
             }
         }
 
-        return MLMemory
+        return MLLongTermMemory
             .builder()
             .memory(memory)
-            .memoryType(memoryType)
+            .strategyType(strategyType)
             .namespace(namespace)
             .tags(tags)
             .createdTime(createdTime)
@@ -229,8 +229,8 @@ public class MLMemory implements ToXContentObject, Writeable {
             .of(
                 MEMORY_FIELD,
                 memory,
-                MEMORY_TYPE_FIELD,
-                memoryType.getValue(),
+                MEMORY_STRATEGY_TYPE_FIELD,
+                strategyType.getValue(),
                 CREATED_TIME_FIELD,
                 createdTime.toEpochMilli(),
                 LAST_UPDATED_TIME_FIELD,

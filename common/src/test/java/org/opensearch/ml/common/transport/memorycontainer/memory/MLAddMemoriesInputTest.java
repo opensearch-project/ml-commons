@@ -11,7 +11,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.common.TestHelper.createTestContent;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
@@ -28,12 +27,9 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
+import org.opensearch.ml.common.memorycontainer.PayloadType;
 
 public class MLAddMemoriesInputTest {
 
@@ -73,7 +69,7 @@ public class MLAddMemoriesInputTest {
         inputWithAllFields = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .memoryType(WorkingMemoryType.CONVERSATIONAL)
+            .payloadType(PayloadType.CONVERSATIONAL)
             .messages(testMessages)
             .binaryData("test binary data")
             .structuredData(structuredData)
@@ -96,7 +92,7 @@ public class MLAddMemoriesInputTest {
         inputNoOptionals = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-999")
-            .memoryType(WorkingMemoryType.CONVERSATIONAL)
+            .payloadType(PayloadType.CONVERSATIONAL)
             .messages(Arrays.asList(MessageInput.builder().role("user").content(createTestContent("Test message")).build()))
             .namespace(Map.of(SESSION_ID_FIELD, "session-456", "agent_id", "agent-789"))
             .infer(true)
@@ -196,7 +192,7 @@ public class MLAddMemoriesInputTest {
             IllegalArgumentException.class,
             () -> new MLAddMemoriesInput(
                 null,
-                WorkingMemoryType.CONVERSATIONAL,
+                PayloadType.CONVERSATIONAL,
                 testMessages,
                 null,
                 null,
@@ -216,7 +212,7 @@ public class MLAddMemoriesInputTest {
             IllegalArgumentException.class,
             () -> new MLAddMemoriesInput(
                 "container-1",
-                WorkingMemoryType.CONVERSATIONAL,
+                PayloadType.CONVERSATIONAL,
                 null,
                 null,
                 null,
@@ -236,7 +232,7 @@ public class MLAddMemoriesInputTest {
             IllegalArgumentException.class,
             () -> new MLAddMemoriesInput(
                 "container-1",
-                WorkingMemoryType.CONVERSATIONAL,
+                PayloadType.CONVERSATIONAL,
                 new ArrayList<>(),
                 null,
                 null,
@@ -254,7 +250,7 @@ public class MLAddMemoriesInputTest {
         // Test valid case - null messages with infer=false should pass
         MLAddMemoriesInput validInput = new MLAddMemoriesInput(
             "container-1",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             null,
             null,
             null,
@@ -267,39 +263,6 @@ public class MLAddMemoriesInputTest {
             "owner-1"
         );
         assertNotNull(validInput);
-    }
-
-    @Test
-    public void testToXContent() throws IOException {
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputWithAllFields.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        assertTrue(jsonString.contains("\"memory_container_id\":\"container-123\""));
-        assertTrue(jsonString.contains("\"messages\":["));
-        assertTrue(jsonString.contains("\"role\":\"user\""));
-        assertTrue(jsonString.contains("\"content\":"));
-        assertTrue(jsonString.contains("\"session_id\":\"session-456\""));
-        assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
-        assertTrue(jsonString.contains("\"infer\":true"));
-        assertTrue(jsonString.contains("\"topic\":\"greeting\""));
-        assertTrue(jsonString.contains("\"owner_id\":\"owner-123\""));
-    }
-
-    @Test
-    public void testToXContentMinimal() throws IOException {
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputMinimal.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        assertTrue(jsonString.contains("\"memory_container_id\""));
-        assertTrue(jsonString.contains("\"messages\":["));
-        assertTrue(jsonString.contains("\"content\":"));
-        assertTrue(!jsonString.contains("\"session_id\""));
-        assertTrue(!jsonString.contains("\"agent_id\""));
-        assertTrue(jsonString.contains("\"infer\":false"));
-        assertTrue(!jsonString.contains("\"tags\""));
-        assertTrue(jsonString.contains("\"owner_id\":\"owner-minimal\""));
     }
 
     @Test
@@ -447,30 +410,6 @@ public class MLAddMemoriesInputTest {
         assertEquals(2, deserialized.getMessages().size());
     }
 
-    @Test
-    public void testXContentRoundTrip() throws IOException {
-        // Convert to XContent
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputWithAllFields.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        // Parse back
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
-        parser.nextToken();
-        // Use the same container ID as the original for round-trip testing
-        MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, inputWithAllFields.getMemoryContainerId());
-
-        // Verify all fields match
-        assertEquals(inputWithAllFields.getMemoryContainerId(), parsed.getMemoryContainerId());
-        assertEquals(inputWithAllFields.getMessages().size(), parsed.getMessages().size());
-        assertEquals(inputWithAllFields.getSessionId(), parsed.getSessionId());
-        assertEquals(inputWithAllFields.getAgentId(), parsed.getAgentId());
-        assertEquals(inputWithAllFields.isInfer(), parsed.isInfer());
-        assertEquals(inputWithAllFields.getTags(), parsed.getTags());
-    }
-
     // Additional tests to achieve 100% coverage
 
     @Test
@@ -490,7 +429,7 @@ public class MLAddMemoriesInputTest {
             null,
             "owner-123"
         );
-        assertEquals(WorkingMemoryType.CONVERSATIONAL, input.getMemoryType());
+        assertEquals(PayloadType.CONVERSATIONAL, input.getPayloadType());
     }
 
     @Test
@@ -498,7 +437,7 @@ public class MLAddMemoriesInputTest {
         // Test with CONVERSATIONAL type
         MLAddMemoriesInput conversationalInput = new MLAddMemoriesInput(
             "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             testMessages,
             null,
             null,
@@ -510,12 +449,12 @@ public class MLAddMemoriesInputTest {
             null,
             "owner-123"
         );
-        assertEquals(WorkingMemoryType.CONVERSATIONAL, conversationalInput.getMemoryType());
+        assertEquals(PayloadType.CONVERSATIONAL, conversationalInput.getPayloadType());
 
         // Test with DATA type
         MLAddMemoriesInput dataInput = new MLAddMemoriesInput(
             "container-123",
-            WorkingMemoryType.DATA,
+            PayloadType.DATA,
             testMessages,
             null,
             null,
@@ -527,7 +466,7 @@ public class MLAddMemoriesInputTest {
             null,
             "owner-123"
         );
-        assertEquals(WorkingMemoryType.DATA, dataInput.getMemoryType());
+        assertEquals(PayloadType.DATA, dataInput.getPayloadType());
     }
 
     @Test
@@ -535,7 +474,7 @@ public class MLAddMemoriesInputTest {
         // Test that null parameters creates empty map
         MLAddMemoriesInput input = new MLAddMemoriesInput(
             "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             testMessages,
             null,
             null,
@@ -557,7 +496,7 @@ public class MLAddMemoriesInputTest {
         Map<String, Object> emptyParams = new HashMap<>();
         MLAddMemoriesInput input = new MLAddMemoriesInput(
             "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             testMessages,
             null,
             null,
@@ -582,7 +521,7 @@ public class MLAddMemoriesInputTest {
 
         MLAddMemoriesInput input = new MLAddMemoriesInput(
             "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             testMessages,
             null,
             null,
@@ -601,58 +540,6 @@ public class MLAddMemoriesInputTest {
     }
 
     @Test
-    public void testToXContentWithTimestamp() throws IOException {
-        // Test the toXContent method with timestamp
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputWithAllFields.toXContent(builder, EMPTY_PARAMS, true);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        assertTrue(jsonString.contains("\"created_time\":"));
-        assertTrue(jsonString.contains("\"last_updated_time\":"));
-    }
-
-    @Test
-    public void testToXContentWithoutTimestamp() throws IOException {
-        // Test the toXContent method without timestamp (default behavior)
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputWithAllFields.toXContent(builder, EMPTY_PARAMS, false);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        assertFalse(jsonString.contains("\"created_time\":"));
-        assertFalse(jsonString.contains("\"last_updated_time\":"));
-    }
-
-    @Test
-    public void testToXContentWithEmptyMessages() throws IOException {
-        // Test toXContent with empty messages list
-        MLAddMemoriesInput inputEmptyMessages = MLAddMemoriesInput
-            .builder()
-            .memoryContainerId("container-123")
-            .messages(new ArrayList<>())
-            .build();
-
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputEmptyMessages.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        // Empty messages should not be included in JSON
-        assertFalse(jsonString.contains("\"messages\":"));
-    }
-
-    @Test
-    public void testToXContentWithNullMessages() throws IOException {
-        // Test toXContent with null messages
-        MLAddMemoriesInput inputNullMessages = MLAddMemoriesInput.builder().memoryContainerId("container-123").messages(null).build();
-
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputNullMessages.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        // Null messages should not be included in JSON
-        assertFalse(jsonString.contains("\"messages\":"));
-    }
-
-    @Test
     public void testStreamInputOutputWithAllFieldTypes() throws IOException {
         // Test with all possible field combinations including messageId, binaryData, structuredData
         Map<String, Object> testStructuredData = new HashMap<>();
@@ -667,7 +554,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput fullInput = MLAddMemoriesInput
             .builder()
             .memoryContainerId("container-full")
-            .memoryType(WorkingMemoryType.DATA)
+            .payloadType(PayloadType.DATA)
             .messages(testMessages)
             .messageId(42)
             .binaryData("binary-data-test")
@@ -686,7 +573,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertEquals(fullInput.getMemoryContainerId(), deserialized.getMemoryContainerId());
-        assertEquals(fullInput.getMemoryType(), deserialized.getMemoryType());
+        assertEquals(fullInput.getPayloadType(), deserialized.getPayloadType());
         assertEquals(fullInput.getMessages().size(), deserialized.getMessages().size());
         assertEquals(fullInput.getMessageId(), deserialized.getMessageId());
         assertEquals(fullInput.getBinaryData(), deserialized.getBinaryData());
@@ -705,7 +592,7 @@ public class MLAddMemoriesInputTest {
         // Use constructor directly to avoid builder validation
         MLAddMemoriesInput nullFieldsInput = new MLAddMemoriesInput(
             "container-null",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             null, // null messages is OK when infer=false
             null,
             null,
@@ -724,7 +611,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertEquals("container-null", deserialized.getMemoryContainerId());
-        assertEquals(WorkingMemoryType.CONVERSATIONAL, deserialized.getMemoryType());
+        assertEquals(PayloadType.CONVERSATIONAL, deserialized.getPayloadType());
         assertNull(deserialized.getMessages());
         assertNull(deserialized.getMessageId());
         assertNull(deserialized.getBinaryData());
@@ -742,7 +629,7 @@ public class MLAddMemoriesInputTest {
     public void testParseWithAllFields() throws IOException {
         // Test parsing with all possible fields (memory_container_id removed - comes from URL path)
         String jsonString = "{"
-            + "\"working_memory_type\":\"data\","
+            + "\"payload_type\":\"data\","
             + "\"messages\":["
             + "{\"role\":\"user\",\"content\":[{\"type\":\"text\", \"text\": \"Test message\"}]}"
             + "],"
@@ -765,7 +652,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "override-container");
 
         assertEquals("override-container", parsed.getMemoryContainerId()); // Should use parameter value (security: no parsing from body)
-        assertEquals(WorkingMemoryType.DATA, parsed.getMemoryType());
+        assertEquals(PayloadType.DATA, parsed.getPayloadType());
         assertEquals(1, parsed.getMessages().size());
         assertEquals(Integer.valueOf(123), parsed.getMessageId());
         assertEquals("test-binary", parsed.getBinaryData());
@@ -797,7 +684,7 @@ public class MLAddMemoriesInputTest {
 
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser, "test-container");
 
-        assertEquals(WorkingMemoryType.CONVERSATIONAL, parsed.getMemoryType());
+        assertEquals(PayloadType.CONVERSATIONAL, parsed.getPayloadType());
     }
 
     @Test
@@ -849,7 +736,7 @@ public class MLAddMemoriesInputTest {
 
         // Test all setters
         input.setMemoryContainerId("test-container");
-        input.setMemoryType(WorkingMemoryType.DATA);
+        input.setPayloadType(PayloadType.DATA);
         input.setMessages(testMessages);
         input.setMessageId(999);
         input.setBinaryData("test-binary");
@@ -863,7 +750,7 @@ public class MLAddMemoriesInputTest {
 
         // Test all getters
         assertEquals("test-container", input.getMemoryContainerId());
-        assertEquals(WorkingMemoryType.DATA, input.getMemoryType());
+        assertEquals(PayloadType.DATA, input.getPayloadType());
         assertEquals(testMessages, input.getMessages());
         assertEquals(Integer.valueOf(999), input.getMessageId());
         assertEquals("test-binary", input.getBinaryData());
@@ -886,7 +773,7 @@ public class MLAddMemoriesInputTest {
 
         assertEquals("test-container", input.getMemoryContainerId());
         assertEquals(testMessages, input.getMessages());
-        assertEquals(WorkingMemoryType.CONVERSATIONAL, input.getMemoryType()); // Constructor sets default
+        assertEquals(PayloadType.CONVERSATIONAL, input.getPayloadType()); // Constructor sets default
         assertNull(input.getMessageId());
         assertNull(input.getBinaryData());
         assertNull(input.getStructuredData());
@@ -900,77 +787,6 @@ public class MLAddMemoriesInputTest {
     }
 
     @Test
-    public void testToXContentWithAllNullOptionalFields() throws IOException {
-        // Test toXContent when all optional fields are null
-        MLAddMemoriesInput inputNullOptionals = new MLAddMemoriesInput(
-            "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
-            testMessages,
-            null, // messageId
-            null, // binaryData
-            null, // structuredData
-            null, // namespace
-            false,
-            null, // metadata
-            null, // tags
-            null, // parameters
-            null  // ownerId
-        );
-
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputNullOptionals.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        // Verify required fields are present
-        // memory_container_id is not serialized to JSON (comes from URL path)
-        assertTrue(jsonString.contains("\"working_memory_type\":\"conversational\""));
-        assertTrue(jsonString.contains("\"messages\":["));
-        assertTrue(jsonString.contains("\"infer\":false"));
-
-        // Verify optional null fields are not present
-        assertFalse(jsonString.contains("\"message_id\":"));
-        assertFalse(jsonString.contains("\"binary_data\":"));
-        assertFalse(jsonString.contains("\"structured_data\":"));
-        assertFalse(jsonString.contains("\"namespace\":"));
-        assertFalse(jsonString.contains("\"metadata\":"));
-        assertFalse(jsonString.contains("\"tags\":"));
-        assertFalse(jsonString.contains("\"parameters\":"));
-        assertFalse(jsonString.contains("\"owner_id\":"));
-    }
-
-    @Test
-    public void testToXContentWithEmptyMaps() throws IOException {
-        // Test toXContent with empty maps (should not be included)
-        MLAddMemoriesInput inputEmptyMaps = new MLAddMemoriesInput(
-            "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
-            testMessages,
-            null,
-            null,
-            null,
-            new HashMap<>(), // empty namespace
-            false,
-            new HashMap<>(), // empty metadata
-            new HashMap<>(), // empty tags
-            new HashMap<>(), // empty parameters
-            "owner-123"
-        );
-
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputEmptyMaps.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        // Empty maps should not be included in JSON
-        assertFalse(jsonString.contains("\"namespace\":"));
-        assertFalse(jsonString.contains("\"metadata\":"));
-        assertFalse(jsonString.contains("\"tags\":"));
-        assertFalse(jsonString.contains("\"parameters\":"));
-
-        // But owner_id should still be present
-        assertTrue(jsonString.contains("\"owner_id\":\"owner-123\""));
-    }
-
-    @Test
     public void testStreamInputOutputWithEmptyMaps() throws IOException {
         // Test serialization with empty maps
         Map<String, String> emptyNamespace = new HashMap<>();
@@ -980,7 +796,7 @@ public class MLAddMemoriesInputTest {
 
         MLAddMemoriesInput inputEmptyMaps = new MLAddMemoriesInput(
             "container-empty-maps",
-            WorkingMemoryType.DATA,
+            PayloadType.DATA,
             testMessages,
             null,
             null,
@@ -999,7 +815,7 @@ public class MLAddMemoriesInputTest {
         MLAddMemoriesInput deserialized = new MLAddMemoriesInput(in);
 
         assertEquals("container-empty-maps", deserialized.getMemoryContainerId());
-        assertEquals(WorkingMemoryType.DATA, deserialized.getMemoryType());
+        assertEquals(PayloadType.DATA, deserialized.getPayloadType());
         assertTrue(deserialized.isInfer());
 
         // Empty maps should be null after deserialization (due to writeTo logic)
@@ -1016,7 +832,7 @@ public class MLAddMemoriesInputTest {
         // Test that empty messages with infer=false is valid
         MLAddMemoriesInput validInput = new MLAddMemoriesInput(
             "container-123",
-            WorkingMemoryType.CONVERSATIONAL,
+            PayloadType.CONVERSATIONAL,
             new ArrayList<>(), // empty messages
             null,
             null,
@@ -1037,11 +853,11 @@ public class MLAddMemoriesInputTest {
     }
 
     @Test
-    public void testParseWithInvalidMemoryType() throws IOException {
+    public void testParseWithInvalidPayloadType() throws IOException {
         // Test parsing with invalid memory type (should throw exception)
         String jsonString = "{"
             + "\"memory_container_id\":\"container-123\","
-            + "\"working_memory_type\":\"invalid_type\","
+            + "\"payload_type\":\"invalid_type\","
             + "\"messages\":["
             + "{\"role\":\"user\",\"content\":[{\"type\":\"text\", \"text\": \"Test\"}]}"
             + "]"
@@ -1056,26 +872,4 @@ public class MLAddMemoriesInputTest {
         assertThrows(IllegalArgumentException.class, () -> { MLAddMemoriesInput.parse(parser, null); });
     }
 
-    @Test
-    public void testNamespaceSize() throws IOException {
-        // Test that namespace_size field is included in XContent when namespace is present
-        Map<String, String> testNamespaceForSize = new HashMap<>();
-        testNamespaceForSize.put("key1", "value1");
-        testNamespaceForSize.put("key2", "value2");
-        testNamespaceForSize.put("key3", "value3");
-
-        MLAddMemoriesInput inputWithNamespace = MLAddMemoriesInput
-            .builder()
-            .memoryContainerId("container-123")
-            .messages(testMessages)
-            .namespace(testNamespaceForSize)
-            .build();
-
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        inputWithNamespace.toXContent(builder, EMPTY_PARAMS);
-        String jsonString = TestHelper.xContentBuilderToString(builder);
-
-        assertTrue(jsonString.contains("\"namespace\":"));
-        assertTrue(jsonString.contains("\"namespace_size\":3"));
-    }
 }

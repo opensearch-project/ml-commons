@@ -33,10 +33,10 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.memorycontainer.MLLongTermMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryResponse;
@@ -84,7 +84,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     private User adminUser;
     private ThreadContext threadContext;
     private MLMemoryContainer testMemoryContainer;
-    private MLMemory testMemory;
+    private MLLongTermMemory testMemory;
 
     @Before
     public void setup() {
@@ -119,11 +119,11 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             .build();
 
         // Setup test memory
-        testMemory = MLMemory
+        testMemory = MLLongTermMemory
             .builder()
             .namespace(Map.of(SESSION_ID_FIELD, "test-session", "user_id", "test-user"))
             .memory("Test memory content")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
@@ -196,7 +196,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         assertNotNull(capturedResponse);
 
         // Verify the memory content in the response matches the JSON that was returned
-        MLMemory returnedMemory = capturedResponse.getLongTermMemory();
+        MLLongTermMemory returnedMemory = capturedResponse.getLongTermMemory();
         assertNotNull(returnedMemory);
 
         // Get the expected JSON content that was actually returned by the mock
@@ -205,11 +205,11 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Verify the memory content matches what was in the JSON
         assertEquals("test-session", returnedMemory.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("Test memory content", returnedMemory.getMemory());
-        assertEquals(MemoryType.SEMANTIC, returnedMemory.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, returnedMemory.getStrategyType());
         assertNotNull(returnedMemory.getCreatedTime());
         assertNotNull(returnedMemory.getLastUpdatedTime());
         assertTrue(expectedJson.contains("\"memory\":\"Test memory content\""));
-        assertTrue(expectedJson.contains("\"memory_type\":\"SEMANTIC\""));
+        assertTrue(expectedJson.contains("\"strategy_type\":\"SEMANTIC\""));
     }
 
     public void testDoExecuteWithUnauthorizedUser() {
@@ -425,7 +425,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         return "{"
             + "\"owner_id\":\"owner-123\","
             + "\"memory\":\"Test memory content\","
-            + "\"memory_type\":\"SEMANTIC\","
+            + "\"strategy_type\":\"SEMANTIC\","
             + "\"namespace\": {\"session_id\": \"test-session\"},"
             + "\"created_time\":"
             + currentTimeEpoch

@@ -40,7 +40,7 @@ import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
+import org.opensearch.ml.common.memorycontainer.PayloadType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
@@ -249,7 +249,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(false);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -301,7 +301,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -383,7 +383,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(false);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -432,7 +432,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(false);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -486,7 +486,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(false);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -536,7 +536,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(false);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.DATA); // DATA type, not CONVERSATIONAL
+        when(input.getPayloadType()).thenReturn(PayloadType.DATA); // DATA type, not CONVERSATIONAL
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -594,7 +594,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -652,7 +652,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -711,7 +711,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -770,7 +770,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -835,7 +835,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -892,7 +892,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -949,7 +949,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -1005,7 +1005,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -1071,7 +1071,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -1156,7 +1156,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
@@ -1251,7 +1251,7 @@ public class TransportAddMemoriesActionTests {
         when(input.isInfer()).thenReturn(true);
         when(input.getNamespace()).thenReturn(namespace);
         when(input.getOwnerId()).thenReturn("user-123");
-        when(input.getMemoryType()).thenReturn(WorkingMemoryType.CONVERSATIONAL);
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
 
         MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
         when(request.getMlAddMemoryInput()).thenReturn(input);
