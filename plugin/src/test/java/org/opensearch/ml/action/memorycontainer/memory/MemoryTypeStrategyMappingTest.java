@@ -15,7 +15,7 @@ import java.util.HashMap;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 
 /**
@@ -42,8 +42,8 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        MemoryType result = invokeGetMemoryTypeFromStrategy(strategy);
-        assertEquals(MemoryType.SEMANTIC, result);
+        MemoryStrategyType result = invokeGetMemoryTypeFromStrategy(strategy);
+        assertEquals(MemoryStrategyType.SEMANTIC, result);
     }
 
     @Test
@@ -57,8 +57,8 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        MemoryType result = invokeGetMemoryTypeFromStrategy(strategy);
-        assertEquals(MemoryType.USER_PREFERENCE, result);
+        MemoryStrategyType result = invokeGetMemoryTypeFromStrategy(strategy);
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, result);
     }
 
     @Test
@@ -72,8 +72,8 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        MemoryType result = invokeGetMemoryTypeFromStrategy(strategy);
-        assertEquals(MemoryType.SUMMARY, result);
+        MemoryStrategyType result = invokeGetMemoryTypeFromStrategy(strategy);
+        assertEquals(MemoryStrategyType.SUMMARY, result);
     }
 
     @Test
@@ -88,7 +88,7 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        assertEquals(MemoryType.SUMMARY, invokeGetMemoryTypeFromStrategy(summaryStrategy));
+        assertEquals(MemoryStrategyType.SUMMARY, invokeGetMemoryTypeFromStrategy(summaryStrategy));
 
         // Test uppercase USER_PREFERENCE
         MemoryStrategy userPrefStrategy = MemoryStrategy
@@ -100,7 +100,7 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        assertEquals(MemoryType.USER_PREFERENCE, invokeGetMemoryTypeFromStrategy(userPrefStrategy));
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, invokeGetMemoryTypeFromStrategy(userPrefStrategy));
 
         // Test uppercase SEMANTIC
         MemoryStrategy semanticStrategy = MemoryStrategy
@@ -112,7 +112,7 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        assertEquals(MemoryType.SEMANTIC, invokeGetMemoryTypeFromStrategy(semanticStrategy));
+        assertEquals(MemoryStrategyType.SEMANTIC, invokeGetMemoryTypeFromStrategy(semanticStrategy));
     }
 
     @Test
@@ -126,16 +126,16 @@ public class MemoryTypeStrategyMappingTest {
             .strategyConfig(new HashMap<>())
             .build();
 
-        MemoryType result = invokeGetMemoryTypeFromStrategy(strategy);
-        assertEquals(MemoryType.SEMANTIC, result);
+        MemoryStrategyType result = invokeGetMemoryTypeFromStrategy(strategy);
+        assertEquals(MemoryStrategyType.SEMANTIC, result);
     }
 
     /**
      * Use reflection to invoke the private getMemoryTypeFromStrategy method
      */
-    private MemoryType invokeGetMemoryTypeFromStrategy(MemoryStrategy strategy) throws Exception {
+    private MemoryStrategyType invokeGetMemoryTypeFromStrategy(MemoryStrategy strategy) throws Exception {
         Method method = MemoryOperationsService.class.getDeclaredMethod("getMemoryTypeFromStrategy", MemoryStrategy.class);
         method.setAccessible(true);
-        return (MemoryType) method.invoke(memoryOperationsService, strategy);
+        return (MemoryStrategyType) method.invoke(memoryOperationsService, strategy);
     }
 }

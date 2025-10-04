@@ -23,7 +23,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
+import org.opensearch.ml.common.memorycontainer.PayloadType;
 
 public class MLAddMemoriesRequestTest {
 
@@ -99,7 +99,7 @@ public class MLAddMemoriesRequestTest {
             .builder()
             .messages(Collections.emptyList())
             .memoryContainerId("container-empty")
-            .memoryType(WorkingMemoryType.CONVERSATIONAL)
+            .payloadType(PayloadType.CONVERSATIONAL)
             .infer(true)
             .build();
     }

@@ -29,10 +29,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-public class MLMemoryTest {
+public class MLLongTermMemoryTest {
 
-    private MLMemory memoryWithAllFields;
-    private MLMemory memoryMinimal;
+    private MLLongTermMemory memoryWithAllFields;
+    private MLLongTermMemory memoryMinimal;
     private Map<String, String> testTags;
     private Instant testCreatedTime;
     private Instant testUpdatedTime;
@@ -55,11 +55,11 @@ public class MLMemoryTest {
         sparseEmbedding.put("token2", 0.8f);
 
         // Memory with all fields
-        memoryWithAllFields = MLMemory
+        memoryWithAllFields = MLLongTermMemory
             .builder()
             .namespace(Map.of(SESSION_ID_FIELD, "session-123", "user_id", "user-456", "agent_id", "agent-789"))
             .memory("This is a test memory content")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .tags(testTags)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -67,11 +67,11 @@ public class MLMemoryTest {
             .build();
 
         // Minimal memory (only required fields)
-        memoryMinimal = MLMemory
+        memoryMinimal = MLLongTermMemory
             .builder()
             .namespace(Map.of(SESSION_ID_FIELD, "session-minimal"))
             .memory("Minimal memory")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
             .build();
@@ -82,7 +82,7 @@ public class MLMemoryTest {
         assertNotNull(memoryWithAllFields);
         assertEquals("session-123", memoryWithAllFields.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("This is a test memory content", memoryWithAllFields.getMemory());
-        assertEquals(MemoryType.SEMANTIC, memoryWithAllFields.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, memoryWithAllFields.getStrategyType());
         assertEquals("user-456", memoryWithAllFields.getNamespace().get("user_id"));
         assertEquals("agent-789", memoryWithAllFields.getNamespace().get("agent_id"));
         assertEquals(testTags, memoryWithAllFields.getTags());
@@ -96,7 +96,7 @@ public class MLMemoryTest {
         assertNotNull(memoryMinimal);
         assertEquals("session-minimal", memoryMinimal.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("Minimal memory", memoryMinimal.getMemory());
-        assertEquals(MemoryType.SEMANTIC, memoryMinimal.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, memoryMinimal.getStrategyType());
         assertNull(memoryMinimal.getNamespace().get("user_id"));
         assertNull(memoryMinimal.getNamespace().get("agent_id"));
         assertNull(memoryMinimal.getTags());
@@ -111,11 +111,11 @@ public class MLMemoryTest {
         BytesStreamOutput out = new BytesStreamOutput();
         memoryWithAllFields.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLMemory deserialized = new MLMemory(in);
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
 
         assertEquals(memoryWithAllFields.getNamespace().get(SESSION_ID_FIELD), deserialized.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(memoryWithAllFields.getMemory(), deserialized.getMemory());
-        assertEquals(memoryWithAllFields.getMemoryType(), deserialized.getMemoryType());
+        assertEquals(memoryWithAllFields.getStrategyType(), deserialized.getStrategyType());
         assertEquals(memoryWithAllFields.getNamespace().get("user_id"), deserialized.getNamespace().get("user_id"));
         assertEquals(memoryWithAllFields.getNamespace().get("agent_id"), deserialized.getNamespace().get("agent_id"));
         assertEquals(memoryWithAllFields.getTags(), deserialized.getTags());
@@ -131,11 +131,11 @@ public class MLMemoryTest {
         BytesStreamOutput out = new BytesStreamOutput();
         memoryMinimal.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLMemory deserialized = new MLMemory(in);
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
 
         assertEquals(memoryMinimal.getNamespace().get(SESSION_ID_FIELD), deserialized.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(memoryMinimal.getMemory(), deserialized.getMemory());
-        assertEquals(memoryMinimal.getMemoryType(), deserialized.getMemoryType());
+        assertEquals(memoryMinimal.getStrategyType(), deserialized.getStrategyType());
         assertNull(deserialized.getNamespace().get("user_id"));
         assertNull(deserialized.getNamespace().get("agent_id"));
         assertNull(deserialized.getTags());
@@ -147,11 +147,11 @@ public class MLMemoryTest {
     @Test
     public void testStreamInputOutputEmptyTags() throws IOException {
         // Test with empty tags
-        MLMemory memoryEmptyTags = MLMemory
+        MLLongTermMemory memoryEmptyTags = MLLongTermMemory
             .builder()
             .namespace(Map.of(SESSION_ID_FIELD, "session-empty-tags"))
             .memory("Memory with empty tags")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .tags(new HashMap<>())
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -160,7 +160,7 @@ public class MLMemoryTest {
         BytesStreamOutput out = new BytesStreamOutput();
         memoryEmptyTags.writeTo(out);
         StreamInput in = out.bytes().streamInput();
-        MLMemory deserialized = new MLMemory(in);
+        MLLongTermMemory deserialized = new MLLongTermMemory(in);
 
         assertNull(deserialized.getTags());
     }
@@ -173,7 +173,7 @@ public class MLMemoryTest {
 
         assertTrue(jsonString.contains("\"session_id\":\"session-123\""));
         assertTrue(jsonString.contains("\"memory\":\"This is a test memory content\""));
-        assertTrue(jsonString.contains("\"memory_type\":\"SEMANTIC\""));
+        assertTrue(jsonString.contains("\"strategy_type\":\"SEMANTIC\""));
         assertTrue(jsonString.contains("\"user_id\":\"user-456\""));
         assertTrue(jsonString.contains("\"agent_id\":\"agent-789\""));
         assertTrue(jsonString.contains("\"topic\":\"machine learning\""));
@@ -190,7 +190,7 @@ public class MLMemoryTest {
 
         assertTrue(jsonString.contains("\"session_id\":\"session-minimal\""));
         assertTrue(jsonString.contains("\"memory\":\"Minimal memory\""));
-        assertTrue(jsonString.contains("\"memory_type\":\"SEMANTIC\""));
+        assertTrue(jsonString.contains("\"strategy_type\":\"SEMANTIC\""));
         // Optional fields should not be present
         assertTrue(!jsonString.contains("\"user_id\""));
         assertTrue(!jsonString.contains("\"agent_id\""));
@@ -204,7 +204,7 @@ public class MLMemoryTest {
         String jsonString = "{"
             + "\"namespace\":{\"session_id\":\"session-123\", \"user_id\":\"user-456\", \"agent_id\":\"agent-789\"},"
             + "\"memory\":\"This is a test memory content\","
-            + "\"memory_type\":\"SEMANTIC\","
+            + "\"strategy_type\":\"SEMANTIC\","
             + "\"role\":\"user\","
             + "\"tags\":{\"topic\":\"machine learning\",\"priority\":\"high\"},"
             + "\"created_time\":"
@@ -221,11 +221,11 @@ public class MLMemoryTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLMemory parsed = MLMemory.parse(parser);
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
 
         assertEquals("session-123", parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("This is a test memory content", parsed.getMemory());
-        assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, parsed.getStrategyType());
         assertEquals("user-456", parsed.getNamespace().get("user_id"));
         assertEquals("agent-789", parsed.getNamespace().get("agent_id"));
         assertEquals(2, parsed.getTags().size());
@@ -241,7 +241,7 @@ public class MLMemoryTest {
         String jsonString = "{"
             + "\"namespace\":{\"session_id\":\"session-minimal\"},"
             + "\"memory\":\"Minimal memory\","
-            + "\"memory_type\":\"SEMANTIC\","
+            + "\"strategy_type\":\"SEMANTIC\","
             + "\"created_time\":"
             + testCreatedTime.toEpochMilli()
             + ","
@@ -254,11 +254,11 @@ public class MLMemoryTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLMemory parsed = MLMemory.parse(parser);
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
 
         assertEquals("session-minimal", parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("Minimal memory", parsed.getMemory());
-        assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, parsed.getStrategyType());
         assertNull(parsed.getNamespace().get("user_id"));
         assertNull(parsed.getNamespace().get("agent_id"));
         assertNull(parsed.getTags());
@@ -272,7 +272,7 @@ public class MLMemoryTest {
         String jsonString = "{"
             + "\"namespace\": {\"session_id\":\"session-123\"},"
             + "\"memory\":\"Test memory\","
-            + "\"memory_type\":\"SEMANTIC\","
+            + "\"strategy_type\":\"SEMANTIC\","
             + "\"unknown_field\":\"should be ignored\","
             + "\"created_time\":"
             + testCreatedTime.toEpochMilli()
@@ -286,11 +286,11 @@ public class MLMemoryTest {
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
 
-        MLMemory parsed = MLMemory.parse(parser);
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
 
         assertEquals("session-123", parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("Test memory", parsed.getMemory());
-        assertEquals(MemoryType.SEMANTIC, parsed.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, parsed.getStrategyType());
     }
 
     @Test
@@ -299,7 +299,7 @@ public class MLMemoryTest {
         Map<String, String> namespace = (Map<String, String>) indexMap.get("namespace");
         assertEquals("session-123", namespace.get(SESSION_ID_FIELD));
         assertEquals("This is a test memory content", indexMap.get("memory"));
-        assertEquals("SEMANTIC", indexMap.get("memory_type"));
+        assertEquals("SEMANTIC", indexMap.get("strategy_type"));
         assertEquals("user-456", namespace.get("user_id"));
         assertEquals("agent-789", namespace.get("agent_id"));
         assertEquals(testTags, indexMap.get("tags"));
@@ -314,7 +314,7 @@ public class MLMemoryTest {
         Map<String, String> namespace = (Map<String, String>) indexMap.get("namespace");
         assertEquals("session-minimal", namespace.get("session_id"));
         assertEquals("Minimal memory", indexMap.get("memory"));
-        assertEquals("SEMANTIC", indexMap.get("memory_type"));
+        assertEquals("SEMANTIC", indexMap.get("strategy_type"));
         assertEquals(testCreatedTime.toEpochMilli(), indexMap.get("created_time"));
         assertEquals(testUpdatedTime.toEpochMilli(), indexMap.get("last_updated_time"));
 
@@ -330,11 +330,11 @@ public class MLMemoryTest {
     public void testSettersWork() {
         Map<String, String> namespace = new HashMap<>();
         namespace.put(SESSION_ID_FIELD, "initial-session");
-        MLMemory memory = MLMemory
+        MLLongTermMemory memory = MLLongTermMemory
             .builder()
             .namespace(namespace)
             .memory("initial memory")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
             .build();
@@ -342,7 +342,7 @@ public class MLMemoryTest {
         // Test setters
         memory.getNamespace().put(SESSION_ID_FIELD, "new-session");
         memory.setMemory("new memory");
-        memory.setMemoryType(MemoryType.SEMANTIC);
+        memory.setStrategyType(MemoryStrategyType.SEMANTIC);
         memory.getNamespace().put("user_id", "new-user");
         memory.getNamespace().put("agent_id", "new-agent");
         memory.setTags(testTags);
@@ -350,7 +350,7 @@ public class MLMemoryTest {
 
         assertEquals("new-session", memory.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("new memory", memory.getMemory());
-        assertEquals(MemoryType.SEMANTIC, memory.getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, memory.getStrategyType());
         assertEquals("new-user", memory.getNamespace().get("user_id"));
         assertEquals("new-agent", memory.getNamespace().get("agent_id"));
         assertEquals(testTags, memory.getTags());
@@ -360,11 +360,11 @@ public class MLMemoryTest {
     @Test
     public void testXContentRoundTrip() throws IOException {
         // Use memory without embedding for round trip test since embedding parsing is complex
-        MLMemory memoryNoEmbedding = MLMemory
+        MLLongTermMemory memoryNoEmbedding = MLLongTermMemory
             .builder()
             .namespace(Map.of(SESSION_ID_FIELD, "session-123", "user_id", "user-456", "agent_id", "agent-789"))
             .memory("This is a test memory content")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .tags(testTags)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -380,12 +380,12 @@ public class MLMemoryTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        MLMemory parsed = MLMemory.parse(parser);
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
 
         // Verify all fields match
         assertEquals(memoryNoEmbedding.getNamespace().get(SESSION_ID_FIELD), parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(memoryNoEmbedding.getMemory(), parsed.getMemory());
-        assertEquals(memoryNoEmbedding.getMemoryType(), parsed.getMemoryType());
+        assertEquals(memoryNoEmbedding.getStrategyType(), parsed.getStrategyType());
         assertEquals(memoryNoEmbedding.getNamespace().get("user_id"), parsed.getNamespace().get("user_id"));
         assertEquals(memoryNoEmbedding.getNamespace().get("agent_id"), parsed.getNamespace().get("agent_id"));
         assertEquals(memoryNoEmbedding.getTags(), parsed.getTags());
@@ -399,11 +399,11 @@ public class MLMemoryTest {
         specialTags.put("key with spaces", "value with\nnewlines");
         specialTags.put("unicode_key_🔥", "unicode_value_✨");
 
-        MLMemory specialMemory = MLMemory
+        MLLongTermMemory specialMemory = MLLongTermMemory
             .builder()
             .namespace(Map.of(SESSION_ID_FIELD, "session-with-special-chars-🚀"))
             .memory("Memory with\n\ttabs and\nnewlines and \"quotes\"")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .tags(specialTags)
             .createdTime(testCreatedTime)
             .lastUpdatedTime(testUpdatedTime)
@@ -418,7 +418,7 @@ public class MLMemoryTest {
             .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        MLMemory parsed = MLMemory.parse(parser);
+        MLLongTermMemory parsed = MLLongTermMemory.parse(parser);
 
         assertEquals(specialMemory.getNamespace().get(SESSION_ID_FIELD), parsed.getNamespace().get(SESSION_ID_FIELD));
         assertEquals(specialMemory.getMemory(), parsed.getMemory());

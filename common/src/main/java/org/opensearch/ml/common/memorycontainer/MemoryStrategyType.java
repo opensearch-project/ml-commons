@@ -8,14 +8,14 @@ package org.opensearch.ml.common.memorycontainer;
 /**
  * Enum representing the type of memory entry
  */
-public enum MemoryType {
+public enum MemoryStrategyType {
     SEMANTIC("SEMANTIC"),
     USER_PREFERENCE("USER_PREFERENCE"),
     SUMMARY("SUMMARY");
 
     private final String value;
 
-    MemoryType(String value) {
+    MemoryStrategyType(String value) {
         this.value = value;
     }
 
@@ -29,12 +29,12 @@ public enum MemoryType {
      * @return corresponding MemoryType enum
      * @throws IllegalArgumentException if value is invalid
      */
-    public static MemoryType fromString(String value) {
+    public static MemoryStrategyType fromString(String value) {
         if (value == null) {
             return null;
         }
 
-        for (MemoryType type : MemoryType.values()) {
+        for (MemoryStrategyType type : MemoryStrategyType.values()) {
             if (type.value.equalsIgnoreCase(value)) {
                 return type;
             }

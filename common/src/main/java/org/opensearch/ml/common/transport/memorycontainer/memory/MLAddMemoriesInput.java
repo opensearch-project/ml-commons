@@ -19,10 +19,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PAYLOAD_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_TYPE_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -38,7 +38,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.WorkingMemoryType;
+import org.opensearch.ml.common.memorycontainer.PayloadType;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Builder;
@@ -55,7 +55,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private WorkingMemoryType memoryType;
+    private PayloadType payloadType;
     private List<MessageInput> messages;
     private Integer messageId;
     private String binaryData;
@@ -71,7 +71,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     public MLAddMemoriesInput(
         String memoryContainerId,
-        WorkingMemoryType memoryType,
+        PayloadType payloadType,
         List<MessageInput> messages,
         Integer messageId,
         String binaryData,
@@ -86,7 +86,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
         this.memoryContainerId = memoryContainerId;
-        this.memoryType = memoryType == null ? WorkingMemoryType.CONVERSATIONAL : memoryType;
+        this.payloadType = payloadType == null ? PayloadType.CONVERSATIONAL : payloadType;
         this.messages = messages;
         this.messageId = messageId;
         this.binaryData = binaryData;
@@ -117,7 +117,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     public MLAddMemoriesInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readEnum(WorkingMemoryType.class);
+        this.payloadType = in.readEnum(PayloadType.class);
         if (in.readBoolean()) {
             int messagesSize = in.readVInt();
             this.messages = new ArrayList<>(messagesSize);
@@ -149,7 +149,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(memoryContainerId);
-        out.writeEnum(memoryType);
+        out.writeEnum(payloadType);
         if (messages != null) {
             out.writeBoolean(true);
             out.writeVInt(messages.size());
@@ -205,7 +205,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
-        builder.field(WORKING_MEMORY_TYPE_FIELD, memoryType);
+        builder.field(PAYLOAD_TYPE_FIELD, payloadType);
         if (messages != null && messages.size() > 0) {
             builder.startArray(MESSAGES_FIELD);
             for (MessageInput message : messages) {
@@ -249,7 +249,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     }
 
     public static MLAddMemoriesInput parse(XContentParser parser, String memoryContainerId) throws IOException {
-        String memoryType = null;
+        String payloadType = null;
         List<MessageInput> messages = null;
         Integer messageId = null;
         String binaryData = null;
@@ -270,8 +270,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                 case MEMORY_CONTAINER_ID_FIELD:
                     memoryContainerId = parser.text();
                     break;
-                case WORKING_MEMORY_TYPE_FIELD:
-                    memoryType = parser.text();
+                case PAYLOAD_TYPE_FIELD:
+                    payloadType = parser.text();
                     break;
                 case MESSAGES_FIELD:
                     messages = new ArrayList<>();
@@ -316,7 +316,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         return MLAddMemoriesInput
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType(memoryType == null ? WorkingMemoryType.CONVERSATIONAL : WorkingMemoryType.fromString(memoryType))
+            .payloadType(payloadType == null ? PayloadType.CONVERSATIONAL : PayloadType.fromString(payloadType))
             .messages(messages)
             .messageId(messageId)
             .binaryData(binaryData)

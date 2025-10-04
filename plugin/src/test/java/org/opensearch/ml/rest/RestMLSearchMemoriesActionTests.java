@@ -7,8 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,25 +24,19 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesRequest;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
-import org.opensearch.threadpool.TestThreadPool;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLSearchMemoriesActionTests extends OpenSearchTestCase {
@@ -52,35 +45,17 @@ public class RestMLSearchMemoriesActionTests extends OpenSearchTestCase {
 
     private RestMLSearchMemoriesAction restMLSearchMemoriesAction;
     private NodeClient client;
-    private ThreadPool threadPool;
-
-    @Mock
-    RestChannel channel;
-
-    @Mock
-    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private RestChannel channel;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setup() {
-        MockitoAnnotations.openMocks(this);
+        mlFeatureEnabledSetting = mock(MLFeatureEnabledSetting.class);
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
         restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
-
-        threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
-        client = spy(new NodeClient(Settings.EMPTY, threadPool));
-
-        doAnswer(invocation -> {
-            ActionListener<MLSearchMemoriesResponse> actionListener = invocation.getArgument(2);
-            return null;
-        }).when(client).execute(eq(MLSearchMemoriesAction.INSTANCE), any(), any());
-    }
-
-    @Override
-    public void tearDown() throws Exception {
-        super.tearDown();
-        threadPool.shutdown();
-        client.close();
+        client = mock(NodeClient.class);
+        channel = mock(RestChannel.class);
     }
 
     public void testGetName() {
