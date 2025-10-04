@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STORAGE_CONFIG_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
 
 import java.time.Instant;
@@ -28,12 +29,15 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.helper.StrategyMergeHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -94,8 +98,9 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         String newName = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getName();
         String newDescription = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getDescription();
         List<String> allowedBackendRoles = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getBackendRoles();
+        List<MemoryStrategy> updateStrategies = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getStrategies();
 
-        // Get memory container to validate access and get memory index name
+        // Get memory container to validate access
         memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
             // Validate access permissions
             User user = RestActionUtils.getUserContext(client);
@@ -121,6 +126,43 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
             if (allowedBackendRoles != null) {
                 updateFields.put(BACKEND_ROLES_FIELD, allowedBackendRoles);
             }
+
+            // Handle strategy updates if provided
+            if (updateStrategies != null && !updateStrategies.isEmpty()) {
+                try {
+                    MemoryConfiguration currentConfig = container.getConfiguration();
+                    List<MemoryStrategy> existingStrategies = currentConfig.getStrategies();
+
+                    // Merge strategies
+                    List<MemoryStrategy> mergedStrategies = StrategyMergeHelper.mergeStrategies(existingStrategies, updateStrategies);
+
+                    // Create updated configuration with merged strategies
+                    MemoryConfiguration updatedConfig = MemoryConfiguration
+                        .builder()
+                        .indexPrefix(currentConfig.getIndexPrefix())
+                        .llmId(currentConfig.getLlmId())
+                        .embeddingModelType(currentConfig.getEmbeddingModelType())
+                        .embeddingModelId(currentConfig.getEmbeddingModelId())
+                        .dimension(currentConfig.getDimension())
+                        .maxInferSize(currentConfig.getMaxInferSize())
+                        .strategies(mergedStrategies)
+                        .indexSettings(currentConfig.getIndexSettings())
+                        .parameters(currentConfig.getParameters())
+                        .disableHistory(currentConfig.isDisableHistory())
+                        .disableSession(currentConfig.isDisableSession())
+                        .useSystemIndex(currentConfig.isUseSystemIndex())
+                        .tenantId(currentConfig.getTenantId())
+                        .build();
+
+                    updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, updatedConfig);
+                    log.info("Merged {} strategy updates for container {}", updateStrategies.size(), memoryContainerId);
+                } catch (Exception e) {
+                    log.error("Failed to merge strategies for container {}", memoryContainerId, e);
+                    actionListener.onFailure(e);
+                    return;
+                }
+            }
+
             updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
             performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, actionListener);
         }, actionListener::onFailure));

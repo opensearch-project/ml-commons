@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGIES_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -31,12 +33,14 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
     private String name;
     private String description;
     private List<String> backendRoles;
+    private List<MemoryStrategy> strategies;
 
     @Builder
-    public MLUpdateMemoryContainerInput(String name, String description, List<String> backendRoles) {
+    public MLUpdateMemoryContainerInput(String name, String description, List<String> backendRoles, List<MemoryStrategy> strategies) {
         this.name = name;
         this.description = description;
         this.backendRoles = backendRoles;
+        this.strategies = strategies;
     }
 
     public MLUpdateMemoryContainerInput(StreamInput in) throws IOException {
@@ -44,6 +48,9 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
             backendRoles = in.readStringList();
+        }
+        if (in.readBoolean()) {
+            strategies = in.readList(MemoryStrategy::new);
         }
     }
 
@@ -55,6 +62,13 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         if (!CollectionUtils.isEmpty(backendRoles)) {
             out.writeBoolean(true);
             out.writeStringCollection(backendRoles);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        if (!CollectionUtils.isEmpty(strategies)) {
+            out.writeBoolean(true);
+            out.writeList(strategies);
         } else {
             out.writeBoolean(false);
         }
@@ -72,6 +86,9 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         if (!CollectionUtils.isEmpty(backendRoles)) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
+        if (!CollectionUtils.isEmpty(strategies)) {
+            builder.field(STRATEGIES_FIELD, strategies);
+        }
         builder.endObject();
         return builder;
     }
@@ -80,6 +97,7 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         String name = null;
         String description = null;
         List<String> backendRoles = null;
+        List<MemoryStrategy> strategies = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -100,13 +118,26 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
                         backendRoles.add(parser.text());
                     }
                     break;
+                case STRATEGIES_FIELD:
+                    strategies = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        strategies.add(MemoryStrategy.parse(parser));
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
 
-        return MLUpdateMemoryContainerInput.builder().name(name).description(description).backendRoles(backendRoles).build();
+        return MLUpdateMemoryContainerInput
+            .builder()
+            .name(name)
+            .description(description)
+            .backendRoles(backendRoles)
+            .strategies(strategies)
+            .build();
     }
 
 }

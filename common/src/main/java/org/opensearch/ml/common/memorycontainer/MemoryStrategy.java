@@ -38,23 +38,23 @@ import lombok.Setter;
 public class MemoryStrategy implements ToXContentObject, Writeable {
 
     private String id;
-    private boolean enabled;
+    private Boolean enabled;
     private String type;
     private List<String> namespace;
     private Map<String, Object> strategyConfig;
 
-    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
+    public MemoryStrategy(String id, Boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
         // Generate ID if not provided, using type prefix for better identification
         this.id = (id != null && !id.trim().isEmpty()) ? id : generateStrategyId(type);
         this.enabled = enabled;
         this.type = type;
         this.namespace = namespace;
-        this.strategyConfig = strategyConfig;
+        this.strategyConfig = (strategyConfig != null) ? strategyConfig : new HashMap<>();
     }
 
     public MemoryStrategy(StreamInput input) throws IOException {
         this.id = input.readString();
-        this.enabled = input.readBoolean();
+        this.enabled = input.readOptionalBoolean();
         this.type = input.readString();
         this.namespace = input.readStringList();
         if (input.readBoolean()) {
@@ -65,7 +65,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
-        out.writeBoolean(enabled);
+        out.writeOptionalBoolean(enabled);
         out.writeString(type);
         out.writeStringCollection(namespace);
         if (!strategyConfig.isEmpty()) {
@@ -94,7 +94,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     public static MemoryStrategy parse(XContentParser parser) throws IOException {
         String id = null;
-        boolean enabled = true;  // Default to true
+        Boolean enabled = null;  // Null to detect if not provided
         String type = null;
         List<String> namespace = null;
         Map<String, Object> strategyConfig = new HashMap<>();
@@ -135,6 +135,15 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             id = generateStrategyId(type);
         }
         return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
+    }
+
+    /**
+     * Returns whether this strategy is enabled. If enabled is null, defaults to true.
+     *
+     * @return true if enabled or null, false otherwise
+     */
+    public boolean isEnabled() {
+        return enabled == null || enabled;
     }
 
     /**
