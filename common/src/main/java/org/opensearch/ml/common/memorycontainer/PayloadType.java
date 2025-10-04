@@ -8,13 +8,13 @@ package org.opensearch.ml.common.memorycontainer;
 /**
  * Enum representing the type of working memory entry
  */
-public enum WorkingMemoryType {
+public enum PayloadType {
     CONVERSATIONAL("conversational"),
     DATA("data");
 
     private final String value;
 
-    WorkingMemoryType(String value) {
+    PayloadType(String value) {
         this.value = value;
     }
 
@@ -28,12 +28,12 @@ public enum WorkingMemoryType {
      * @return corresponding WorkingMemoryType enum
      * @throws IllegalArgumentException if value is invalid
      */
-    public static WorkingMemoryType fromString(String value) {
+    public static PayloadType fromString(String value) {
         if (value == null) {
             return null;
         }
 
-        for (WorkingMemoryType type : WorkingMemoryType.values()) {
+        for (PayloadType type : PayloadType.values()) {
             if (type.value.equalsIgnoreCase(value)) {
                 return type;
             }

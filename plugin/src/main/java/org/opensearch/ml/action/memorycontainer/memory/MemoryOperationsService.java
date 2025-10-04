@@ -33,11 +33,11 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.memorycontainer.MLLongTermMemory;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
@@ -58,14 +58,14 @@ public class MemoryOperationsService {
     /**
      * Maps strategy type to corresponding MemoryType
      */
-    private MemoryType getMemoryTypeFromStrategy(MemoryStrategy strategy) {
+    private MemoryStrategyType getMemoryTypeFromStrategy(MemoryStrategy strategy) {
         String strategyType = strategy.getType();
         if ("user_preference".equalsIgnoreCase(strategyType)) {
-            return MemoryType.USER_PREFERENCE;
+            return MemoryStrategyType.USER_PREFERENCE;
         } else if ("summary".equalsIgnoreCase(strategyType)) {
-            return MemoryType.SUMMARY;
+            return MemoryStrategyType.SUMMARY;
         }
-        return MemoryType.SEMANTIC; // Default for "semantic" and any other types
+        return MemoryStrategyType.SEMANTIC; // Default for "semantic" and any other types
     }
 
     public void executeMemoryOperations(
@@ -90,11 +90,11 @@ public class MemoryOperationsService {
         for (MemoryDecision decision : decisions) {
             switch (decision.getEvent()) {
                 case ADD:
-                    MLMemory newMemory = MLMemory
+                    MLLongTermMemory newMemory = MLLongTermMemory
                         .builder()
                         .ownerId(input.getOwnerId())
                         .memory(decision.getText())
-                        .memoryType(getMemoryTypeFromStrategy(strategy))
+                        .strategyType(getMemoryTypeFromStrategy(strategy))
                         .namespace(namespace)
                         .tags(input.getTags())
                         .strategyId(strategy.getId())
@@ -300,10 +300,10 @@ public class MemoryOperationsService {
         Instant now = Instant.now();
 
         for (String fact : facts) {
-            MLMemory factMemory = MLMemory
+            MLLongTermMemory factMemory = MLLongTermMemory
                 .builder()
                 .memory(fact)
-                .memoryType(getMemoryTypeFromStrategy(strategy))
+                .strategyType(getMemoryTypeFromStrategy(strategy))
                 .namespace(strategyNameSpace)
                 .tags(input.getTags())
                 .strategyId(strategy.getId())
@@ -314,7 +314,7 @@ public class MemoryOperationsService {
             IndexRequest request = new IndexRequest(indexName).source(factMemory.toIndexMap());
             indexRequests.add(request);
 
-            memoryInfos.add(new MemoryInfo(null, factMemory.getMemory(), factMemory.getMemoryType(), true));
+            memoryInfos.add(new MemoryInfo(null, factMemory.getMemory(), factMemory.getStrategyType(), true));
         }
     }
 

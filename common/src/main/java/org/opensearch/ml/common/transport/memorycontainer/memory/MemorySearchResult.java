@@ -16,7 +16,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -36,7 +36,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
     private final String sessionId;
     private final String agentId;
     private final String userId;
-    private final MemoryType memoryType;
+    private final MemoryStrategyType memoryType;
     private final String role;
     private final Map<String, String> tags;
     private final Instant createdTime;
@@ -49,7 +49,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         String sessionId,
         String agentId,
         String userId,
-        MemoryType memoryType,
+        MemoryStrategyType memoryType,
         String role,
         Map<String, String> tags,
         Instant createdTime,
@@ -76,7 +76,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
         this.agentId = in.readOptionalString();
         this.userId = in.readOptionalString();
         String memoryTypeStr = in.readOptionalString();
-        this.memoryType = memoryTypeStr != null ? MemoryType.fromString(memoryTypeStr) : null;
+        this.memoryType = memoryTypeStr != null ? MemoryStrategyType.fromString(memoryTypeStr) : null;
         this.role = in.readOptionalString();
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
@@ -123,7 +123,7 @@ public class MemorySearchResult implements ToXContentObject, Writeable {
             builder.field(USER_ID_FIELD, userId);
         }
         if (memoryType != null) {
-            builder.field(LONG_TERM_MEMORY_TYPE_FIELD, memoryType.toString());
+            builder.field(MEMORY_STRATEGY_TYPE_FIELD, memoryType.toString());
         }
         if (role != null) {
             builder.field(ROLE_FIELD, role);

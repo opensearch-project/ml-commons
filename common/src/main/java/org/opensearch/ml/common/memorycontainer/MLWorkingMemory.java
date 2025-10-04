@@ -18,10 +18,10 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PAYLOAD_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_TYPE_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -52,7 +52,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private WorkingMemoryType memoryType;
+    private PayloadType memoryType;
     private List<MessageInput> messages;
     private Integer messageId;
     private String binaryData;
@@ -71,7 +71,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
     @Builder
     public MLWorkingMemory(
         String memoryContainerId,
-        WorkingMemoryType memoryType,
+        PayloadType memoryType,
         List<MessageInput> messages,
         Integer messageId,
         String binaryData,
@@ -87,7 +87,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
         this.memoryContainerId = memoryContainerId;
-        this.memoryType = memoryType == null ? WorkingMemoryType.CONVERSATIONAL : memoryType;
+        this.memoryType = memoryType == null ? PayloadType.CONVERSATIONAL : memoryType;
         this.messages = messages;
         this.messageId = messageId;
         this.binaryData = binaryData;
@@ -104,7 +104,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     public MLWorkingMemory(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readEnum(WorkingMemoryType.class);
+        this.memoryType = in.readEnum(PayloadType.class);
         if (in.readBoolean()) {
             int messagesSize = in.readVInt();
             this.messages = new ArrayList<>(messagesSize);
@@ -185,7 +185,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
-        builder.field(WORKING_MEMORY_TYPE_FIELD, memoryType);
+        builder.field(PAYLOAD_TYPE_FIELD, memoryType);
 
         if (messages != null && !messages.isEmpty()) {
             builder.startArray(MESSAGES_FIELD);
@@ -253,7 +253,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
                 case MEMORY_CONTAINER_ID_FIELD:
                     memoryContainerId = parser.text();
                     break;
-                case WORKING_MEMORY_TYPE_FIELD:
+                case PAYLOAD_TYPE_FIELD:
                     memoryType = parser.text();
                     break;
                 case MESSAGES_FIELD:
@@ -302,7 +302,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         return MLWorkingMemory
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType(memoryType == null ? WorkingMemoryType.CONVERSATIONAL : WorkingMemoryType.fromString(memoryType))
+            .memoryType(memoryType == null ? PayloadType.CONVERSATIONAL : PayloadType.fromString(memoryType))
             .messages(messages)
             .messageId(messageId)
             .binaryData(binaryData)

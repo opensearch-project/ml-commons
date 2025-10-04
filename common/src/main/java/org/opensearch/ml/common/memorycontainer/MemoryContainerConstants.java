@@ -68,8 +68,8 @@ public class MemoryContainerConstants {
     public static final String MEMORY_ACTION_FIELD = "action";
     public static final String MEMORY_BEFORE_FIELD = "before";
     public static final String MEMORY_AFTER_FIELD = "after";
-    public static final String LONG_TERM_MEMORY_TYPE_FIELD = "memory_type";
-    public static final String WORKING_MEMORY_TYPE_FIELD = "working_memory_type";
+    public static final String PAYLOAD_TYPE_FIELD = "payload_type";
+    public static final String MEMORY_STRATEGY_TYPE_FIELD = "strategy_type";
     public static final String ROLE_FIELD = "role";
 
     // Request body field names (different from storage field names)
