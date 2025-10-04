@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -34,6 +35,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
@@ -129,7 +131,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         when(deleteDataObjectResponse.id()).thenReturn(MEMORY_CONTAINER_ID);
 
         Settings settings = Settings.builder().build();
-        mlMemoryContainerDeleteRequest = MLMemoryContainerDeleteRequest.builder().memoryContainerId("test_id").build();
+        mlMemoryContainerDeleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId("test_id")
+            .deleteAllMemories(false)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
         transportDeleteMemoryContainerAction = spy(
             new TransportDeleteMemoryContainerAction(
                 transportService,
@@ -145,6 +153,8 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         );
 
         MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
             listener.onResponse(mockContainer);
@@ -163,7 +173,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     public void testDeleteMemoryContainer_Success() throws InterruptedException {
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
         when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
@@ -188,18 +198,18 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
 
         // Mock access control to return false
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(false);
 
         transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User doesn't have permissions to delete this memory container", argumentCaptor.getValue().getMessage());
+        assertEquals("Only container owner can delete container", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteMemoryContainer_Failure() {
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         CompletableFuture<DeleteDataObjectResponse> deleteFuture = new CompletableFuture<>();
         deleteFuture.completeExceptionally(new Exception("errorMessage"));
@@ -243,12 +253,14 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         // Create request with tenant ID
         MLMemoryContainerDeleteRequest requestWithTenant = MLMemoryContainerDeleteRequest.builder()
                 .memoryContainerId(MEMORY_CONTAINER_ID)
+                .deleteAllMemories(false)
+                .deleteMemories(null)
                 .tenantId(TENANT_ID)
                 .build();
 
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
         when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
@@ -267,7 +279,12 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
 
         // Create a request without a tenant ID
-        MLMemoryContainerDeleteRequest requestWithoutTenant = MLMemoryContainerDeleteRequest.builder().memoryContainerId(MEMORY_CONTAINER_ID).build();
+        MLMemoryContainerDeleteRequest requestWithoutTenant = MLMemoryContainerDeleteRequest.builder()
+                .memoryContainerId(MEMORY_CONTAINER_ID)
+                .deleteAllMemories(false)
+                .deleteMemories(null)
+                .tenantId(null)
+                .build();
 
         transportDeleteMemoryContainerAction.doExecute(null, requestWithoutTenant, actionListener);
 
@@ -278,7 +295,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDeleteMemoryContainer_UnauthorizedUser() {
         // Create request
-        MLMemoryContainerDeleteRequest request = MLMemoryContainerDeleteRequest.builder().memoryContainerId(MEMORY_CONTAINER_ID).build();
+        MLMemoryContainerDeleteRequest request = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(false)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
 
         CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
         future.complete(getDataObjectResponse);
@@ -301,7 +324,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
                 argThat(
                     exception -> exception instanceof OpenSearchStatusException
                         && ((OpenSearchStatusException) exception).status() == RestStatus.FORBIDDEN
-                        && exception.getMessage().contains("User doesn't have permissions to delete this memory container")
+                        && exception.getMessage().contains("Only container owner can delete container")
                 )
             );
     }
@@ -311,7 +334,12 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
 
         // Create request
-        MLMemoryContainerDeleteRequest request = MLMemoryContainerDeleteRequest.builder().memoryContainerId(MEMORY_CONTAINER_ID).build();
+        MLMemoryContainerDeleteRequest request = MLMemoryContainerDeleteRequest.builder()
+                .memoryContainerId(MEMORY_CONTAINER_ID)
+                .deleteAllMemories(false)
+                .deleteMemories(null)
+                .tenantId(null)
+                .build();
 
         // Execute
         transportDeleteMemoryContainerAction.doExecute(null, request, actionListener);
@@ -345,9 +373,11 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
             .build();
 
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         // Mock successful memory container retrieval
         doAnswer(invocation -> {
@@ -405,9 +435,11 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
             .build();
 
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         // Mock successful memory container retrieval
         doAnswer(invocation -> {
@@ -450,9 +482,11 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(false)
+            .deleteMemories(null)
+            .tenantId(null)
             .build();
 
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         // Mock successful memory container retrieval
         doAnswer(invocation -> {
@@ -488,9 +522,11 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
             .build();
 
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
 
         // Mock successful memory container retrieval
         doAnswer(invocation -> {
@@ -511,6 +547,170 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
         assertTrue(exception instanceof NullPointerException || exception.getMessage().contains("configuration"));
+    }
+
+    @Test
+    public void testDeleteMemoryContainer_WithSelectiveMemories_Success() {
+        // Setup mock container with configuration
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
+
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
+        when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
+        when(mockConfig.getLongMemoryHistoryIndexName()).thenReturn("test-memory-prefix-history");
+
+        // Setup delete request with selective memories
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(false)
+            .deleteMemories(java.util.Arrays.asList("sessions", "working"))
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock successful memory container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock successful deleteIndex operation
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            AcknowledgedResponse acknowledgedResponse = mock(AcknowledgedResponse.class);
+            listener.onResponse(acknowledgedResponse);
+            return null;
+        }).when(memoryContainerHelper).deleteIndex(any(), any(), any());
+
+        // Setup successful delete data object response
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // Verify deleteIndex was called with correct index names (only session and working)
+        ArgumentCaptor<org.opensearch.action.admin.indices.delete.DeleteIndexRequest> deleteIndexCaptor = ArgumentCaptor
+            .forClass(org.opensearch.action.admin.indices.delete.DeleteIndexRequest.class);
+        verify(memoryContainerHelper).deleteIndex(any(), deleteIndexCaptor.capture(), any());
+
+        org.opensearch.action.admin.indices.delete.DeleteIndexRequest capturedRequest = deleteIndexCaptor.getValue();
+        String[] indices = capturedRequest.indices();
+        assertEquals(2, indices.length);
+        assertEquals("test-memory-prefix-sessions", indices[0]);
+        assertEquals("test-memory-prefix-working", indices[1]);
+
+        // Verify final success response
+        ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
+    }
+
+    @Test
+    public void testDeleteMemoryContainer_WithSelectiveMemories_UnknownType() {
+        // Setup mock container with configuration
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
+
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
+
+        // Setup delete request with unknown memory type
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(false)
+            .deleteMemories(java.util.Arrays.asList("sessions", "unknown_type"))
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock successful memory container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock successful deleteIndex operation
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(2);
+            AcknowledgedResponse acknowledgedResponse = mock(AcknowledgedResponse.class);
+            listener.onResponse(acknowledgedResponse);
+            return null;
+        }).when(memoryContainerHelper).deleteIndex(any(), any(), any());
+
+        // Setup successful delete data object response
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // Verify deleteIndex was called with only valid index (session)
+        ArgumentCaptor<org.opensearch.action.admin.indices.delete.DeleteIndexRequest> deleteIndexCaptor = ArgumentCaptor
+            .forClass(org.opensearch.action.admin.indices.delete.DeleteIndexRequest.class);
+        verify(memoryContainerHelper).deleteIndex(any(), deleteIndexCaptor.capture(), any());
+
+        org.opensearch.action.admin.indices.delete.DeleteIndexRequest capturedRequest = deleteIndexCaptor.getValue();
+        String[] indices = capturedRequest.indices();
+        assertEquals(1, indices.length);
+        assertEquals("test-memory-prefix-sessions", indices[0]);
+    }
+
+    @Test
+    public void testDeleteMemoryContainer_WithEmptySelectiveMemories() {
+        // Setup mock container
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
+
+        // Setup delete request with empty selective memories list
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(false)
+            .deleteMemories(Collections.emptyList())
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock successful memory container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Setup successful delete data object response
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // Verify deleteIndex was NOT called since the list is empty
+        verify(memoryContainerHelper, timeout(1000).times(0)).deleteIndex(any(), any(), any());
+
+        // Verify final success response (container deleted, no indices)
+        ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
     }
 
 }

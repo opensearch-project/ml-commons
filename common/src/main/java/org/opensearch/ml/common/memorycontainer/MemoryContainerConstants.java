@@ -96,6 +96,7 @@ public class MemoryContainerConstants {
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_DELETE_ALL_MEMORIES = "delete_all_memories";
+    public static final String PARAMETER_DELETE_MEMORIES = "delete_memories";
     /**
      * Memory type used as API parameter
      */
