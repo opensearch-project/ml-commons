@@ -14,7 +14,6 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
