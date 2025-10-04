@@ -52,7 +52,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private PayloadType memoryType;
+    private PayloadType payloadType;
     private List<MessageInput> messages;
     private Integer messageId;
     private String binaryData;
@@ -71,7 +71,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
     @Builder
     public MLWorkingMemory(
         String memoryContainerId,
-        PayloadType memoryType,
+        PayloadType payloadType,
         List<MessageInput> messages,
         Integer messageId,
         String binaryData,
@@ -87,7 +87,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
         this.memoryContainerId = memoryContainerId;
-        this.memoryType = memoryType == null ? PayloadType.CONVERSATIONAL : memoryType;
+        this.payloadType = payloadType == null ? PayloadType.CONVERSATIONAL : payloadType;
         this.messages = messages;
         this.messageId = messageId;
         this.binaryData = binaryData;
@@ -104,7 +104,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     public MLWorkingMemory(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readEnum(PayloadType.class);
+        this.payloadType = in.readEnum(PayloadType.class);
         if (in.readBoolean()) {
             int messagesSize = in.readVInt();
             this.messages = new ArrayList<>(messagesSize);
@@ -136,7 +136,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(memoryContainerId);
-        out.writeEnum(memoryType);
+        out.writeEnum(payloadType);
         if (messages != null) {
             out.writeBoolean(true);
             out.writeVInt(messages.size());
@@ -185,7 +185,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
-        builder.field(PAYLOAD_TYPE_FIELD, memoryType);
+        builder.field(PAYLOAD_TYPE_FIELD, payloadType);
 
         if (messages != null && !messages.isEmpty()) {
             builder.startArray(MESSAGES_FIELD);
@@ -302,7 +302,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         return MLWorkingMemory
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType(memoryType == null ? PayloadType.CONVERSATIONAL : PayloadType.fromString(memoryType))
+            .payloadType(memoryType == null ? PayloadType.CONVERSATIONAL : PayloadType.fromString(memoryType))
             .messages(messages)
             .messageId(messageId)
             .binaryData(binaryData)
