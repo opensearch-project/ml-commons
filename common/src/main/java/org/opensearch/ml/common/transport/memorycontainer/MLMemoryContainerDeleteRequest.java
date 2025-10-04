@@ -89,20 +89,26 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
 
         // Validate memory types
         if (this.deleteMemories != null && !this.deleteMemories.isEmpty()) {
-            List<String> validMemoryTypes = Arrays.asList(
-                MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-                MEM_CONTAINER_MEMORY_TYPE_WORKING,
-                MEM_CONTAINER_MEMORY_TYPE_LONG_TERM,
-                MEM_CONTAINER_MEMORY_TYPE_HISTORY
-            );
+            List<String> validMemoryTypes = Arrays
+                .asList(
+                    MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
+                    MEM_CONTAINER_MEMORY_TYPE_WORKING,
+                    MEM_CONTAINER_MEMORY_TYPE_LONG_TERM,
+                    MEM_CONTAINER_MEMORY_TYPE_HISTORY
+                );
             for (String memoryType : this.deleteMemories) {
                 if (!validMemoryTypes.contains(memoryType)) {
                     exception = addValidationError(
-                        "Invalid memory type: " + memoryType + ". Must be one of: " +
-                        MEM_CONTAINER_MEMORY_TYPE_SESSIONS + ", " +
-                        MEM_CONTAINER_MEMORY_TYPE_WORKING + ", " +
-                        MEM_CONTAINER_MEMORY_TYPE_LONG_TERM + ", " +
-                        MEM_CONTAINER_MEMORY_TYPE_HISTORY,
+                        "Invalid memory type: "
+                            + memoryType
+                            + ". Must be one of: "
+                            + MEM_CONTAINER_MEMORY_TYPE_SESSIONS
+                            + ", "
+                            + MEM_CONTAINER_MEMORY_TYPE_WORKING
+                            + ", "
+                            + MEM_CONTAINER_MEMORY_TYPE_LONG_TERM
+                            + ", "
+                            + MEM_CONTAINER_MEMORY_TYPE_HISTORY,
                         exception
                     );
                 }

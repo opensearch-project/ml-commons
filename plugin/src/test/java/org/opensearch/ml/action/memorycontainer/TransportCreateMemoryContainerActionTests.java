@@ -926,6 +926,53 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertTrue(exception instanceof IllegalArgumentException);
     }
 
+    @Test
+    public void testDoExecuteWithMissingStrategyNamespace() throws InterruptedException {
+        // Test behavior when strategy namespace is null
+        MemoryStrategy strategyWithNullNamespace = MemoryStrategy.builder().type("semantic").enabled(true).namespace(null).build();
+
+        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(strategyWithNullNamespace)).build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
+        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
+
+        // Act
+        action.doExecute(task, request, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertTrue(exception.getMessage().contains("namespace is required"));
+    }
+
+    @Test
+    public void testDoExecuteWithEmptyStrategyNamespace() throws InterruptedException {
+        // Test behavior when strategy namespace is empty list
+        MemoryStrategy strategyWithEmptyNamespace = MemoryStrategy
+            .builder()
+            .type("semantic")
+            .enabled(true)
+            .namespace(Arrays.asList())
+            .build();
+
+        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(strategyWithEmptyNamespace)).build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
+        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
+
+        // Act
+        action.doExecute(task, request, actionListener);
+
+        // Assert
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof IllegalArgumentException);
+        assertTrue(exception.getMessage().contains("namespace is required"));
+    }
+
     // Helper method to mock successful model validation
     private void mockSuccessfulModelValidation() {
         // Mock valid LLM model

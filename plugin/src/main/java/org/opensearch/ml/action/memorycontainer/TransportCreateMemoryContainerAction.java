@@ -327,7 +327,7 @@ public class TransportCreateMemoryContainerAction extends
     }
 
     private void validateConfiguration(MemoryConfiguration config, ActionListener<Boolean> listener) {
-        // Validate strategy types first
+        // Validate strategy types and namespace
         if (config.getStrategies() != null) {
             for (MemoryStrategy strategy : config.getStrategies()) {
                 String type = strategy.getType();
@@ -337,6 +337,16 @@ public class TransportCreateMemoryContainerAction extends
                         || "summary".equalsIgnoreCase(type))) {
                     log.error("Invalid strategy type provided: {}. Must be one of: semantic, user_preference, summary", type);
                     listener.onFailure(new IllegalArgumentException(String.format(INVALID_STRATEGY_TYPE_ERROR, type)));
+                    return;
+                }
+
+                // Validate namespace is not null or empty
+                if (strategy.getNamespace() == null || strategy.getNamespace().isEmpty()) {
+                    log.error("Strategy namespace is required but not provided for strategy type: {}", type);
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException("Strategy namespace is required. Please provide a non-empty namespace array.")
+                        );
                     return;
                 }
             }
