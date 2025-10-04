@@ -11,9 +11,12 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +31,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -36,6 +41,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
@@ -53,12 +59,17 @@ public class StreamingWrapperTest {
     @Mock
     private ActionListener<MLTaskResponse> mlTaskListener;
 
+    @Mock
+    private ThreadPool threadPool;
+
     private StreamingWrapper streamingWrapper;
     private StreamingWrapper nonStreamingWrapper;
 
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(new ThreadContext(Settings.EMPTY));
         streamingWrapper = new StreamingWrapper(channel, client);
         nonStreamingWrapper = new StreamingWrapper(null, client);
     }
@@ -144,7 +155,7 @@ public class StreamingWrapperTest {
         streamingWrapper.executeRequest(request, mlTaskListener);
 
         verify(request).setStreamingChannel(channel);
-        verify(client).execute(eq(MLPredictionStreamTaskAction.INSTANCE), eq(request), eq(mlTaskListener));
+        verify(client).execute(eq(MLPredictionStreamTaskAction.INSTANCE), eq(request), any(ActionListener.class));
     }
 
     @Test
