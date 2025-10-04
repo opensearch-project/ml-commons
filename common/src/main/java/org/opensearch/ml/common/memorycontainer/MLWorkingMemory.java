@@ -231,7 +231,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
 
     public static MLWorkingMemory parse(XContentParser parser) throws IOException {
         String memoryContainerId = null;
-        String memoryType = null;
+        String payloadType = null;
         List<MessageInput> messages = null;
         Integer messageId = null;
         String binaryData = null;
@@ -254,7 +254,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
                     memoryContainerId = parser.text();
                     break;
                 case PAYLOAD_TYPE_FIELD:
-                    memoryType = parser.text();
+                    payloadType = parser.text();
                     break;
                 case MESSAGES_FIELD:
                     messages = new ArrayList<>();
@@ -302,7 +302,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         return MLWorkingMemory
             .builder()
             .memoryContainerId(memoryContainerId)
-            .payloadType(memoryType == null ? PayloadType.CONVERSATIONAL : PayloadType.fromString(memoryType))
+            .payloadType(payloadType == null ? PayloadType.CONVERSATIONAL : PayloadType.fromString(payloadType))
             .messages(messages)
             .messageId(messageId)
             .binaryData(binaryData)
