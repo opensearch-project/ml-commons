@@ -12,7 +12,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MemoryInfoTests extends OpenSearchTestCase {
@@ -21,7 +21,7 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     public void testConstructor() {
         String memoryId = "memory-123";
         String content = "Test memory content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(memoryId, content, type, includeInResponse);
@@ -36,7 +36,7 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     @Test
     public void testConstructorWithNullMemoryId() {
         String content = "Test memory content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(null, content, type, includeInResponse);
@@ -51,7 +51,7 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     public void testConstructorWithIncludeInResponseFalse() {
         String memoryId = "memory-123";
         String content = "Test memory content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = false;
 
         MemoryInfo memoryInfo = new MemoryInfo(memoryId, content, type, includeInResponse);
@@ -67,7 +67,7 @@ public class MemoryInfoTests extends OpenSearchTestCase {
         String initialId = "memory-123";
         String newId = "memory-456";
         String content = "Test memory content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(initialId, content, type, includeInResponse);
@@ -81,7 +81,7 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     public void testSetMemoryIdToNull() {
         String initialId = "memory-123";
         String content = "Test memory content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(initialId, content, type, includeInResponse);
@@ -98,23 +98,23 @@ public class MemoryInfoTests extends OpenSearchTestCase {
         boolean includeInResponse = true;
 
         // Test with SEMANTIC type
-        MemoryInfo semanticInfo = new MemoryInfo(memoryId, content, MemoryType.SEMANTIC, includeInResponse);
-        assertEquals(MemoryType.SEMANTIC, semanticInfo.getType());
+        MemoryInfo semanticInfo = new MemoryInfo(memoryId, content, MemoryStrategyType.SEMANTIC, includeInResponse);
+        assertEquals(MemoryStrategyType.SEMANTIC, semanticInfo.getType());
 
         // Test with USER_PREFERENCE type
-        MemoryInfo userPrefInfo = new MemoryInfo(memoryId, content, MemoryType.USER_PREFERENCE, includeInResponse);
-        assertEquals(MemoryType.USER_PREFERENCE, userPrefInfo.getType());
+        MemoryInfo userPrefInfo = new MemoryInfo(memoryId, content, MemoryStrategyType.USER_PREFERENCE, includeInResponse);
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, userPrefInfo.getType());
 
         // Test with SUMMARY type
-        MemoryInfo summaryInfo = new MemoryInfo(memoryId, content, MemoryType.SUMMARY, includeInResponse);
-        assertEquals(MemoryType.SUMMARY, summaryInfo.getType());
+        MemoryInfo summaryInfo = new MemoryInfo(memoryId, content, MemoryStrategyType.SUMMARY, includeInResponse);
+        assertEquals(MemoryStrategyType.SUMMARY, summaryInfo.getType());
     }
 
     @Test
     public void testContentIsImmutable() {
         String memoryId = "memory-123";
         String content = "Original content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(memoryId, content, type, includeInResponse);
@@ -131,16 +131,16 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     public void testTypeIsImmutable() {
         String memoryId = "memory-123";
         String content = "Test content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(memoryId, content, type, includeInResponse);
 
         // Type should remain the same (it's final)
-        assertEquals(MemoryType.SEMANTIC, memoryInfo.getType());
+        assertEquals(MemoryStrategyType.SEMANTIC, memoryInfo.getType());
 
         // Verify type getter returns the same value
-        MemoryType retrievedType = memoryInfo.getType();
+        MemoryStrategyType retrievedType = memoryInfo.getType();
         assertEquals(type, retrievedType);
     }
 
@@ -148,7 +148,7 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     public void testIncludeInResponseIsImmutable() {
         String memoryId = "memory-123";
         String content = "Test content";
-        MemoryType type = MemoryType.SEMANTIC;
+        MemoryStrategyType type = MemoryStrategyType.SEMANTIC;
         boolean includeInResponse = true;
 
         MemoryInfo memoryInfo = new MemoryInfo(memoryId, content, type, includeInResponse);
@@ -164,23 +164,23 @@ public class MemoryInfoTests extends OpenSearchTestCase {
     @Test
     public void testMultipleInstances() {
         // Test that multiple instances maintain their own state
-        MemoryInfo info1 = new MemoryInfo("id-1", "content-1", MemoryType.SEMANTIC, true);
-        MemoryInfo info2 = new MemoryInfo("id-2", "content-2", MemoryType.USER_PREFERENCE, false);
-        MemoryInfo info3 = new MemoryInfo("id-3", "content-3", MemoryType.SUMMARY, true);
+        MemoryInfo info1 = new MemoryInfo("id-1", "content-1", MemoryStrategyType.SEMANTIC, true);
+        MemoryInfo info2 = new MemoryInfo("id-2", "content-2", MemoryStrategyType.USER_PREFERENCE, false);
+        MemoryInfo info3 = new MemoryInfo("id-3", "content-3", MemoryStrategyType.SUMMARY, true);
 
         assertEquals("id-1", info1.getMemoryId());
         assertEquals("content-1", info1.getContent());
-        assertEquals(MemoryType.SEMANTIC, info1.getType());
+        assertEquals(MemoryStrategyType.SEMANTIC, info1.getType());
         assertTrue(info1.isIncludeInResponse());
 
         assertEquals("id-2", info2.getMemoryId());
         assertEquals("content-2", info2.getContent());
-        assertEquals(MemoryType.USER_PREFERENCE, info2.getType());
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, info2.getType());
         assertFalse(info2.isIncludeInResponse());
 
         assertEquals("id-3", info3.getMemoryId());
         assertEquals("content-3", info3.getContent());
-        assertEquals(MemoryType.SUMMARY, info3.getType());
+        assertEquals(MemoryStrategyType.SUMMARY, info3.getType());
         assertTrue(info3.isIncludeInResponse());
     }
 }

@@ -21,20 +21,20 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.memorycontainer.MLMemory;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MLLongTermMemory;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class MLGetMemoryResponseTest {
 
     private MLGetMemoryResponse responseNormal;
-    private MLMemory testMemory;
+    private MLLongTermMemory testMemory;
 
     @Before
     public void setUp() {
-        testMemory = MLMemory
+        testMemory = MLLongTermMemory
             .builder()
             .memory("Test memory content")
-            .memoryType(MemoryType.SEMANTIC)
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
@@ -47,7 +47,7 @@ public class MLGetMemoryResponseTest {
         assertNotNull(responseNormal);
         assertNotNull(responseNormal.getLongTermMemory());
         assertEquals("Test memory content", responseNormal.getLongTermMemory().getMemory());
-        assertEquals(MemoryType.SEMANTIC, responseNormal.getLongTermMemory().getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, responseNormal.getLongTermMemory().getStrategyType());
     }
 
     @Test
@@ -59,7 +59,7 @@ public class MLGetMemoryResponseTest {
 
         assertNotNull(deserialized.getLongTermMemory());
         assertEquals(responseNormal.getLongTermMemory().getMemory(), deserialized.getLongTermMemory().getMemory());
-        assertEquals(responseNormal.getLongTermMemory().getMemoryType(), deserialized.getLongTermMemory().getMemoryType());
+        assertEquals(responseNormal.getLongTermMemory().getStrategyType(), deserialized.getLongTermMemory().getStrategyType());
     }
 
     @Test
@@ -90,7 +90,7 @@ public class MLGetMemoryResponseTest {
         assertNotNull(result);
         assertNotNull(result.getLongTermMemory());
         assertEquals("Test memory content", result.getLongTermMemory().getMemory());
-        assertEquals(MemoryType.SEMANTIC, result.getLongTermMemory().getMemoryType());
+        assertEquals(MemoryStrategyType.SEMANTIC, result.getLongTermMemory().getStrategyType());
     }
 
     @Test(expected = UncheckedIOException.class)

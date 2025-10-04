@@ -28,7 +28,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.memorycontainer.MLLongTermMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryHistory;
 import org.opensearch.ml.common.memorycontainer.MLMemorySession;
 import org.opensearch.ml.common.memorycontainer.MLWorkingMemory;
@@ -42,14 +42,14 @@ import lombok.ToString;
 public class MLGetMemoryResponse extends ActionResponse implements ToXContentObject {
     MLMemorySession session;
     MLWorkingMemory workingMemory;
-    MLMemory longTermMemory;
+    MLLongTermMemory longTermMemory;
     MLMemoryHistory memoryHistory;
 
     @Builder
     public MLGetMemoryResponse(
         MLMemorySession session,
         MLWorkingMemory workingMemory,
-        MLMemory longTermMemory,
+        MLLongTermMemory longTermMemory,
         MLMemoryHistory memoryHistory
     ) {
         this.session = session;
@@ -67,7 +67,7 @@ public class MLGetMemoryResponse extends ActionResponse implements ToXContentObj
             workingMemory = new MLWorkingMemory(in);
         }
         if (in.readBoolean()) {
-            longTermMemory = new MLMemory(in);
+            longTermMemory = new MLLongTermMemory(in);
         }
         if (in.readBoolean()) {
             memoryHistory = new MLMemoryHistory(in);
@@ -114,7 +114,7 @@ public class MLGetMemoryResponse extends ActionResponse implements ToXContentObj
                 case MEM_CONTAINER_MEMORY_TYPE_WORKING:
                     return MLGetMemoryResponse.builder().workingMemory(MLWorkingMemory.parse(parser)).build();
                 case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
-                    return MLGetMemoryResponse.builder().longTermMemory(MLMemory.parse(parser)).build();
+                    return MLGetMemoryResponse.builder().longTermMemory(MLLongTermMemory.parse(parser)).build();
                 case MEM_CONTAINER_MEMORY_TYPE_HISTORY:
                     return MLGetMemoryResponse.builder().memoryHistory(MLMemoryHistory.parse(parser)).build();
                 default:
