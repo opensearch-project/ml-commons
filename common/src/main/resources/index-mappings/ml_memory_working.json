@@ -9,7 +9,7 @@
     "memory_container_id": {
       "type": "keyword"
     },
-    "working_memory_type": {
+    "payload_type": {
       "type": "keyword"
     },
     "messages": {
