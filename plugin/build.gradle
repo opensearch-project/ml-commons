@@ -210,6 +210,10 @@ task integTest(type: RestIntegTestTask) {
 }
 tasks.named("check").configure { dependsOn(integTest) }
 
+// Enable Security if -Dsecurity=true or -Dhttps=true
+def securityEnabled = System.getProperty("security", "false") == "true" ||
+        System.getProperty("https", "false")   == "true"
+
 integTest {
     dependsOn "bundlePlugin"
     systemProperty 'tests.security.manager', 'false'
@@ -253,7 +257,7 @@ integTest {
         // There seems to be an issue when running multi node run or integ tasks with unicast_hosts
         // not being written, the waitForAllConditions ensures it's written
         getClusters().forEach { cluster ->
-            cluster.waitForAllConditions()
+            waitForClusterSetup(cluster, securityEnabled)
         }
     }
 
@@ -287,10 +291,6 @@ ext.resolvePluginFile = { pluginId ->
 
 def jobSchedulerFile  = resolvePluginFile("opensearch-job-scheduler")
 def securityPluginFile = resolvePluginFile("opensearch-security")
-
-// Enable Security if -Dsecurity=true or -Dhttps=true
-def securityEnabled = System.getProperty("security", "false") == "true" ||
-        System.getProperty("https", "false")   == "true"
 
 // Single authoritative cluster definition
 testClusters.integTest {
@@ -394,7 +394,7 @@ run {
         // There seems to be an issue when running multi node run or integ tasks with unicast_hosts
         // not being written, the waitForAllConditions ensures it's written
         getClusters().forEach { cluster ->
-            waitForClusterSetup(cluster, securityEnabled)
+            cluster.waitForAllConditions()
         }
     }
 
