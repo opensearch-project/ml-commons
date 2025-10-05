@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,6 +23,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 public class MLDeleteMemoriesByQueryRequestTests {
 
@@ -94,7 +94,7 @@ public class MLDeleteMemoriesByQueryRequestTests {
     @Test
     public void testValidation_validMemoryTypes() {
         List<String> validTypes = new ArrayList<>();
-        for (String type : VALID_MEMORY_TYPES) {
+        for (String type : MemoryType.getAllValues()) {
             validTypes.add(type);
             validTypes.add(type.toUpperCase());
         }

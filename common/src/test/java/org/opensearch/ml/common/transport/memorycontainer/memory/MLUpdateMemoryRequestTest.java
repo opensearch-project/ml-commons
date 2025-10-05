@@ -9,8 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -24,6 +22,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 public class MLUpdateMemoryRequestTest {
 
@@ -406,7 +405,7 @@ public class MLUpdateMemoryRequestTest {
     @Test
     public void testValidateWithValidMemoryTypes() {
         // Test all valid memory types: "sessions", "working", "long-term", "history"
-        for (String memoryType : VALID_MEMORY_TYPES) {
+        for (String memoryType : MemoryType.getAllValues()) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
                 .builder()
                 .memoryContainerId("container-123")
@@ -454,11 +453,11 @@ public class MLUpdateMemoryRequestTest {
 
     @Test
     public void testValidateInvalidMemoryType_Lines71to73() {
-        // Test lines 71-73: } else if (!VALID_MEMORY_TYPES.contains(memoryType)) {
+        // Test lines 71-73: } else if (!MemoryType.getAllValues().contains(memoryType)) {
         // exception = addValidationError("Invalid memory type", exception);
         // }
 
-        String[] invalidTypes = { "invalid", "unknown", "bad-type", "LONG-TERM", "Session", "WORKING" };
+        String[] invalidTypes = { "invalid", "unknown", "bad-type", "long_term", "session_memory", "work" };
 
         for (String invalidType : invalidTypes) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
@@ -482,7 +481,7 @@ public class MLUpdateMemoryRequestTest {
     public void testValidateMemoryTypeValidation_BothBranches() {
         // Test that valid memory types pass through the validation without errors
         // This ensures the else-if condition on line 71 works correctly for valid types
-        for (String validType : VALID_MEMORY_TYPES) {
+        for (String validType : MemoryType.getAllValues()) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
                 .builder()
                 .memoryContainerId("container-123")
@@ -543,13 +542,13 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("test-container")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType("sessions")
             .memoryId("test-memory")
             .mlUpdateMemoryInput(input)
             .build();
 
         assertEquals("test-container", request.getMemoryContainerId());
-        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, request.getMemoryType());
+        assertEquals("sessions", request.getMemoryType());
         assertEquals("test-memory", request.getMemoryId());
         assertEquals(input, request.getMlUpdateMemoryInput());
     }
@@ -560,7 +559,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType("sessions")
             .memoryId("memory-456")
             .mlUpdateMemoryInput(testInput)
             .build();
@@ -576,7 +575,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType("sessions")
             .memoryId("")
             .mlUpdateMemoryInput(testInput)
             .build();
@@ -619,7 +618,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest requestWithNullInput = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType("sessions")
             .memoryId("memory-456")
             .mlUpdateMemoryInput(null)
             .build();
@@ -639,7 +638,7 @@ public class MLUpdateMemoryRequestTest {
     @Test
     public void testAllValidMemoryTypesIndividually() {
         // Test each valid memory type individually to ensure complete coverage
-        for (String memoryType : VALID_MEMORY_TYPES) {
+        for (String memoryType : MemoryType.getAllValues()) {
             MLUpdateMemoryRequest request = MLUpdateMemoryRequest
                 .builder()
                 .memoryContainerId("container-" + memoryType)
@@ -666,7 +665,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest validRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("valid-container")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType("sessions")
             .memoryId("valid-memory")
             .mlUpdateMemoryInput(testInput)
             .build();
@@ -689,7 +688,7 @@ public class MLUpdateMemoryRequestTest {
         MLUpdateMemoryRequest request = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType("sessions")
             .memoryId("memory-456")
             .mlUpdateMemoryInput(originalInput)
             .build();
@@ -708,8 +707,6 @@ public class MLUpdateMemoryRequestTest {
     public void testEdgeCaseMemoryTypes() {
         // Test memory types that are close to valid but not quite
         String[] edgeCaseTypes = {
-            "Session", // Wrong case
-            "WORKING", // Wrong case
             "long_term", // Underscore instead of hyphen
             "longterm", // No separator
             "work", // Partial

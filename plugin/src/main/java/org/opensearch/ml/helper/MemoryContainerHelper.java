@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.List;
 
@@ -52,6 +53,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -209,10 +211,13 @@ public class MemoryContainerHelper {
      * @param container the memory container
      * @return the memory index name or null if not configured
      */
-    public String getMemoryIndexName(MLMemoryContainer container, String memoryType) {
+    public String getMemoryIndexName(MLMemoryContainer container, String memoryTypeStr) {
         MemoryConfiguration config = container.getConfiguration();
         if (config != null) {
-            return config.getIndexName(memoryType);
+            MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
+            if (memoryType != null) {
+                return config.getIndexName(memoryType);
+            }
         }
         return null;
     }
@@ -242,14 +247,24 @@ public class MemoryContainerHelper {
         SearchDataObjectRequest searchRequest,
         ActionListener<SearchResponse> listener
     ) {
-        if (configuration.isUseSystemIndex()) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                sdkClient
-                    .searchDataObjectAsync(searchRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.runBefore(listener, context::restore)));
+        try {
+            if (configuration.isUseSystemIndex()) {
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+                    final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                        .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
+
+                    sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
+                }
+            } else {
+                final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                    .wrap(listener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, listener));
+
+                sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
             }
-        } else {
-            sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
+        } catch (Exception e) {
+            log.error("Failed to search data", e);
+            listener.onFailure(e);
         }
     }
 

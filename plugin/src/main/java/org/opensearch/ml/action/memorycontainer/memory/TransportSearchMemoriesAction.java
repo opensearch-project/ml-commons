@@ -19,6 +19,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
@@ -110,7 +111,13 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
     ) {
         try {
             MemoryConfiguration memoryConfig = container.getConfiguration();
-            String indexName = memoryConfig.getIndexName(input.getMemoryType());
+            MemoryType memoryType = MemoryType.fromString(input.getMemoryType());
+            if (memoryType == null) {
+                actionListener
+                    .onFailure(new OpenSearchStatusException("Invalid memory type: " + input.getMemoryType(), RestStatus.BAD_REQUEST));
+                return;
+            }
+            String indexName = memoryConfig.getIndexName(memoryType);
 
             if (!memoryContainerHelper.isAdminUser(user)) {
                 memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());

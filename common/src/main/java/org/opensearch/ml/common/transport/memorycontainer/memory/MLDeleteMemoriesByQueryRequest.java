@@ -8,12 +8,10 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
-import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 
 import java.io.IOException;
-import java.util.Locale;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -23,6 +21,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -73,10 +72,9 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
             validationException = addValidationError("Memory type is required", validationException);
         } else {
             // Validate memory type is one of the allowed values
-            String normalizedType = memoryType.toLowerCase(Locale.ROOT);
-            if (!VALID_MEMORY_TYPES.contains(normalizedType)) {
+            if (!MemoryType.isValid(memoryType)) {
                 validationException = addValidationError(
-                    "Invalid memory type. Must be one of: session, working, long_term, history",
+                    "Invalid memory type. Must be one of: " + MemoryType.getAllValuesAsString(),
                     validationException
                 );
             }

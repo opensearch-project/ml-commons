@@ -6,10 +6,6 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.util.ArrayList;
@@ -31,6 +27,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
@@ -218,22 +215,29 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                     MemoryConfiguration configuration = container.getConfiguration();
                     List<String> indicesToDelete = new ArrayList<>();
 
-                    for (String memoryType : deleteMemories) {
-                        switch (memoryType) {
-                            case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
-                                indicesToDelete.add(configuration.getSessionIndexName());
-                                break;
-                            case MEM_CONTAINER_MEMORY_TYPE_WORKING:
-                                indicesToDelete.add(configuration.getWorkingMemoryIndexName());
-                                break;
-                            case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
-                                indicesToDelete.add(configuration.getLongMemoryIndexName());
-                                break;
-                            case MEM_CONTAINER_MEMORY_TYPE_HISTORY:
-                                indicesToDelete.add(configuration.getLongMemoryHistoryIndexName());
-                                break;
-                            default:
-                                log.warn("Unknown memory type for deletion: {}", memoryType);
+                    for (String memoryTypeStr : deleteMemories) {
+                        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
+                        if (memoryType != null) {
+                            String indexName = null;
+                            switch (memoryType) {
+                                case SESSIONS:
+                                    indexName = configuration.getSessionIndexName();
+                                    break;
+                                case WORKING:
+                                    indexName = configuration.getWorkingMemoryIndexName();
+                                    break;
+                                case LONG_TERM:
+                                    indexName = configuration.getLongMemoryIndexName();
+                                    break;
+                                case HISTORY:
+                                    indexName = configuration.getLongMemoryHistoryIndexName();
+                                    break;
+                            }
+                            if (indexName != null) {
+                                indicesToDelete.add(indexName);
+                            }
+                        } else {
+                            log.warn("Unknown memory type for deletion: {}", memoryTypeStr);
                         }
                     }
 

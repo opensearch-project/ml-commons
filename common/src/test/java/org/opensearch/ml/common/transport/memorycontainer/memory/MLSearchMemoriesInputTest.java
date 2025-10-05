@@ -11,7 +11,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -83,9 +82,9 @@ public class MLSearchMemoriesInputTest {
     @Test
     public void testConstructorWithContainerId() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
-        MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-456", MEM_CONTAINER_MEMORY_TYPE_SESSIONS, searchSourceBuilder);
+        MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-456", "sessions", searchSourceBuilder);
         assertEquals("container-456", input.getMemoryContainerId());
-        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, input.getMemoryType());
+        assertEquals("sessions", input.getMemoryType());
         assertNotNull(input.getSearchSourceBuilder());
     }
 
@@ -182,13 +181,13 @@ public class MLSearchMemoriesInputTest {
         MLSearchMemoriesInput input = new MLSearchMemoriesInput(null, "working", initialSearchSourceBuilder);
 
         input.setMemoryContainerId("new-container");
-        input.setMemoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS);
+        input.setMemoryType("sessions");
 
         SearchSourceBuilder newSearchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "updated query"));
         input.setSearchSourceBuilder(newSearchSourceBuilder);
 
         assertEquals("new-container", input.getMemoryContainerId());
-        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, input.getMemoryType());
+        assertEquals("sessions", input.getMemoryType());
         assertNotNull(input.getSearchSourceBuilder());
     }
 

@@ -6,16 +6,11 @@
 package org.opensearch.ml.common.transport.memorycontainer;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -92,26 +88,10 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
 
         // Validate memory types
         if (this.deleteMemories != null && !this.deleteMemories.isEmpty()) {
-            List<String> validMemoryTypes = Arrays
-                .asList(
-                    MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-                    MEM_CONTAINER_MEMORY_TYPE_WORKING,
-                    MEM_CONTAINER_MEMORY_TYPE_LONG_TERM,
-                    MEM_CONTAINER_MEMORY_TYPE_HISTORY
-                );
             for (String memoryType : this.deleteMemories) {
-                if (!validMemoryTypes.contains(memoryType)) {
+                if (!MemoryType.isValid(memoryType)) {
                     exception = addValidationError(
-                        "Invalid memory type: "
-                            + memoryType
-                            + ". Must be one of: "
-                            + MEM_CONTAINER_MEMORY_TYPE_SESSIONS
-                            + ", "
-                            + MEM_CONTAINER_MEMORY_TYPE_WORKING
-                            + ", "
-                            + MEM_CONTAINER_MEMORY_TYPE_LONG_TERM
-                            + ", "
-                            + MEM_CONTAINER_MEMORY_TYPE_HISTORY,
+                        "Invalid memory type: " + memoryType + ". Must be one of: " + MemoryType.getAllValuesAsString(),
                         exception
                     );
                 }

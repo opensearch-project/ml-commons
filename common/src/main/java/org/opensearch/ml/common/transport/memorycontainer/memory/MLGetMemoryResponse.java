@@ -7,10 +7,6 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -32,6 +28,7 @@ import org.opensearch.ml.common.memorycontainer.MLLongTermMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryHistory;
 import org.opensearch.ml.common.memorycontainer.MLMemorySession;
 import org.opensearch.ml.common.memorycontainer.MLWorkingMemory;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -102,23 +99,28 @@ public class MLGetMemoryResponse extends ActionResponse implements ToXContentObj
         }
     }
 
-    public static MLGetMemoryResponse fromGetResponse(GetResponse getResponse, String memoryType) {
+    public static MLGetMemoryResponse fromGetResponse(GetResponse getResponse, String memoryTypeStr) {
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
+        if (memoryType == null) {
+            throw new IllegalArgumentException("Invalid memory type: " + memoryTypeStr);
+        }
+
         try (
             XContentParser parser = jsonXContent
                 .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
         ) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
             switch (memoryType) {
-                case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
+                case SESSIONS:
                     return MLGetMemoryResponse.builder().session(MLMemorySession.parse(parser)).build();
-                case MEM_CONTAINER_MEMORY_TYPE_WORKING:
+                case WORKING:
                     return MLGetMemoryResponse.builder().workingMemory(MLWorkingMemory.parse(parser)).build();
-                case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
+                case LONG_TERM:
                     return MLGetMemoryResponse.builder().longTermMemory(MLLongTermMemory.parse(parser)).build();
-                case MEM_CONTAINER_MEMORY_TYPE_HISTORY:
+                case HISTORY:
                     return MLGetMemoryResponse.builder().memoryHistory(MLMemoryHistory.parse(parser)).build();
                 default:
-                    throw new IllegalArgumentException("Invalid memory type: " + memoryType);
+                    throw new IllegalArgumentException("Invalid memory type: " + memoryTypeStr);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

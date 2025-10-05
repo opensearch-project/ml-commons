@@ -16,7 +16,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -690,8 +689,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("additional_info", Map.of("key", "value"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction
-            .constructNewDoc(input, MEM_CONTAINER_MEMORY_TYPE_SESSIONS, new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "sessions", new HashMap<>());
 
         assertEquals(3, result.size()); // 2 fields + last_updated_time
         assertEquals("Updated summary", result.get("summary"));

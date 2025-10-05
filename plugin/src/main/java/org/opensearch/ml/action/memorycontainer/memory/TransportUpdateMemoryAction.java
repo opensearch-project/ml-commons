@@ -24,6 +24,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
@@ -134,22 +135,27 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }, actionListener::onFailure));
     }
 
-    public Map<String, Object> constructNewDoc(MLUpdateMemoryInput input, String memoryType, Map<String, Object> originalDoc) {
+    public Map<String, Object> constructNewDoc(MLUpdateMemoryInput input, String memoryTypeStr, Map<String, Object> originalDoc) {
         Map<String, Object> updateFields = new HashMap<>();
         updateFields.putAll(originalDoc);
         Map<String, Object> updateContent = input.getUpdateContent();
-        switch (memoryType) {
-            case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
-                constructSessionMemUpdateFields(updateFields, updateContent);
-                break;
-            case MEM_CONTAINER_MEMORY_TYPE_WORKING:
-                constructWorkingMemUpdateFields(updateFields, updateContent);
-                break;
-            case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
-                constructLongTermMemUpdateFields(updateFields, updateContent);
-                break;
-            default:
-                break;
+
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
+        if (memoryType != null) {
+            switch (memoryType) {
+                case SESSIONS:
+                    constructSessionMemUpdateFields(updateFields, updateContent);
+                    break;
+                case WORKING:
+                    constructWorkingMemUpdateFields(updateFields, updateContent);
+                    break;
+                case LONG_TERM:
+                    constructLongTermMemUpdateFields(updateFields, updateContent);
+                    break;
+                case HISTORY:
+                    // History should not be updatable, but handle for completeness
+                    break;
+            }
         }
         updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         return updateFields;
