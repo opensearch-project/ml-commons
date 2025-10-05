@@ -399,6 +399,66 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         expectThrows(Exception.class, () -> restMLDeleteMemoryContainerAction.handleRequest(request, channel, client));
     }
 
+    public void testPrepareRequest_WithDuplicateMemoryTypes_AutomaticallyDeduplicates() throws Exception {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        // Test with duplicate memory types in request body
+        String requestContent = "{\"delete_memories\":[\"sessions\",\"working\",\"sessions\",\"working\",\"long-term\"]}";
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MEMORY_CONTAINER_ID, "test_id");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.DELETE)
+            .withPath("/_plugins/_ml/memory_containers/test_id")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), MediaType.fromMediaType("application/json"))
+            .build();
+
+        restMLDeleteMemoryContainerAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLMemoryContainerDeleteRequest> captor = ArgumentCaptor.forClass(MLMemoryContainerDeleteRequest.class);
+        verify(client, times(1)).execute(eq(MLMemoryContainerDeleteAction.INSTANCE), captor.capture(), any());
+
+        MLMemoryContainerDeleteRequest capturedRequest = captor.getValue();
+        assertNotNull(capturedRequest.getDeleteMemories());
+        // Should have only 3 unique memory types despite 5 entries in the array
+        assertEquals(3, capturedRequest.getDeleteMemories().size());
+        assertTrue(capturedRequest.getDeleteMemories().contains("sessions"));
+        assertTrue(capturedRequest.getDeleteMemories().contains("working"));
+        assertTrue(capturedRequest.getDeleteMemories().contains("long-term"));
+    }
+
+    public void testPrepareRequest_WithDuplicateMemoryTypesInUrlParams_AutomaticallyDeduplicates() throws Exception {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MEMORY_CONTAINER_ID, "test_id");
+        // Comma-separated string with duplicates
+        params.put("delete_memories", "sessions,working,sessions,history,working");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.DELETE)
+            .withPath("/_plugins/_ml/memory_containers/test_id")
+            .withParams(params)
+            .build();
+
+        restMLDeleteMemoryContainerAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLMemoryContainerDeleteRequest> captor = ArgumentCaptor.forClass(MLMemoryContainerDeleteRequest.class);
+        verify(client, times(1)).execute(eq(MLMemoryContainerDeleteAction.INSTANCE), captor.capture(), any());
+
+        MLMemoryContainerDeleteRequest capturedRequest = captor.getValue();
+        assertNotNull(capturedRequest.getDeleteMemories());
+        // Should have only 3 unique memory types
+        assertEquals(3, capturedRequest.getDeleteMemories().size());
+        assertTrue(capturedRequest.getDeleteMemories().contains("sessions"));
+        assertTrue(capturedRequest.getDeleteMemories().contains("working"));
+        assertTrue(capturedRequest.getDeleteMemories().contains("history"));
+    }
+
     private RestRequest createRestRequestWithoutId() {
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.DELETE)

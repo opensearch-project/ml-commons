@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -130,7 +131,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         MLMemoryContainer container,
         String tenantId,
         boolean deleteAllMemories,
-        List<String> deleteMemories,
+        Set<String> deleteMemories,
         ActionListener<DeleteResponse> listener
     ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -164,7 +165,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         Throwable throwable,
         String memoryContainerId,
         boolean deleteAllMemories,
-        List<String> deleteMemories,
+        Set<String> deleteMemories,
         MLMemoryContainer container,
         ActionListener<DeleteResponse> actionListener
     ) {

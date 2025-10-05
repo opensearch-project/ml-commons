@@ -420,16 +420,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             .strategies(existingStrategies)
             .build();
 
-        // Create new strategy without ID (simulate no ID provided by setting to empty)
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("user_preference")
             .namespace(Arrays.asList("session_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        newStrategy.setId("");  // Simulate no ID provided - merge logic will generate new ID
 
         MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().strategies(Arrays.asList(newStrategy)).build();
 

@@ -8,7 +8,6 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_STRATEGY_TYPE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_FOUND_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
@@ -139,6 +138,20 @@ public class TransportCreateMemoryContainerAction extends
     private MLMemoryContainer buildMemoryContainer(MLCreateMemoryContainerInput input, User user, String tenantId) {
         Instant now = Instant.now();
 
+        // Generate IDs for strategies that don't have them (new container creation)
+        MemoryConfiguration configuration = input.getConfiguration();
+        if (configuration != null && configuration.getStrategies() != null) {
+            for (MemoryStrategy strategy : configuration.getStrategies()) {
+                if (strategy.getId() == null || strategy.getId().trim().isEmpty()) {
+                    strategy.setId(MemoryStrategy.generateStrategyId(strategy.getType()));
+                }
+                // Set enabled to true if not specified (default for new strategies)
+                if (strategy.getEnabled() == null) {
+                    strategy.setEnabled(true);
+                }
+            }
+        }
+
         return MLMemoryContainer
             .builder()
             .name(input.getName())
@@ -147,7 +160,7 @@ public class TransportCreateMemoryContainerAction extends
             .tenantId(tenantId)
             .createdTime(now)
             .lastUpdatedTime(now)
-            .configuration(input.getConfiguration())
+            .configuration(configuration)
             .backendRoles(input.getBackendRoles())
             .build();
     }
@@ -327,26 +340,14 @@ public class TransportCreateMemoryContainerAction extends
     }
 
     private void validateConfiguration(MemoryConfiguration config, ActionListener<Boolean> listener) {
-        // Validate strategy types and namespace
+        // Validate strategy types and namespace using centralized validator
         if (config.getStrategies() != null) {
             for (MemoryStrategy strategy : config.getStrategies()) {
-                String type = strategy.getType();
-                if (type != null
-                    && !("semantic".equalsIgnoreCase(type)
-                        || "user_preference".equalsIgnoreCase(type)
-                        || "summary".equalsIgnoreCase(type))) {
-                    log.error("Invalid strategy type provided: {}. Must be one of: semantic, user_preference, summary", type);
-                    listener.onFailure(new IllegalArgumentException(String.format(INVALID_STRATEGY_TYPE_ERROR, type)));
-                    return;
-                }
-
-                // Validate namespace is not null or empty
-                if (strategy.getNamespace() == null || strategy.getNamespace().isEmpty()) {
-                    log.error("Strategy namespace is required but not provided for strategy type: {}", type);
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException("Strategy namespace is required. Please provide a non-empty namespace array.")
-                        );
+                try {
+                    MemoryStrategy.validate(strategy);
+                } catch (IllegalArgumentException e) {
+                    log.error("Strategy validation failed: {}", e.getMessage());
+                    listener.onFailure(e);
                     return;
                 }
             }

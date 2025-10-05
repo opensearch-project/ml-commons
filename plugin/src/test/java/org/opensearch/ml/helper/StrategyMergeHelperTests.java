@@ -94,17 +94,12 @@ public class StrategyMergeHelperTests {
     @Test
     public void testMergeStrategies_AddNewStrategyWithoutId() {
         // Test adding a new strategy without ID (should auto-generate)
-        // Pass null ID explicitly to test new strategy creation
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("summary")
             .namespace(Arrays.asList("agent_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        // Set ID to empty string to simulate no ID provided
-        newStrategy.setId("");
 
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
@@ -125,13 +120,10 @@ public class StrategyMergeHelperTests {
         // Test that new strategies without enabled field default to true
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("summary")
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        newStrategy.setId("");  // Simulate no ID provided
 
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
@@ -147,14 +139,11 @@ public class StrategyMergeHelperTests {
         // Test that new strategies can be explicitly set to enabled=false
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("summary")
             .enabled(false)  // Explicitly set to false
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        newStrategy.setId("");  // Simulate no ID provided
 
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
@@ -228,13 +217,10 @@ public class StrategyMergeHelperTests {
 
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("summary")
             .namespace(Arrays.asList("session_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        newStrategy.setId("");  // Simulate no ID provided
 
         List<MemoryStrategy> updates = Arrays.asList(update1, update2, newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
@@ -262,13 +248,10 @@ public class StrategyMergeHelperTests {
         // Test with null existing strategies list
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("semantic")
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        newStrategy.setId("");  // Simulate no ID provided
 
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(null, updates);
@@ -282,13 +265,10 @@ public class StrategyMergeHelperTests {
         // Test with empty existing strategies list
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .id(null)
             .type("semantic")
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
-
-        newStrategy.setId("");  // Simulate no ID provided
 
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(new ArrayList<>(), updates);
@@ -349,5 +329,66 @@ public class StrategyMergeHelperTests {
 
         assertNotNull(updated);
         assertEquals(newConfig, updated.getStrategyConfig());
+    }
+
+    @Test
+    public void testMergeStrategies_InvalidStrategyType() {
+        // Test adding new strategy with invalid type
+        MemoryStrategy invalidStrategy = MemoryStrategy
+            .builder()
+            .type("invalid_type")
+            .namespace(Arrays.asList("user_id"))
+            .strategyConfig(new HashMap<>())
+            .build();
+
+        List<MemoryStrategy> updates = Arrays.asList(invalidStrategy);
+
+        try {
+            StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
+            fail("Expected IllegalArgumentException for invalid strategy type");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("Invalid strategy type"));
+            assertTrue(e.getMessage().contains("invalid_type"));
+        }
+    }
+
+    @Test
+    public void testMergeStrategies_MissingNamespace() {
+        // Test adding new strategy without namespace
+        MemoryStrategy noNamespaceStrategy = MemoryStrategy
+            .builder()
+            .type("semantic")
+            .namespace(null)
+            .strategyConfig(new HashMap<>())
+            .build();
+
+        List<MemoryStrategy> updates = Arrays.asList(noNamespaceStrategy);
+
+        try {
+            StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
+            fail("Expected IllegalArgumentException for missing namespace");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("namespace is required"));
+        }
+    }
+
+    @Test
+    public void testMergeStrategies_EmptyNamespace() {
+        // Test adding new strategy with empty namespace array
+        MemoryStrategy emptyNamespaceStrategy = MemoryStrategy
+            .builder()
+            .type("semantic")
+            .namespace(new ArrayList<>())
+            .strategyConfig(new HashMap<>())
+            .build();
+
+        List<MemoryStrategy> updates = Arrays.asList(emptyNamespaceStrategy);
+
+        try {
+            StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
+            fail("Expected IllegalArgumentException for empty namespace");
+        } catch (IllegalArgumentException e) {
+            assertTrue(e.getMessage().contains("namespace is required"));
+        }
     }
 }

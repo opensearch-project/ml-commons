@@ -17,7 +17,9 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -570,7 +572,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(false)
-            .deleteMemories(java.util.Arrays.asList("sessions", "working"))
+            .deleteMemories(new LinkedHashSet<>(Arrays.asList("sessions", "working")))
             .tenantId(null)
             .build();
 
@@ -633,7 +635,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(false)
-            .deleteMemories(java.util.Arrays.asList("sessions", "unknown_type"))
+            .deleteMemories(new LinkedHashSet<>(Arrays.asList("sessions", "unknown_type")))
             .tenantId(null)
             .build();
 
@@ -684,7 +686,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(false)
-            .deleteMemories(Collections.emptyList())
+            .deleteMemories(Collections.emptySet())
             .tenantId(null)
             .build();
 

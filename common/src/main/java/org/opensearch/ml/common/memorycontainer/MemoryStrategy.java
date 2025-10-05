@@ -44,8 +44,9 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     private Map<String, Object> strategyConfig;
 
     public MemoryStrategy(String id, Boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
-        // Generate ID if not provided, using type prefix for better identification
-        this.id = (id != null && !id.trim().isEmpty()) ? id : generateStrategyId(type);
+        // Do not auto-generate ID in constructor - let StrategyMergeHelper control ID generation
+        // This allows distinguishing between updates (ID provided) and additions (ID null/empty)
+        this.id = id;
         this.enabled = enabled;
         this.type = type;
         this.namespace = namespace;
@@ -130,10 +131,8 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             }
         }
 
-        // Generate ID with type prefix if not provided
-        if (id == null) {
-            id = generateStrategyId(type);
-        }
+        // Do not auto-generate ID during parsing - let StrategyMergeHelper control ID generation
+        // When id is null/empty, StrategyMergeHelper will detect it as a new strategy and generate ID
         return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
     }
 
@@ -144,6 +143,30 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
      */
     public boolean isEnabled() {
         return enabled == null || enabled;
+    }
+
+    /**
+     * Validates a memory strategy for required fields and valid values.
+     *
+     * @param strategy The memory strategy to validate
+     * @throws IllegalArgumentException if validation fails with specific error message
+     */
+    public static void validate(MemoryStrategy strategy) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("Strategy cannot be null");
+        }
+
+        // Validate strategy type
+        String type = strategy.getType();
+        if (type != null
+            && !("semantic".equalsIgnoreCase(type) || "user_preference".equalsIgnoreCase(type) || "summary".equalsIgnoreCase(type))) {
+            throw new IllegalArgumentException(String.format(MemoryContainerConstants.INVALID_STRATEGY_TYPE_ERROR, type));
+        }
+
+        // Validate namespace is not null or empty
+        if (strategy.getNamespace() == null || strategy.getNamespace().isEmpty()) {
+            throw new IllegalArgumentException("Strategy namespace is required. Please provide a non-empty namespace array.");
+        }
     }
 
     /**

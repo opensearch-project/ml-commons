@@ -227,17 +227,6 @@ public class MemoryContainerHelper {
         }
     }
 
-    // public void getData(MemoryConfiguration configuration, GetDataObjectRequest getRequest, ActionListener<GetResponse> listener) {
-    // if (configuration.isUseSystemIndex()) {
-    // try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-    // sdkClient.getDataObjectAsync(getRequest).whenComplete(SdkClientUtils.wrapGetCompletion(ActionListener.runBefore(listener,
-    // context::restore)));
-    // }
-    // } else {
-    // sdkClient.getDataObjectAsync(getRequest).whenComplete(SdkClientUtils.wrapGetCompletion(listener));
-    // }
-    // }
-
     public void searchData(MemoryConfiguration configuration, SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         if (configuration.isUseSystemIndex()) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {

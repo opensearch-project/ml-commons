@@ -16,7 +16,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -36,7 +38,7 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     boolean deleteAllMemories;
 
     @Getter
-    List<String> deleteMemories;
+    Set<String> deleteMemories;
 
     @Getter
     String tenantId;
@@ -45,7 +47,7 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     public MLMemoryContainerDeleteRequest(
         String memoryContainerId,
         boolean deleteAllMemories,
-        List<String> deleteMemories,
+        Set<String> deleteMemories,
         String tenantId
     ) {
         this.memoryContainerId = memoryContainerId;
@@ -58,7 +60,8 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
         super(input);
         this.memoryContainerId = input.readString();
         this.deleteAllMemories = input.readBoolean();
-        this.deleteMemories = input.readOptionalStringList();
+        List<String> tempList = input.readOptionalStringList();
+        this.deleteMemories = tempList != null ? new LinkedHashSet<>(tempList) : null;
         this.tenantId = input.readOptionalString();
     }
 

@@ -13,11 +13,12 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.common.Strings;
@@ -72,10 +73,10 @@ public class RestMLDeleteMemoryContainerAction extends BaseRestHandler {
 
         // Parse URL parameters
         boolean deleteAllMemories = request.paramAsBoolean(PARAMETER_DELETE_ALL_MEMORIES, false);
-        List<String> deleteMemories = null;
+        Set<String> deleteMemories = null;
         String[] memoryArray = request.paramAsStringArray(PARAMETER_DELETE_MEMORIES, Strings.EMPTY_ARRAY);
         if (memoryArray != null && memoryArray.length > 0) {
-            deleteMemories = Arrays.asList(memoryArray);
+            deleteMemories = new LinkedHashSet<>(Arrays.asList(memoryArray));
         }
 
         // Parse request body if present (URL params take precedence)
@@ -95,7 +96,7 @@ public class RestMLDeleteMemoryContainerAction extends BaseRestHandler {
                 if ((deleteMemories == null || deleteMemories.isEmpty()) && map.containsKey(PARAMETER_DELETE_MEMORIES)) {
                     Object value = map.get(PARAMETER_DELETE_MEMORIES);
                     if (value instanceof List) {
-                        deleteMemories = new ArrayList<>();
+                        deleteMemories = new LinkedHashSet<>();
                         for (Object item : (List<?>) value) {
                             if (item instanceof String) {
                                 deleteMemories.add((String) item);

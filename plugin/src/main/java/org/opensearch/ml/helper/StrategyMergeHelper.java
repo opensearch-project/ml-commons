@@ -18,8 +18,8 @@ import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * Helper class for merging memory strategies during container updates.
- * Handles both updating existing strategies and adding new ones.
+ * Helper class for merging memory strategies.
+ * Handles merge logic for strategy updates.
  */
 @Log4j2
 public class StrategyMergeHelper {
@@ -37,7 +37,8 @@ public class StrategyMergeHelper {
      * @param existing List of existing strategies
      * @param updates List of strategy updates to apply
      * @return Merged list of strategies
-     * @throws OpenSearchStatusException if strategy ID not found (404) or type change attempted (400)
+     * @throws OpenSearchStatusException if strategy ID not found (404)
+     * @throws IllegalArgumentException if type change attempted or validation fails
      */
     public static List<MemoryStrategy> mergeStrategies(List<MemoryStrategy> existing, List<MemoryStrategy> updates) {
         if (existing == null) {
@@ -94,6 +95,14 @@ public class StrategyMergeHelper {
                 log.debug("Updated strategy with id: {}", update.getId());
             } else {
                 // Add new strategy with generated ID
+                // Validate new strategy before adding
+                try {
+                    MemoryStrategy.validate(update);
+                } catch (IllegalArgumentException e) {
+                    log.error("Strategy validation failed for new strategy: {}", e.getMessage());
+                    throw e;
+                }
+
                 String newId = MemoryStrategy.generateStrategyId(update.getType());
                 update.setId(newId);
 
