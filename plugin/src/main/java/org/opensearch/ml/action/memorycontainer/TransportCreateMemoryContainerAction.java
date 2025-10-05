@@ -142,7 +142,7 @@ public class TransportCreateMemoryContainerAction extends
         MemoryConfiguration configuration = input.getConfiguration();
         if (configuration != null && configuration.getStrategies() != null) {
             for (MemoryStrategy strategy : configuration.getStrategies()) {
-                if (strategy.getId() == null || strategy.getId().trim().isEmpty()) {
+                if (strategy.getId() == null || strategy.getId().isBlank()) {
                     strategy.setId(MemoryStrategy.generateStrategyId(strategy.getType()));
                 }
                 // Set enabled to true if not specified (default for new strategies)

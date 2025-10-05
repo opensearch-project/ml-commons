@@ -36,7 +36,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("semantic_12345678")
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .enabled(true)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
@@ -51,7 +51,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("user_preference_87654321")
-            .type("user_preference")
+            .type(MemoryStrategyType.USER_PREFERENCE)
             .enabled(true)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
@@ -66,7 +66,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("summary_11223344")
-            .type("summary")
+            .type(MemoryStrategyType.SUMMARY)
             .enabled(true)
             .namespace(Arrays.asList("session_id"))
             .strategyConfig(new HashMap<>())
@@ -82,7 +82,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy summaryStrategy = MemoryStrategy
             .builder()
             .id("summary_uppercase")
-            .type("SUMMARY")
+            .type(MemoryStrategyType.SUMMARY)
             .enabled(true)
             .namespace(Arrays.asList("session_id"))
             .strategyConfig(new HashMap<>())
@@ -94,7 +94,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy userPrefStrategy = MemoryStrategy
             .builder()
             .id("user_preference_uppercase")
-            .type("USER_PREFERENCE")
+            .type(MemoryStrategyType.USER_PREFERENCE)
             .enabled(true)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
@@ -106,7 +106,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy semanticStrategy = MemoryStrategy
             .builder()
             .id("semantic_uppercase")
-            .type("SEMANTIC")
+            .type(MemoryStrategyType.SEMANTIC)
             .enabled(true)
             .namespace(Arrays.asList("agent_id"))
             .strategyConfig(new HashMap<>())
@@ -120,7 +120,7 @@ public class MemoryTypeStrategyMappingTest {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("unknown_55667788")
-            .type("unknown_type")
+            .type(null)
             .enabled(true)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())

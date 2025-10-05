@@ -14,6 +14,7 @@ import java.io.UncheckedIOException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -34,7 +35,7 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     boolean deleteAllMemories;
 
     @Getter
-    Set<String> deleteMemories;
+    Set<MemoryType> deleteMemories;
 
     @Getter
     String tenantId;
@@ -43,7 +44,7 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     public MLMemoryContainerDeleteRequest(
         String memoryContainerId,
         boolean deleteAllMemories,
-        Set<String> deleteMemories,
+        Set<MemoryType> deleteMemories,
         String tenantId
     ) {
         this.memoryContainerId = memoryContainerId;
@@ -57,7 +58,9 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
         this.memoryContainerId = input.readString();
         this.deleteAllMemories = input.readBoolean();
         List<String> tempList = input.readOptionalStringList();
-        this.deleteMemories = tempList != null ? new LinkedHashSet<>(tempList) : null;
+        this.deleteMemories = tempList != null
+            ? tempList.stream().map(MemoryType::fromString).collect(Collectors.toCollection(LinkedHashSet::new))
+            : null;
         this.tenantId = input.readOptionalString();
     }
 
@@ -66,7 +69,10 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
         super.writeTo(output);
         output.writeString(memoryContainerId);
         output.writeBoolean(deleteAllMemories);
-        output.writeOptionalStringCollection(deleteMemories);
+        output
+            .writeOptionalStringCollection(
+                deleteMemories != null ? deleteMemories.stream().map(MemoryType::getValue).collect(Collectors.toList()) : null
+            );
         output.writeOptionalString(tenantId);
     }
 
@@ -84,18 +90,6 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
                 "Cannot specify both delete_all_memories and delete_memories. Use either delete_all_memories=true OR delete_memories with specific types",
                 exception
             );
-        }
-
-        // Validate memory types
-        if (this.deleteMemories != null && !this.deleteMemories.isEmpty()) {
-            for (String memoryType : this.deleteMemories) {
-                if (!MemoryType.isValid(memoryType)) {
-                    exception = addValidationError(
-                        "Invalid memory type: " + memoryType + ". Must be one of: " + MemoryType.getAllValuesAsString(),
-                        exception
-                    );
-                }
-            }
         }
 
         return exception;

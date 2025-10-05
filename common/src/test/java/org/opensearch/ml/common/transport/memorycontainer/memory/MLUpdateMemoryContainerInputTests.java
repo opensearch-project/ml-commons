@@ -26,6 +26,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class MLUpdateMemoryContainerInputTests {
 
@@ -38,7 +39,7 @@ public class MLUpdateMemoryContainerInputTests {
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build()
@@ -66,7 +67,7 @@ public class MLUpdateMemoryContainerInputTests {
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build(),
@@ -74,7 +75,7 @@ public class MLUpdateMemoryContainerInputTests {
                     .builder()
                     .id("user_pref_456")
                     .enabled(false)
-                    .type("user_preference")
+                    .type(MemoryStrategyType.USER_PREFERENCE)
                     .namespace(Arrays.asList("user_id", "session_id"))
                     .strategyConfig(new HashMap<>())
                     .build()
@@ -132,7 +133,7 @@ public class MLUpdateMemoryContainerInputTests {
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(strategyConfig)
                     .build()
@@ -155,7 +156,7 @@ public class MLUpdateMemoryContainerInputTests {
         assertTrue(jsonStr.contains("\"backend_roles\":[\"role1\",\"role2\"]"));
         assertTrue(jsonStr.contains("\"strategies\""));
         assertTrue(jsonStr.contains("\"semantic_123\""));
-        assertTrue(jsonStr.contains("\"semantic\""));
+        assertTrue(jsonStr.contains("\"SEMANTIC\""));
     }
 
     @Test
@@ -202,7 +203,7 @@ public class MLUpdateMemoryContainerInputTests {
         assertNotNull(input.getStrategies());
         assertEquals(1, input.getStrategies().size());
         assertEquals("semantic_123", input.getStrategies().get(0).getId());
-        assertEquals("semantic", input.getStrategies().get(0).getType());
+        assertEquals(MemoryStrategyType.SEMANTIC, input.getStrategies().get(0).getType());
     }
 
     @Test
@@ -263,7 +264,7 @@ public class MLUpdateMemoryContainerInputTests {
         MemoryStrategy strategy = input.getStrategies().get(0);
         assertNotNull(strategy);
         assertEquals("semantic_123", strategy.getId());
-        assertEquals("semantic", strategy.getType());
+        assertEquals(MemoryStrategyType.SEMANTIC, strategy.getType());
         assertNotNull(strategy.getStrategyConfig());
         // Strategy config parsing is tested in MemoryStrategyTest
     }
@@ -279,7 +280,7 @@ public class MLUpdateMemoryContainerInputTests {
                     .builder()
                     .id("test_id")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(strategyConfig)
                     .build()
@@ -311,7 +312,7 @@ public class MLUpdateMemoryContainerInputTests {
                     .builder()
                     .id("semantic_abc")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id", "agent_id"))
                     .strategyConfig(strategyConfig)
                     .build()

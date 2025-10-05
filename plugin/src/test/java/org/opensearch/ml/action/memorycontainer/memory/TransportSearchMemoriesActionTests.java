@@ -40,6 +40,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesRequest;
@@ -157,7 +158,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -233,7 +234,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -295,7 +296,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -328,7 +329,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -368,7 +369,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -423,7 +424,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -491,7 +492,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -585,7 +586,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -657,7 +658,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId("")
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -686,7 +687,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(null)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -716,7 +717,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest
             .builder()
@@ -752,7 +753,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId("   ")
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -782,7 +783,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -836,7 +837,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -866,7 +867,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -919,7 +920,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")  // Specify working memory type
+            .memoryType(MemoryType.WORKING)  // Specify working memory type
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -968,7 +969,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -1009,7 +1010,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -1063,7 +1064,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(tenantId).build();
 
@@ -1112,7 +1113,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -1169,7 +1170,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -1209,7 +1210,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
@@ -1255,7 +1256,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             .builder()
             .memoryContainerId(memoryContainerId)
             .searchSourceBuilder(searchSourceBuilder)
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .build();
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 

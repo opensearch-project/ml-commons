@@ -34,6 +34,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
@@ -325,7 +326,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build()
@@ -407,7 +408,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build()
@@ -422,7 +423,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("user_preference")
+            .type(MemoryStrategyType.USER_PREFERENCE)
             .namespace(Arrays.asList("session_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -489,7 +490,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build()
@@ -557,7 +558,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build()
@@ -574,7 +575,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MemoryStrategy updateStrategy = MemoryStrategy
             .builder()
             .id("semantic_123")
-            .type("user_preference")  // Try to change type
+            .type(MemoryStrategyType.USER_PREFERENCE)  // Try to change type
             .enabled(false)
             .build();
 
@@ -630,7 +631,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                     .builder()
                     .id("semantic_123")
                     .enabled(true)
-                    .type("semantic")
+                    .type(MemoryStrategyType.SEMANTIC)
                     .namespace(Arrays.asList("user_id"))
                     .strategyConfig(new HashMap<>())
                     .build()

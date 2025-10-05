@@ -28,6 +28,7 @@ import org.opensearch.index.query.WrapperQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class MemorySearchQueryBuilderTests {
 
@@ -152,7 +153,7 @@ public class MemorySearchQueryBuilderTests {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("semantic-strategy")
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(List.of(SESSION_ID_FIELD))
             .build();
 
@@ -202,7 +203,7 @@ public class MemorySearchQueryBuilderTests {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("semantic-strategy")
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(List.of(SESSION_ID_FIELD))
             .build();
 

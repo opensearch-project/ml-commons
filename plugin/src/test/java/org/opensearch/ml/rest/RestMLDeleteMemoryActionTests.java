@@ -31,6 +31,7 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
@@ -101,7 +102,7 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
         MLDeleteMemoryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("test-memory-type", capturedRequest.getMemoryType());
+        assertEquals(MemoryType.LONG_TERM, capturedRequest.getMemoryType());
         assertEquals("test-memory-id", capturedRequest.getMemoryId());
     }
 
@@ -181,7 +182,7 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testPrepareRequestWithSpecialCharacters() throws Exception {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "container-with-dashes-123");
-        params.put(PARAMETER_MEMORY_TYPE, "type_with_underscores");
+        params.put(PARAMETER_MEMORY_TYPE, "working");
         params.put(PARAMETER_MEMORY_ID, "memory_with_underscores_456");
 
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -198,14 +199,14 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
         MLDeleteMemoryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("container-with-dashes-123", capturedRequest.getMemoryContainerId());
-        assertEquals("type_with_underscores", capturedRequest.getMemoryType());
+        assertEquals(MemoryType.WORKING, capturedRequest.getMemoryType());
         assertEquals("memory_with_underscores_456", capturedRequest.getMemoryId());
     }
 
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MEMORY_CONTAINER_ID, "test-container-id");
-        params.put(PARAMETER_MEMORY_TYPE, "test-memory-type");
+        params.put(PARAMETER_MEMORY_TYPE, "long-term");
         params.put(PARAMETER_MEMORY_ID, "test-memory-id");
 
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

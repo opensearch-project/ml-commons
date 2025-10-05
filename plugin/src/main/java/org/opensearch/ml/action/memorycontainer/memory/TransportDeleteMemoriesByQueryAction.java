@@ -88,7 +88,7 @@ public class TransportDeleteMemoriesByQueryAction extends
             }
 
             // Step 4: Get the memory index name based on type
-            String memoryType = request.getMemoryType();
+            MemoryType memoryType = request.getMemoryType();
             String memoryIndexName = getMemoryIndexName(container, memoryType);
 
             if (memoryIndexName == null) {
@@ -136,17 +136,12 @@ public class TransportDeleteMemoriesByQueryAction extends
     /**
      * Get the memory index name based on the memory type
      */
-    private String getMemoryIndexName(MLMemoryContainer container, String memoryTypeStr) {
+    private String getMemoryIndexName(MLMemoryContainer container, MemoryType memoryType) {
         if (container == null || container.getConfiguration() == null) {
             return null;
         }
 
         MemoryConfiguration config = container.getConfiguration();
-        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
-
-        if (memoryType == null) {
-            return null;
-        }
 
         switch (memoryType) {
             case SESSIONS:

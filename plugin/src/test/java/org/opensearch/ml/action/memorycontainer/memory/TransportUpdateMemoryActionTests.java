@@ -40,6 +40,7 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
@@ -147,7 +148,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_Success() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "long-term";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         String newText = "Updated memory content";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, newText)).build();
@@ -180,7 +181,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(mockContainer, "long-term")).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.LONG_TERM)).thenReturn("test-memory-index");
 
         // Mock get operation
         doAnswer(invocation -> {
@@ -224,7 +225,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .memoryId(memoryId)
             .mlUpdateMemoryInput(input)
             .build();
@@ -259,7 +260,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .memoryId(memoryId)
             .mlUpdateMemoryInput(input)
             .build();
@@ -296,7 +297,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_MemoryNotFound() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "long-term";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", "new text")).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
@@ -321,7 +322,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(mockContainer, "long-term")).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.LONG_TERM)).thenReturn("test-memory-index");
 
         // Mock get operation to return not found
         doAnswer(invocation -> {
@@ -352,7 +353,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_EmbeddingGenerationFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "long-term";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         String newText = "Updated memory content";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, newText)).build();
@@ -384,7 +385,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(mockContainer, "long-term")).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(mockContainer, MemoryType.LONG_TERM)).thenReturn("test-memory-index");
 
         // Mock get operation
         doAnswer(invocation -> {
@@ -424,7 +425,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_UpdateFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "long-term";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         String newText = "Updated memory content";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, newText)).build();
@@ -463,7 +464,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(containerWithoutSemantic))).thenReturn(true);
 
         // Mock getMemoryIndexName
-        when(memoryContainerHelper.getMemoryIndexName(containerWithoutSemantic, "long-term")).thenReturn("test-memory-index");
+        when(memoryContainerHelper.getMemoryIndexName(containerWithoutSemantic, MemoryType.LONG_TERM)).thenReturn("test-memory-index");
 
         // Mock get operation
         doAnswer(invocation -> {
@@ -499,7 +500,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLUpdateMemoryRequest originalRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .memoryId("memory-456")
             .mlUpdateMemoryInput(input)
             .build();
@@ -518,7 +519,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .memoryId("memory-456")
             .mlUpdateMemoryInput(input)
             .build();
@@ -541,7 +542,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_MemoryIndexNotFound() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "unknown-type";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", "new text")).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
@@ -583,7 +584,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_CannotUpdateHistoryIndex() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "history";
+        MemoryType memoryType = MemoryType.HISTORY;
         String memoryId = "memory-456";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of("text", "new text")).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
@@ -625,7 +626,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_MemoryAccessDenied() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "long-term";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, "new text")).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest
@@ -689,7 +690,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("additional_info", Map.of("key", "value"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "sessions", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, MemoryType.SESSIONS, new HashMap<>());
 
         assertEquals(3, result.size()); // 2 fields + last_updated_time
         assertEquals("Updated summary", result.get("summary"));
@@ -708,7 +709,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("tags", Map.of("tag1", "value1"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "working", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, MemoryType.WORKING, new HashMap<>());
 
         assertEquals(6, result.size()); // 5 fields + last_updated_time
         assertEquals("New messages", result.get("messages"));
@@ -727,7 +728,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("tags", Map.of("tag1", "value1"));
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "long-term", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, MemoryType.LONG_TERM, new HashMap<>());
 
         assertEquals(3, result.size()); // 2 fields + last_updated_time
         assertEquals("Updated memory text", result.get(MEMORY_FIELD));
@@ -742,7 +743,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
         updateContent.put("field", "value");
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(updateContent).build();
 
-        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, "unknown", new HashMap<>());
+        Map<String, Object> result = transportUpdateMemoryAction.constructNewDoc(input, null, new HashMap<>());
 
         assertEquals(1, result.size()); // only last_updated_time is added for unknown types
         assertNotNull(result.get("last_updated_time"));
@@ -752,7 +753,7 @@ public class TransportUpdateMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_GetRequestFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "long-term";
+        MemoryType memoryType = MemoryType.LONG_TERM;
         String memoryId = "memory-456";
         MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(Map.of(MEMORY_FIELD, "new text")).build();
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest

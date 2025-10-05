@@ -19,11 +19,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
@@ -73,10 +75,10 @@ public class RestMLDeleteMemoryContainerAction extends BaseRestHandler {
 
         // Parse URL parameters
         boolean deleteAllMemories = request.paramAsBoolean(PARAMETER_DELETE_ALL_MEMORIES, false);
-        Set<String> deleteMemories = null;
+        Set<String> deleteMemoriesStr = null;
         String[] memoryArray = request.paramAsStringArray(PARAMETER_DELETE_MEMORIES, Strings.EMPTY_ARRAY);
         if (memoryArray != null && memoryArray.length > 0) {
-            deleteMemories = new LinkedHashSet<>(Arrays.asList(memoryArray));
+            deleteMemoriesStr = new LinkedHashSet<>(Arrays.asList(memoryArray));
         }
 
         // Parse request body if present (URL params take precedence)
@@ -93,18 +95,24 @@ public class RestMLDeleteMemoryContainerAction extends BaseRestHandler {
                 }
 
                 // Parse delete_memories from body if not set from URL
-                if ((deleteMemories == null || deleteMemories.isEmpty()) && map.containsKey(PARAMETER_DELETE_MEMORIES)) {
+                if ((deleteMemoriesStr == null || deleteMemoriesStr.isEmpty()) && map.containsKey(PARAMETER_DELETE_MEMORIES)) {
                     Object value = map.get(PARAMETER_DELETE_MEMORIES);
                     if (value instanceof List) {
-                        deleteMemories = new LinkedHashSet<>();
+                        deleteMemoriesStr = new LinkedHashSet<>();
                         for (Object item : (List<?>) value) {
                             if (item instanceof String) {
-                                deleteMemories.add((String) item);
+                                deleteMemoriesStr.add((String) item);
                             }
                         }
                     }
                 }
             }
+        }
+
+        // Convert String set to MemoryType enum set
+        Set<MemoryType> deleteMemories = null;
+        if (deleteMemoriesStr != null && !deleteMemoriesStr.isEmpty()) {
+            deleteMemories = deleteMemoriesStr.stream().map(MemoryType::fromString).collect(Collectors.toSet());
         }
 
         MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest = new MLMemoryContainerDeleteRequest(

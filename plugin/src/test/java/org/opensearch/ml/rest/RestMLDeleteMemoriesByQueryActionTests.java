@@ -129,7 +129,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         MLDeleteMemoriesByQueryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("sessions", capturedRequest.getMemoryType());
+        assertEquals(MemoryType.SESSIONS, capturedRequest.getMemoryType());
         assertNotNull(capturedRequest.getQuery());
     }
 
@@ -149,7 +149,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         MLDeleteMemoriesByQueryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("sessions", capturedRequest.getMemoryType());
+        assertEquals(MemoryType.SESSIONS, capturedRequest.getMemoryType());
         // Query should be null, transport layer will handle default
         assertNull(capturedRequest.getQuery());
     }
@@ -171,7 +171,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         MLDeleteMemoriesByQueryRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals("test-container-id", capturedRequest.getMemoryContainerId());
-        assertEquals("sessions", capturedRequest.getMemoryType());
+        assertEquals(MemoryType.SESSIONS, capturedRequest.getMemoryType());
         assertNotNull(capturedRequest.getQuery());
         assertTrue(capturedRequest.getQuery().toString().contains("bool"));
     }
@@ -211,7 +211,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
         for (int i = 0; i < memoryTypes.length; i++) {
             MLDeleteMemoriesByQueryRequest capturedRequest = capturedRequests.get(i);
             assertEquals("container-" + memoryTypes[i], capturedRequest.getMemoryContainerId());
-            assertEquals(memoryTypes[i], capturedRequest.getMemoryType());
+            assertEquals(MemoryType.fromString(memoryTypes[i]), capturedRequest.getMemoryType());
         }
 
         // Verify client was called the right number of times
@@ -221,7 +221,7 @@ public class RestMLDeleteMemoriesByQueryActionTests extends OpenSearchTestCase {
     @Test
     public void testPrepareRequest_MissingContainerId() {
         Map<String, String> params = new HashMap<>();
-        params.put(PARAMETER_MEMORY_TYPE, "session");
+        params.put(PARAMETER_MEMORY_TYPE, "sessions");
 
         RestRequest request = new FakeRestRequest.Builder(xContentRegistry)
             .withMethod(RestRequest.Method.POST)

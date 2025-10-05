@@ -20,6 +20,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 public class MLGetMemoryRequestTest {
 
@@ -31,7 +32,7 @@ public class MLGetMemoryRequestTest {
         requestNormal = MLGetMemoryRequest
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .memoryId("memory-456")
             .build();
 
@@ -42,7 +43,7 @@ public class MLGetMemoryRequestTest {
     public void testBuilderNormal() {
         assertNotNull(requestNormal);
         assertEquals("container-123", requestNormal.getMemoryContainerId());
-        assertEquals("long-term", requestNormal.getMemoryType());
+        assertEquals(MemoryType.LONG_TERM, requestNormal.getMemoryType());
         assertEquals("memory-456", requestNormal.getMemoryId());
     }
 
@@ -92,7 +93,7 @@ public class MLGetMemoryRequestTest {
             public void writeTo(StreamOutput out) throws IOException {
                 super.writeTo(out);
                 out.writeString("test-container");
-                out.writeString("test-type");
+                out.writeEnum(MemoryType.SESSIONS);
                 out.writeString("test-memory");
             }
         };
@@ -100,7 +101,7 @@ public class MLGetMemoryRequestTest {
         MLGetMemoryRequest result = MLGetMemoryRequest.fromActionRequest(mockRequest);
         assertNotNull(result);
         assertEquals("test-container", result.getMemoryContainerId());
-        assertEquals("test-type", result.getMemoryType());
+        assertEquals(MemoryType.SESSIONS, result.getMemoryType());
         assertEquals("test-memory", result.getMemoryId());
     }
 

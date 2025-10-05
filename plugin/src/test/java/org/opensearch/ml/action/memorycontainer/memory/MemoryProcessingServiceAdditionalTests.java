@@ -26,6 +26,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -54,7 +55,7 @@ public class MemoryProcessingServiceAdditionalTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+        memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
     }
 

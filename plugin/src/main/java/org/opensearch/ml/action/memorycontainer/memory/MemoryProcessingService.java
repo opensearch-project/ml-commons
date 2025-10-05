@@ -36,6 +36,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryDecisionRequest;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -68,13 +69,12 @@ public class MemoryProcessingService {
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
-        if ("semantic".equalsIgnoreCase(strategy.getType())
-            || "user_preference".equalsIgnoreCase(strategy.getType())
-            || "summary".equalsIgnoreCase(strategy.getType())) {
+        MemoryStrategyType type = strategy.getType();
+        if (type == MemoryStrategyType.SEMANTIC || type == MemoryStrategyType.USER_PREFERENCE || type == MemoryStrategyType.SUMMARY) {
             extractFactsFromConversation(messages, strategy, memoryConfig, listener);
         } else {
-            log.error("Unsupported memory strategy type: {}", strategy.getType());
-            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
+            log.error("Unsupported memory strategy type: {}", type);
+            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + type));
         }
     }
 
@@ -94,9 +94,10 @@ public class MemoryProcessingService {
 
         // Determine default prompt based on strategy type
         String defaultPrompt;
-        if ("user_preference".equalsIgnoreCase(strategy.getType())) {
+        MemoryStrategyType type = strategy.getType();
+        if (type == MemoryStrategyType.USER_PREFERENCE) {
             defaultPrompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
-        } else if ("summary".equalsIgnoreCase(strategy.getType())) {
+        } else if (type == MemoryStrategyType.SUMMARY) {
             defaultPrompt = SUMMARY_FACTS_EXTRACTION_PROMPT;
         } else {
             defaultPrompt = SEMANTIC_FACTS_EXTRACTION_PROMPT;
@@ -106,7 +107,7 @@ public class MemoryProcessingService {
             stringParameters.put("system_prompt", defaultPrompt);
         } else {
             Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
-            if (customPrompt == null || customPrompt.toString().trim().isEmpty()) {
+            if (customPrompt == null || customPrompt.toString().isBlank()) {
                 stringParameters.put("system_prompt", defaultPrompt);
             } else if (!validatePromptFormat(customPrompt.toString())) {
                 log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");

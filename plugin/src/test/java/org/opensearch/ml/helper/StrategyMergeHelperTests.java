@@ -18,6 +18,7 @@ import org.junit.Test;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class StrategyMergeHelperTests {
 
@@ -32,7 +33,7 @@ public class StrategyMergeHelperTests {
             .builder()
             .id("semantic_12345678")
             .enabled(true)
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -41,7 +42,7 @@ public class StrategyMergeHelperTests {
             .builder()
             .id("user_preference_87654321")
             .enabled(false)
-            .type("user_preference")
+            .type(MemoryStrategyType.USER_PREFERENCE)
             .namespace(Arrays.asList("user_id", "session_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -67,7 +68,7 @@ public class StrategyMergeHelperTests {
 
         assertNotNull(updatedStrategy);
         assertFalse(updatedStrategy.getEnabled());  // Should be updated
-        assertEquals("semantic", updatedStrategy.getType());  // Should be preserved
+        assertEquals(MemoryStrategyType.SEMANTIC, updatedStrategy.getType());  // Should be preserved
         assertEquals(Arrays.asList("user_id"), updatedStrategy.getNamespace());  // Should be preserved
     }
 
@@ -87,7 +88,7 @@ public class StrategyMergeHelperTests {
         assertNotNull(updatedStrategy);
         assertEquals(newConfig, updatedStrategy.getStrategyConfig());  // Should be updated
         assertFalse(updatedStrategy.getEnabled());  // Should be preserved (was false)
-        assertEquals("user_preference", updatedStrategy.getType());  // Should be preserved
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, updatedStrategy.getType());  // Should be preserved
         assertEquals(Arrays.asList("user_id", "session_id"), updatedStrategy.getNamespace());  // Should be preserved
     }
 
@@ -96,7 +97,7 @@ public class StrategyMergeHelperTests {
         // Test adding a new strategy without ID (should auto-generate)
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("summary")
+            .type(MemoryStrategyType.SUMMARY)
             .namespace(Arrays.asList("agent_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -106,7 +107,7 @@ public class StrategyMergeHelperTests {
 
         assertEquals(3, result.size());  // Should have 3 strategies now
 
-        MemoryStrategy addedStrategy = result.stream().filter(s -> s.getType().equals("summary")).findFirst().orElse(null);
+        MemoryStrategy addedStrategy = result.stream().filter(s -> s.getType() == MemoryStrategyType.SUMMARY).findFirst().orElse(null);
 
         assertNotNull(addedStrategy);
         assertNotNull(addedStrategy.getId());  // Should have auto-generated ID
@@ -120,7 +121,7 @@ public class StrategyMergeHelperTests {
         // Test that new strategies without enabled field default to true
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("summary")
+            .type(MemoryStrategyType.SUMMARY)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -128,7 +129,7 @@ public class StrategyMergeHelperTests {
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
 
-        MemoryStrategy addedStrategy = result.stream().filter(s -> s.getType().equals("summary")).findFirst().orElse(null);
+        MemoryStrategy addedStrategy = result.stream().filter(s -> s.getType() == MemoryStrategyType.SUMMARY).findFirst().orElse(null);
 
         assertNotNull(addedStrategy);
         assertTrue(addedStrategy.getEnabled());  // Should default to true
@@ -139,7 +140,7 @@ public class StrategyMergeHelperTests {
         // Test that new strategies can be explicitly set to enabled=false
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("summary")
+            .type(MemoryStrategyType.SUMMARY)
             .enabled(false)  // Explicitly set to false
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
@@ -148,7 +149,7 @@ public class StrategyMergeHelperTests {
         List<MemoryStrategy> updates = Arrays.asList(newStrategy);
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
 
-        MemoryStrategy addedStrategy = result.stream().filter(s -> s.getType().equals("summary")).findFirst().orElse(null);
+        MemoryStrategy addedStrategy = result.stream().filter(s -> s.getType() == MemoryStrategyType.SUMMARY).findFirst().orElse(null);
 
         assertNotNull(addedStrategy);
         assertFalse(addedStrategy.getEnabled());  // Should respect explicit false
@@ -176,7 +177,7 @@ public class StrategyMergeHelperTests {
         MemoryStrategy update = MemoryStrategy
             .builder()
             .id("semantic_12345678")
-            .type("user_preference")  // Try to change type
+            .type(MemoryStrategyType.USER_PREFERENCE)  // Try to change type
             .build();
 
         List<MemoryStrategy> updates = Arrays.asList(update);
@@ -186,8 +187,8 @@ public class StrategyMergeHelperTests {
             fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             assertTrue(e.getMessage().contains("Cannot change strategy type"));
-            assertTrue(e.getMessage().contains("semantic"));
-            assertTrue(e.getMessage().contains("user_preference"));
+            assertTrue(e.getMessage().contains("SEMANTIC"));
+            assertTrue(e.getMessage().contains("USER_PREFERENCE"));
         }
     }
 
@@ -204,7 +205,7 @@ public class StrategyMergeHelperTests {
 
         assertNotNull(unmodified);
         assertFalse(unmodified.getEnabled());  // Should be unchanged
-        assertEquals("user_preference", unmodified.getType());
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, unmodified.getType());
         assertEquals(Arrays.asList("user_id", "session_id"), unmodified.getNamespace());
     }
 
@@ -217,7 +218,7 @@ public class StrategyMergeHelperTests {
 
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("summary")
+            .type(MemoryStrategyType.SUMMARY)
             .namespace(Arrays.asList("session_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -238,7 +239,7 @@ public class StrategyMergeHelperTests {
         assertTrue(updated2.getEnabled());
 
         // Verify new strategy
-        MemoryStrategy added = result.stream().filter(s -> s.getType().equals("summary")).findFirst().orElse(null);
+        MemoryStrategy added = result.stream().filter(s -> s.getType() == MemoryStrategyType.SUMMARY).findFirst().orElse(null);
         assertNotNull(added);
         assertTrue(added.getEnabled());
     }
@@ -248,7 +249,7 @@ public class StrategyMergeHelperTests {
         // Test with null existing strategies list
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -257,7 +258,7 @@ public class StrategyMergeHelperTests {
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(null, updates);
 
         assertEquals(1, result.size());
-        assertEquals("semantic", result.get(0).getType());
+        assertEquals(MemoryStrategyType.SEMANTIC, result.get(0).getType());
     }
 
     @Test
@@ -265,7 +266,7 @@ public class StrategyMergeHelperTests {
         // Test with empty existing strategies list
         MemoryStrategy newStrategy = MemoryStrategy
             .builder()
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(Arrays.asList("user_id"))
             .strategyConfig(new HashMap<>())
             .build();
@@ -274,7 +275,7 @@ public class StrategyMergeHelperTests {
         List<MemoryStrategy> result = StrategyMergeHelper.mergeStrategies(new ArrayList<>(), updates);
 
         assertEquals(1, result.size());
-        assertEquals("semantic", result.get(0).getType());
+        assertEquals(MemoryStrategyType.SEMANTIC, result.get(0).getType());
     }
 
     @Test
@@ -331,53 +332,18 @@ public class StrategyMergeHelperTests {
         assertEquals(newConfig, updated.getStrategyConfig());
     }
 
-    @Test
-    public void testMergeStrategies_InvalidStrategyType() {
-        // Test adding new strategy with invalid type
-        MemoryStrategy invalidStrategy = MemoryStrategy
-            .builder()
-            .type("invalid_type")
-            .namespace(Arrays.asList("user_id"))
-            .strategyConfig(new HashMap<>())
-            .build();
+    // Note: Test for invalid strategy type removed - type is now @NonNull enum,
+    // so invalid types cannot be constructed via builder
 
-        List<MemoryStrategy> updates = Arrays.asList(invalidStrategy);
-
-        try {
-            StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
-            fail("Expected IllegalArgumentException for invalid strategy type");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("Invalid strategy type"));
-            assertTrue(e.getMessage().contains("invalid_type"));
-        }
-    }
-
-    @Test
-    public void testMergeStrategies_MissingNamespace() {
-        // Test adding new strategy without namespace
-        MemoryStrategy noNamespaceStrategy = MemoryStrategy
-            .builder()
-            .type("semantic")
-            .namespace(null)
-            .strategyConfig(new HashMap<>())
-            .build();
-
-        List<MemoryStrategy> updates = Arrays.asList(noNamespaceStrategy);
-
-        try {
-            StrategyMergeHelper.mergeStrategies(existingStrategies, updates);
-            fail("Expected IllegalArgumentException for missing namespace");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("namespace is required"));
-        }
-    }
+    // Note: Test for missing namespace removed - namespace is now @NonNull,
+    // so null namespace cannot be set via builder
 
     @Test
     public void testMergeStrategies_EmptyNamespace() {
         // Test adding new strategy with empty namespace array
         MemoryStrategy emptyNamespaceStrategy = MemoryStrategy
             .builder()
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(new ArrayList<>())
             .strategyConfig(new HashMap<>())
             .build();

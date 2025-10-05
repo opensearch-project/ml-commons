@@ -35,6 +35,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
@@ -78,7 +79,7 @@ public class MemoryOperationsServiceTests {
         namespace = new HashMap<>();
         namespace.put("session_id", "session-123");
 
-        strategy = MemoryStrategy.builder().type("semantic").enabled(true).id("strategy-123").build();
+        strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).enabled(true).id("strategy-123").build();
     }
 
     @Test
@@ -408,7 +409,12 @@ public class MemoryOperationsServiceTests {
     @Test
     public void testExecuteMemoryOperations_UserPreferenceStrategy() {
         // Test that USER_PREFERENCE strategy type maps correctly
-        MemoryStrategy userPrefStrategy = MemoryStrategy.builder().type("user_preference").enabled(true).id("pref-strategy").build();
+        MemoryStrategy userPrefStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.USER_PREFERENCE)
+            .enabled(true)
+            .id("pref-strategy")
+            .build();
 
         MemoryDecision addDecision = mock(MemoryDecision.class);
         when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
@@ -447,7 +453,12 @@ public class MemoryOperationsServiceTests {
     @Test
     public void testExecuteMemoryOperations_SummaryStrategy() {
         // Test that SUMMARY strategy type maps correctly
-        MemoryStrategy summaryStrategy = MemoryStrategy.builder().type("summary").enabled(true).id("summary-strategy").build();
+        MemoryStrategy summaryStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.SUMMARY)
+            .enabled(true)
+            .id("summary-strategy")
+            .build();
 
         MemoryDecision addDecision = mock(MemoryDecision.class);
         when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);

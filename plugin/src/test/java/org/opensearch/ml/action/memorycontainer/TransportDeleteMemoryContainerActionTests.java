@@ -44,6 +44,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -592,7 +593,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(false)
-            .deleteMemories(new LinkedHashSet<>(Arrays.asList("sessions", "working")))
+            .deleteMemories(new LinkedHashSet<>(Arrays.asList(MemoryType.SESSIONS, MemoryType.WORKING)))
             .tenantId(null)
             .build();
 
@@ -658,12 +659,12 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
         when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
 
-        // Setup delete request with unknown memory type
+        // Setup delete request with selective memories (cannot test unknown type with enum)
         MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
             .builder()
             .memoryContainerId(MEMORY_CONTAINER_ID)
             .deleteAllMemories(false)
-            .deleteMemories(new LinkedHashSet<>(Arrays.asList("sessions", "unknown_type")))
+            .deleteMemories(new LinkedHashSet<>(Arrays.asList(MemoryType.SESSIONS)))
             .tenantId(null)
             .build();
 

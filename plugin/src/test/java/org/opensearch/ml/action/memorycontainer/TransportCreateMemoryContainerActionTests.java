@@ -50,6 +50,7 @@ import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
@@ -142,7 +143,15 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         // Setup memory storage config
         List<MemoryStrategy> strategies = new ArrayList<>();
         strategies
-            .add(MemoryStrategy.builder().namespace(List.of(SESSION_ID_FIELD)).id("strategy-id1").enabled(true).type("semantic").build());
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .namespace(List.of(SESSION_ID_FIELD))
+                    .id("strategy-id1")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .build()
+            );
         memoryStorageConfig = spy(
             MemoryConfiguration
                 .builder()
@@ -878,81 +887,18 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("created", response.getStatus());
     }
 
-    @Test
-    public void testDoExecuteWithInvalidStrategyType() throws InterruptedException {
-        // Arrange
-        MemoryStrategy invalidStrategy = MemoryStrategy
-            .builder()
-            .type("invalid_type")
-            .enabled(true)
-            .namespace(Arrays.asList("user_id"))
-            .build();
+    // Note: Tests for invalid strategy type removed - type is now @NonNull enum,
+    // so invalid types cannot be constructed via builder
 
-        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(invalidStrategy)).build();
-
-        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
-        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
-
-        // Act
-        action.doExecute(task, request, actionListener);
-
-        // Assert
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof IllegalArgumentException);
-        assertTrue(exception.getMessage().contains("Invalid strategy type"));
-    }
-
-    @Test
-    public void testDoExecuteWithEmptyStrategyType() throws InterruptedException {
-        // Test behavior when strategy type is empty string
-        MemoryStrategy emptyTypeStrategy = MemoryStrategy.builder().type("").enabled(true).namespace(Arrays.asList("user_id")).build();
-
-        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(emptyTypeStrategy)).build();
-
-        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
-        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
-
-        mockSuccessfulIndexCreation();
-
-        // Act
-        action.doExecute(task, request, actionListener);
-
-        // Assert - empty string should be treated as invalid
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof IllegalArgumentException);
-    }
-
-    @Test
-    public void testDoExecuteWithMissingStrategyNamespace() throws InterruptedException {
-        // Test behavior when strategy namespace is null
-        MemoryStrategy strategyWithNullNamespace = MemoryStrategy.builder().type("semantic").enabled(true).namespace(null).build();
-
-        MemoryConfiguration config = MemoryConfiguration.builder().strategies(Arrays.asList(strategyWithNullNamespace)).build();
-
-        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("Test Container").configuration(config).build();
-        MLCreateMemoryContainerRequest request = MLCreateMemoryContainerRequest.builder().mlCreateMemoryContainerInput(input).build();
-
-        // Act
-        action.doExecute(task, request, actionListener);
-
-        // Assert
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof IllegalArgumentException);
-        assertTrue(exception.getMessage().contains("namespace is required"));
-    }
+    // Note: Test for missing namespace removed - namespace is now @NonNull,
+    // so null namespace cannot be set via builder
 
     @Test
     public void testDoExecuteWithEmptyStrategyNamespace() throws InterruptedException {
         // Test behavior when strategy namespace is empty list
         MemoryStrategy strategyWithEmptyNamespace = MemoryStrategy
             .builder()
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .enabled(true)
             .namespace(Arrays.asList())
             .build();

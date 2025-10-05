@@ -39,11 +39,11 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     private String id;
     private Boolean enabled;
-    private String type;
+    private MemoryStrategyType type;
     private List<String> namespace;
     private Map<String, Object> strategyConfig;
 
-    public MemoryStrategy(String id, Boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
+    public MemoryStrategy(String id, Boolean enabled, MemoryStrategyType type, List<String> namespace, Map<String, Object> strategyConfig) {
         // Do not auto-generate ID in constructor - let StrategyMergeHelper control ID generation
         // This allows distinguishing between updates (ID provided) and additions (ID null/empty)
         this.id = id;
@@ -56,10 +56,23 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     public MemoryStrategy(StreamInput input) throws IOException {
         this.id = input.readString();
         this.enabled = input.readOptionalBoolean();
-        this.type = input.readString();
-        this.namespace = input.readStringList();
+
+        if (input.readBoolean()) {
+            this.type = input.readEnum(MemoryStrategyType.class);
+        } else {
+            this.type = null;
+        }
+
+        if (input.readBoolean()) {
+            this.namespace = input.readStringList();
+        } else {
+            this.namespace = null;
+        }
+
         if (input.readBoolean()) {
             this.strategyConfig = input.readMap();
+        } else {
+            this.strategyConfig = new HashMap<>();
         }
     }
 
@@ -67,9 +80,22 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
         out.writeOptionalBoolean(enabled);
-        out.writeString(type);
-        out.writeStringCollection(namespace);
-        if (!strategyConfig.isEmpty()) {
+
+        if (type != null) {
+            out.writeBoolean(true);
+            out.writeEnum(type);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        if (namespace != null) {
+            out.writeBoolean(true);
+            out.writeStringCollection(namespace);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        if (strategyConfig != null && !strategyConfig.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(strategyConfig);
         } else {
@@ -80,25 +106,30 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-
         builder.field(ID_FIELD, id);
         builder.field(ENABLED_FIELD, enabled);
-        builder.field(STRATEGY_TYPE_FIELD, type);
-        builder.field(NAMESPACE_FIELD, namespace);
-        if (!strategyConfig.isEmpty()) {
-            builder.field(STRATEGY_CONFIG_FIELD, strategyConfig);
+
+        if (type != null) {
+            builder.field(STRATEGY_TYPE_FIELD, type.getValue());
         }
 
+        if (namespace != null) {
+            builder.field(NAMESPACE_FIELD, namespace);
+        }
+
+        if (strategyConfig != null && !strategyConfig.isEmpty()) {
+            builder.field(STRATEGY_CONFIG_FIELD, strategyConfig);
+        }
         builder.endObject();
         return builder;
     }
 
     public static MemoryStrategy parse(XContentParser parser) throws IOException {
         String id = null;
-        Boolean enabled = null;  // Null to detect if not provided
-        String type = null;
+        Boolean enabled = null;
+        MemoryStrategyType type = null;
         List<String> namespace = null;
-        Map<String, Object> strategyConfig = new HashMap<>();
+        Map<String, Object> strategyConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -113,7 +144,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                     enabled = parser.booleanValue();
                     break;
                 case STRATEGY_TYPE_FIELD:
-                    type = parser.text();
+                    type = MemoryStrategyType.fromString(parser.text());
                     break;
                 case NAMESPACE_FIELD:
                     namespace = new ArrayList<>();
@@ -123,7 +154,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                     }
                     break;
                 case STRATEGY_CONFIG_FIELD:
-                    strategyConfig.putAll(parser.map());
+                    strategyConfig = parser.map();
                     break;
                 default:
                     parser.skipChildren();
@@ -131,8 +162,6 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             }
         }
 
-        // Do not auto-generate ID during parsing - let StrategyMergeHelper control ID generation
-        // When id is null/empty, StrategyMergeHelper will detect it as a new strategy and generate ID
         return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
     }
 
@@ -146,24 +175,17 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     }
 
     /**
-     * Validates a memory strategy for required fields and valid values.
+     * Validates a memory strategy for required fields.
+     * Since type is now @NonNull and an enum, no type validation needed.
+     * Only validates namespace is not empty.
      *
      * @param strategy The memory strategy to validate
-     * @throws IllegalArgumentException if validation fails with specific error message
+     * @throws IllegalArgumentException if validation fails
      */
     public static void validate(MemoryStrategy strategy) {
         if (strategy == null) {
             throw new IllegalArgumentException("Strategy cannot be null");
         }
-
-        // Validate strategy type
-        String type = strategy.getType();
-        if (type != null
-            && !("semantic".equalsIgnoreCase(type) || "user_preference".equalsIgnoreCase(type) || "summary".equalsIgnoreCase(type))) {
-            throw new IllegalArgumentException(String.format(MemoryContainerConstants.INVALID_STRATEGY_TYPE_ERROR, type));
-        }
-
-        // Validate namespace is not null or empty
         if (strategy.getNamespace() == null || strategy.getNamespace().isEmpty()) {
             throw new IllegalArgumentException("Strategy namespace is required. Please provide a non-empty namespace array.");
         }
@@ -171,14 +193,12 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     /**
      * Generate a unique strategy ID with format: type_XXXXXXXX (8 char UUID)
-     * If type is null or empty, defaults to "strategy_XXXXXXXX"
      *
-     * @param type The strategy type (e.g., "semantic", "user_preference")
+     * @param type The strategy type enum (required)
      * @return A unique strategy ID
      */
-    public static String generateStrategyId(String type) {
-        String prefix = (type != null && !type.trim().isEmpty()) ? type.toLowerCase().replace(" ", "_") : "strategy";
-        return prefix + "_" + UUID.randomUUID().toString().substring(0, 8);
+    public static String generateStrategyId(MemoryStrategyType type) {
+        return type.getValue().toLowerCase() + "_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
 }

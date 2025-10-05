@@ -36,6 +36,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.memorycontainer.PayloadType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
@@ -80,7 +81,9 @@ public class MemorySearchServiceTests {
                 .messages(messages)
                 .build()
         );
-        strategy = spy(MemoryStrategy.builder().id("strategy-123").type("semantic").namespace(List.of(SESSION_ID_FIELD)).build());
+        strategy = spy(
+            MemoryStrategy.builder().id("strategy-123").type(MemoryStrategyType.SEMANTIC).namespace(List.of(SESSION_ID_FIELD)).build()
+        );
 
         memoryConfig = spy(
             MemoryConfiguration

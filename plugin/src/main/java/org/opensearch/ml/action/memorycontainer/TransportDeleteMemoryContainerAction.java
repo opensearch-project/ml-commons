@@ -23,6 +23,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
@@ -109,8 +110,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
             }
 
             // CRITICAL: Check for shared index prefix BEFORE deleting container
-            boolean willDeleteIndices = deleteRequest.isDeleteAllMemories()
-                || (deleteRequest.getDeleteMemories() != null && !deleteRequest.getDeleteMemories().isEmpty());
+            boolean willDeleteIndices = deleteRequest.isDeleteAllMemories() || !CollectionUtils.isEmpty(deleteRequest.getDeleteMemories());
 
             if (willDeleteIndices) {
                 MemoryConfiguration configuration = container.getConfiguration();
@@ -164,7 +164,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         MLMemoryContainer container,
         String tenantId,
         boolean deleteAllMemories,
-        Set<String> deleteMemories,
+        Set<MemoryType> deleteMemories,
         ActionListener<DeleteResponse> listener
     ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -198,7 +198,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         Throwable throwable,
         String memoryContainerId,
         boolean deleteAllMemories,
-        Set<String> deleteMemories,
+        Set<MemoryType> deleteMemories,
         MLMemoryContainer container,
         ActionListener<DeleteResponse> actionListener
     ) {
@@ -275,35 +275,30 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
     private void deleteSelectiveMemoryIndices(
         String memoryContainerId,
         MemoryConfiguration configuration,
-        Set<String> deleteMemories,
+        Set<MemoryType> deleteMemories,
         DeleteResponse deleteResponse,
         ActionListener<DeleteResponse> actionListener
     ) {
         List<String> indicesToDelete = new ArrayList<>();
 
-        for (String memoryTypeStr : deleteMemories) {
-            MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
-            if (memoryType != null) {
-                String indexName = null;
-                switch (memoryType) {
-                    case SESSIONS:
-                        indexName = configuration.getSessionIndexName();
-                        break;
-                    case WORKING:
-                        indexName = configuration.getWorkingMemoryIndexName();
-                        break;
-                    case LONG_TERM:
-                        indexName = configuration.getLongMemoryIndexName();
-                        break;
-                    case HISTORY:
-                        indexName = configuration.getLongMemoryHistoryIndexName();
-                        break;
-                }
-                if (indexName != null) {
-                    indicesToDelete.add(indexName);
-                }
-            } else {
-                log.warn("Unknown memory type for deletion: {}", memoryTypeStr);
+        for (MemoryType memoryType : deleteMemories) {
+            String indexName = null;
+            switch (memoryType) {
+                case SESSIONS:
+                    indexName = configuration.getSessionIndexName();
+                    break;
+                case WORKING:
+                    indexName = configuration.getWorkingMemoryIndexName();
+                    break;
+                case LONG_TERM:
+                    indexName = configuration.getLongMemoryIndexName();
+                    break;
+                case HISTORY:
+                    indexName = configuration.getLongMemoryHistoryIndexName();
+                    break;
+            }
+            if (indexName != null) {
+                indicesToDelete.add(indexName);
             }
         }
 

@@ -36,10 +36,10 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     private static final String QUERY_FIELD = "query";
 
     private String memoryContainerId;
-    private String memoryType;
+    private MemoryType memoryType;
     private QueryBuilder query;
 
-    public MLDeleteMemoriesByQueryRequest(String memoryContainerId, String memoryType, QueryBuilder query) {
+    public MLDeleteMemoriesByQueryRequest(String memoryContainerId, MemoryType memoryType, QueryBuilder query) {
         this.memoryContainerId = memoryContainerId;
         this.memoryType = memoryType;
         this.query = query;
@@ -48,7 +48,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     public MLDeleteMemoriesByQueryRequest(StreamInput in) throws IOException {
         super(in);
         this.memoryContainerId = in.readString();
-        this.memoryType = in.readString();
+        this.memoryType = in.readEnum(MemoryType.class);
         this.query = in.readNamedWriteable(QueryBuilder.class);
     }
 
@@ -56,7 +56,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(memoryContainerId);
-        out.writeString(memoryType);
+        out.writeEnum(memoryType);
         out.writeNamedWriteable(query);
     }
 
@@ -68,16 +68,8 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
             validationException = addValidationError("Memory container ID is required", validationException);
         }
 
-        if (memoryType == null || memoryType.isEmpty()) {
+        if (memoryType == null) {
             validationException = addValidationError("Memory type is required", validationException);
-        } else {
-            // Validate memory type is one of the allowed values
-            if (!MemoryType.isValid(memoryType)) {
-                validationException = addValidationError(
-                    "Invalid memory type. Must be one of: " + MemoryType.getAllValuesAsString(),
-                    validationException
-                );
-            }
         }
 
         if (query == null) {
@@ -91,7 +83,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(PARAMETER_MEMORY_CONTAINER_ID, memoryContainerId);
-        builder.field(PARAMETER_MEMORY_TYPE, memoryType);
+        builder.field(PARAMETER_MEMORY_TYPE, memoryType.getValue());
         builder.field(QUERY_FIELD, query);
         builder.endObject();
         return builder;
@@ -99,7 +91,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
 
     public static MLDeleteMemoriesByQueryRequest parse(XContentParser parser) throws IOException {
         String memoryContainerId = null;
-        String memoryType = null;
+        MemoryType memoryType = null;
         QueryBuilder query = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -112,7 +104,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
                     memoryContainerId = parser.text();
                     break;
                 case PARAMETER_MEMORY_TYPE:
-                    memoryType = parser.text();
+                    memoryType = MemoryType.fromString(parser.text());
                     break;
                 case QUERY_FIELD:
                     query = parseQuery(parser);

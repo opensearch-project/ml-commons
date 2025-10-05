@@ -59,13 +59,9 @@ public class MemoryOperationsService {
      * Maps strategy type to corresponding MemoryType
      */
     private MemoryStrategyType getMemoryTypeFromStrategy(MemoryStrategy strategy) {
-        String strategyType = strategy.getType();
-        if ("user_preference".equalsIgnoreCase(strategyType)) {
-            return MemoryStrategyType.USER_PREFERENCE;
-        } else if ("summary".equalsIgnoreCase(strategyType)) {
-            return MemoryStrategyType.SUMMARY;
-        }
-        return MemoryStrategyType.SEMANTIC; // Default for "semantic" and any other types
+        MemoryStrategyType type = strategy.getType();
+        // Just return the type directly since it's already a MemoryStrategyType
+        return type != null ? type : MemoryStrategyType.SEMANTIC; // Default to SEMANTIC if null
     }
 
     public void executeMemoryOperations(

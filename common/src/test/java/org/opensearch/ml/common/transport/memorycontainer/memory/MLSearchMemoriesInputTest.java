@@ -30,6 +30,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.indices.IndicesModule;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -53,21 +54,25 @@ public class MLSearchMemoriesInputTest {
         inputWithContainerId = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .searchSourceBuilder(searchSourceBuilder1)
             .build();
 
         SearchSourceBuilder searchSourceBuilder2 = new SearchSourceBuilder()
             .query(QueryBuilders.matchQuery("memory", "search without container id"));
 
-        inputWithoutContainerId = MLSearchMemoriesInput.builder().memoryType("working").searchSourceBuilder(searchSourceBuilder2).build();
+        inputWithoutContainerId = MLSearchMemoriesInput
+            .builder()
+            .memoryType(MemoryType.WORKING)
+            .searchSourceBuilder(searchSourceBuilder2)
+            .build();
     }
 
     @Test
     public void testBuilderWithContainerId() {
         assertNotNull(inputWithContainerId);
         assertEquals("container-123", inputWithContainerId.getMemoryContainerId());
-        assertEquals("long-term", inputWithContainerId.getMemoryType());
+        assertEquals(MemoryType.LONG_TERM, inputWithContainerId.getMemoryType());
         assertNotNull(inputWithContainerId.getSearchSourceBuilder());
     }
 
@@ -75,25 +80,25 @@ public class MLSearchMemoriesInputTest {
     public void testBuilderWithoutContainerId() {
         assertNotNull(inputWithoutContainerId);
         assertNull(inputWithoutContainerId.getMemoryContainerId());
-        assertEquals("working", inputWithoutContainerId.getMemoryType());
+        assertEquals(MemoryType.WORKING, inputWithoutContainerId.getMemoryType());
         assertNotNull(inputWithoutContainerId.getSearchSourceBuilder());
     }
 
     @Test
     public void testConstructorWithContainerId() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "test query"));
-        MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-456", "sessions", searchSourceBuilder);
+        MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-456", MemoryType.SESSIONS, searchSourceBuilder);
         assertEquals("container-456", input.getMemoryContainerId());
-        assertEquals("sessions", input.getMemoryType());
+        assertEquals(MemoryType.SESSIONS, input.getMemoryType());
         assertNotNull(input.getSearchSourceBuilder());
     }
 
     @Test
     public void testConstructorWithoutContainerId() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "another query"));
-        MLSearchMemoriesInput input = new MLSearchMemoriesInput(null, "history", searchSourceBuilder);
+        MLSearchMemoriesInput input = new MLSearchMemoriesInput(null, MemoryType.HISTORY, searchSourceBuilder);
         assertNull(input.getMemoryContainerId());
-        assertEquals("history", input.getMemoryType());
+        assertEquals(MemoryType.HISTORY, input.getMemoryType());
         assertNotNull(input.getSearchSourceBuilder());
     }
 
@@ -101,7 +106,7 @@ public class MLSearchMemoriesInputTest {
     public void testConstructorWithNullSearchSourceBuilder() {
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> new MLSearchMemoriesInput("container-1", "long-term", null)
+            () -> new MLSearchMemoriesInput("container-1", MemoryType.LONG_TERM, null)
         );
         assertEquals("Query cannot be null", exception.getMessage());
     }
@@ -109,9 +114,9 @@ public class MLSearchMemoriesInputTest {
     @Test
     public void testValidSearchSourceBuilder() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "query with spaces"));
-        MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-1", "long-term", searchSourceBuilder);
+        MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-1", MemoryType.LONG_TERM, searchSourceBuilder);
         assertEquals("container-1", input.getMemoryContainerId());
-        assertEquals("long-term", input.getMemoryType());
+        assertEquals(MemoryType.LONG_TERM, input.getMemoryType());
         assertNotNull(input.getSearchSourceBuilder());
     }
 
@@ -178,16 +183,16 @@ public class MLSearchMemoriesInputTest {
     public void testSetters() {
         SearchSourceBuilder initialSearchSourceBuilder = new SearchSourceBuilder()
             .query(QueryBuilders.matchQuery("memory", "initial query"));
-        MLSearchMemoriesInput input = new MLSearchMemoriesInput(null, "working", initialSearchSourceBuilder);
+        MLSearchMemoriesInput input = new MLSearchMemoriesInput(null, MemoryType.WORKING, initialSearchSourceBuilder);
 
         input.setMemoryContainerId("new-container");
-        input.setMemoryType("sessions");
+        input.setMemoryType(MemoryType.SESSIONS);
 
         SearchSourceBuilder newSearchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.matchQuery("memory", "updated query"));
         input.setSearchSourceBuilder(newSearchSourceBuilder);
 
         assertEquals("new-container", input.getMemoryContainerId());
-        assertEquals("sessions", input.getMemoryType());
+        assertEquals(MemoryType.SESSIONS, input.getMemoryType());
         assertNotNull(input.getSearchSourceBuilder());
     }
 
@@ -196,7 +201,11 @@ public class MLSearchMemoriesInputTest {
         SearchSourceBuilder specialSearchSourceBuilder = new SearchSourceBuilder()
             .query(QueryBuilders.matchQuery("memory", "Query with\n\ttabs,\nnewlines, \"quotes\", 'single quotes', and unicode 🚀✨"));
 
-        MLSearchMemoriesInput specialInput = new MLSearchMemoriesInput("container-special", "long-term", specialSearchSourceBuilder);
+        MLSearchMemoriesInput specialInput = new MLSearchMemoriesInput(
+            "container-special",
+            MemoryType.LONG_TERM,
+            specialSearchSourceBuilder
+        );
 
         // Test serialization round trip
         BytesStreamOutput out = new BytesStreamOutput();
@@ -229,7 +238,7 @@ public class MLSearchMemoriesInputTest {
         SearchSourceBuilder longSearchSourceBuilder = new SearchSourceBuilder()
             .query(QueryBuilders.matchQuery("memory", longQuery.toString().trim()));
 
-        MLSearchMemoriesInput longInput = new MLSearchMemoriesInput("container-1", "history", longSearchSourceBuilder);
+        MLSearchMemoriesInput longInput = new MLSearchMemoriesInput("container-1", MemoryType.HISTORY, longSearchSourceBuilder);
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
@@ -268,9 +277,9 @@ public class MLSearchMemoriesInputTest {
 
         for (int i = 0; i < queries.length; i++) {
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(QueryBuilders.queryStringQuery(queries[i]));
-            MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-" + i, "long-term", searchSourceBuilder);
+            MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-" + i, MemoryType.LONG_TERM, searchSourceBuilder);
             assertEquals("container-" + i, input.getMemoryContainerId());
-            assertEquals("long-term", input.getMemoryType());
+            assertEquals(MemoryType.LONG_TERM, input.getMemoryType());
             assertNotNull(input.getSearchSourceBuilder());
         }
     }

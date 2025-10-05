@@ -99,12 +99,7 @@ public class MLGetMemoryResponse extends ActionResponse implements ToXContentObj
         }
     }
 
-    public static MLGetMemoryResponse fromGetResponse(GetResponse getResponse, String memoryTypeStr) {
-        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
-        if (memoryType == null) {
-            throw new IllegalArgumentException("Invalid memory type: " + memoryTypeStr);
-        }
-
+    public static MLGetMemoryResponse fromGetResponse(GetResponse getResponse, MemoryType memoryType) {
         try (
             XContentParser parser = jsonXContent
                 .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
@@ -120,7 +115,7 @@ public class MLGetMemoryResponse extends ActionResponse implements ToXContentObj
                 case HISTORY:
                     return MLGetMemoryResponse.builder().memoryHistory(MLMemoryHistory.parse(parser)).build();
                 default:
-                    throw new IllegalArgumentException("Invalid memory type: " + memoryTypeStr);
+                    throw new IllegalArgumentException("Invalid memory type: " + memoryType);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);

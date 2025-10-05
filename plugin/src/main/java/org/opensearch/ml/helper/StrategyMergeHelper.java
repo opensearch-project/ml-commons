@@ -53,7 +53,7 @@ public class StrategyMergeHelper {
 
         // Process each update
         for (MemoryStrategy update : updates) {
-            if (update.getId() != null && !update.getId().trim().isEmpty()) {
+            if (update.getId() != null && !update.getId().isBlank()) {
                 // Update existing strategy
                 MemoryStrategy existingStrategy = strategyMap.get(update.getId());
 
@@ -91,6 +91,9 @@ public class StrategyMergeHelper {
                 if (update.getStrategyConfig() != null) {
                     existingStrategy.setStrategyConfig(update.getStrategyConfig());
                 }
+
+                // Validate the merged strategy to ensure it remains valid
+                MemoryStrategy.validate(existingStrategy);
 
                 log.debug("Updated strategy with id: {}", update.getId());
             } else {

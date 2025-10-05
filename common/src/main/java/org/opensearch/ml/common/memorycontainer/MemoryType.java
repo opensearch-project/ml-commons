@@ -78,7 +78,8 @@ public enum MemoryType {
     /**
      * Parse a string value to MemoryType
      * @param value string representation of memory type
-     * @return corresponding MemoryType enum or null if not found
+     * @return corresponding MemoryType enum
+     * @throws IllegalArgumentException if value is invalid
      */
     public static MemoryType fromString(String value) {
         if (value == null) {
@@ -91,7 +92,8 @@ public enum MemoryType {
                 return type;
             }
         }
-        return null;
+
+        throw new IllegalArgumentException("Invalid memory type: " + value + ". Must be one of: " + getAllValuesAsString());
     }
 
     /**
@@ -100,7 +102,11 @@ public enum MemoryType {
      * @return true if the value represents a valid memory type
      */
     public static boolean isValid(String value) {
-        return fromString(value) != null;
+        try {
+            return fromString(value) != null;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     /**

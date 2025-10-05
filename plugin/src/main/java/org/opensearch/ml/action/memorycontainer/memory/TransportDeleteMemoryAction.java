@@ -20,6 +20,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
@@ -79,7 +80,7 @@ public class TransportDeleteMemoryAction extends HandledTransportAction<ActionRe
 
         MLDeleteMemoryRequest deleteRequest = MLDeleteMemoryRequest.fromActionRequest(request);
         String memoryContainerId = deleteRequest.getMemoryContainerId();
-        String memoryType = deleteRequest.getMemoryType();
+        MemoryType memoryType = deleteRequest.getMemoryType();
         String memoryId = deleteRequest.getMemoryId();
 
         // Get memory container to validate access and get memory index name

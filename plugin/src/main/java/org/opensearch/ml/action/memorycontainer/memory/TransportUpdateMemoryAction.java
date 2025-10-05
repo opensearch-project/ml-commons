@@ -78,7 +78,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
 
         MLUpdateMemoryRequest updateRequest = MLUpdateMemoryRequest.fromActionRequest(request);
         String memoryContainerId = updateRequest.getMemoryContainerId();
-        String memoryType = updateRequest.getMemoryType();
+        MemoryType memoryType = updateRequest.getMemoryType();
         String memoryId = updateRequest.getMemoryId();
 
         // Get memory container to validate access and get memory index name
@@ -135,12 +135,11 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         }, actionListener::onFailure));
     }
 
-    public Map<String, Object> constructNewDoc(MLUpdateMemoryInput input, String memoryTypeStr, Map<String, Object> originalDoc) {
+    public Map<String, Object> constructNewDoc(MLUpdateMemoryInput input, MemoryType memoryType, Map<String, Object> originalDoc) {
         Map<String, Object> updateFields = new HashMap<>();
         updateFields.putAll(originalDoc);
         Map<String, Object> updateContent = input.getUpdateContent();
 
-        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
         if (memoryType != null) {
             switch (memoryType) {
                 case SESSIONS:

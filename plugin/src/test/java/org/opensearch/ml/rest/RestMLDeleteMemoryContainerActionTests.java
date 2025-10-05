@@ -30,6 +30,7 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.input.Constants;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
@@ -189,8 +190,8 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         MLMemoryContainerDeleteRequest capturedRequest = captor.getValue();
         assertNotNull(capturedRequest.getDeleteMemories());
         assertEquals(2, capturedRequest.getDeleteMemories().size());
-        assertTrue(capturedRequest.getDeleteMemories().contains("sessions"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("working"));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.SESSIONS));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.WORKING));
     }
 
     public void testPrepareRequest_WithDeleteAllMemoriesParameter() throws Exception {
@@ -240,8 +241,8 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         MLMemoryContainerDeleteRequest capturedRequest = captor.getValue();
         assertNotNull(capturedRequest.getDeleteMemories());
         assertEquals(2, capturedRequest.getDeleteMemories().size());
-        assertTrue(capturedRequest.getDeleteMemories().contains("sessions"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("long-term"));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.SESSIONS));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.LONG_TERM));
     }
 
     public void testPrepareRequest_WithRequestBodyAndUrlParams_UrlTakesPrecedence() throws Exception {
@@ -272,8 +273,8 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         assertTrue(capturedRequest.isDeleteAllMemories());
         assertNotNull(capturedRequest.getDeleteMemories());
         assertEquals(2, capturedRequest.getDeleteMemories().size());
-        assertTrue(capturedRequest.getDeleteMemories().contains("working"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("history"));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.WORKING));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.HISTORY));
     }
 
     public void testPrepareRequest_WithEmptyDeleteMemoriesParameter() throws Exception {
@@ -425,9 +426,9 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(capturedRequest.getDeleteMemories());
         // Should have only 3 unique memory types despite 5 entries in the array
         assertEquals(3, capturedRequest.getDeleteMemories().size());
-        assertTrue(capturedRequest.getDeleteMemories().contains("sessions"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("working"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("long-term"));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.SESSIONS));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.WORKING));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.LONG_TERM));
     }
 
     public void testPrepareRequest_WithDuplicateMemoryTypesInUrlParams_AutomaticallyDeduplicates() throws Exception {
@@ -454,9 +455,9 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         assertNotNull(capturedRequest.getDeleteMemories());
         // Should have only 3 unique memory types
         assertEquals(3, capturedRequest.getDeleteMemories().size());
-        assertTrue(capturedRequest.getDeleteMemories().contains("sessions"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("working"));
-        assertTrue(capturedRequest.getDeleteMemories().contains("history"));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.SESSIONS));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.WORKING));
+        assertTrue(capturedRequest.getDeleteMemories().contains(MemoryType.HISTORY));
     }
 
     private RestRequest createRestRequestWithoutId() {

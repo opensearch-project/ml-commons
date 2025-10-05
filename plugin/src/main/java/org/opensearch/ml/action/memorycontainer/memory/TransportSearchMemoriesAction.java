@@ -111,12 +111,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
     ) {
         try {
             MemoryConfiguration memoryConfig = container.getConfiguration();
-            MemoryType memoryType = MemoryType.fromString(input.getMemoryType());
-            if (memoryType == null) {
-                actionListener
-                    .onFailure(new OpenSearchStatusException("Invalid memory type: " + input.getMemoryType(), RestStatus.BAD_REQUEST));
-                return;
-            }
+            MemoryType memoryType = input.getMemoryType();
             String indexName = memoryConfig.getIndexName(memoryType);
 
             if (!memoryContainerHelper.isAdminUser(user)) {

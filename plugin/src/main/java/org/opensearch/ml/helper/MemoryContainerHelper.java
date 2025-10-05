@@ -207,17 +207,14 @@ public class MemoryContainerHelper {
 
     /**
      * Get memory index name from container
-     * 
+     *
      * @param container the memory container
      * @return the memory index name or null if not configured
      */
-    public String getMemoryIndexName(MLMemoryContainer container, String memoryTypeStr) {
+    public String getMemoryIndexName(MLMemoryContainer container, MemoryType memoryType) {
         MemoryConfiguration config = container.getConfiguration();
-        if (config != null) {
-            MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
-            if (memoryType != null) {
-                return config.getIndexName(memoryType);
-            }
+        if (config != null && memoryType != null) {
+            return config.getIndexName(memoryType);
         }
         return null;
     }

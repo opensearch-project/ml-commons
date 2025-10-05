@@ -81,11 +81,19 @@ public class MemoryTypeTest {
         assertNull(MemoryType.fromString(null));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testFromString_InvalidValue() {
-        assertNull(MemoryType.fromString("INVALID_TYPE"));
-        assertNull(MemoryType.fromString(""));
-        assertNull(MemoryType.fromString("   "));
+        MemoryType.fromString("INVALID_TYPE");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testFromString_EmptyString() {
+        MemoryType.fromString("");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testFromString_WhitespaceString() {
+        MemoryType.fromString("   ");
     }
 
     @Test
