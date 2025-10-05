@@ -419,4 +419,50 @@ public class MemoryContainerHelper {
     public String getOwnerId(User user) {
         return user != null ? user.getName() : null;
     }
+
+    /**
+     * Count memory containers with the specified index prefix
+     *
+     * @param indexPrefix the index prefix to search for
+     * @param tenantId the tenant ID (optional)
+     * @param listener action listener returning the count
+     */
+    public void countContainersWithPrefix(String indexPrefix, String tenantId, ActionListener<Long> listener) {
+        if (indexPrefix == null || indexPrefix.isBlank()) {
+            listener.onResponse(0L);
+            return;
+        }
+
+        // Build search query for containers with matching index prefix
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(QueryBuilders.termQuery("configuration.index_prefix", indexPrefix));
+        searchSourceBuilder.size(0); // We only need the total count
+        searchSourceBuilder.trackTotalHits(true);
+
+        SearchDataObjectRequest.Builder requestBuilder = SearchDataObjectRequest
+            .builder()
+            .indices(ML_MEMORY_CONTAINER_INDEX)
+            .searchSourceBuilder(searchSourceBuilder);
+
+        if (tenantId != null) {
+            requestBuilder.tenantId(tenantId);
+        }
+
+        SearchDataObjectRequest searchRequest = requestBuilder.build();
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(ActionListener.wrap(response -> {
+                long totalHits = response.getHits().getTotalHits().value();
+                listener.onResponse(totalHits);
+            }, e -> {
+                log.error("Failed to count containers with prefix: " + indexPrefix, e);
+                listener.onFailure(e);
+            }), context::restore);
+
+            sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
+        } catch (Exception e) {
+            log.error("Failed to search for containers with prefix: " + indexPrefix, e);
+            listener.onFailure(e);
+        }
+    }
 }

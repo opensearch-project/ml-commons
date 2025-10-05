@@ -108,15 +108,51 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 return;
             }
 
-            // Delete memory container
-            deleteMemoryContainer(
-                memoryContainerId,
-                container,
-                tenantId,
-                deleteRequest.isDeleteAllMemories(),
-                deleteRequest.getDeleteMemories(),
-                actionListener
-            );
+            // CRITICAL: Check for shared index prefix BEFORE deleting container
+            boolean willDeleteIndices = deleteRequest.isDeleteAllMemories()
+                || (deleteRequest.getDeleteMemories() != null && !deleteRequest.getDeleteMemories().isEmpty());
+
+            if (willDeleteIndices) {
+                MemoryConfiguration configuration = container.getConfiguration();
+                String indexPrefix = configuration.getIndexPrefix();
+
+                memoryContainerHelper.countContainersWithPrefix(indexPrefix, tenantId, ActionListener.wrap(count -> {
+                    if (count > 1) {
+                        // Multiple containers share this prefix - cannot delete indices
+                        String error = String
+                            .format(
+                                "Cannot delete memory indices as multiple containers share the index prefix '%s'. "
+                                    + "Please delete the container without index deletion, or use delete_by_query API for data cleanup.",
+                                indexPrefix
+                            );
+                        log.error("Prevented index deletion for shared prefix '{}': {} containers sharing", indexPrefix, count);
+                        actionListener.onFailure(new OpenSearchStatusException(error, RestStatus.CONFLICT));
+                    } else {
+                        // Safe to proceed with deletion (sole owner or unique prefix)
+                        deleteMemoryContainer(
+                            memoryContainerId,
+                            container,
+                            tenantId,
+                            deleteRequest.isDeleteAllMemories(),
+                            deleteRequest.getDeleteMemories(),
+                            actionListener
+                        );
+                    }
+                }, e -> {
+                    log.error("Failed to check for shared index prefix, aborting deletion for safety", e);
+                    actionListener.onFailure(e);
+                }));
+            } else {
+                // No index deletion requested, proceed with container-only deletion
+                deleteMemoryContainer(
+                    memoryContainerId,
+                    container,
+                    tenantId,
+                    deleteRequest.isDeleteAllMemories(),
+                    deleteRequest.getDeleteMemories(),
+                    actionListener
+                );
+            }
         }, error -> {
             log.error("Failed to retrieve memory container: {} for deletion", memoryContainerId, error);
             actionListener.onFailure(error);
@@ -175,116 +211,122 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 DeleteResponse deleteResponse = response.deleteResponse();
                 log.info("Successfully deleted memory container: {} from index", memoryContainerId);
 
-                if (deleteAllMemories) {
+                // Delete memory indices if requested
+                // Note: Shared prefix validation already done BEFORE container deletion
+                if (deleteAllMemories || (deleteMemories != null && !deleteMemories.isEmpty())) {
                     MemoryConfiguration configuration = container.getConfiguration();
-                    // Don't use index pattern here to avoid delete other user's index by mistake
-                    DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(
-                        configuration.getSessionIndexName(),
-                        configuration.getWorkingMemoryIndexName(),
-                        configuration.getLongMemoryIndexName(),
-                        configuration.getLongMemoryHistoryIndexName()
-                    );
-
-                    log
-                        .info(
-                            "Attempting to delete all memory indices for container {}: [{}, {}, {}, {}]",
-                            memoryContainerId,
-                            configuration.getSessionIndexName(),
-                            configuration.getWorkingMemoryIndexName(),
-                            configuration.getLongMemoryIndexName(),
-                            configuration.getLongMemoryHistoryIndexName()
-                        );
-                    memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
-                        log.info("Successfully deleted all memory indices for container: {}", memoryContainerId);
-                        actionListener.onResponse(deleteResponse);
-                    }, e -> {
-                        log
-                            .error(
-                                "Failed to delete memory indices for container: {}. Indices: [{}, {}, {}, {}]",
-                                memoryContainerId,
-                                configuration.getSessionIndexName(),
-                                configuration.getWorkingMemoryIndexName(),
-                                configuration.getLongMemoryIndexName(),
-                                configuration.getLongMemoryHistoryIndexName(),
-                                e
-                            );
-                        actionListener.onFailure(e);
-                    }));
-                } else if (deleteMemories != null && !deleteMemories.isEmpty()) {
-                    // Selective memory deletion
-                    MemoryConfiguration configuration = container.getConfiguration();
-                    List<String> indicesToDelete = new ArrayList<>();
-
-                    for (String memoryTypeStr : deleteMemories) {
-                        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
-                        if (memoryType != null) {
-                            String indexName = null;
-                            switch (memoryType) {
-                                case SESSIONS:
-                                    indexName = configuration.getSessionIndexName();
-                                    break;
-                                case WORKING:
-                                    indexName = configuration.getWorkingMemoryIndexName();
-                                    break;
-                                case LONG_TERM:
-                                    indexName = configuration.getLongMemoryIndexName();
-                                    break;
-                                case HISTORY:
-                                    indexName = configuration.getLongMemoryHistoryIndexName();
-                                    break;
-                            }
-                            if (indexName != null) {
-                                indicesToDelete.add(indexName);
-                            }
-                        } else {
-                            log.warn("Unknown memory type for deletion: {}", memoryTypeStr);
-                        }
-                    }
-
-                    if (!indicesToDelete.isEmpty()) {
-                        log
-                            .debug(
-                                "Attempting selective deletion of memory indices for container {}: {}, requested types: {}",
-                                memoryContainerId,
-                                indicesToDelete,
-                                deleteMemories
-                            );
-
-                        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indicesToDelete.toArray(new String[0]));
-                        memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
-                            log
-                                .info(
-                                    "Successfully deleted selective memory indices [{}] for container: {}",
-                                    indicesToDelete,
-                                    memoryContainerId
-                                );
-                            actionListener.onResponse(deleteResponse);
-                        }, e -> {
-                            log
-                                .error(
-                                    "Failed to delete selective memory indices [{}] for container: {}.",
-                                    memoryContainerId,
-                                    indicesToDelete,
-                                    e
-                                );
-                            actionListener.onFailure(e);
-                        }));
+                    if (deleteAllMemories) {
+                        deleteAllMemoryIndices(memoryContainerId, configuration, deleteResponse, actionListener);
                     } else {
-                        log
-                            .warn(
-                                "Memory container {} deleted without memory index deletion due to all provided types were unrecognized",
-                                memoryContainerId
-                            );
-                        actionListener.onResponse(deleteResponse);
+                        deleteSelectiveMemoryIndices(memoryContainerId, configuration, deleteMemories, deleteResponse, actionListener);
                     }
-                } else { // No memory deletion requested
-                    log.info("Memory container {} deleted without memory index deletion", memoryContainerId);
+                } else {
+                    // No index deletion requested
                     actionListener.onResponse(deleteResponse);
                 }
             } catch (Exception e) {
-                log.error("Unexpected error while processing delete response for container: {}", memoryContainerId, e);
+                log.error("Failed to process container deletion", e);
                 actionListener.onFailure(e);
             }
+        }
+    }
+
+    private void deleteAllMemoryIndices(
+        String memoryContainerId,
+        MemoryConfiguration configuration,
+        DeleteResponse deleteResponse,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        // Don't use index pattern here to avoid delete other user's index by mistake
+        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(
+            configuration.getSessionIndexName(),
+            configuration.getWorkingMemoryIndexName(),
+            configuration.getLongMemoryIndexName(),
+            configuration.getLongMemoryHistoryIndexName()
+        );
+
+        log
+            .info(
+                "Attempting to delete all memory indices for container {}: [{}, {}, {}, {}]",
+                memoryContainerId,
+                configuration.getSessionIndexName(),
+                configuration.getWorkingMemoryIndexName(),
+                configuration.getLongMemoryIndexName(),
+                configuration.getLongMemoryHistoryIndexName()
+            );
+        memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
+            log.info("Successfully deleted all memory indices for container: {}", memoryContainerId);
+            actionListener.onResponse(deleteResponse);
+        }, e -> {
+            log
+                .error(
+                    "Failed to delete memory indices for container: {}. Indices: [{}, {}, {}, {}]",
+                    memoryContainerId,
+                    configuration.getSessionIndexName(),
+                    configuration.getWorkingMemoryIndexName(),
+                    configuration.getLongMemoryIndexName(),
+                    configuration.getLongMemoryHistoryIndexName(),
+                    e
+                );
+            actionListener.onFailure(e);
+        }));
+    }
+
+    private void deleteSelectiveMemoryIndices(
+        String memoryContainerId,
+        MemoryConfiguration configuration,
+        Set<String> deleteMemories,
+        DeleteResponse deleteResponse,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        List<String> indicesToDelete = new ArrayList<>();
+
+        for (String memoryTypeStr : deleteMemories) {
+            MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
+            if (memoryType != null) {
+                String indexName = null;
+                switch (memoryType) {
+                    case SESSIONS:
+                        indexName = configuration.getSessionIndexName();
+                        break;
+                    case WORKING:
+                        indexName = configuration.getWorkingMemoryIndexName();
+                        break;
+                    case LONG_TERM:
+                        indexName = configuration.getLongMemoryIndexName();
+                        break;
+                    case HISTORY:
+                        indexName = configuration.getLongMemoryHistoryIndexName();
+                        break;
+                }
+                if (indexName != null) {
+                    indicesToDelete.add(indexName);
+                }
+            } else {
+                log.warn("Unknown memory type for deletion: {}", memoryTypeStr);
+            }
+        }
+
+        if (!indicesToDelete.isEmpty()) {
+            log
+                .debug(
+                    "Attempting selective deletion of memory indices for container {}: {}, requested types: {}",
+                    memoryContainerId,
+                    indicesToDelete,
+                    deleteMemories
+                );
+
+            DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest(indicesToDelete.toArray(new String[0]));
+            memoryContainerHelper.deleteIndex(configuration, deleteIndexRequest, ActionListener.wrap(r -> {
+                log.info("Successfully deleted selective memory indices [{}] for container: {}", indicesToDelete, memoryContainerId);
+                actionListener.onResponse(deleteResponse);
+            }, e -> {
+                log.error("Failed to delete selective memory indices [{}] for container: {}.", memoryContainerId, indicesToDelete, e);
+                actionListener.onFailure(e);
+            }));
+        } else {
+            log.info("No valid memory indices to delete for container: {}", memoryContainerId);
+            actionListener.onResponse(deleteResponse);
         }
     }
 }

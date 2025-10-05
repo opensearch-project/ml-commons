@@ -365,6 +365,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
         );
         when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
         when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
         when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
         when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
@@ -387,6 +388,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(mockContainer);
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
 
         // Mock successful deleteIndex operation
         doAnswer(invocation -> {
@@ -430,7 +438,11 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
         );
         when(mockContainer.getConfiguration()).thenReturn(mockConfig);
-        when(mockConfig.getFinalMemoryIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
+        when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
+        when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
+        when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
+        when(mockConfig.getLongMemoryHistoryIndexName()).thenReturn("test-memory-prefix-history");
 
         // Setup delete request with deleteAllMemories = true
         MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
@@ -449,6 +461,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(mockContainer);
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
 
         // Mock failed deleteIndex operation
         doAnswer(invocation -> {
@@ -562,6 +581,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
         );
         when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
         when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
         when(mockConfig.getWorkingMemoryIndexName()).thenReturn("test-memory-prefix-working");
         when(mockConfig.getLongMemoryIndexName()).thenReturn("test-memory-prefix-long-term");
@@ -584,6 +604,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(mockContainer);
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
 
         // Mock successful deleteIndex operation
         doAnswer(invocation -> {
@@ -628,6 +655,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
         );
         when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-memory-prefix");
         when(mockConfig.getSessionIndexName()).thenReturn("test-memory-prefix-sessions");
 
         // Setup delete request with unknown memory type
@@ -647,6 +675,13 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(mockContainer);
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(1L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
 
         // Mock successful deleteIndex operation
         doAnswer(invocation -> {
@@ -710,6 +745,162 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         verify(memoryContainerHelper, timeout(1000).times(0)).deleteIndex(any(), any(), any());
 
         // Verify final success response (container deleted, no indices)
+        ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(responseCaptor.capture());
+        assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
+    }
+
+    @Test
+    public void testDeleteMemoryContainer_WithSharedPrefix_PreventsDeletion() {
+        // Setup mock container with configuration
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
+
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("shared-prefix");
+
+        // Setup delete request with deleteAllMemories = true
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock successful memory container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock countContainersWithPrefix to return 2 (shared prefix - unsafe to delete indices)
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onResponse(2L);
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // Verify deleteIndex was NEVER called (prevented due to shared prefix)
+        verify(memoryContainerHelper, timeout(1000).times(0)).deleteIndex(any(), any(), any());
+
+        // Verify failure response with CONFLICT status
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof OpenSearchStatusException);
+        OpenSearchStatusException statusException = (OpenSearchStatusException) exception;
+        assertEquals(RestStatus.CONFLICT, statusException.status());
+        assertTrue(exception.getMessage().contains("multiple containers share"));
+        assertTrue(exception.getMessage().contains("shared-prefix"));
+    }
+
+    @Test
+    public void testDeleteMemoryContainer_CountCheckFailure_AbortsOperation() {
+        // Setup mock container with configuration
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
+
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+        when(mockConfig.getIndexPrefix()).thenReturn("test-prefix");
+
+        // Setup delete request
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(true)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock successful memory container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Mock countContainersWithPrefix to fail
+        doAnswer(invocation -> {
+            ActionListener<Long> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Failed to count containers"));
+            return null;
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // Verify deleteIndex and delete container were NEVER called (operation aborted)
+        verify(memoryContainerHelper, timeout(1000).times(0)).deleteIndex(any(), any(), any());
+        verify(sdkClient, timeout(1000).times(0)).deleteDataObjectAsync(any());
+
+        // Verify failure response
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception.getMessage().contains("Failed to count containers"));
+    }
+
+    @Test
+    public void testDeleteMemoryContainer_WithoutIndexDeletion_SkipsCountCheck() {
+        // Setup mock container
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        User owner = new User("test_user", Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        when(mockContainer.getOwner()).thenReturn(owner);
+
+        org.opensearch.ml.common.memorycontainer.MemoryConfiguration mockConfig = mock(
+            org.opensearch.ml.common.memorycontainer.MemoryConfiguration.class
+        );
+        when(mockContainer.getConfiguration()).thenReturn(mockConfig);
+
+        // Setup delete request WITHOUT index deletion (deleteAllMemories=false, deleteMemories=null)
+        MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest
+            .builder()
+            .memoryContainerId(MEMORY_CONTAINER_ID)
+            .deleteAllMemories(false)
+            .deleteMemories(null)
+            .tenantId(null)
+            .build();
+
+        when(memoryContainerHelper.checkMemoryAccess(any(), any())).thenReturn(true);
+
+        // Mock successful memory container retrieval
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        // Setup successful delete data object response
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
+
+        // Verify countContainersWithPrefix was NEVER called (no index deletion requested)
+        verify(memoryContainerHelper, timeout(1000).times(0)).countContainersWithPrefix(any(), any(), any());
+
+        // Verify deleteIndex was NEVER called
+        verify(memoryContainerHelper, timeout(1000).times(0)).deleteIndex(any(), any(), any());
+
+        // Verify success response
         ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
         verify(actionListener).onResponse(responseCaptor.capture());
         assertEquals(deleteResponse.getId(), responseCaptor.getValue().getId());
