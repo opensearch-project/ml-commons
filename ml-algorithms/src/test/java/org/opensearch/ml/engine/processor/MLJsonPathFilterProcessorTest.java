@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.processor;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -337,7 +338,7 @@ public class MLJsonPathFilterProcessorTest {
 
         Object result = processor.process(input);
 
-        assertEquals(input, result);
+        assertNull(result);
     }
 
     @Test
