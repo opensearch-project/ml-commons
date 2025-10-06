@@ -6,6 +6,7 @@
 package org.opensearch.ml.utils;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
@@ -116,7 +117,9 @@ public class MemorySearchQueryBuilder {
      * @param strategy The memory strategy containing namespace information
      * @param fact The fact to search for
      * @param namespace The namespace map for filtering
+     * @param ownerId The owner ID for filtering
      * @param memoryConfig The memory storage configuration
+     * @param memoryContainerId The memory container ID to filter by (prevents cross-container access)
      * @return QueryBuilder with the bool query
      */
     public static QueryBuilder buildFactSearchQuery(
@@ -124,7 +127,8 @@ public class MemorySearchQueryBuilder {
         String fact,
         Map<String, String> namespace,
         String ownerId,
-        MemoryConfiguration memoryConfig
+        MemoryConfiguration memoryConfig,
+        String memoryContainerId
     ) {
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 
@@ -141,6 +145,10 @@ public class MemorySearchQueryBuilder {
         boolQuery.filter(QueryBuilders.termQuery(NAMESPACE_SIZE_FIELD, strategy.getNamespace().size()));
         // Filter by strategy_id to prevent cross-strategy interference (sufficient for uniqueness)
         boolQuery.filter(QueryBuilders.termQuery(STRATEGY_ID_FIELD, strategy.getId()));
+        // Filter by memory_container_id to prevent cross-container access when containers share the same index prefix
+        if (memoryContainerId != null && !memoryContainerId.isBlank()) {
+            boolQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, memoryContainerId));
+        }
 
         // Add the search query
         if (memoryConfig != null) {

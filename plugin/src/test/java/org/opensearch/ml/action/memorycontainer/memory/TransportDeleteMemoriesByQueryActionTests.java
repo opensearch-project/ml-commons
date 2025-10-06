@@ -14,6 +14,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
 import java.util.Collections;
@@ -411,6 +412,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
+        // Mock addContainerIdFilter to add container ID filter
+        when(memoryContainerHelper.addContainerIdFilter(anyString(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            String containerId = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+            return filteredQuery;
+        });
+
         // Mock addOwnerIdFilter to return the original query for admin users
         when(memoryContainerHelper.addOwnerIdFilter(any(User.class), any(QueryBuilder.class))).thenAnswer(invocation -> {
             // For admin users with all_access, return the original query
@@ -433,9 +444,10 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         DeleteByQueryRequest capturedRequest = deleteRequestCaptor.getValue();
         assertNotNull(capturedRequest);
         assertNotNull(capturedRequest.getSearchRequest().source().query());
-        // For admin users with all_access, the query should not be wrapped in a bool filter
+        // Query should have container ID filter applied
         String queryString = capturedRequest.getSearchRequest().source().query().toString();
-        assertTrue("Admin user query should be match_all, not wrapped in bool: " + queryString, queryString.contains("match_all"));
+        assertTrue("Query should contain memory_container_id filter: " + queryString, queryString.contains("memory_container_id"));
+        assertTrue("Query should contain bool filter: " + queryString, queryString.contains("bool"));
     }
 
     @Test
@@ -501,6 +513,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
+        // Mock addContainerIdFilter to add container ID filter
+        when(memoryContainerHelper.addContainerIdFilter(anyString(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            String containerId = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+            return filteredQuery;
+        });
+
         // Mock addOwnerIdFilter to simulate adding owner filter for non-admin users
         when(memoryContainerHelper.addOwnerIdFilter(any(User.class), any(QueryBuilder.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
@@ -555,6 +577,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
 
+        // Mock addContainerIdFilter to add container ID filter
+        when(memoryContainerHelper.addContainerIdFilter(anyString(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            String containerId = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+            return filteredQuery;
+        });
+
         // Mock addOwnerIdFilter to return original query for null user (security disabled)
         when(memoryContainerHelper.addOwnerIdFilter(any(), any(QueryBuilder.class))).thenAnswer(invocation -> {
             // For null user (security disabled), return the original query
@@ -577,9 +609,9 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         DeleteByQueryRequest capturedRequest = deleteRequestCaptor.getValue();
         assertNotNull(capturedRequest);
         String queryString = capturedRequest.getSearchRequest().source().query().toString();
-        // With null user, query should not be wrapped in bool filter
-        assertTrue("Null user query should be term query: " + queryString, queryString.contains("term"));
-        assertFalse("Null user query should not have bool filter: " + queryString, queryString.contains("bool"));
+        // With container ID filter, query should now be wrapped in bool filter
+        assertTrue("Query should contain bool filter for container ID: " + queryString, queryString.contains("bool"));
+        assertTrue("Query should contain memory_container_id: " + queryString, queryString.contains("memory_container_id"));
     }
 
     @Test

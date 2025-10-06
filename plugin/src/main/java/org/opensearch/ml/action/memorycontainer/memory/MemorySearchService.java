@@ -75,7 +75,7 @@ public class MemorySearchService {
 
         try {
             QueryBuilder queryBuilder = MemorySearchQueryBuilder
-                .buildFactSearchQuery(strategy, fact, input.getNamespace(), input.getOwnerId(), memoryConfig);
+                .buildFactSearchQuery(strategy, fact, input.getNamespace(), input.getOwnerId(), memoryConfig, input.getMemoryContainerId());
 
             log.debug("Searching for similar facts with query: {}", queryBuilder.toString());
 

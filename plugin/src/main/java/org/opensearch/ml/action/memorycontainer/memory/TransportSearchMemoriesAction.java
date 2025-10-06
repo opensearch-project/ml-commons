@@ -114,6 +114,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             MemoryType memoryType = input.getMemoryType();
             String indexName = memoryConfig.getIndexName(memoryType);
 
+            // Always add container ID filter to prevent cross-container access when containers share index prefix
+            memoryContainerHelper.addContainerIdFilter(input.getMemoryContainerId(), input.getSearchSourceBuilder());
+
+            // Add owner filter for non-admin users
             if (!memoryContainerHelper.isAdminUser(user)) {
                 memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
             }

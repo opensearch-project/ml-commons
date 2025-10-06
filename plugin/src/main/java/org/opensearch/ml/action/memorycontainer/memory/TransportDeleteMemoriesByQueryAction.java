@@ -119,12 +119,15 @@ public class TransportDeleteMemoriesByQueryAction extends
             // Step 6: Build the DeleteByQueryRequest
             DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(memoryIndexName);
 
-            // Step 7: Apply query with owner filtering for non-admin users
-            QueryBuilder finalQuery = memoryContainerHelper.addOwnerIdFilter(user, query);
+            // Step 7: Apply container ID filter to prevent cross-container deletion when containers share index prefix
+            QueryBuilder containerFilteredQuery = memoryContainerHelper.addContainerIdFilter(memoryContainerId, query);
+
+            // Step 8: Apply owner filtering for non-admin users
+            QueryBuilder finalQuery = memoryContainerHelper.addOwnerIdFilter(user, containerFilteredQuery);
             deleteByQueryRequest.setQuery(finalQuery);
             deleteByQueryRequest.setRefresh(true);
 
-            // Step 8: Execute the delete by query
+            // Step 9: Execute the delete by query
             executeDeleteByQuery(container.getConfiguration(), deleteByQueryRequest, actionListener);
 
         }, error -> {

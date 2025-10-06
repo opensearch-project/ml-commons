@@ -9,6 +9,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
@@ -398,6 +399,46 @@ public class MemoryContainerHelper {
         BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
         filteredQuery.must(query);
         filteredQuery.filter(QueryBuilders.termQuery(OWNER_ID_FIELD, user.getName()));
+
+        return filteredQuery;
+    }
+
+    /**
+     * Add memory container ID filter to a SearchSourceBuilder.
+     * This ensures that searches only return memories from the specified container,
+     * preventing cross-container access when multiple containers share the same index prefix.
+     *
+     * @param containerId The memory container ID to filter by
+     * @param searchSourceBuilder The search source builder to update
+     * @return The updated search source builder with container ID filter applied
+     */
+    public SearchSourceBuilder addContainerIdFilter(String containerId, SearchSourceBuilder searchSourceBuilder) {
+        if (containerId == null || containerId.isBlank()) {
+            return searchSourceBuilder;
+        }
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+
+        return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
+    }
+
+    /**
+     * Add memory container ID filter to a QueryBuilder.
+     * This ensures that queries only match memories from the specified container,
+     * preventing cross-container access when multiple containers share the same index prefix.
+     *
+     * @param containerId The memory container ID to filter by
+     * @param query The original query to filter
+     * @return The filtered query with container ID restriction
+     */
+    public QueryBuilder addContainerIdFilter(String containerId, QueryBuilder query) {
+        if (containerId == null || containerId.isBlank()) {
+            return query;
+        }
+
+        BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+        filteredQuery.must(query);
+        filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
 
         return filteredQuery;
     }
