@@ -15,16 +15,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -38,8 +39,8 @@ public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    TriConsumer<String, String, ActionListener<String>> encryptFunction;
+    TriConsumer<String, String, ActionListener<String>> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
@@ -55,8 +56,8 @@ public class HttpConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v, l) -> l.onResponse("encrypted: " + s.toLowerCase(Locale.ROOT));
+        decryptFunction = (s, v, l) -> l.onResponse("decrypted: " + s.toUpperCase(Locale.ROOT));
     }
 
     @Test

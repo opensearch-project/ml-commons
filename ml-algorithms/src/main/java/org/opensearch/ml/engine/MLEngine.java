@@ -134,7 +134,7 @@ public class MLEngine {
         connector
             .decrypt(
                 PREDICT.name(),
-                (credential, tenantId) -> encryptor.decrypt(credential, connector.getTenantId()),
+                (credential, tenantId, listener) -> encryptor.decrypt(credential, connector.getTenantId(), listener),
                 connector.getTenantId()
             );
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
@@ -235,8 +235,8 @@ public class MLEngine {
         }
     }
 
-    public String encrypt(String credential, String tenantId) {
-        return encryptor.encrypt(credential, tenantId);
+    public void encrypt(String credential, String tenantId, ActionListener<String> listener) {
+        encryptor.encrypt(credential, tenantId, listener);
     }
 
 }

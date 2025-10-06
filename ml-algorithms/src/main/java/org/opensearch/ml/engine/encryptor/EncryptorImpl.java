@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.encryptor;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
@@ -22,15 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 
 import javax.crypto.spec.SecretKeySpec;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
-import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -99,50 +95,27 @@ public class EncryptorImpl implements Encryptor {
     }
 
     @Override
-    public String encrypt(String plainText, String tenantId) {
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicReference<Object> encryptResponse = new AtomicReference<>();
-        LatchedActionListener<Boolean> initListener = new LatchedActionListener<>(ActionListener.wrap(result -> {
+    public void encrypt(String plainText, String tenantId, ActionListener<String> listener) {
+        ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
             final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
             JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
             final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
                 .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
-            encryptResponse.set(Base64.getEncoder().encodeToString(encryptResult.getResult()));
-        }, error -> { encryptResponse.set(error); }), latch);
+            listener.onResponse(Base64.getEncoder().encodeToString(encryptResult.getResult()));
+        }, listener::onFailure);
         initMasterKey(tenantId, initListener);
-        return waitAndGetResult(latch, encryptResponse);
     }
 
     @Override
-    public String decrypt(String encryptedText, String tenantId) {
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicReference<Object> decryptResponse = new AtomicReference<>();
-        LatchedActionListener<Boolean> initListener = new LatchedActionListener<>(ActionListener.wrap(result -> {
+    public void decrypt(String encryptedText, String tenantId, ActionListener<String> listener) {
+        ActionListener<Boolean> initListener = ActionListener.wrap(result -> {
             final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
             JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
             final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
                 .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
-            decryptResponse.set(new String(decryptedResult.getResult()));
-        }, error -> { decryptResponse.set(error); }), latch);
+            listener.onResponse(new String(decryptedResult.getResult()));
+        }, listener::onFailure);
         initMasterKey(tenantId, initListener);
-        return waitAndGetResult(latch, decryptResponse);
-    }
-
-    private String waitAndGetResult(CountDownLatch latch, AtomicReference<Object> response) {
-        try {
-            boolean completed = latch.await(5, SECONDS);
-            if (!completed) {
-                throw new MLException("Fetching master key timed out.");
-            }
-        } catch (InterruptedException e) {
-            throw new MLException("Interrupted while waiting for fetching master key." + e.getMessage());
-        }
-        Object result = response.get();
-        if (result instanceof Exception) {
-            throw (RuntimeException) result;
-        } else {
-            return (String) result;
-        }
     }
 
     @Override
@@ -165,16 +138,19 @@ public class EncryptorImpl implements Encryptor {
             return;
         }
         // checking and setting the waiting listeners for master key generation
-        List<ActionListener<Boolean>> newWaitingListeners = new ArrayList<>();
-        List<ActionListener<Boolean>> existingWaitingListener = tenantWaitingListenerMap.putIfAbsent(tenantId, newWaitingListeners);
-        List<ActionListener<Boolean>> waitingListeners = (existingWaitingListener != null) ? existingWaitingListener : newWaitingListeners;
-        waitingListeners.add(listener);
-        synchronized (waitingListeners) {
+        List<ActionListener<Boolean>> newWaitingListenersPerTenant = new ArrayList<>();
+        List<ActionListener<Boolean>> existingWaitingListenersPerTenant = tenantWaitingListenerMap
+            .putIfAbsent(tenantId, newWaitingListenersPerTenant);
+        List<ActionListener<Boolean>> waitingListenersPerTenant = (existingWaitingListenersPerTenant != null)
+            ? existingWaitingListenersPerTenant
+            : newWaitingListenersPerTenant;
+        waitingListenersPerTenant.add(listener);
+        synchronized (waitingListenersPerTenant) {
             try {
                 // checking and waiting if the master key generation triggered by any other thread
-                if (existingWaitingListener != null && tenantWaitingListenerMap.containsKey(tenantId)) {
+                if (existingWaitingListenersPerTenant != null && tenantWaitingListenerMap.containsKey(tenantId)) {
                     log.info("Waiting for other thread to generate master key");
-                    waitingListeners.wait();
+                    waitingListenersPerTenant.wait();
                 }
             } catch (InterruptedException e) {
                 throw new MLException("Interrupted while waiting for other thread to generate master key." + e.getMessage());
@@ -191,7 +167,7 @@ public class EncryptorImpl implements Encryptor {
 
     private void handleSuccess(String tenantId, String masterKey) {
         this.tenantMasterKeys.put(tenantId, masterKey);
-        log.info("ML encryption master key already initialized, no action needed");
+        log.info("ML encryption master key initialized, no action needed");
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
         synchronized (waitingListeners) {
             log.info("Notifying all waiting threads");

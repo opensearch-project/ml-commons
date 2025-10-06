@@ -161,9 +161,12 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
-        syncUpCron.initMLConfig();
-        verify(encryptor, times(1)).setMasterKey(any(), any());
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            syncUpCron.initMLConfig();
+            verify(encryptor, times(1)).setMasterKey(any(), any());
+        }, error -> {});
+        encryptor.encrypt("test", null, listener);
     }
 
     public void testInitMlConfig_MasterKeyExists() {
@@ -179,9 +182,12 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
-        syncUpCron.initMLConfig();
-        verify(encryptor, times(1)).setMasterKey(any(), any());
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            syncUpCron.initMLConfig();
+            verify(encryptor, times(1)).setMasterKey(any(), any());
+        }, error -> {});
+        encryptor.encrypt("test", null, listener);
     }
 
     public void testRun_NoMLModelIndex() {
