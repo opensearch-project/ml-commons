@@ -12,7 +12,6 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import java.util.Locale;
 
 import org.apache.commons.lang3.StringUtils;
-import org.opensearch.ml.common.exception.MLException;
 
 public class FunctionCallingFactory {
     public static FunctionCalling create(String llmInterface) {
@@ -28,7 +27,7 @@ public class FunctionCallingFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1:
                 return new BedrockConverseDeepseekR1FunctionCalling();
             default:
-                throw new MLException(String.format("Invalid _llm_interface: %s", llmInterface));
+                throw new IllegalArgumentException(String.format("Invalid _llm_interface: %s", llmInterface));
         }
     }
 }

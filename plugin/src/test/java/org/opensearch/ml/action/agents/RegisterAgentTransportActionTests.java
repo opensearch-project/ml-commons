@@ -525,4 +525,52 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue().getMessage().contains("Invalid _llm_interface: invalid_interface"));
     }
+
+    @Test
+    public void test_execute_registerAgent_EmptyLlmInterface() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_INTERFACE, "");
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("_llm_interface cannot be blank or empty", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_BlankLlmInterface() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_INTERFACE, "   ");
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("_llm_interface cannot be blank or empty", argumentCaptor.getValue().getMessage());
+    }
 }

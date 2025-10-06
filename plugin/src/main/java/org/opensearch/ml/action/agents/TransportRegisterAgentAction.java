@@ -103,6 +103,11 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
         String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
         if (llmInterface != null) {
+            if (llmInterface.trim().isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("_llm_interface cannot be blank or empty"));
+                return;
+            }
+
             try {
                 FunctionCallingFactory.create(llmInterface);
             } catch (Exception e) {
