@@ -85,6 +85,9 @@ public class MLExtractJsonProcessor extends AbstractMLProcessor {
 
     private final String extractType;
     private final Object defaultValue;
+
+    // TODO: Some place use XContentParser to parse json. Make code consistent.
+    // Need to research if we should use XContentParser or ObjectMapper first.
     private final ObjectMapper mapper;
 
     public MLExtractJsonProcessor(Map<String, Object> config) {

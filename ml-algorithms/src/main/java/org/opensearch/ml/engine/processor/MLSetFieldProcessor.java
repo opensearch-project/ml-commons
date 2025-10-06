@@ -30,6 +30,9 @@ import lombok.extern.log4j.Log4j2;
  *   <li><b>source_path</b> (conditionally required): JsonPath expression to read the value from.
  *       The value at this path will be copied to the target path.
  *       Either 'value' or 'source_path' must be provided, but not both.</li>
+ *   <li><b>default</b> (optional): Default value to use when 'source_path' is specified but
+ *       the source path doesn't exist or cannot be read. Only applicable with 'source_path'.
+ *       If not provided and source path fails, the original input is returned unchanged.</li>
  * </ul>
  * <p>
  * <b>Path Behavior:</b>
@@ -83,6 +86,16 @@ import lombok.extern.log4j.Log4j2;
  *   "source_path": "$.user.id"
  * }
  * 
+ * // Copy field with default fallback
+ * // Input: {"name": "John"}
+ * // Output: {"name": "John", "status": "unknown"}
+ * {
+ *   "type": "set_field",
+ *   "path": "$.status",
+ *   "source_path": "$.user.status",
+ *   "default": "unknown"
+ * }
+ * 
  * // Set an object (static value)
  * {
  *   "type": "set_field",
@@ -105,7 +118,8 @@ import lombok.extern.log4j.Log4j2;
  * <ul>
  *   <li>If 'value' is provided: sets the static value at the target path</li>
  *   <li>If 'source_path' is provided: reads value from source path and sets it at target path</li>
- *   <li>If source path doesn't exist or read fails: returns original input unchanged</li>
+ *   <li>If source path doesn't exist and 'default' is provided: uses the default value</li>
+ *   <li>If source path doesn't exist and no 'default': returns original input unchanged</li>
  *   <li>If the target path exists, overwrites the existing value</li>
  *   <li>If the target path doesn't exist, attempts to create it</li>
  *   <li>Path creation only works for simple nested fields (not array elements)</li>
@@ -120,12 +134,16 @@ public class MLSetFieldProcessor extends AbstractMLProcessor {
     private final String targetPath;
     private final Object value;
     private final String sourcePath;
+    private final Object defaultValue;
+    private final boolean hasDefault;
 
     public MLSetFieldProcessor(Map<String, Object> config) {
         super(config);
         this.targetPath = (String) config.get("path");
         this.value = config.get("value");
         this.sourcePath = (String) config.get("source_path");
+        this.defaultValue = config.get("default");
+        this.hasDefault = config.containsKey("default");
     }
 
     @Override
@@ -156,6 +174,11 @@ public class MLSetFieldProcessor extends AbstractMLProcessor {
                 throw new IllegalArgumentException("'source_path' cannot be empty for set_field processor");
             }
         }
+
+        // Validate that 'default' is only used with 'source_path'
+        if (config.containsKey("default") && !hasSourcePath) {
+            throw new IllegalArgumentException("'default' can only be used with 'source_path' for set_field processor");
+        }
     }
 
     @Override
@@ -166,8 +189,8 @@ public class MLSetFieldProcessor extends AbstractMLProcessor {
 
             // Determine the value to set
             Object valueToSet = determineValue(context);
-            if (valueToSet == null && sourcePath != null) {
-                // Source path read failed, return original input
+            if (valueToSet == null && sourcePath != null && !hasDefault) {
+                // Source path read failed and no default provided, return original input
                 return input;
             }
 
@@ -185,10 +208,11 @@ public class MLSetFieldProcessor extends AbstractMLProcessor {
     /**
      * Determines the value to set based on configuration.
      * If source_path is configured, reads from that path.
+     * If source_path fails and default is provided, uses the default.
      * Otherwise, uses the static value.
      * 
      * @param context The JsonPath document context
-     * @return The value to set, or null if source path read fails
+     * @return The value to set, or null if source path read fails and no default
      */
     private Object determineValue(com.jayway.jsonpath.DocumentContext context) {
         if (sourcePath != null) {
@@ -197,7 +221,11 @@ public class MLSetFieldProcessor extends AbstractMLProcessor {
                 log.debug("Read value from source path '{}'", sourcePath);
                 return sourceValue;
             } catch (Exception e) {
-                log.warn("Failed to read from source path '{}': {}", sourcePath, e.getMessage());
+                if (hasDefault) {
+                    log.debug("Failed to read from source path '{}', using default value", sourcePath);
+                    return defaultValue;
+                }
+                log.warn("Failed to read from source path '{}' and no default provided: {}", sourcePath, e.getMessage());
                 return null; // Signal failure
             }
         }

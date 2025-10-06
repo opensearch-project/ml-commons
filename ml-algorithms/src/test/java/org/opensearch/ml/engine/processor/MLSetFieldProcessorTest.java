@@ -627,4 +627,182 @@ public class MLSetFieldProcessorTest {
         String target = JsonPath.read(result, "$.target");
         assertEquals("newValue", target);
     }
+
+    // Tests for default value functionality
+
+    @Test
+    public void testSourcePathWithDefaultWhenSourceExists() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.status");
+        config.put("source_path", "$.user.status");
+        config.put("default", "unknown");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> user = new HashMap<>();
+        user.put("status", "active");
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("user", user);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String status = JsonPath.read(result, "$.status");
+        assertEquals("active", status);
+    }
+
+    @Test
+    public void testSourcePathWithDefaultWhenSourceNotFound() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.status");
+        config.put("source_path", "$.user.status");
+        config.put("default", "unknown");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "John");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String status = JsonPath.read(result, "$.status");
+        assertEquals("unknown", status);
+    }
+
+    @Test
+    public void testSourcePathWithNumericDefault() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.priority");
+        config.put("source_path", "$.user.priority");
+        config.put("default", 0);
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "John");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Integer priority = JsonPath.read(result, "$.priority");
+        assertEquals(Integer.valueOf(0), priority);
+    }
+
+    @Test
+    public void testSourcePathWithBooleanDefault() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.enabled");
+        config.put("source_path", "$.settings.enabled");
+        config.put("default", false);
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "Test");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Boolean enabled = JsonPath.read(result, "$.enabled");
+        assertEquals(false, enabled);
+    }
+
+    @Test
+    public void testSourcePathWithObjectDefault() {
+        Map<String, Object> defaultValue = new HashMap<>();
+        defaultValue.put("type", "guest");
+        defaultValue.put("level", 1);
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.userInfo");
+        config.put("source_path", "$.user.info");
+        config.put("default", defaultValue);
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "John");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Map<String, Object> userInfo = JsonPath.read(result, "$.userInfo");
+        assertEquals("guest", userInfo.get("type"));
+        assertEquals(1, userInfo.get("level"));
+    }
+
+    @Test
+    public void testSourcePathWithArrayDefault() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.tags");
+        config.put("source_path", "$.user.tags");
+        config.put("default", Arrays.asList("default", "tag"));
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "John");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Object tags = JsonPath.read(result, "$.tags");
+        assertTrue(tags instanceof java.util.List);
+        assertEquals(2, ((java.util.List<?>) tags).size());
+    }
+
+    @Test
+    public void testSourcePathWithNullDefault() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.optional");
+        config.put("source_path", "$.user.optional");
+        config.put("default", null);
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "John");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        // When setting null, the field is created but JsonPath may have issues reading it
+        // Verify the result is a Map and contains the field
+        assertTrue(result instanceof Map);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+        assertTrue(resultMap.containsKey("optional"));
+        assertEquals(null, resultMap.get("optional"));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testDefaultWithoutSourcePath() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.field");
+        config.put("value", "test");
+        config.put("default", "fallback");
+
+        new MLSetFieldProcessor(config);
+    }
+
+    @Test
+    public void testSourcePathWithDefaultInNestedPath() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.metadata.version");
+        config.put("source_path", "$.config.version");
+        config.put("default", "1.0.0");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("metadata", new HashMap<>());
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String version = JsonPath.read(result, "$.metadata.version");
+        assertEquals("1.0.0", version);
+    }
 }
