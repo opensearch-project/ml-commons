@@ -152,7 +152,8 @@ public class MemoryOperationsServiceTests {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos);
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos, "container-123");
 
         // Verify that requests and infos were populated
         assert indexRequests.size() == 2;
@@ -550,11 +551,48 @@ public class MemoryOperationsServiceTests {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos);
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos, "container-123");
 
         // Should not create any requests or infos for empty list
         assertTrue(indexRequests.isEmpty());
         assertTrue(memoryInfos.isEmpty());
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_WithMemoryContainerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+        when(input.getTags()).thenReturn(Map.of("tag1", "value1"));
+
+        Map<String, String> strategyNamespace = Map.of("session_id", "session-123");
+        Exception exception = new RuntimeException("Test error");
+        String memoryContainerId = "container-123";
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(strategyNamespace, input, exception, memoryContainerId);
+
+        assertEquals(memoryContainerId, result.get("memory_container_id"));
+        assertEquals(strategyNamespace, result.get("namespace"));
+        assertEquals(Map.of("tag1", "value1"), result.get("tags"));
+        assertTrue(result.containsKey("error"));
+        assertTrue(result.containsKey("created_time"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_WithNullMemoryContainerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+        when(input.getTags()).thenReturn(null);
+
+        Exception exception = new RuntimeException("Test error");
+
+        Map<String, Object> result = memoryOperationsService.createErrorMemoryHistory(null, input, exception, null);
+
+        // Should not contain memory_container_id when it's null
+        assertTrue(!result.containsKey("memory_container_id"));
+        assertTrue(result.containsKey("error"));
+        assertTrue(result.containsKey("created_time"));
     }
 
 }

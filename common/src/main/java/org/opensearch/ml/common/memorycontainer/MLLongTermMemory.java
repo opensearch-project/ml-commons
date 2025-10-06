@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STRATEGY_TYPE_FIELD;
@@ -55,6 +56,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
     // Vector/embedding field (optional, for semantic storage)
     private Object memoryEmbedding;
     private String ownerId;
+    private String memoryContainerId;
     private String strategyId;
 
     @Builder
@@ -67,6 +69,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         Instant lastUpdatedTime,
         Object memoryEmbedding,
         String ownerId,
+        String memoryContainerId,
         String strategyId
     ) {
         this.memory = memory;
@@ -77,6 +80,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         this.lastUpdatedTime = lastUpdatedTime;
         this.memoryEmbedding = memoryEmbedding;
         this.ownerId = ownerId;
+        this.memoryContainerId = memoryContainerId;
         this.strategyId = strategyId;
     }
 
@@ -92,6 +96,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         this.createdTime = in.readInstant();
         this.lastUpdatedTime = in.readInstant();
         this.ownerId = in.readOptionalString();
+        this.memoryContainerId = in.readOptionalString();
         this.strategyId = in.readOptionalString();
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
@@ -115,6 +120,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         out.writeInstant(createdTime);
         out.writeInstant(lastUpdatedTime);
         out.writeOptionalString(ownerId);
+        out.writeOptionalString(memoryContainerId);
         out.writeOptionalString(strategyId);
         // Note: memoryEmbedding is not serialized in StreamInput/Output as it's typically handled separately
     }
@@ -159,6 +165,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         Instant lastUpdatedTime = null;
         Object memoryEmbedding = null;
         String ownerId = null;
+        String memoryContainerId = null;
         String strategyId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -198,6 +205,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
                 case OWNER_ID_FIELD:
                     ownerId = parser.text();
                     break;
+                case MEMORY_CONTAINER_ID_FIELD:
+                    memoryContainerId = parser.text();
+                    break;
                 case STRATEGY_ID_FIELD:
                     strategyId = parser.text();
                     break;
@@ -217,6 +227,7 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
             .lastUpdatedTime(lastUpdatedTime)
             .memoryEmbedding(memoryEmbedding)
             .ownerId(ownerId)
+            .memoryContainerId(memoryContainerId)
             .strategyId(strategyId)
             .build();
     }
@@ -252,6 +263,9 @@ public class MLLongTermMemory implements ToXContentObject, Writeable {
         }
         if (ownerId != null) {
             result.put(OWNER_ID_FIELD, ownerId);
+        }
+        if (memoryContainerId != null) {
+            result.put(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         if (strategyId != null) {
             result.put(STRATEGY_ID_FIELD, strategyId);

@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,7 +49,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         this.enabled = enabled;
         this.type = type;
         this.namespace = namespace;
-        this.strategyConfig = (strategyConfig != null) ? strategyConfig : new HashMap<>();
+        this.strategyConfig = strategyConfig;
     }
 
     public MemoryStrategy(StreamInput input) throws IOException {
@@ -72,7 +71,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.strategyConfig = input.readMap();
         } else {
-            this.strategyConfig = new HashMap<>();
+            this.strategyConfig = null;
         }
     }
 

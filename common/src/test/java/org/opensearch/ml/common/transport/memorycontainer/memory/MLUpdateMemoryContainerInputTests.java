@@ -251,7 +251,7 @@ public class MLUpdateMemoryContainerInputTests {
             + "\"enabled\":true,"
             + "\"type\":\"semantic\","
             + "\"namespace\":[\"user_id\"],"
-            + "\"strategy_config\":{\"threshold\":0.8,\"max_results\":10}"
+            + "\"configuration\":{\"threshold\":0.8,\"max_results\":10}"
             + "}]"
             + "}";
 
@@ -343,5 +343,140 @@ public class MLUpdateMemoryContainerInputTests {
         assertEquals(original.getStrategies().size(), deserialized.getStrategies().size());
         assertEquals(original.getStrategies().get(0).getId(), deserialized.getStrategies().get(0).getId());
         assertEquals(original.getStrategies().get(0).getType(), deserialized.getStrategies().get(0).getType());
+    }
+
+    @Test
+    public void testConstructorWithLlmId() {
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("test").llmId("llm-model-123").build();
+
+        assertEquals("test", input.getName());
+        assertEquals("llm-model-123", input.getLlmId());
+    }
+
+    @Test
+    public void testStreamSerializationWithLlmId() throws IOException {
+        MLUpdateMemoryContainerInput original = MLUpdateMemoryContainerInput
+            .builder()
+            .name("test")
+            .description("desc")
+            .llmId("llm-model-456")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        MLUpdateMemoryContainerInput deserialized = new MLUpdateMemoryContainerInput(input);
+
+        assertEquals(original.getName(), deserialized.getName());
+        assertEquals(original.getDescription(), deserialized.getDescription());
+        assertEquals("llm-model-456", deserialized.getLlmId());
+    }
+
+    @Test
+    public void testStreamSerializationWithNullLlmId() throws IOException {
+        MLUpdateMemoryContainerInput original = MLUpdateMemoryContainerInput.builder().name("test").llmId(null).build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        original.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        MLUpdateMemoryContainerInput deserialized = new MLUpdateMemoryContainerInput(input);
+
+        assertEquals(original.getName(), deserialized.getName());
+        assertNull(deserialized.getLlmId());
+    }
+
+    @Test
+    public void testToXContentWithLlmId() throws IOException {
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("test container").llmId("llm-789").build();
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        assertTrue(jsonStr.contains("\"name\":\"test container\""));
+        assertTrue(jsonStr.contains("\"llm_id\":\"llm-789\""));
+    }
+
+    @Test
+    public void testToXContentWithNullLlmId() throws IOException {
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("test container").build();
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        assertTrue(jsonStr.contains("\"name\":\"test container\""));
+        assertFalse(jsonStr.contains("\"llm_id\""));
+    }
+
+    @Test
+    public void testParseWithLlmId() throws IOException {
+        String jsonStr = "{" + "\"name\":\"test\"," + "\"description\":\"desc\"," + "\"llm_id\":\"llm-model-xyz\"" + "}";
+
+        XContentParser parser = MediaTypeRegistry.JSON.xContent().createParser(null, null, jsonStr);
+        parser.nextToken();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.parse(parser);
+
+        assertEquals("test", input.getName());
+        assertEquals("desc", input.getDescription());
+        assertEquals("llm-model-xyz", input.getLlmId());
+    }
+
+    @Test
+    public void testParseWithoutLlmId() throws IOException {
+        String jsonStr = "{" + "\"name\":\"test\"," + "\"description\":\"desc\"" + "}";
+
+        XContentParser parser = MediaTypeRegistry.JSON.xContent().createParser(null, null, jsonStr);
+        parser.nextToken();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.parse(parser);
+
+        assertEquals("test", input.getName());
+        assertEquals("desc", input.getDescription());
+        assertNull(input.getLlmId());
+    }
+
+    @Test
+    public void testRoundTripSerializationWithLlmIdAndStrategies() throws IOException {
+        List<MemoryStrategy> strategies = Arrays
+            .asList(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MLUpdateMemoryContainerInput original = MLUpdateMemoryContainerInput
+            .builder()
+            .name("container")
+            .description("description")
+            .backendRoles(Arrays.asList("role1"))
+            .strategies(strategies)
+            .llmId("llm-combined-test")
+            .build();
+
+        // Serialize to XContent
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        original.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        // Deserialize from XContent
+        XContentParser parser = MediaTypeRegistry.JSON.xContent().createParser(null, null, jsonStr);
+        parser.nextToken();
+        MLUpdateMemoryContainerInput deserialized = MLUpdateMemoryContainerInput.parse(parser);
+
+        // Verify
+        assertEquals(original.getName(), deserialized.getName());
+        assertEquals(original.getDescription(), deserialized.getDescription());
+        assertEquals(original.getBackendRoles(), deserialized.getBackendRoles());
+        assertEquals(original.getLlmId(), deserialized.getLlmId());
+        assertEquals(original.getStrategies().size(), deserialized.getStrategies().size());
     }
 }

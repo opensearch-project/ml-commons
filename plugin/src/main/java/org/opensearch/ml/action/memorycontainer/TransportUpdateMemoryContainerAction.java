@@ -99,6 +99,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         String newDescription = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getDescription();
         List<String> allowedBackendRoles = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getBackendRoles();
         List<MemoryStrategy> updateStrategies = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getStrategies();
+        String newLlmId = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getLlmId();
 
         // Get memory container to validate access
         memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
@@ -127,25 +128,33 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                 updateFields.put(BACKEND_ROLES_FIELD, allowedBackendRoles);
             }
 
-            // Handle strategy updates if provided
-            if (updateStrategies != null && !updateStrategies.isEmpty()) {
+            // Handle configuration updates (strategies and/or llmId)
+            if ((updateStrategies != null && !updateStrategies.isEmpty()) || newLlmId != null) {
                 try {
                     MemoryConfiguration currentConfig = container.getConfiguration();
-                    List<MemoryStrategy> existingStrategies = currentConfig.getStrategies();
 
-                    // Merge strategies
-                    List<MemoryStrategy> mergedStrategies = StrategyMergeHelper.mergeStrategies(existingStrategies, updateStrategies);
+                    // Merge strategies if provided, otherwise keep existing
+                    List<MemoryStrategy> finalStrategies;
+                    if (updateStrategies != null && !updateStrategies.isEmpty()) {
+                        List<MemoryStrategy> existingStrategies = currentConfig.getStrategies();
+                        finalStrategies = StrategyMergeHelper.mergeStrategies(existingStrategies, updateStrategies);
+                    } else {
+                        finalStrategies = currentConfig.getStrategies();
+                    }
 
-                    // Create updated configuration with merged strategies
+                    // Use new llmId if provided, otherwise keep current
+                    String finalLlmId = newLlmId != null ? newLlmId : currentConfig.getLlmId();
+
+                    // Create updated configuration with merged/updated values
                     MemoryConfiguration updatedConfig = MemoryConfiguration
                         .builder()
                         .indexPrefix(currentConfig.getIndexPrefix())
-                        .llmId(currentConfig.getLlmId())
+                        .llmId(finalLlmId)
                         .embeddingModelType(currentConfig.getEmbeddingModelType())
                         .embeddingModelId(currentConfig.getEmbeddingModelId())
                         .dimension(currentConfig.getDimension())
                         .maxInferSize(currentConfig.getMaxInferSize())
-                        .strategies(mergedStrategies)
+                        .strategies(finalStrategies)
                         .indexSettings(currentConfig.getIndexSettings())
                         .parameters(currentConfig.getParameters())
                         .disableHistory(currentConfig.isDisableHistory())
@@ -155,9 +164,15 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                         .build();
 
                     updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, updatedConfig);
-                    log.info("Merged {} strategy updates for container {}", updateStrategies.size(), memoryContainerId);
+                    log
+                        .info(
+                            "Updated configuration for container {}: llmId={}, strategies={}",
+                            memoryContainerId,
+                            newLlmId != null,
+                            updateStrategies != null && !updateStrategies.isEmpty()
+                        );
                 } catch (Exception e) {
-                    log.error("Failed to merge strategies for container {}", memoryContainerId, e);
+                    log.error("Failed to update configuration for container {}", memoryContainerId, e);
                     actionListener.onFailure(e);
                     return;
                 }

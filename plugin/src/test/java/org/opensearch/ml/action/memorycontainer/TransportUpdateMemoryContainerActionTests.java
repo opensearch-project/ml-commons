@@ -31,6 +31,7 @@ import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -664,6 +665,235 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testUpdateLlmId_Success() {
+        String containerId = "test-container-id";
+        String newLlmId = "new-llm-model-789";
+
+        // Create existing configuration
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("old-llm-123")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("embedding-123")
+            .dimension(768)
+            .strategies(new ArrayList<>())
+            .build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().llmId(newLlmId).build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        // Mock container with configuration
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock successful update
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testUpdateLlmId_WithStrategies() {
+        String containerId = "test-container-id";
+        String newLlmId = "new-llm-combined";
+
+        // Create existing strategies
+        List<MemoryStrategy> existingStrategies = new ArrayList<>();
+        existingStrategies
+            .add(
+                MemoryStrategy
+                    .builder()
+                    .id("semantic_123")
+                    .enabled(true)
+                    .type(MemoryStrategyType.SEMANTIC)
+                    .namespace(Arrays.asList("user_id"))
+                    .strategyConfig(new HashMap<>())
+                    .build()
+            );
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("old-llm-456")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("embedding-456")
+            .dimension(768)
+            .strategies(existingStrategies)
+            .build();
+
+        // Update both llmId and strategy
+        MemoryStrategy updateStrategy = MemoryStrategy.builder().id("semantic_123").enabled(false).build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput
+            .builder()
+            .llmId(newLlmId)
+            .strategies(Arrays.asList(updateStrategy))
+            .build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .configuration(config)
+            .owner(
+                new User(
+                    "test-user",
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyMap()
+                )
+            )
+            .build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> containerListener = invocation.getArgument(1);
+            containerListener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        UpdateResponse updateResponse = new UpdateResponse(
+            new ShardId(new Index("test", "uuid"), 0),
+            containerId,
+            1L,
+            1L,
+            1L,
+            org.opensearch.action.DocWriteResponse.Result.UPDATED
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> updateListener = invocation.getArgument(1);
+            updateListener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(), any());
+
+        action.doExecute(task, request, listener);
+
+        verify(listener).onResponse(updateResponse);
+    }
+
+    public void testUpdateLlmId_WithOtherFields() {
+        String containerId = "test-container-id";
+        String newLlmId = "new-llm-with-name";
+        String newName = "updated-name";
+        String newDescription = "updated-description";
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("old-llm-999")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("embedding-999")
+            .dimension(768)
+            .strategies(new ArrayList<>())
+            .build();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput
+            .builder()
+            .name(newName)
+            .description(newDescription)
+            .llmId(newLlmId)
+            .build();
+
+        MLUpdateMemoryContainerRequest request = MLUpdateMemoryContainerRequest
+            .builder()
+            .memoryContainerId(containerId)
+            .mlUpdateMemoryContainerInput(input)
+            .build();
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+
+        MLMemoryContainer container = MLMemoryContainer
+            .builder()
+            .name("old-name")
             .configuration(config)
             .owner(
                 new User(

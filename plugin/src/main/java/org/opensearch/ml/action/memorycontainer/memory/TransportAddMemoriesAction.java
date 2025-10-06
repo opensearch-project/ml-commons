@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
@@ -160,6 +161,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                 .of(
                                     OWNER_ID_FIELD,
                                     input.getOwnerId(),
+                                    MEMORY_CONTAINER_ID_FIELD,
+                                    input.getMemoryContainerId(),
                                     SUMMARY_FIELD,
                                     summary,
                                     NAMESPACE_FIELD,
@@ -311,25 +314,26 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 log.debug("Found {} total similar facts across all {} new facts", allSearchResults.size(), facts.size());
 
                 if (allSearchResults.size() > 0) {
-                    memoryProcessingService.makeMemoryDecisions(facts, allSearchResults, memoryConfig, ActionListener.wrap(decisions -> {
-                        memoryOperationsService
-                            .executeMemoryOperations(
-                                decisions,
-                                memoryConfig,
-                                strategyNameSpace,
-                                user,
-                                input,
-                                strategy,
-                                ActionListener.wrap(operationResults -> {
-                                    List<MemoryResult> allResults = new ArrayList<>(operationResults);
-                                    MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
-                                    actionListener.onResponse(response);
-                                }, actionListener::onFailure)
-                            );
-                    }, e -> {
-                        log.error("Failed to make memory decisions", e);
-                        actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
-                    }));
+                    memoryProcessingService
+                        .makeMemoryDecisions(facts, allSearchResults, strategy, memoryConfig, ActionListener.wrap(decisions -> {
+                            memoryOperationsService
+                                .executeMemoryOperations(
+                                    decisions,
+                                    memoryConfig,
+                                    strategyNameSpace,
+                                    user,
+                                    input,
+                                    strategy,
+                                    ActionListener.wrap(operationResults -> {
+                                        List<MemoryResult> allResults = new ArrayList<>(operationResults);
+                                        MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
+                                        actionListener.onResponse(response);
+                                    }, actionListener::onFailure)
+                                );
+                        }, e -> {
+                            log.error("Failed to make memory decisions", e);
+                            actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
+                        }));
                 } else {
                     List<MemoryDecision> decisions = new ArrayList<>();
                     for (int i = 0; i < facts.size(); i++) {
@@ -365,7 +369,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     user,
                     strategy,
                     indexRequests,
-                    memoryInfos
+                    memoryInfos,
+                    input.getMemoryContainerId()
                 );
         }
     }

@@ -1209,10 +1209,10 @@ public class TransportAddMemoriesActionTests {
             MemoryDecision.builder().event(MemoryEvent.UPDATE).text("fact2").build()
         );
         doAnswer(invocation -> {
-            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(3);
+            ActionListener<List<MemoryDecision>> listener = invocation.getArgument(4);
             listener.onResponse(decisions);
             return null;
-        }).when(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), eq(config), any());
+        }).when(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), any(), eq(config), any());
 
         // Mock executeMemoryOperations to succeed
         doAnswer(invocation -> {
@@ -1228,7 +1228,7 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify decision-making was called
-        verify(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), eq(config), any());
+        verify(memoryProcessingService).makeMemoryDecisions(eq(facts), any(), any(), eq(config), any());
         verify(memoryOperationsService).executeMemoryOperations(eq(decisions), eq(config), any(), any(), eq(input), eq(strategy), any());
     }
 

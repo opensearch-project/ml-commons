@@ -111,7 +111,17 @@ public class MemoryOperationsServiceAdditionalTests {
 
         Map<String, String> strategyNameSpace = Map.of(SESSION_ID_FIELD, sessionId);
         memoryOperationsService
-            .createFactMemoriesFromList(facts, indexName, input, strategyNameSpace, user, strategy, indexRequests, memoryInfos);
+            .createFactMemoriesFromList(
+                facts,
+                indexName,
+                input,
+                strategyNameSpace,
+                user,
+                strategy,
+                indexRequests,
+                memoryInfos,
+                "container-123"
+            );
 
         assert indexRequests.size() == 1;
         assert memoryInfos.size() == 1;

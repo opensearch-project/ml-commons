@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -32,6 +33,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceAdditionalTests {
@@ -106,9 +108,70 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
         verify(decisionsListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testMakeMemoryDecisions_WithStrategyLlmIdOverride() {
+        List<String> facts = Arrays.asList("User name is John");
+        List<FactSearchResult> searchResults = Arrays.asList();
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("default-llm-123");
+
+        MemoryStrategy strategy = mock(MemoryStrategy.class);
+        when(strategy.getStrategyConfig()).thenReturn(Map.of("llm_id", "override-llm-456"));
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList());
+
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            assertEquals("override-llm-456", request.getModelId());
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, strategy, storageConfig, decisionsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithStrategyLlmIdOverride() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("default-llm-123");
+
+        MemoryStrategy strategy = mock(MemoryStrategy.class);
+        when(strategy.getType()).thenReturn(MemoryStrategyType.SEMANTIC);
+        when(strategy.getStrategyConfig()).thenReturn(Map.of("llm_id", "override-llm-789"));
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList());
+
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            assertEquals("override-llm-789", request.getModelId());
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
     }
 }

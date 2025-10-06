@@ -505,28 +505,6 @@ public class MemoryContainerHelperTests {
     }
 
     @Test
-    public void testSearchDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.search.SearchRequest searchRequest = new org.opensearch.action.search.SearchRequest("test-index");
-        ActionListener<org.opensearch.action.search.SearchResponse> listener = mock(ActionListener.class);
-
-        helper.searchData(config, searchRequest, listener);
-
-        verify(client).search(any(org.opensearch.action.search.SearchRequest.class), any());
-    }
-
-    @Test
-    public void testSearchDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.search.SearchRequest searchRequest = new org.opensearch.action.search.SearchRequest("test-index");
-        ActionListener<org.opensearch.action.search.SearchResponse> listener = mock(ActionListener.class);
-
-        helper.searchData(config, searchRequest, listener);
-
-        verify(client).search(any(org.opensearch.action.search.SearchRequest.class), any());
-    }
-
-    @Test
     public void testIndexDataWithSystemIndex() {
         MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
         org.opensearch.action.index.IndexRequest indexRequest = new org.opensearch.action.index.IndexRequest("test-index");

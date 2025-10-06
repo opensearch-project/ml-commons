@@ -27,7 +27,6 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -226,16 +225,6 @@ public class MemoryContainerHelper {
             }
         } else {
             client.get(getRequest, listener);
-        }
-    }
-
-    public void searchData(MemoryConfiguration configuration, SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
-        if (configuration.isUseSystemIndex()) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.search(searchRequest, ActionListener.runBefore(listener, context::restore));
-            }
-        } else {
-            client.search(searchRequest, listener);
         }
     }
 
