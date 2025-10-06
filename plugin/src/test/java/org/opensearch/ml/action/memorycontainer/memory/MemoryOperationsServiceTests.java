@@ -35,6 +35,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
@@ -78,7 +79,7 @@ public class MemoryOperationsServiceTests {
         namespace = new HashMap<>();
         namespace.put("session_id", "session-123");
 
-        strategy = MemoryStrategy.builder().type("semantic").enabled(true).id("strategy-123").build();
+        strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).enabled(true).id("strategy-123").build();
     }
 
     @Test
@@ -151,7 +152,8 @@ public class MemoryOperationsServiceTests {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos);
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos, "container-123");
 
         // Verify that requests and infos were populated
         assert indexRequests.size() == 2;
@@ -408,7 +410,12 @@ public class MemoryOperationsServiceTests {
     @Test
     public void testExecuteMemoryOperations_UserPreferenceStrategy() {
         // Test that USER_PREFERENCE strategy type maps correctly
-        MemoryStrategy userPrefStrategy = MemoryStrategy.builder().type("user_preference").enabled(true).id("pref-strategy").build();
+        MemoryStrategy userPrefStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.USER_PREFERENCE)
+            .enabled(true)
+            .id("pref-strategy")
+            .build();
 
         MemoryDecision addDecision = mock(MemoryDecision.class);
         when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
@@ -447,7 +454,12 @@ public class MemoryOperationsServiceTests {
     @Test
     public void testExecuteMemoryOperations_SummaryStrategy() {
         // Test that SUMMARY strategy type maps correctly
-        MemoryStrategy summaryStrategy = MemoryStrategy.builder().type("summary").enabled(true).id("summary-strategy").build();
+        MemoryStrategy summaryStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.SUMMARY)
+            .enabled(true)
+            .id("summary-strategy")
+            .build();
 
         MemoryDecision addDecision = mock(MemoryDecision.class);
         when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
@@ -539,11 +551,48 @@ public class MemoryOperationsServiceTests {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos);
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos, "container-123");
 
         // Should not create any requests or infos for empty list
         assertTrue(indexRequests.isEmpty());
         assertTrue(memoryInfos.isEmpty());
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_WithMemoryContainerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+        when(input.getTags()).thenReturn(Map.of("tag1", "value1"));
+
+        Map<String, String> strategyNamespace = Map.of("session_id", "session-123");
+        Exception exception = new RuntimeException("Test error");
+        String memoryContainerId = "container-123";
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(strategyNamespace, input, exception, memoryContainerId);
+
+        assertEquals(memoryContainerId, result.get("memory_container_id"));
+        assertEquals(strategyNamespace, result.get("namespace"));
+        assertEquals(Map.of("tag1", "value1"), result.get("tags"));
+        assertTrue(result.containsKey("error"));
+        assertTrue(result.containsKey("created_time"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_WithNullMemoryContainerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+        when(input.getTags()).thenReturn(null);
+
+        Exception exception = new RuntimeException("Test error");
+
+        Map<String, Object> result = memoryOperationsService.createErrorMemoryHistory(null, input, exception, null);
+
+        // Should not contain memory_container_id when it's null
+        assertTrue(!result.containsKey("memory_container_id"));
+        assertTrue(result.containsKey("error"));
+        assertTrue(result.containsKey("created_time"));
     }
 
 }

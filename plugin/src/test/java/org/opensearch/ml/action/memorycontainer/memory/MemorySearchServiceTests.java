@@ -27,7 +27,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -36,10 +35,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.memorycontainer.PayloadType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.transport.client.Client;
@@ -80,7 +81,9 @@ public class MemorySearchServiceTests {
                 .messages(messages)
                 .build()
         );
-        strategy = spy(MemoryStrategy.builder().id("strategy-123").type("semantic").namespace(List.of(SESSION_ID_FIELD)).build());
+        strategy = spy(
+            MemoryStrategy.builder().id("strategy-123").type(MemoryStrategyType.SEMANTIC).namespace(List.of(SESSION_ID_FIELD)).build()
+        );
 
         memoryConfig = spy(
             MemoryConfiguration
@@ -125,14 +128,14 @@ public class MemorySearchServiceTests {
         Exception searchException = new RuntimeException("Search failed");
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
             searchListener.onFailure(searchException);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
         memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
-        verify(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
+        verify(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
     }
 
     @Test
@@ -155,11 +158,11 @@ public class MemorySearchServiceTests {
             ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
             searchListener.onResponse(searchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
         memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
-        verify(memoryContainerHelper, times(3)).searchData(any(), any(SearchRequest.class), any()); // Limited by maxInferSize
+        verify(memoryContainerHelper, times(3)).searchData(any(), any(SearchDataObjectRequest.class), any()); // Limited by maxInferSize
         verify(listener).onResponse(any(List.class));
     }
 

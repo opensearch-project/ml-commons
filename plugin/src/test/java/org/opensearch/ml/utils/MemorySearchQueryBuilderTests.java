@@ -10,6 +10,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
@@ -28,6 +29,7 @@ import org.opensearch.index.query.WrapperQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 
 public class MemorySearchQueryBuilderTests {
 
@@ -152,12 +154,12 @@ public class MemorySearchQueryBuilderTests {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("semantic-strategy")
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(List.of(SESSION_ID_FIELD))
             .build();
 
         QueryBuilder builder = MemorySearchQueryBuilder
-            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, config);
+            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, config, "container-123");
 
         assertTrue(builder instanceof BoolQueryBuilder);
         BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
@@ -187,6 +189,15 @@ public class MemorySearchQueryBuilderTests {
                 .map(TermQueryBuilder.class::cast)
                 .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD) && strategy.getId().equals(term.value()))
         );
+        // Verify container ID filter is applied
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(MEMORY_CONTAINER_ID_FIELD) && "container-123".equals(term.value()))
+        );
 
         assertEquals(1, boolQuery.must().size());
         assertTrue(boolQuery.must().get(0) instanceof WrapperQueryBuilder);
@@ -202,7 +213,7 @@ public class MemorySearchQueryBuilderTests {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id("semantic-strategy")
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .namespace(List.of(SESSION_ID_FIELD))
             .build();
 
@@ -218,7 +229,8 @@ public class MemorySearchQueryBuilderTests {
                     .embeddingModelId("embedding_model1")
                     .embeddingModelType(FunctionName.TEXT_EMBEDDING)
                     .dimension(512)
-                    .build()
+                    .build(),
+                "container-456"
             );
 
         assertTrue(builder instanceof BoolQueryBuilder);
@@ -247,6 +259,15 @@ public class MemorySearchQueryBuilderTests {
                 .filter(TermQueryBuilder.class::isInstance)
                 .map(TermQueryBuilder.class::cast)
                 .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD) && strategy.getId().equals(term.value()))
+        );
+        // Verify container ID filter is applied
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(MEMORY_CONTAINER_ID_FIELD) && "container-456".equals(term.value()))
         );
 
         assertEquals(1, boolQuery.must().size());
@@ -306,5 +327,143 @@ public class MemorySearchQueryBuilderTests {
         String jsonString = builder.toString();
 
         assertTrue(jsonString.contains("\"memory\":\"\""));
+    }
+
+    @Test
+    public void testBuildFactSearchQueryWithNullContainerId() throws IOException {
+        String fact = "User prefers dark mode";
+        String sessionId = "session-null-container";
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .disableHistory(true)
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("embedding-model-123")
+            .dimension(768)
+            .build();
+
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type(MemoryStrategyType.SEMANTIC)
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
+
+        // Test with null container ID
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, config, null);
+
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        // Verify standard filters are still applied
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
+        );
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(STRATEGY_ID_FIELD))
+        );
+
+        // Verify container ID filter is NOT applied when null
+        assertFalse(
+            "Container ID filter should not be applied when container ID is null",
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(MEMORY_CONTAINER_ID_FIELD))
+        );
+    }
+
+    @Test
+    public void testBuildFactSearchQueryWithBlankContainerId() throws IOException {
+        String fact = "User lives in Seattle";
+        String sessionId = "session-blank-container";
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .disableHistory(true)
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .embeddingModelId("sparse-model-456")
+            .build();
+
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type(MemoryStrategyType.SEMANTIC)
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
+
+        // Test with blank container ID
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, config, "");
+
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        // Verify standard filters are still applied
+        assertTrue(
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(NAMESPACE_FIELD + "." + SESSION_ID_FIELD))
+        );
+
+        // Verify container ID filter is NOT applied when blank
+        assertFalse(
+            "Container ID filter should not be applied when container ID is blank",
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(MEMORY_CONTAINER_ID_FIELD))
+        );
+    }
+
+    @Test
+    public void testBuildFactSearchQueryWithNullConfig() throws IOException {
+        String fact = "User is learning Java";
+        String sessionId = "session-no-config";
+
+        MemoryStrategy strategy = MemoryStrategy
+            .builder()
+            .id("semantic-strategy")
+            .type(MemoryStrategyType.SEMANTIC)
+            .namespace(List.of(SESSION_ID_FIELD))
+            .build();
+
+        // Test with null config (falls back to match query)
+        QueryBuilder builder = MemorySearchQueryBuilder
+            .buildFactSearchQuery(strategy, fact, Map.of(SESSION_ID_FIELD, sessionId), null, null, "container-789");
+
+        assertTrue(builder instanceof BoolQueryBuilder);
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) builder;
+
+        // Verify container ID filter is applied even with null config
+        assertTrue(
+            "Container ID filter should be applied even with null config",
+            boolQuery
+                .filter()
+                .stream()
+                .filter(TermQueryBuilder.class::isInstance)
+                .map(TermQueryBuilder.class::cast)
+                .anyMatch(term -> term.fieldName().equals(MEMORY_CONTAINER_ID_FIELD) && "container-789".equals(term.value()))
+        );
+
+        // Verify it uses match query instead of neural
+        assertEquals(1, boolQuery.must().size());
+        assertTrue("Should use match query when config is null", boolQuery.must().get(0).toString().contains("match"));
     }
 }

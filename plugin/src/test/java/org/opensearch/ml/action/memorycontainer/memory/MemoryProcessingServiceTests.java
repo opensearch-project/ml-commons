@@ -28,6 +28,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -62,7 +63,7 @@ public class MemoryProcessingServiceTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+        memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
         memoryStrategy.getStrategyConfig().put("llm_result_path", "$");
         memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
         testContent = createTestContent("Hello");
@@ -120,7 +121,7 @@ public class MemoryProcessingServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         List<FactSearchResult> searchResults = Arrays.asList();
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, null, decisionsListener);
 
         verify(decisionsListener).onFailure(any(IllegalStateException.class));
     }
@@ -133,7 +134,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn(null);
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(IllegalStateException.class));
     }
@@ -160,7 +161,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -206,7 +207,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(Exception.class));
     }
@@ -229,7 +230,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -242,7 +243,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -274,7 +275,13 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        MemoryStrategy memoryStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+        MemoryStrategy memoryStrategy = new MemoryStrategy(
+            "id",
+            true,
+            MemoryStrategyType.SEMANTIC,
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
         memoryStrategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
@@ -458,7 +465,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(RuntimeException.class));
     }
@@ -481,7 +488,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(RuntimeException.class));
     }
@@ -514,7 +521,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onResponse(any(List.class));
     }
@@ -545,7 +552,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onResponse(any(List.class));
     }
@@ -576,7 +583,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onResponse(any(List.class));
     }
@@ -607,7 +614,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(RuntimeException.class));
     }
@@ -651,7 +658,7 @@ public class MemoryProcessingServiceTests {
         MemoryStrategy userPreferenceStrategy = new MemoryStrategy(
             "id",
             true,
-            "user_preference",
+            MemoryStrategyType.USER_PREFERENCE,
             Arrays.asList("user_id"),
             new HashMap<>()
         );
@@ -674,7 +681,7 @@ public class MemoryProcessingServiceTests {
         MemoryStrategy userPreferenceStrategy = new MemoryStrategy(
             "id",
             true,
-            "user_preference",
+            MemoryStrategyType.USER_PREFERENCE,
             Arrays.asList("user_id"),
             new HashMap<>()
         );
@@ -694,7 +701,13 @@ public class MemoryProcessingServiceTests {
     @Test
     public void testRunMemoryStrategy_SemanticStrategy() {
         // Test that semantic strategy still works
-        MemoryStrategy semanticStrategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), new HashMap<>());
+        MemoryStrategy semanticStrategy = new MemoryStrategy(
+            "id",
+            true,
+            MemoryStrategyType.SEMANTIC,
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
 
         List<MessageInput> messages = Arrays
             .asList(MessageInput.builder().content(createTestContent("My name is John")).role("user").build());
@@ -711,7 +724,13 @@ public class MemoryProcessingServiceTests {
     @Test
     public void testRunMemoryStrategy_SummaryStrategy() {
         // Test that summary strategy is properly routed
-        MemoryStrategy summaryStrategy = new MemoryStrategy("id", true, "summary", Arrays.asList("user_id"), new HashMap<>());
+        MemoryStrategy summaryStrategy = new MemoryStrategy(
+            "id",
+            true,
+            MemoryStrategyType.SUMMARY,
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
 
         List<MessageInput> messages = Arrays
             .asList(MessageInput.builder().content(createTestContent("This is a document to summarize")).role("user").build());
@@ -728,7 +747,13 @@ public class MemoryProcessingServiceTests {
     @Test
     public void testExtractFactsFromConversation_SummaryStrategy() {
         // Test with summary strategy type
-        MemoryStrategy summaryStrategy = new MemoryStrategy("id", true, "summary", Arrays.asList("user_id"), new HashMap<>());
+        MemoryStrategy summaryStrategy = new MemoryStrategy(
+            "id",
+            true,
+            MemoryStrategyType.SUMMARY,
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
 
         List<MessageInput> messages = Arrays
             .asList(MessageInput.builder().content(createTestContent("Document content to summarize")).role("user").build());
@@ -745,7 +770,7 @@ public class MemoryProcessingServiceTests {
     @Test
     public void testRunMemoryStrategy_InvalidStrategy() {
         // Test that invalid strategy type is rejected
-        MemoryStrategy invalidStrategy = new MemoryStrategy("id", true, "invalid_type", Arrays.asList("user_id"), new HashMap<>());
+        MemoryStrategy invalidStrategy = new MemoryStrategy("id", true, null, Arrays.asList("user_id"), new HashMap<>());
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
 
@@ -763,7 +788,7 @@ public class MemoryProcessingServiceTests {
         // Test with custom prompt that doesn't specify JSON format
         Map<String, Object> strategyConfig = new HashMap<>();
         strategyConfig.put("system_prompt", "Extract information from this conversation");
-        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
@@ -780,7 +805,7 @@ public class MemoryProcessingServiceTests {
         // Test with empty custom prompt (should fallback to default)
         Map<String, Object> strategyConfig = new HashMap<>();
         strategyConfig.put("prompt", "");
-        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
@@ -800,7 +825,7 @@ public class MemoryProcessingServiceTests {
         systemPromptMsg.put("role", "system");
         systemPromptMsg.put("content", Arrays.asList(Map.of("text", "You are a helpful assistant", "type", "text")));
         strategyConfig.put("system_prompt_message", systemPromptMsg);
-        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
@@ -819,7 +844,7 @@ public class MemoryProcessingServiceTests {
         userPromptMsg.put("role", "user");
         userPromptMsg.put("content", Arrays.asList(Map.of("text", "Extract all facts from above", "type", "text")));
         strategyConfig.put("user_prompt_message", userPromptMsg);
-        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
@@ -844,7 +869,7 @@ public class MemoryProcessingServiceTests {
         userPromptMsg.put("content", Arrays.asList(Map.of("text", "Extract all facts", "type", "text")));
         strategyConfig.put("user_prompt_message", userPromptMsg);
 
-        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
@@ -898,7 +923,7 @@ public class MemoryProcessingServiceTests {
         // Test with valid custom prompt that has JSON and "facts" keywords (with quotes as required by validation)
         Map<String, Object> strategyConfig = new HashMap<>();
         strategyConfig.put("prompt", "Extract information and return JSON response format with \"facts\" array containing key points");
-        MemoryStrategy strategy = new MemoryStrategy("id", true, "semantic", Arrays.asList("user_id"), strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
 
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);

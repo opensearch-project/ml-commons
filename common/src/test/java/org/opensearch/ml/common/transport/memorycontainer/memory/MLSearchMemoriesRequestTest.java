@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -29,6 +28,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.indices.IndicesModule;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -53,7 +53,7 @@ public class MLSearchMemoriesRequestTest {
         testInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-123")
-            .memoryType("long-term")
+            .memoryType(MemoryType.LONG_TERM)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
@@ -162,7 +162,7 @@ public class MLSearchMemoriesRequestTest {
 
         assertNotNull(result);
         assertEquals("container-123", result.getMlSearchMemoriesInput().getMemoryContainerId());
-        assertEquals("long-term", result.getMlSearchMemoriesInput().getMemoryType());
+        assertEquals(MemoryType.LONG_TERM, result.getMlSearchMemoriesInput().getMemoryType());
         assertNotNull(result.getMlSearchMemoriesInput().getSearchSourceBuilder());
         assertEquals("mock-tenant", result.getTenantId());
     }
@@ -194,7 +194,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesInput newInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("new-container")
-            .memoryType("working")
+            .memoryType(MemoryType.WORKING)
             .searchSourceBuilder(newSearchSourceBuilder)
             .build();
         mutableRequest.setMlSearchMemoriesInput(newInput);
@@ -208,7 +208,7 @@ public class MLSearchMemoriesRequestTest {
     @Test(expected = IllegalArgumentException.class)
     public void testWithNullSearchSourceBuilder() {
         // Null SearchSourceBuilder is not allowed - should throw exception
-        new MLSearchMemoriesInput("container-empty", "long-term", null);
+        new MLSearchMemoriesInput("container-empty", MemoryType.LONG_TERM, null);
     }
 
     @Test
@@ -219,7 +219,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesInput specialInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-with-special-chars-🚀")
-            .memoryType(MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            .memoryType(MemoryType.SESSIONS)
             .searchSourceBuilder(specialSearchSourceBuilder)
             .build();
 
@@ -237,7 +237,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
         assertEquals("container-with-special-chars-🚀", deserialized.getMlSearchMemoriesInput().getMemoryContainerId());
-        assertEquals(MEM_CONTAINER_MEMORY_TYPE_SESSIONS, deserialized.getMlSearchMemoriesInput().getMemoryType());
+        assertEquals(MemoryType.SESSIONS, deserialized.getMlSearchMemoriesInput().getMemoryType());
         assertNotNull(deserialized.getMlSearchMemoriesInput().getSearchSourceBuilder());
         assertEquals("tenant-特殊文字", deserialized.getTenantId());
     }
@@ -255,7 +255,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesInput longInput = MLSearchMemoriesInput
             .builder()
             .memoryContainerId("container-long")
-            .memoryType("history")
+            .memoryType(MemoryType.HISTORY)
             .searchSourceBuilder(longSearchSourceBuilder)
             .build();
 
@@ -272,7 +272,7 @@ public class MLSearchMemoriesRequestTest {
         StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(), namedWriteableRegistry);
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
-        assertEquals("history", deserialized.getMlSearchMemoriesInput().getMemoryType());
+        assertEquals(MemoryType.HISTORY, deserialized.getMlSearchMemoriesInput().getMemoryType());
         assertNotNull(deserialized.getMlSearchMemoriesInput().getSearchSourceBuilder());
     }
 }

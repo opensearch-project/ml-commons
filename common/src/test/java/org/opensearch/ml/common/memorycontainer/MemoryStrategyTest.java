@@ -40,7 +40,7 @@ public class MemoryStrategyTest {
 
     @Test
     public void testGenerateStrategyId_WithSemanticType() {
-        String id = generateStrategyId("semantic");
+        String id = generateStrategyId(MemoryStrategyType.SEMANTIC);
         assertNotNull(id);
         assertTrue("ID should start with semantic_", id.startsWith("semantic_"));
         assertEquals("ID should have correct length", "semantic_".length() + 8, id.length());
@@ -48,7 +48,7 @@ public class MemoryStrategyTest {
 
     @Test
     public void testGenerateStrategyId_WithUserPreferenceType() {
-        String id = generateStrategyId("user_preference");
+        String id = generateStrategyId(MemoryStrategyType.USER_PREFERENCE);
         assertNotNull(id);
         assertTrue("ID should start with user_preference_", id.startsWith("user_preference_"));
         assertEquals("ID should have correct length", "user_preference_".length() + 8, id.length());
@@ -56,86 +56,49 @@ public class MemoryStrategyTest {
 
     @Test
     public void testGenerateStrategyId_WithSummaryType() {
-        String id = generateStrategyId("summary");
+        String id = generateStrategyId(MemoryStrategyType.SUMMARY);
         assertNotNull(id);
         assertTrue("ID should start with summary_", id.startsWith("summary_"));
         assertEquals("ID should have correct length", "summary_".length() + 8, id.length());
     }
 
     @Test
-    public void testGenerateStrategyId_WithCustomType() {
-        String id = generateStrategyId("custom_type");
-        assertNotNull(id);
-        assertTrue("ID should start with custom_type_", id.startsWith("custom_type_"));
+    public void testConstructor_WithNullId_KeepsNull() {
+        MemoryStrategy strategy = new MemoryStrategy(null, true, MemoryStrategyType.SEMANTIC, namespace, strategyConfig);
+        assertEquals(null, strategy.getId());
+        assertEquals(MemoryStrategyType.SEMANTIC, strategy.getType());
     }
 
     @Test
-    public void testGenerateStrategyId_WithSpacesInType() {
-        String id = generateStrategyId("custom type with spaces");
-        assertNotNull(id);
-        assertTrue("ID should replace spaces with underscores", id.startsWith("custom_type_with_spaces_"));
+    public void testConstructor_WithEmptyId_KeepsEmpty() {
+        MemoryStrategy strategy = new MemoryStrategy("", true, MemoryStrategyType.USER_PREFERENCE, namespace, strategyConfig);
+        assertEquals("", strategy.getId());
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, strategy.getType());
     }
 
     @Test
-    public void testGenerateStrategyId_WithNullType() {
-        String id = generateStrategyId(null);
-        assertNotNull(id);
-        assertTrue("ID should start with strategy_ for null type", id.startsWith("strategy_"));
-    }
-
-    @Test
-    public void testGenerateStrategyId_WithEmptyType() {
-        String id = generateStrategyId("");
-        assertNotNull(id);
-        assertTrue("ID should start with strategy_ for empty type", id.startsWith("strategy_"));
-    }
-
-    @Test
-    public void testGenerateStrategyId_WithWhitespaceType() {
-        String id = generateStrategyId("   ");
-        assertNotNull(id);
-        assertTrue("ID should start with strategy_ for whitespace type", id.startsWith("strategy_"));
-    }
-
-    @Test
-    public void testConstructor_WithNullId_GeneratesId() {
-        MemoryStrategy strategy = new MemoryStrategy(null, true, "semantic", namespace, strategyConfig);
-        assertNotNull(strategy.getId());
-        assertTrue("Generated ID should start with semantic_", strategy.getId().startsWith("semantic_"));
-    }
-
-    @Test
-    public void testConstructor_WithEmptyId_GeneratesId() {
-        MemoryStrategy strategy = new MemoryStrategy("", true, "user_preference", namespace, strategyConfig);
-        assertNotNull(strategy.getId());
-        assertTrue("Generated ID should start with user_preference_", strategy.getId().startsWith("user_preference_"));
-    }
-
-    @Test
-    public void testConstructor_WithSummaryType_GeneratesId() {
-        MemoryStrategy strategy = new MemoryStrategy(null, true, "summary", namespace, strategyConfig);
-        assertNotNull(strategy.getId());
-        assertTrue("Generated ID should start with summary_", strategy.getId().startsWith("summary_"));
-        assertEquals("summary", strategy.getType());
+    public void testConstructor_WithSummaryType_NoAutoGeneration() {
+        MemoryStrategy strategy = new MemoryStrategy(null, true, MemoryStrategyType.SUMMARY, namespace, strategyConfig);
+        assertEquals(null, strategy.getId());
+        assertEquals(MemoryStrategyType.SUMMARY, strategy.getType());
     }
 
     @Test
     public void testConstructor_WithProvidedId_KeepsId() {
         String customId = "custom_id_123";
-        MemoryStrategy strategy = new MemoryStrategy(customId, true, "semantic", namespace, strategyConfig);
+        MemoryStrategy strategy = new MemoryStrategy(customId, true, MemoryStrategyType.SEMANTIC, namespace, strategyConfig);
         assertEquals(customId, strategy.getId());
     }
 
     @Test
-    public void testParse_WithoutId_GeneratesIdWithTypePrefix() throws IOException {
+    public void testParse_WithoutId_KeepsNull() throws IOException {
         String jsonContent = "{\"type\":\"semantic\",\"enabled\":true,\"namespace\":[\"user_id\"]}";
         XContentParser parser = XContentType.JSON.xContent().createParser(null, null, jsonContent);
         parser.nextToken(); // Start parsing
 
         MemoryStrategy strategy = MemoryStrategy.parse(parser);
-        assertNotNull(strategy.getId());
-        assertTrue("Generated ID should start with semantic_", strategy.getId().startsWith("semantic_"));
-        assertEquals("semantic", strategy.getType());
+        assertEquals(null, strategy.getId());
+        assertEquals(MemoryStrategyType.SEMANTIC, strategy.getType());
     }
 
     @Test
@@ -151,10 +114,9 @@ public class MemoryStrategyTest {
 
     @Test
     public void testSerialization_PreservesId() throws IOException {
-        MemoryStrategy original = new MemoryStrategy(null, true, "semantic", namespace, strategyConfig);
-        String originalId = original.getId();
-        assertNotNull(originalId);
-        assertTrue(originalId.startsWith("semantic_"));
+        String customId = "semantic_abc123";
+        MemoryStrategy original = new MemoryStrategy(customId, true, MemoryStrategyType.SEMANTIC, namespace, strategyConfig);
+        assertEquals(customId, original.getId());
 
         // Write to stream
         BytesStreamOutput output = new BytesStreamOutput();
@@ -164,26 +126,27 @@ public class MemoryStrategyTest {
         StreamInput input = output.bytes().streamInput();
         MemoryStrategy deserialized = new MemoryStrategy(input);
 
-        assertEquals(originalId, deserialized.getId());
+        assertEquals(customId, deserialized.getId());
         assertEquals(original.getType(), deserialized.getType());
         assertEquals(original.isEnabled(), deserialized.isEnabled());
     }
 
     @Test
     public void testToXContent_IncludesId() throws IOException {
-        MemoryStrategy strategy = new MemoryStrategy(null, true, "user_preference", namespace, strategyConfig);
+        String customId = "user_preference_xyz789";
+        MemoryStrategy strategy = new MemoryStrategy(customId, true, MemoryStrategyType.USER_PREFERENCE, namespace, strategyConfig);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         strategy.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonString = builder.toString();
 
         assertTrue("JSON should contain id field", jsonString.contains("\"id\":"));
-        assertTrue("ID should contain type prefix", jsonString.contains("user_preference_"));
+        assertTrue("ID should match custom id", jsonString.contains(customId));
     }
 
     @Test
     public void testIdGeneration_UniqueForEachCall() {
-        String id1 = generateStrategyId("semantic");
-        String id2 = generateStrategyId("semantic");
+        String id1 = generateStrategyId(MemoryStrategyType.SEMANTIC);
+        String id2 = generateStrategyId(MemoryStrategyType.SEMANTIC);
 
         assertNotNull(id1);
         assertNotNull(id2);
@@ -192,17 +155,17 @@ public class MemoryStrategyTest {
     }
 
     @Test
-    public void testBuilder_WithoutId_GeneratesId() {
+    public void testBuilder_WithoutId_KeepsNull() {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .enabled(true)
             .namespace(namespace)
             .strategyConfig(strategyConfig)
             .build();
 
-        assertNotNull(strategy.getId());
-        assertTrue("Generated ID should start with semantic_", strategy.getId().startsWith("semantic_"));
+        assertEquals(null, strategy.getId());
+        assertEquals(MemoryStrategyType.SEMANTIC, strategy.getType());
     }
 
     @Test
@@ -211,7 +174,7 @@ public class MemoryStrategyTest {
         MemoryStrategy strategy = MemoryStrategy
             .builder()
             .id(customId)
-            .type("semantic")
+            .type(MemoryStrategyType.SEMANTIC)
             .enabled(true)
             .namespace(namespace)
             .strategyConfig(strategyConfig)

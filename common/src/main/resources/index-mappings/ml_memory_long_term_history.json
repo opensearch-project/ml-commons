@@ -6,6 +6,9 @@
     "owner_id": {
       "type": "keyword"
     },
+    "memory_container_id": {
+      "type": "keyword"
+    },
     "memory_id": {
       "type": "keyword"
     },

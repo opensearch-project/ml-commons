@@ -110,6 +110,7 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
         MLMemorySession session = MLMemorySession
             .builder()
             .ownerId(input.getOwnerId())
+            .memoryContainerId(input.getMemoryContainerId())
             .summary(input.getSummary())
             .createdTime(now)
             .lastUpdateTime(now)

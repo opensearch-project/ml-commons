@@ -16,6 +16,7 @@ import java.util.List;
 
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryRequest;
@@ -51,7 +52,8 @@ public class RestMLDeleteMemoriesByQueryAction extends BaseRestHandler {
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         // Extract path parameters
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
 
         // Parse query from request body
         QueryBuilder query = null;
