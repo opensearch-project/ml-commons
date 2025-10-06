@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
 import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
@@ -19,9 +20,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHis
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
-import java.security.AccessController;
 import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +51,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -95,7 +95,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     }
 
     @Override
-    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
         String appType = mlAgent.getAppType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
@@ -270,12 +270,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
             } else if (output instanceof ModelTensorOutput) {
                 flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+            } else if (toolParameters.getOrDefault("return_data_as_map", "false").equalsIgnoreCase("true")) {
+                flowAgentOutput.add(convertOutputToModelTensor(output, outputKey));
             } else {
-                String result = output instanceof String
-                    ? (String) output
-                    : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
-
-                ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(result).build();
+                ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(StringUtils.toJson(output)).build();
                 flowAgentOutput.add(stepOutput);
             }
             if (memory == null) {

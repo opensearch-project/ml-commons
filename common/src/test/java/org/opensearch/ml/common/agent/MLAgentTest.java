@@ -445,4 +445,56 @@ public class MLAgentTest {
         assertNull(agent.getAppType());
         assertFalse(agent.getIsHidden()); // Default value for boolean when not specified
     }
+
+    @Test
+    public void getTags() {
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            "CONVERSATIONAL",
+            "test description",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            List.of(mlToolSpec),
+            Map.of("_llm_interface", "bedrock"),
+            new MLMemorySpec("conversation_index", "123", 10),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            true,
+            null
+        );
+
+        org.opensearch.telemetry.metrics.tags.Tags tags = agent.getTags();
+        Map<String, ?> tagsMap = tags.getTagsMap();
+
+        assertEquals(true, tagsMap.get("is_hidden"));
+        assertEquals("CONVERSATIONAL", tagsMap.get("type"));
+        assertEquals("conversation_index", tagsMap.get("memory_type"));
+        assertEquals("bedrock", tagsMap.get("_llm_interface"));
+    }
+
+    @Test
+    public void getTags_NullValues() {
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            "flow",
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            null,
+            null
+        );
+
+        org.opensearch.telemetry.metrics.tags.Tags tags = agent.getTags();
+        Map<String, ?> tagsMap = tags.getTagsMap();
+
+        assertEquals(false, tagsMap.get("is_hidden"));
+        assertEquals("flow", tagsMap.get("type"));
+        assertFalse(tagsMap.containsKey("memory_type"));
+        assertFalse(tagsMap.containsKey("_llm_interface"));
+    }
 }

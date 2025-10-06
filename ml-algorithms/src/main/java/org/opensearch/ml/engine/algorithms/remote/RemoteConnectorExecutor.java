@@ -53,8 +53,10 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -64,6 +66,21 @@ public interface RemoteConnectorExecutor {
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
 
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        executeAction(action, mlInput, actionListener, null);
+    }
+
+    default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener, TransportChannel channel) {
+        // Check for streaming
+        if (channel != null) {
+            ActionListener<Tuple<Integer, ModelTensors>> streamingListener = ActionListener.wrap(response -> {
+                ModelTensors tensors = response.v2();
+                MLTaskResponse mlResponse = new MLTaskResponse(new ModelTensorOutput(Arrays.asList(tensors)));
+                actionListener.onResponse(mlResponse);
+            }, actionListener::onFailure);
+            preparePayloadAndInvoke(action, mlInput, new ExecutionContext(0), streamingListener, actionListener, channel);
+            return;
+        }
+
         ActionListener<Collection<Tuple<Integer, ModelTensors>>> tensorActionListener = ActionListener.wrap(r -> {
             // Only all sub-requests success will call logics here
             ModelTensors[] modelTensors = new ModelTensors[r.size()];
@@ -182,6 +199,17 @@ public interface RemoteConnectorExecutor {
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
+        preparePayloadAndInvoke(action, mlInput, executionContext, actionListener, null, null);
+    }
+
+    default void preparePayloadAndInvoke(
+        String action,
+        MLInput mlInput,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener,
+        ActionListener<MLTaskResponse> agentListener,
+        TransportChannel channel
+    ) {
         Connector connector = getConnector();
 
         Map<String, String> parameters = new HashMap<>();
@@ -241,6 +269,18 @@ public interface RemoteConnectorExecutor {
             }
             if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
+            } else if (parameters.containsKey("stream")) {
+                String memoryId = parameters.get("memory_id");
+                String parentInteractionId = parameters.get("parent_interaction_id");
+                // TODO: find a better way to differentiate agent and predict request
+                boolean isAgentRequest = (memoryId != null || parentInteractionId != null);
+                StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(
+                    channel,
+                    isAgentRequest ? agentListener : null,
+                    memoryId,
+                    parentInteractionId
+                );
+                invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, streamListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
@@ -313,6 +353,15 @@ public interface RemoteConnectorExecutor {
         String payload,
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    );
+
+    void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> streamListener
     );
 
     static class RetryableActionExtension extends RetryableAction<Tuple<Integer, ModelTensors>> {

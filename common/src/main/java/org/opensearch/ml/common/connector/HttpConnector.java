@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
@@ -19,12 +20,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -35,6 +39,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -51,6 +58,8 @@ public class HttpConnector extends AbstractConnector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
+    // TODO: move the AgentUtils class from algorithm module to common module
+    public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
 
     // TODO: add RequestConfig like request time out,
 
@@ -351,10 +360,39 @@ public class HttpConnector extends AbstractConnector {
 
             if (!isJson(payload)) {
                 throw new IllegalArgumentException("Invalid payload: " + payload);
+            } else if (neededStreamParameterInPayload(parameters)) {
+                JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+                jsonObject.addProperty("stream", true);
+                payload = jsonObject.toString();
             }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+    }
+
+    private boolean neededStreamParameterInPayload(Map<String, String> parameters) {
+        if (parameters == null) {
+            return false;
+        }
+
+        boolean isStream = parameters.containsKey("stream");
+        if (!isStream) {
+            return false;
+        }
+
+        String llmInterface = parameters.get("_llm_interface");
+        if (StringUtils.isBlank(llmInterface)) {
+            return false;
+        }
+
+        llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
+        llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+        switch (llmInterface) {
+            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+                return true;
+            default:
+                return false;
+        }
     }
 
     protected String fillNullParameters(Map<String, String> parameters, String payload) {

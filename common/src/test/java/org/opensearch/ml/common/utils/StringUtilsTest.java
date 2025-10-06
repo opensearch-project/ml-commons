@@ -16,6 +16,7 @@ import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -30,7 +31,14 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
+import com.google.gson.JsonElement;
+import com.google.gson.TypeAdapter;
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 
 public class StringUtilsTest {
@@ -120,6 +128,91 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void fromJsonWithWrappingKey_SimpleMap() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{\"key\": \"value\"}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertEquals("value", wrappedMap.get("key"));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_NestedMap() {
+        Map<String, Object> response = StringUtils
+            .fromJsonWithWrappingKey("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertTrue(wrappedMap.get("key") instanceof Map);
+        Map nestedMap = (Map) wrappedMap.get("key");
+        assertEquals("nested_value", nestedMap.get("nested_key"));
+        List list = (List) nestedMap.get("nested_array");
+        assertEquals(2, list.size());
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_SimpleList() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\"]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_NestedList() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+        assertTrue(list.get(2) instanceof List);
+        assertTrue(list.get(3) instanceof Map);
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_EmptyObject() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertTrue(wrappedMap.isEmpty());
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_EmptyArray() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertTrue(list.isEmpty());
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedType() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("\"simple string\"", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedNumber() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("42", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedBoolean() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("true", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedNull() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("null", "wrapper"); });
+    }
+
+    @Test
     public void getParameterMap() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("key1", "value1");
@@ -134,6 +227,18 @@ public class StringUtilsTest {
         assertEquals("2.1", parameterMap.get("key3"));
         assertEquals("[10,20]", parameterMap.get("key4"));
         assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
+    }
+
+    @Test
+    public void getParameterMapWithNullInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(null);
+        Assert.assertTrue(parameterMap.isEmpty());
+    }
+
+    @Test
+    public void getParameterMapWithEmptyInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(Map.of());
+        Assert.assertTrue(parameterMap.isEmpty());
     }
 
     @Test
@@ -240,6 +345,48 @@ public class StringUtilsTest {
      * in the values. Verifies that the method correctly extracts the prefixes of the toString()
      * method calls.
      */
+    @Test
+    public void testCollectToStringPrefixes() {
+        Map<String, String> map = new HashMap<>();
+        map.put("key1", "${parameters.tensor.toString()}");
+        map.put("key2", "${parameters.output.toString()}");
+        map.put("key3", "normal value");
+
+        List<String> prefixes = StringUtils.collectToStringPrefixes(map);
+
+        assertEquals(2, prefixes.size());
+        assertTrue(prefixes.contains("tensor"));
+        assertTrue(prefixes.contains("output"));
+    }
+
+    @Test
+    public void test_GsonTypeAdapters() {
+        // Test ModelTensor serialization
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .name("test_tensor")
+            .data(new Number[] { 1, 2, 3 })
+            .dataType(MLResultDataType.INT32)
+            .build();
+
+        String tensorJson = StringUtils.gson.toJson(tensor);
+        assertEquals(tensor.toString(), tensorJson);
+
+        // Test ModelTensorOutput serialization
+        List<ModelTensors> outputs = new ArrayList<>();
+        outputs.add(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build());
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+
+        String outputJson = StringUtils.gson.toJson(output);
+        assertEquals(output.toString(), outputJson);
+
+        // Test ModelTensors serialization
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+
+        String tensorsJson = StringUtils.gson.toJson(tensors);
+        assertEquals(tensors.toString(), tensorsJson);
+    }
+
     @Test
     public void testGetToStringPrefix() {
         Map<String, String> parameters = new HashMap<>();
@@ -949,4 +1096,133 @@ public class StringUtilsTest {
         assertEquals(0, array.size());
     }
 
+    // reflect method for PlainDoubleAdapter
+    private static TypeAdapter<Double> createPlainDoubleAdapter() {
+        try {
+            Class<?> clazz = Class.forName("org.opensearch.ml.common.utils.StringUtils$PlainDoubleAdapter");
+            Constructor<?> constructor = clazz.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            Object adapterInstance = constructor.newInstance();
+            return (TypeAdapter<Double>) adapterInstance;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create PlainDoubleAdapter via reflection", e);
+        }
+    }
+
+    @Test
+    public void testSerializeScientificNotation_RemovesExponent() {
+        Map<String, Object> data = Map.of("test1", 1e30, "test2", 1.2e3, "test3", 9.5e-3, "test4", 1.56e-30);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("1000000000000000000000000000000"));
+        assertTrue(json.contains("1200"));
+        assertTrue(json.contains("0.0095"));
+        assertTrue(json.contains("0.00000000000000000000000000000156"));
+
+    }
+
+    @Test
+    public void testSerializeInteger_RemovesDecimalPoint() {
+        Map<String, Object> data = Map.of("intLike", 42.0);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("42"));
+        assertFalse(json.contains("42.0"));
+    }
+
+    @Test
+    public void testSerializeNaNAndInfinity_BecomesNull() {
+        Map<String, Double> data = new HashMap<>();
+        data.put("nul", null);
+        data.put("nan", Double.NaN);
+        data.put("inf", Double.POSITIVE_INFINITY);
+        data.put("ninf", Double.NEGATIVE_INFINITY);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"nan\":null"));
+        assertTrue(json.contains("\"inf\":null"));
+        assertTrue(json.contains("\"ninf\":null"));
+        assertTrue(json.contains("\"nul\":null"));
+
+        assertFalse(json.contains("NaN"));
+        assertFalse(json.contains("Infinity"));
+    }
+
+    @Test
+    public void testDeserializeBackToDouble() {
+        String json = "{\"value\": 12345.6789}";
+
+        Map<?, ?> result = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, Map.class);
+
+        Object value = result.get("value");
+        assertTrue(value instanceof Double);
+        assertEquals(12345.6789, (Double) value, 1e-7);
+    }
+
+    @Test
+    public void testQuotedScientificNotation_RemainsString() {
+        String json = "{\"code\":\"1e-6\"}";
+
+        Map<?, ?> result = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, Map.class);
+
+        assertEquals("1e-6", result.get("code"));
+    }
+
+    @Test
+    public void testSerializeFloatScientificNotation_RemovesExponent_InPojo() {
+        java.util.Map<String, Float> data = new java.util.LinkedHashMap<>();
+        data.put("fObj", 1.23e-5f);
+        data.put("fPrim", 9.5e-3f);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"fObj\":0.0000123"));
+
+        assertTrue(json.contains("\"fPrim\":0.0095") || json.contains("\"fPrim\":9.5E-3") || json.contains("\"fPrim\":9.5e-3"));
+    }
+
+    @Test
+    public void testSerializeFloatNaNAndInfinity_BecomesNull_InPojo() {
+        java.util.Map<String, Float> data = new java.util.LinkedHashMap<>();
+        data.put("fObj", Float.NaN);
+        data.put("fPrimBox", Float.POSITIVE_INFINITY);
+        data.put("fNull", null);
+
+        String json = StringUtils.PLAIN_NUMBER_GSON.toJson(data);
+
+        assertTrue(json.contains("\"fObj\":null"));
+        assertTrue(json.contains("\"fNull\":null"));
+        assertTrue(json.contains("\"fPrimBox\":null") || !json.contains("\"fPrimBox\""));
+    }
+
+    @Test
+    public void testDeserializeScientificNotation_ToFloatAndPrimitive() {
+        String jsonObj = "{\"fObj\":1.23e-5}";
+        java.lang.reflect.Type mapType = new com.google.gson.reflect.TypeToken<java.util.Map<String, Float>>() {
+        }.getType();
+        java.util.Map<String, Float> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonObj, mapType);
+        assertEquals(1.23e-5f, m.get("fObj"), 1e-9f);
+
+        String jsonArr = "[4.56e1]";
+        float[] arr = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonArr, float[].class);
+        assertEquals(45.6f, arr[0], 1e-6f);
+    }
+
+    @Test
+    public void testDeserializeNullFloat_ToNull() {
+        String json = "{\"fObj\":null,\"fPrim\":1.0}";
+
+        java.lang.reflect.Type mapType = new TypeToken<java.util.Map<String, JsonElement>>() {
+        }.getType();
+        java.util.Map<String, JsonElement> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, mapType);
+
+        assertTrue(m.containsKey("fObj"));
+        assertTrue(m.get("fObj").isJsonNull());
+
+        assertTrue(m.get("fPrim").isJsonPrimitive());
+        assertEquals(1.0f, m.get("fPrim").getAsFloat(), 1e-9f);
+    }
 }

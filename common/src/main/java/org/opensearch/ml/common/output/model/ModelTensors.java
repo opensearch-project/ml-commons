@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -170,5 +171,14 @@ public class ModelTensors implements Writeable, ToXContentObject {
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(mlModelTensors).build();
         modelTensors.setStatusCode(statusCode);
         return modelTensors;
+    }
+
+    @Override
+    public String toString() {
+        try {
+            return this.toXContent(JsonXContent.contentBuilder(), null).toString();
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Can't convert ModelTensors to string", e);
+        }
     }
 }

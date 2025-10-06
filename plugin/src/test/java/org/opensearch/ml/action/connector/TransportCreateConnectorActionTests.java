@@ -329,7 +329,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_connectorAccessControlEnabled_adminSpecifyAllBackendRoles_exception() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(connectorAccessControlHelper.isAdmin(any(User.class))).thenReturn(true);
+        ThreadContext threadContext1 = new ThreadContext(settings);
+        threadContext1.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|role-1|all_access");
+        when(threadPool.getThreadContext()).thenReturn(threadContext1);
         input.setAddAllBackendRoles(true);
         input.setBackendRoles(null);
 
@@ -631,6 +633,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .version("1")
             .protocol(ConnectorProtocols.MCP_SSE)
             .credential(credential)
+            .url("test")
             .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
         action.doExecute(task, request, actionListener);

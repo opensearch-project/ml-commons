@@ -27,6 +27,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.search.SearchHit;
 
 import lombok.AllArgsConstructor;
@@ -44,6 +45,8 @@ public class Interaction implements Writeable, ToXContentObject {
     private String id;
     @Getter
     private Instant createTime;
+    @Getter
+    private Instant updatedTime;
     @Getter
     private String conversationId;
     @Getter
@@ -65,6 +68,7 @@ public class Interaction implements Writeable, ToXContentObject {
     public Interaction(
         String id,
         Instant createTime,
+        Instant updatedTime,
         String conversationId,
         String input,
         String promptTemplate,
@@ -74,6 +78,7 @@ public class Interaction implements Writeable, ToXContentObject {
     ) {
         this.id = id;
         this.createTime = createTime;
+        this.updatedTime = updatedTime;
         this.conversationId = conversationId;
         this.input = input;
         this.promptTemplate = promptTemplate;
@@ -92,6 +97,10 @@ public class Interaction implements Writeable, ToXContentObject {
      */
     public static Interaction fromMap(String id, Map<String, Object> fields) {
         Instant createTime = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD));
+        Instant updatedTime = null;
+        if (fields.get(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD) != null) {
+            updatedTime = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD));
+        }
         String conversationId = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD);
         String input = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD);
         String promptTemplate = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD);
@@ -104,6 +113,7 @@ public class Interaction implements Writeable, ToXContentObject {
         return new Interaction(
             id,
             createTime,
+            updatedTime,
             conversationId,
             input,
             promptTemplate,
@@ -134,6 +144,10 @@ public class Interaction implements Writeable, ToXContentObject {
     public static Interaction fromStream(StreamInput in) throws IOException {
         String id = in.readString();
         Instant createTime = in.readInstant();
+        Instant updatedTime = null;
+        if (in.getVersion().onOrAfter(CommonValue.VERSION_3_3_0)) {
+            updatedTime = in.readInstant();
+        }
         String conversationId = in.readString();
         String input = in.readString();
         String promptTemplate = in.readString();
@@ -148,6 +162,7 @@ public class Interaction implements Writeable, ToXContentObject {
         return new Interaction(
             id,
             createTime,
+            updatedTime,
             conversationId,
             input,
             promptTemplate,
@@ -163,6 +178,9 @@ public class Interaction implements Writeable, ToXContentObject {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
         out.writeInstant(createTime);
+        if (updatedTime != null && out.getVersion().onOrAfter(CommonValue.VERSION_3_3_0)) {
+            out.writeInstant(updatedTime);
+        }
         out.writeString(conversationId);
         out.writeString(input);
         out.writeString(promptTemplate);
@@ -184,6 +202,9 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, conversationId);
         builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, id);
         builder.field(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, createTime);
+        if (updatedTime != null) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_UPDATED_TIME_FIELD, updatedTime);
+        }
         if (input != null && !input.trim().isEmpty()) {
             builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
         }

@@ -73,7 +73,9 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -83,10 +85,12 @@ import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -1860,5 +1864,140 @@ public class AgentUtilsTest extends MLStaticMockBase {
         createTool(toolFactories, params, toolSpec);
 
         verify(factory).create(argThat(toolParamsMap -> ((Map<String, Object>) toolParamsMap).get("param1").equals("value1")));
+    }
+
+    @Test
+    public void testParseLLMOutput_PathNotFoundExceptionWithEmptyToolCalls() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        parameters.put(TOOL_CALLS_PATH, "$.output.message.content[*].toolUse");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "toolUseId");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.stopReason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = Map
+            .of("output", Map.of("message", Map.of("content", Collections.emptyList(), "role", "assistant")), "stopReason", "end_turn");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output.get(THOUGHT));
+        Assert.assertEquals("", output.get(ACTION_INPUT));
+        Assert.assertEquals("", output.get(TOOL_CALL_ID));
+        Assert.assertTrue(output.containsKey(FINAL_ANSWER));
+        Assert.assertTrue(output.get(FINAL_ANSWER).contains("[]"));
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_McpStreamableHttpConnectorSuccess() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> expected = List
+            .of(MLToolSpec.builder().type(McpStreamableHttpTool.TYPE).name("StreamableHttpTool").description("mock").build());
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpStreamableHttpConnector, McpStreamableHttpConnectorExecutor, agent, and listener
+            mockMcpStreamableHttpConnector(connStatic);
+            McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_UnsupportedConnectorType() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+            // Mock an unsupported connector type (neither McpConnector nor McpStreamableHttpConnector)
+            HttpConnector mockConnector = mock(HttpConnector.class);
+            when(mockConnector.getProtocol()).thenReturn("http");
+            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+
+            MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ExceptionInGetMcpToolSpecs() throws Exception {
+        stubGetConnector();
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenThrow(new RuntimeException("Test exception"));
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ExceptionInGetConnector() throws Exception {
+        // Mock getConnector to throw an exception
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(null, new RuntimeException("Failed to get connector"));
+                return stage;
+            });
+            return stage;
+        });
+
+        MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+        verify(listener).onResponse(Collections.emptyList());
+    }
+
+    // Helper method to mock McpStreamableHttpConnector
+    private void mockMcpStreamableHttpConnector(MockedStatic<Connector> connectorStatic) {
+        McpStreamableHttpConnector mockConnector = mock(McpStreamableHttpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_streamable_http");
+        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
 }

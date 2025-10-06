@@ -35,7 +35,15 @@ jobs:
             else
               # Check if the author is in the approvers list
               approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
-              if [[ "$approvers" =~ "$author" ]]; then
+              is_approved=false
+              IFS=',' read -ra APPROVER_ARRAY <<< "$approvers"
+              for approver in "${APPROVER_ARRAY[@]}"; do
+                if [[ "$approver" == "$author" ]]; then
+                  is_approved=true
+                  break
+                fi
+              done
+              if [[ "$is_approved" == "true" ]]; then
                 echo "$author is in the approval list."
                 echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
               else

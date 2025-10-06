@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -24,6 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
@@ -409,4 +411,113 @@ public class SearchIndexToolTests {
         assertFalse(((String) result).contains("took"));
     }
 
+    @Test
+    @SneakyThrows
+    public void testRunWithOutputParserForModelTensorOutput() {
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mockedSearchIndexTool.setOutputParser(output -> "parsed_output");
+
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "true");
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        Object result = future.join();
+        assertEquals("parsed_output", result);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithOutputParserForStringResponse() {
+        SearchResponse mockedSearchResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, mockedSearchResponseString)
+            );
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mockedSearchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mockedSearchIndexTool.setOutputParser(output -> "parsed_string_output");
+
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
+        final CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(r -> future.complete(r), e -> future.completeExceptionally(e));
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", inputString);
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "false");
+
+        mockedSearchIndexTool.run(parameters, listener);
+
+        Object result = future.join();
+        assertEquals("parsed_string_output", result);
+    }
+
+    @Test
+    public void testFactoryCreateWithProcessorEnhancement() {
+        SearchIndexTool.Factory.getInstance().init(client, TEST_XCONTENT_REGISTRY_FOR_QUERY);
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("processor_configs", "[{\"type\":\"test_processor\"}]");
+
+        SearchIndexTool tool = SearchIndexTool.Factory.getInstance().create(params);
+
+        assertEquals(SearchIndexTool.TYPE, tool.getType());
+        // Verify that the output parser was set (not null)
+        assertTrue(tool.getOutputParser() != null);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withMatchQuery_triggersPlainDoubleGson() {
+        String input = "{\"index\":\"test-index\",\"query\":{}}";
+        Map<String, String> params = Map.of("input", input);
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        mockedSearchIndexTool.run(params, listener);
+
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        verify(client, never()).execute(any(), any(), any());
+
+        assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRun_withRangeQuery_triggersPlainDoubleGson() {
+        String input = "{\"index\":\"test-index\",\"query\":{}}";
+        Map<String, String> params = Map.of("input", input);
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+
+        mockedSearchIndexTool.run(params, listener);
+
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        verify(client, never()).execute(any(), any(), any());
+
+        assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
+    }
 }

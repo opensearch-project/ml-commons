@@ -26,6 +26,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.transport.TransportChannel;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -150,6 +151,15 @@ public class MLEngine {
         return predictable;
     }
 
+    public void deploy(MLModel mlModel, Map<String, Object> params, ActionListener<Predictable> listener) {
+        Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
+        predictable.initModelAsync(mlModel, params, encryptor).thenAccept((b) -> listener.onResponse(predictable)).exceptionally(e -> {
+            log.error("Failed to init model", e);
+            listener.onFailure(new RuntimeException(e));
+            return null;
+        });
+    }
+
     public MLExecutable deployExecute(MLModel mlModel, Map<String, Object> params) {
         MLExecutable executable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
         executable.initModel(mlModel, params);
@@ -177,7 +187,7 @@ public class MLEngine {
         return trainAndPredictable.trainAndPredict(mlInput);
     }
 
-    public void execute(Input input, ActionListener<Output> listener) throws Exception {
+    public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) throws Exception {
         validateInput(input);
         if (input.getFunctionName() == FunctionName.METRICS_CORRELATION) {
             MLExecutable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
@@ -189,6 +199,10 @@ public class MLEngine {
             Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
             if (executable == null) {
                 throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
+            }
+            if (channel != null) {
+                executable.execute(input, listener, channel);
+                return;
             }
             executable.execute(input, listener);
         }

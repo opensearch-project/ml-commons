@@ -8,13 +8,16 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.time.Instant;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -30,10 +33,10 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.memorycontainer.MLLongTermMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryResponse;
@@ -47,6 +50,7 @@ import org.opensearch.transport.client.Client;
 public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
     private static final String MEMORY_CONTAINER_ID = "test-memory-container-id";
+    private static final String MEMORY_TYPE = "long-term";
     private static final String MEMORY_ID = "test-memory-id";
     private static final String MEMORY_INDEX_NAME = "ml-static-memory-test-container";
     private static final String USER_NAME = "test-user";
@@ -80,7 +84,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     private User adminUser;
     private ThreadContext threadContext;
     private MLMemoryContainer testMemoryContainer;
-    private MLMemory testMemory;
+    private MLLongTermMemory testMemory;
 
     @Before
     public void setup() {
@@ -101,11 +105,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         actionRequest = mock(ActionRequest.class);
 
         // Setup test memory container
-        MemoryStorageConfig storageConfig = MemoryStorageConfig
-            .builder()
-            .memoryIndexName(MEMORY_INDEX_NAME)
-            .semanticStorageEnabled(false)
-            .build();
+        MemoryConfiguration storageConfig = MemoryConfiguration.builder().indexPrefix(MEMORY_INDEX_NAME).disableHistory(false).build();
 
         testMemoryContainer = MLMemoryContainer
             .builder()
@@ -115,16 +115,15 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             .tenantId("test-tenant")
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
-            .memoryStorageConfig(storageConfig)
+            .configuration(storageConfig)
             .build();
 
         // Setup test memory
-        testMemory = MLMemory
+        testMemory = MLLongTermMemory
             .builder()
-            .sessionId("test-session")
+            .namespace(Map.of(SESSION_ID_FIELD, "test-session", "user_id", "test-user"))
             .memory("Test memory content")
-            .memoryType(MemoryType.RAW_MESSAGE)
-            .userId("test-user")
+            .strategyType(MemoryStrategyType.SEMANTIC)
             .createdTime(Instant.now())
             .lastUpdatedTime(Instant.now())
             .build();
@@ -147,12 +146,8 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class))).thenReturn(true);
 
-        // Setup memory index validation to pass
-        when(memoryContainerHelper.validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class)))
-            .thenReturn(true);
-
         // Setup memory index name
-        when(memoryContainerHelper.getMemoryIndexName(testMemoryContainer)).thenReturn(MEMORY_INDEX_NAME);
+        when(memoryContainerHelper.getMemoryIndexName(any(MLMemoryContainer.class), any(String.class))).thenReturn(MEMORY_INDEX_NAME);
     }
 
     public void testConstructor() {
@@ -161,7 +156,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
     public void testDoExecuteSuccess() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -172,22 +167,26 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup client to return successful response
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(2);
             org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
             when(getResponse.isExists()).thenReturn(true);
             when(getResponse.getSourceAsString()).thenReturn(createMemoryJson());
             listener.onResponse(getResponse);
             return null;
-        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        })
+            .when(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+
+        doReturn(true).when(memoryContainerHelper).checkMemoryAccess(any(), any());
 
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper).validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class));
-        verify(memoryContainerHelper).getMemoryIndexName(testMemoryContainer);
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
+        verify(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         // Capture and verify the success response content
         ArgumentCaptor<MLGetMemoryResponse> responseCaptor = forClass(MLGetMemoryResponse.class);
@@ -197,28 +196,25 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         assertNotNull(capturedResponse);
 
         // Verify the memory content in the response matches the JSON that was returned
-        MLMemory returnedMemory = capturedResponse.getMlMemory();
+        MLLongTermMemory returnedMemory = capturedResponse.getLongTermMemory();
         assertNotNull(returnedMemory);
 
         // Get the expected JSON content that was actually returned by the mock
         String expectedJson = createMemoryJson();
 
         // Verify the memory content matches what was in the JSON
-        assertEquals("test-session", returnedMemory.getSessionId());
+        assertEquals("test-session", returnedMemory.getNamespace().get(SESSION_ID_FIELD));
         assertEquals("Test memory content", returnedMemory.getMemory());
-        assertEquals(MemoryType.RAW_MESSAGE, returnedMemory.getMemoryType());
-        assertEquals("test-user", returnedMemory.getUserId());
+        assertEquals(MemoryStrategyType.SEMANTIC, returnedMemory.getStrategyType());
         assertNotNull(returnedMemory.getCreatedTime());
         assertNotNull(returnedMemory.getLastUpdatedTime());
-        assertTrue(expectedJson.contains("\"session_id\":\"test-session\""));
         assertTrue(expectedJson.contains("\"memory\":\"Test memory content\""));
-        assertTrue(expectedJson.contains("\"memory_type\":\"RAW_MESSAGE\""));
-        assertTrue(expectedJson.contains("\"user_id\":\"test-user\""));
+        assertTrue(expectedJson.contains("\"strategy_type\":\"SEMANTIC\""));
     }
 
     public void testDoExecuteWithUnauthorizedUser() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -253,7 +249,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
     public void testDoExecuteWithParsingException() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -264,22 +260,20 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class))).thenReturn(true);
 
-        // Setup memory index validation to pass
-        when(memoryContainerHelper.validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class)))
-            .thenReturn(true);
-
         // Setup memory index name
-        when(memoryContainerHelper.getMemoryIndexName(testMemoryContainer)).thenReturn(MEMORY_INDEX_NAME);
+        when(memoryContainerHelper.getMemoryIndexName(any(MLMemoryContainer.class), any(String.class))).thenReturn(MEMORY_INDEX_NAME);
 
         // Setup client to return response with invalid JSON
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(2);
             org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
             when(getResponse.isExists()).thenReturn(true);
             when(getResponse.getSourceAsString()).thenReturn("invalid-json-content");
             listener.onResponse(getResponse);
             return null;
-        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        })
+            .when(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         // Execute
         action.doExecute(task, getRequest, actionListener);
@@ -290,14 +284,12 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Verify access control was checked
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
 
-        // Verify memory index validation was called
-        verify(memoryContainerHelper).validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class));
-
         // Verify memory index name was retrieved
-        verify(memoryContainerHelper).getMemoryIndexName(testMemoryContainer);
+        verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
 
         // Verify client.get was called
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        verify(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         // Verify failure response due to parsing error
         verify(actionListener).onFailure(any(Exception.class));
@@ -306,7 +298,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecuteWithNoResponse() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -317,21 +309,23 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup client to return response with isExists() as false
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(2);
             org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
             when(getResponse.isExists()).thenReturn(false);
             listener.onResponse(getResponse);
             return null;
-        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        })
+            .when(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper).validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class));
-        verify(memoryContainerHelper).getMemoryIndexName(testMemoryContainer);
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
+        verify(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         // Capture and verify the failure response
         ArgumentCaptor<Exception> exceptionCaptor = forClass(Exception.class);
@@ -341,14 +335,14 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         Exception capturedException = exceptionCaptor.getValue();
         assertTrue(capturedException instanceof OpenSearchStatusException);
         OpenSearchStatusException statusException = (OpenSearchStatusException) capturedException;
-        assertEquals("Memory not found with id: " + MEMORY_ID, statusException.getMessage());
+        assertEquals("Memory not found", statusException.getMessage());
         assertEquals(RestStatus.NOT_FOUND, statusException.status());
     }
 
     @Test
     public void testDoExecuteWithClientGetFailure() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -359,20 +353,22 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
 
         // Setup client to throw an exception when get() is called
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(2);
             // Simulate a client failure by calling onFailure directly
             listener.onFailure(new RuntimeException("Client get operation failed"));
             return null;
-        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        })
+            .when(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper).validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class));
-        verify(memoryContainerHelper).getMemoryIndexName(testMemoryContainer);
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
+        verify(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         ArgumentCaptor<Exception> exceptionCaptor = forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
@@ -386,7 +382,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecuteWithProcessResponseException() {
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
 
         // Setup memory container helper to return container
         doAnswer(invocation -> {
@@ -396,20 +392,22 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         }).when(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(1);
+            ActionListener<org.opensearch.action.get.GetResponse> listener = invocation.getArgument(2);
             org.opensearch.action.get.GetResponse getResponse = mock(org.opensearch.action.get.GetResponse.class);
             when(getResponse.isExists()).thenThrow(new RuntimeException("Outer try block failure"));
             listener.onResponse(getResponse);
             return null;
-        }).when(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        })
+            .when(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
 
         action.doExecute(task, getRequest, actionListener);
 
         verify(memoryContainerHelper).getMemoryContainer(any(String.class), any(ActionListener.class));
         verify(memoryContainerHelper).checkMemoryContainerAccess(any(User.class), any(MLMemoryContainer.class));
-        verify(memoryContainerHelper).validateMemoryIndexExists(any(MLMemoryContainer.class), any(String.class), any(ActionListener.class));
-        verify(memoryContainerHelper).getMemoryIndexName(testMemoryContainer);
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
+        verify(memoryContainerHelper).getMemoryIndexName(any(MLMemoryContainer.class), any(String.class));
+        verify(memoryContainerHelper)
+            .getData(any(MemoryConfiguration.class), any(org.opensearch.action.get.GetRequest.class), any(ActionListener.class));
         ArgumentCaptor<Exception> exceptionCaptor = forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
 
@@ -425,10 +423,10 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         // Use epoch timestamps instead of ISO format to avoid parsing errors
         long currentTimeEpoch = System.currentTimeMillis();
         return "{"
-            + "\"session_id\":\"test-session\","
+            + "\"owner_id\":\"owner-123\","
             + "\"memory\":\"Test memory content\","
-            + "\"memory_type\":\"RAW_MESSAGE\","
-            + "\"user_id\":\"test-user\","
+            + "\"strategy_type\":\"SEMANTIC\","
+            + "\"namespace\": {\"session_id\": \"test-session\"},"
             + "\"created_time\":"
             + currentTimeEpoch
             + ","
@@ -443,7 +441,7 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
         
         // Setup request
-        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_TYPE, MEMORY_ID);
         
         // Execute
         action.doExecute(task, getRequest, actionListener);

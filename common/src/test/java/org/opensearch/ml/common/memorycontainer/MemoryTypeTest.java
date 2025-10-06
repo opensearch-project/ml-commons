@@ -17,65 +17,75 @@ public class MemoryTypeTest {
     @Test
     public void testEnumValues() {
         // Test all enum values exist
-        assertEquals(2, MemoryType.values().length);
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.valueOf("RAW_MESSAGE"));
-        assertEquals(MemoryType.FACT, MemoryType.valueOf("FACT"));
+        assertEquals(3, MemoryStrategyType.values().length);
+        assertEquals(MemoryStrategyType.SEMANTIC, MemoryStrategyType.valueOf("SEMANTIC"));
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, MemoryStrategyType.valueOf("USER_PREFERENCE"));
+        assertEquals(MemoryStrategyType.SUMMARY, MemoryStrategyType.valueOf("SUMMARY"));
     }
 
     @Test
     public void testGetValue() {
-        assertEquals("RAW_MESSAGE", MemoryType.RAW_MESSAGE.getValue());
-        assertEquals("FACT", MemoryType.FACT.getValue());
+        assertEquals("SEMANTIC", MemoryStrategyType.SEMANTIC.getValue());
+        assertEquals("USER_PREFERENCE", MemoryStrategyType.USER_PREFERENCE.getValue());
+        assertEquals("SUMMARY", MemoryStrategyType.SUMMARY.getValue());
     }
 
     @Test
     public void testToString() {
-        assertEquals("RAW_MESSAGE", MemoryType.RAW_MESSAGE.toString());
-        assertEquals("FACT", MemoryType.FACT.toString());
+        assertEquals("SEMANTIC", MemoryStrategyType.SEMANTIC.toString());
+        assertEquals("USER_PREFERENCE", MemoryStrategyType.USER_PREFERENCE.toString());
+        assertEquals("SUMMARY", MemoryStrategyType.SUMMARY.toString());
     }
 
     @Test
     public void testFromString_ValidValues() {
         // Test exact match
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("RAW_MESSAGE"));
-        assertEquals(MemoryType.FACT, MemoryType.fromString("FACT"));
+        assertEquals(MemoryStrategyType.SEMANTIC, MemoryStrategyType.fromString("SEMANTIC"));
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, MemoryStrategyType.fromString("USER_PREFERENCE"));
+        assertEquals(MemoryStrategyType.SUMMARY, MemoryStrategyType.fromString("SUMMARY"));
 
         // Test case insensitive
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("raw_message"));
-        assertEquals(MemoryType.FACT, MemoryType.fromString("FaCt"));
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("Raw_Message"));
+        assertEquals(MemoryStrategyType.SEMANTIC, MemoryStrategyType.fromString("semantic"));
+        assertEquals(MemoryStrategyType.SEMANTIC, MemoryStrategyType.fromString("SeMANtIC"));
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, MemoryStrategyType.fromString("user_preference"));
+        assertEquals(MemoryStrategyType.USER_PREFERENCE, MemoryStrategyType.fromString("User_Preference"));
+        assertEquals(MemoryStrategyType.SUMMARY, MemoryStrategyType.fromString("summary"));
+        assertEquals(MemoryStrategyType.SUMMARY, MemoryStrategyType.fromString("SuMmArY"));
     }
 
     @Test
     public void testFromString_Null() {
-        assertNull(MemoryType.fromString(null));
+        assertNull(MemoryStrategyType.fromString(null));
     }
 
     @Test
     public void testFromString_InvalidValue() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString("INVALID_TYPE"));
-        assertEquals("Invalid memory type: INVALID_TYPE. Must be either RAW_MESSAGE or FACT", exception.getMessage());
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> MemoryStrategyType.fromString("INVALID_TYPE")
+        );
+        assertEquals("Invalid memory type: INVALID_TYPE. Must be SEMANTIC, USER_PREFERENCE, or SUMMARY", exception.getMessage());
     }
 
     @Test
     public void testFromString_EmptyString() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString(""));
-        assertEquals("Invalid memory type: . Must be either RAW_MESSAGE or FACT", exception.getMessage());
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryStrategyType.fromString(""));
+        assertEquals("Invalid memory type: . Must be SEMANTIC, USER_PREFERENCE, or SUMMARY", exception.getMessage());
     }
 
     @Test
     public void testFromString_Whitespace() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString("   "));
-        assertEquals("Invalid memory type:    . Must be either RAW_MESSAGE or FACT", exception.getMessage());
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryStrategyType.fromString("   "));
+        assertEquals("Invalid memory type:    . Must be SEMANTIC, USER_PREFERENCE, or SUMMARY", exception.getMessage());
     }
 
     @Test
     public void testEnumConsistency() {
         // Verify each enum's getValue() returns its name
-        for (MemoryType type : MemoryType.values()) {
+        for (MemoryStrategyType type : MemoryStrategyType.values()) {
             assertNotNull(type.getValue());
             assertEquals(type.getValue(), type.toString());
-            assertEquals(type, MemoryType.fromString(type.getValue()));
+            assertEquals(type, MemoryStrategyType.fromString(type.getValue()));
         }
     }
 }

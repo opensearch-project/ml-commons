@@ -9,9 +9,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
@@ -91,7 +93,7 @@ public class MLStatsJobProcessorTests {
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("test-cluster"));
-        when(metadata.indices()).thenReturn(Map.of(ML_MODEL_INDEX, mock(IndexMetadata.class)));
+        when(metadata.indices()).thenReturn(Map.of(ML_MODEL_INDEX, mock(IndexMetadata.class), ML_AGENT_INDEX, mock(IndexMetadata.class)));
 
         // Reset singletons before each test
         MLAdoptionMetricsCounter.reset();
@@ -116,27 +118,41 @@ public class MLStatsJobProcessorTests {
 
     @Test
     public void testRun() throws IOException {
-        SearchResponse searchResponse = createModelSearchResponse();
+        SearchResponse modelSearchResponse = createModelSearchResponse();
+        SearchResponse emptyAgentResponse = createEmptySearchResponse();
 
         doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
+
+            if (request.indices()[0].equals(ML_AGENT_INDEX)) {
+                listener.onResponse(emptyAgentResponse);
+            } else {
+                listener.onResponse(modelSearchResponse);
+            }
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         processor.run();
 
-        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(client, times(2)).search(any(SearchRequest.class), isA(ActionListener.class)); // Both model and agent searches
         verify(mockCounter, times(1)).add(eq(1.0), any(Tags.class));
     }
 
     @Test
     public void testMetricCollectionSettings() throws IOException {
-        SearchResponse searchResponse = createModelSearchResponse();
+        SearchResponse modelSearchResponse = createModelSearchResponse();
+        SearchResponse emptyAgentResponse = createEmptySearchResponse();
 
         doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
+
+            if (request.indices()[0].equals(ML_AGENT_INDEX)) {
+                listener.onResponse(emptyAgentResponse);
+            } else {
+                listener.onResponse(modelSearchResponse);
+            }
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
@@ -158,11 +174,18 @@ public class MLStatsJobProcessorTests {
 
     @Test
     public void testRunWithConnectorId() throws IOException {
-        SearchResponse searchResponse = createModelSearchResponseWithConnectorId();
+        SearchResponse modelSearchResponse = createModelSearchResponseWithConnectorId();
+        SearchResponse emptyAgentResponse = createEmptySearchResponse();
 
         doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
+
+            if (request.indices()[0].equals(ML_AGENT_INDEX)) {
+                listener.onResponse(emptyAgentResponse);
+            } else {
+                listener.onResponse(modelSearchResponse);
+            }
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
@@ -214,17 +237,25 @@ public class MLStatsJobProcessorTests {
 
         processor.run();
 
+        // only model search
         verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
         verify(mockCounter, never()).add(anyDouble(), any(Tags.class));
     }
 
     @Test
     public void testRunWithConnectorFailure() throws IOException {
-        SearchResponse searchResponse = createModelSearchResponseWithConnectorId();
+        SearchResponse modelSearchResponse = createModelSearchResponseWithConnectorId();
+        SearchResponse emptyAgentResponse = createEmptySearchResponse();
 
         doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
+
+            if (request.indices()[0].equals(ML_AGENT_INDEX)) {
+                listener.onResponse(emptyAgentResponse);
+            } else {
+                listener.onResponse(modelSearchResponse);
+            }
             return null;
         }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
@@ -315,5 +346,143 @@ public class MLStatsJobProcessorTests {
         when(searchResponse.getHits()).thenReturn(hits);
 
         return searchResponse;
+    }
+
+    @Test
+    public void testCollectAgentMetricsWithModelTags() throws IOException {
+        SearchResponse modelSearchResponse = createModelSearchResponse();
+        SearchResponse agentSearchResponse = createAgentSearchResponseWithModelId();
+
+        // Use a counter to ensure model search happens first
+        final int[] callCount = { 0 };
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            callCount[0]++;
+            if (callCount[0] == 1) {
+                // First call should be model search
+                listener.onResponse(modelSearchResponse);
+            } else {
+                // Second call should be agent search
+                listener.onResponse(agentSearchResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(2)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(mockCounter, times(2)).add(eq(1.0), any(Tags.class)); // Both model and agent metrics
+    }
+
+    @Test
+    public void testCollectAgentMetricsNoAgentIndex() {
+        when(metadata.indices()).thenReturn(Map.of(ML_MODEL_INDEX, mock(IndexMetadata.class)));
+
+        SearchResponse modelSearchResponse = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(modelSearchResponse.getHits()).thenReturn(hits);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(modelSearchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class)); // Only model search
+    }
+
+    @Test
+    public void testCollectAgentMetricsSearchFailure() throws IOException {
+        SearchResponse modelSearchResponse = createModelSearchResponse();
+
+        doAnswer(invocation -> {
+            SearchRequest request = invocation.getArgument(0);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+
+            if (request.indices()[0].equals(ML_AGENT_INDEX)) {
+                listener.onFailure(new RuntimeException("Agent search failed"));
+            } else {
+                listener.onResponse(modelSearchResponse);
+            }
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(2)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(mockCounter, times(1)).add(eq(1.0), any(Tags.class)); // Only model metric
+    }
+
+    private SearchResponse createAgentSearchResponseWithModelId() throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+
+        String agentContent = "{\n"
+            + "    \"name\": \"Test Chat Agent with Model\",\n"
+            + "    \"type\": \"conversational\",\n"
+            + "    \"description\": \"this is a test agent\",\n"
+            + "    \"llm\": {\n"
+            + "        \"model_id\": \"test-model-id\",\n"
+            + "        \"parameters\": {\n"
+            + "            \"max_iteration\": 1,\n"
+            + "            \"system_prompt\": \"You are a helpful assistant\"\n"
+            + "        }\n"
+            + "    },\n"
+            + "    \"memory\": {\n"
+            + "        \"type\": \"conversation_index\"\n"
+            + "    },\n"
+            + "    \"tools\": [\n"
+            + "        {\n"
+            + "            \"type\": \"SearchIndexTool\",\n"
+            + "            \"attributes\": {\n"
+            + "                \"input_schema\": {\n"
+            + "                    \"type\": \"object\",\n"
+            + "                    \"properties\": {\n"
+            + "                        \"index\": {\"type\": \"string\"},\n"
+            + "                        \"query\": {\"type\": \"object\"}\n"
+            + "                    }\n"
+            + "                }\n"
+            + "            }\n"
+            + "        }\n"
+            + "    ],\n"
+            + "    \"app_type\": \"os_chat\"\n"
+            + "}";
+
+        SearchHit agentHit = new SearchHit(1);
+        agentHit.sourceRef(new BytesArray(agentContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { agentHit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+
+        return searchResponse;
+    }
+
+    private SearchResponse createEmptySearchResponse() {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
+    }
+
+    @Test
+    public void testAddTagIfExists() {
+        Tags agentTags = Tags.create();
+        Map<String, Object> sourceTagsMap = new HashMap<>();
+        sourceTagsMap.put("model", "test-model");
+        sourceTagsMap.put("service_provider", "openai");
+        sourceTagsMap.put("empty_key", null);
+
+        processor.addTagIfExists(sourceTagsMap, "model", "agent_model", agentTags);
+        processor.addTagIfExists(sourceTagsMap, "service_provider", "agent_service_provider", agentTags);
+        processor.addTagIfExists(sourceTagsMap, "nonexistent_key", "agent_nonexistent", agentTags);
+        processor.addTagIfExists(sourceTagsMap, "empty_key", "agent_empty", agentTags);
+
+        Map<String, ?> resultTags = agentTags.getTagsMap();
+        Assert.assertEquals("test-model", resultTags.get("agent_model"));
+        Assert.assertEquals("openai", resultTags.get("agent_service_provider"));
+        Assert.assertNull(resultTags.get("agent_nonexistent"));
+        Assert.assertNull(resultTags.get("agent_empty"));
     }
 }

@@ -89,6 +89,7 @@ import org.opensearch.ml.utils.TestData;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -348,7 +349,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener
                 .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
         when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
         when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
         taskRunner.dispatchTask(FunctionName.REMOTE, textDocsInputRequest, transportService, listener);
@@ -469,7 +470,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockTaskId");
@@ -549,7 +550,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener
                 .onResponse(MLTaskResponse.builder().output(ModelTensorOutput.builder().mlModelOutputs(List.of()).build()).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockTaskId");
@@ -585,6 +586,45 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             .build();
         when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
         taskRunner.validateOutputSchema("testId", modelTensorOutput);
+    }
+
+    public void testIsStreamingRequest() {
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(new TextDocsInputDataSet(List.of("test"), null))
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().modelId("test").mlInput(mlInput).build();
+
+        try {
+            java.lang.reflect.Method method = MLPredictTaskRunner.class
+                .getDeclaredMethod("isStreamingRequest", MLPredictionTaskRequest.class);
+            method.setAccessible(true);
+            boolean result = (boolean) method.invoke(taskRunner, request);
+            assertFalse(result);
+        } catch (Exception e) {
+            fail("Failed to test isStreamingRequest: " + e.getMessage());
+        }
+    }
+
+    public void testIsStreamingRequestWithChannel() {
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(new TextDocsInputDataSet(List.of("test"), null))
+            .build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().modelId("test").mlInput(mlInput).build();
+        request.setStreamingChannel(mock(TransportChannel.class));
+
+        try {
+            java.lang.reflect.Method method = MLPredictTaskRunner.class
+                .getDeclaredMethod("isStreamingRequest", MLPredictionTaskRequest.class);
+            method.setAccessible(true);
+            boolean result = (boolean) method.invoke(taskRunner, request);
+            assertTrue(result);
+        } catch (Exception e) {
+            fail("Failed to test isStreamingRequest: " + e.getMessage());
+        }
     }
 
     public void testValidateBatchPredictionSuccess_InitPollingJob() throws IOException {
@@ -625,7 +665,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
             return null;
-        }).when(predictor).asyncPredict(any(), any());
+        }).when(predictor).asyncPredict(any(), any(), any());
 
         IndexResponse indexResponse = mock(IndexResponse.class);
         when(indexResponse.getId()).thenReturn("mockTaskId");

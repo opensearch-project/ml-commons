@@ -73,7 +73,7 @@ public class MLCommonsSettingsTests {
 
     @Test
     public void testAgenticMemoryDisabledByDefault() {
-        assertFalse(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getDefault(null));
+        assertTrue(MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED.getDefault(null));
     }
 
     @Test
@@ -101,5 +101,10 @@ public class MLCommonsSettingsTests {
         String expectedMessage =
             "The Agentic Memory APIs are not enabled. To enable, please update the setting plugins.ml_commons.agentic_memory_enabled";
         assertEquals(expectedMessage, MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE);
+    }
+
+    @Test
+    public void testStreamDisabledByDefault() {
+        assertFalse(MLCommonsSettings.ML_COMMONS_STREAM_ENABLED.getDefault(null));
     }
 }

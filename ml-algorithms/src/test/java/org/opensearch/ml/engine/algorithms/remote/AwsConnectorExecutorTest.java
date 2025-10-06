@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
@@ -32,7 +34,6 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -55,12 +56,14 @@ import org.opensearch.ml.common.connector.RetryBackoffPolicy;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.script.ScriptService;
@@ -168,7 +171,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
         assertEquals(
             "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
@@ -263,8 +266,8 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
 
-        Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
+        verify(actionListener, times(0)).onFailure(any());
+        verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
     }
 
     @Test
@@ -316,7 +319,7 @@ public class AwsConnectorExecutorTest {
             );
 
         ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
-        Mockito.verify(actionListener, times(1)).onResponse(responseCaptor.capture());
+        verify(actionListener, times(1)).onResponse(responseCaptor.capture());
         for (int idx = 0; idx < 3; idx++) {
             assert ((ModelTensorOutput) responseCaptor.getValue().getOutput())
                 .getMlModelOutputs()
@@ -379,7 +382,7 @@ public class AwsConnectorExecutorTest {
             );
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionCaptor.getValue().getMessage());
     }
@@ -436,7 +439,7 @@ public class AwsConnectorExecutorTest {
             );
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionCaptor.getValue().getMessage());
         assert exceptionCaptor.getValue().getSuppressed().length == 1;
@@ -485,7 +488,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof NullPointerException;
     }
 
@@ -527,7 +530,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
         assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
     }
 
@@ -568,7 +571,7 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
         assert exceptionArgumentCaptor.getValue() instanceof IllegalArgumentException;
         assert "no PREDICT action found".equals(exceptionArgumentCaptor.getValue().getMessage());
     }
@@ -739,8 +742,8 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
 
-        Mockito.verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
-        Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(executor, times(0)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
 
         // execute with retry enabled
         ConnectorClientConfig connectorClientConfig2 = new ConnectorClientConfig(10, 10, 10, 1, 1, 1, RetryBackoffPolicy.CONSTANT);
@@ -763,8 +766,8 @@ public class AwsConnectorExecutorTest {
                 actionListener
             );
 
-        Mockito.verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
-        Mockito.verify(actionListener, times(0)).onFailure(any());
+        verify(executor, times(1)).invokeRemoteServiceWithRetry(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(0)).onFailure(any());
     }
 
     @Test
@@ -838,9 +841,9 @@ public class AwsConnectorExecutorTest {
         }).when(executorService).execute(any());
 
         executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
-        Mockito.verify(actionListener, times(0)).onFailure(any());
-        Mockito.verify(actionListener, times(1)).onResponse(any());
-        Mockito.verify(executor, times(11)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(0)).onFailure(any());
+        verify(actionListener, times(1)).onResponse(any());
+        verify(executor, times(11)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -885,9 +888,9 @@ public class AwsConnectorExecutorTest {
         }).when(executorService).execute(any());
 
         executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
-        Mockito.verify(actionListener, times(1)).onFailure(any());
-        Mockito.verify(actionListener, times(0)).onResponse(any());
-        Mockito.verify(executor, times(6)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(1)).onFailure(any());
+        verify(actionListener, times(0)).onResponse(any());
+        verify(executor, times(6)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -934,12 +937,34 @@ public class AwsConnectorExecutorTest {
         ArgumentCaptor<Exception> exceptionArgumentCaptor = ArgumentCaptor.forClass(Exception.class);
 
         executor.invokeRemoteServiceWithRetry(PREDICT.name(), mlInput, parameters, payload, executionContext, actionListener);
-        Mockito.verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
-        Mockito.verify(actionListener, times(0)).onResponse(any());
-        Mockito.verify(executor, times(3)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+        verify(actionListener, times(1)).onFailure(exceptionArgumentCaptor.capture());
+        verify(actionListener, times(0)).onResponse(any());
+        verify(executor, times(3)).invokeRemoteService(any(), any(), any(), any(), any(), any());
         assert exceptionArgumentCaptor.getValue() instanceof OpenSearchStatusException;
         assertEquals("test failure", exceptionArgumentCaptor.getValue().getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[0].getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[1].getMessage());
+    }
+
+    @Test
+    public void testInvokeRemoteServiceStream_WithException() {
+        AwsConnector mockConnector = mock(AwsConnector.class);
+        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
+        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
+        when(mockConnector.getRegion()).thenReturn("us-east-1");
+
+        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
+        MLInput mlInput = mock(MLInput.class);
+        Map<String, String> parameters = Map.of("llm_interface", "invalid_interface", "model", "claude-v2", "inputs", "test input");
+        String payload = "test payload";
+        ExecutionContext executionContext = new ExecutionContext(123);
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
+
+        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof MLException);
+        assertEquals("Fail to execute streaming", captor.getValue().getMessage());
     }
 }

@@ -20,7 +20,6 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
-    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 dependencies {
@@ -38,7 +37,7 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     testImplementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
-    testImplementation group: 'com.google.code.gson', name: 'gson', version: '2.11.0'
+    testImplementation group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     testImplementation group: 'org.json', name: 'json', version: '20231013'
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
@@ -81,12 +80,3 @@ jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
 }
 check.dependsOn jacocoTestCoverageVerification
-
-spotless {
-    java {
-        removeUnusedImports()
-        importOrder 'java', 'javax', 'org', 'com'
-
-        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
-    }
-}

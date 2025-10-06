@@ -33,6 +33,9 @@ public class CommonValue {
     public static String HOT_BOX_TYPE = "hot";
     // warm node
     public static String WARM_BOX_TYPE = "warm";
+    public static final String ML_INDEX_INSIGHT_CONFIG_INDEX = ".plugins-ml-index-insight-config";
+    public static final String ML_INDEX_INSIGHT_STORAGE_INDEX = ".plugins-ml-index-insight-storage";
+
     public static final String ML_MODEL_GROUP_INDEX = ".plugins-ml-model-group";
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
@@ -43,7 +46,9 @@ public class CommonValue {
     public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
     public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
     public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
-    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-memory-container";
+    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-am-memory-container";
+    public static final String ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX = ".plugins-ml-am";
+    public static final String ML_AGENTIC_MEMORY_INDEX_PATTERN = ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "*";
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
     // index used in 2.19 to track MlTaskBatchUpdate task
     public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
@@ -65,9 +70,18 @@ public class CommonValue {
     public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "index-mappings/ml_memory_meta.json";
     public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH = "index-mappings/ml_memory_message.json";
     public static final String ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH = "index-mappings/ml_memory_container.json";
+    public static final String ML_MEMORY_SESSION_INDEX_MAPPING_PATH = "index-mappings/ml_memory_sessions.json";
+    public static final String ML_WORKING_MEMORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_working.json";
+    public static final String ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term.json";
+    public static final String ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term_history.json";
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
+    public static final String ML_INDEX_INSIGHT_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_config.json";
+    public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
+
+    // Resource type used in resource-access-control
+    public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
@@ -81,6 +95,8 @@ public class CommonValue {
     public static final Version VERSION_2_19_0 = Version.fromString("2.19.0");
     public static final Version VERSION_3_0_0 = Version.fromString("3.0.0");
     public static final Version VERSION_3_1_0 = Version.fromString("3.1.0");
+    public static final Version VERSION_3_2_0 = Version.fromString("3.2.0");
+    public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";
@@ -107,8 +123,27 @@ public class CommonValue {
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
     public static final String MCP_DEFAULT_SSE_ENDPOINT = "/sse";
-    public static final String SSE_ENDPOINT_FILED = "sse_endpoint";
+    public static final String SSE_ENDPOINT_FIELD = "sse_endpoint";
+    public static final String MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT = "/mcp/";
+    public static final String ENDPOINT_FIELD = "endpoint";
 
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
+
+    public static final String INDEX_INSIGHT_AGENT_NAME = "os_index_insight_agent";
+    public static final long INDEX_INSIGHT_GENERATING_TIMEOUT = 3 * 60 * 1000;
+    public static final long INDEX_INSIGHT_UPDATE_INTERVAL = 24 * 60 * 60 * 1000;
+
+    // JSON-RPC Error Codes
+    public static final int JSON_RPC_PARSE_ERROR = -32700;
+    public static final int JSON_RPC_INTERNAL_ERROR = -32603;
+    public static final int JSON_RPC_SERVER_NOT_READY_ERROR = -32000;
+
+    // MCP Server response fields
+    public static final String ACKNOWLEDGE_FIELD = "acknowledged";
+    public static final String MCP_RESPONSE_FIELD = "mcp_response";
+    public static final String ERROR_FIELD = "error";
+    public static final String MESSAGE_FIELD = "message";
+    public static final String ID_FIELD = "id";
+    public static final String ERROR_CODE_FIELD = "error_code";
 }

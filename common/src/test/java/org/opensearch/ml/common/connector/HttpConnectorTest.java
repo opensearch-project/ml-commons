@@ -62,7 +62,7 @@ public class HttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]");
 
         HttpConnector.builder().protocol("wrong protocol").build();
     }
@@ -229,6 +229,52 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_WithStreamParameter_OpenAI() {
+        String requestBody = "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        Assert
+            .assertEquals(
+                "{\"model\":\"gpt-3.5-turbo\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello world\"}],\"stream\":true}",
+                payload
+            );
+    }
+
+    @Test
+    public void createPayload_WithoutStreamParameter() {
+        String requestBody = "{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"${parameters.input}\"}]}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+        Assert.assertEquals("{\"model\": \"gpt-3.5-turbo\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello world\"}]}", payload);
+    }
+
+    @Test
+    public void createPayload_WithStreamParameter_UnsupportedInterface() {
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "Hello world");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "invalid/interface");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        Assert.assertEquals("{\"input\": \"Hello world\"}", payload);
+    }
+
+    @Test
     public void parseResponse_modelTensorJson() throws IOException {
         HttpConnector connector = createHttpConnector();
 
@@ -302,6 +348,20 @@ public class HttpConnectorTest {
         Assert.assertEquals(1, modelTensors.size());
         Assert.assertEquals(1, modelTensors.get(0).getDataAsMap().size());
         Assert.assertEquals("test output", modelTensors.get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void parseResponse_MapResponse() throws IOException {
+        HttpConnector connector = createHttpConnector();
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("key1", "value1");
+        responseMap.put("key2", "value2");
+        List<ModelTensor> modelTensors = new ArrayList<>();
+
+        connector.parseResponse(responseMap, modelTensors, false);
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(responseMap, modelTensors.get(0).getDataAsMap());
     }
 
     @Test
@@ -440,6 +500,35 @@ public class HttpConnectorTest {
 
         HttpConnector connector = new HttpConnector("http", parser);
         Assert.assertEquals("test_tenant", connector.getTenantId());
+    }
+
+    @Test
+    public void testParseResponse_MapResponse() throws IOException {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("result", "success");
+        responseMap.put("data", Arrays.asList("item1", "item2"));
+
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        connector.parseResponse(responseMap, modelTensors, false);
+
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(responseMap, modelTensors.get(0).getDataAsMap());
+    }
+
+    @Test
+    public void testParseResponse_NonStringNonMapResponse() throws IOException {
+        HttpConnector connector = createHttpConnector();
+
+        Integer numericResponse = 42;
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        connector.parseResponse(numericResponse, modelTensors, false);
+
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(42, modelTensors.get(0).getDataAsMap().get("response"));
     }
 
 }

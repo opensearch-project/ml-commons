@@ -7,6 +7,7 @@ package org.opensearch.ml.helper;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
@@ -14,9 +15,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -26,6 +29,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
@@ -43,6 +47,7 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -52,6 +57,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
@@ -70,6 +76,10 @@ public class ModelAccessControlHelper {
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> modelAccessControlEnabled = it);
     }
 
+    public boolean modelAccessControlEnabled() {
+        return modelAccessControlEnabled;
+    }
+
     private static final List<Class<?>> SUPPORTED_QUERY_TYPES = ImmutableList
         .of(
             IdsQueryBuilder.class,
@@ -83,8 +93,34 @@ public class ModelAccessControlHelper {
         );
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
-    public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
-        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+    public void validateModelGroupAccess(User user, String modelGroupId, String action, Client client, ActionListener<Boolean> listener) {
+        if (modelGroupId == null) {
+            listener.onResponse(true);
+            return;
+        }
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User "
+                                    + user.getName()
+                                    + " is not authorized to perform action "
+                                    + action
+                                    + " on ml-model-group id: "
+                                    + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
             return;
         }
@@ -128,14 +164,45 @@ public class ModelAccessControlHelper {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         String tenantId,
         String modelGroupId,
+        String action,
         Client client,
         SdkClient sdkClient,
         ActionListener<Boolean> listener
     ) {
-        if (modelGroupId == null
-            || (!mlFeatureEnabledSetting.isMultiTenancyEnabled()
-                && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)))) {
+        if (modelGroupId == null) {
             listener.onResponse(true);
+            return;
+        }
+        if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User "
+                                    + user.getName()
+                                    + " is not authorized to perform action "
+                                    + action
+                                    + " on ml-model-group id: "
+                                    + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+            listener.onResponse(true);  // Multi-tenancy handles access control
+            return;
+        }
+
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+            listener.onResponse(true);  // Admin or security disabled
             return;
         }
         GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest
@@ -288,7 +355,7 @@ public class ModelAccessControlHelper {
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termQuery(MLModelGroup.ACCESS, AccessMode.PUBLIC.getValue()));
-        boolQueryBuilder.should(QueryBuilders.termsQuery(MLModelGroup.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
+        boolQueryBuilder.should(QueryBuilders.termsQuery(BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
 
         BoolQueryBuilder privateBoolQuery = new BoolQueryBuilder();
         String ownerName = "owner.name.keyword";
@@ -313,5 +380,19 @@ public class ModelAccessControlHelper {
 
     public SearchSourceBuilder createSearchSourceBuilder(User user) {
         return addUserBackendRolesFilter(user, new SearchSourceBuilder());
+    }
+
+    public QueryBuilder mergeWithAccessFilter(QueryBuilder existing, Set<String> ids) {
+        QueryBuilder accessFilter = (ids == null || ids.isEmpty())
+            ? QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()) // deny-all
+            : QueryBuilders.idsQuery().addIds(ids.toArray(new String[0])); // use termsQuery(field, ids) if not _id
+
+        if (existing == null)
+            return QueryBuilders.boolQuery().filter(accessFilter);
+        if (existing instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) existing).filter(accessFilter);
+            return existing;
+        }
+        return QueryBuilders.boolQuery().must(existing).filter(accessFilter);
     }
 }

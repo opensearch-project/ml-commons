@@ -5,8 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
-import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import org.opensearch.OpenSearchStatusException;
@@ -16,14 +15,10 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
@@ -71,6 +66,7 @@ public class TransportGetMemoryAction extends HandledTransportAction<ActionReque
         }
         MLGetMemoryRequest getRequest = MLGetMemoryRequest.fromActionRequest(request);
         String memoryContainerId = getRequest.getMemoryContainerId();
+        String memoryType = getRequest.getMemoryType();
         String memoryId = getRequest.getMemoryId();
 
         // Get memory container to validate access and get memory index name
@@ -88,59 +84,32 @@ public class TransportGetMemoryAction extends HandledTransportAction<ActionReque
                 return;
             }
 
-            // Validate and get memory index name
-            if (!memoryContainerHelper.validateMemoryIndexExists(container, "GET", actionListener)) {
+            // Validate memory index exists
+            String memoryIndexName = memoryContainerHelper.getMemoryIndexName(container, memoryType);
+            if (memoryIndexName == null) {
+                actionListener.onFailure(new OpenSearchStatusException("Memory index not found", RestStatus.NOT_FOUND));
                 return;
             }
-            String memoryIndexName = memoryContainerHelper.getMemoryIndexName(container);
 
+            ActionListener<GetResponse> getResponseActionListener = ActionListener.wrap(getResponse -> {
+                if (!getResponse.isExists()) {
+                    actionListener.onFailure(new OpenSearchStatusException("Memory not found", RestStatus.NOT_FOUND));
+                    return;
+                }
+                String ownerId = (String) getResponse.getSourceAsMap().get(OWNER_ID_FIELD);
+                if (!memoryContainerHelper.checkMemoryAccess(user, ownerId)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException("User doesn't have permissions to update this memory", RestStatus.FORBIDDEN)
+                        );
+                    return;
+                }
+                actionListener.onResponse(MLGetMemoryResponse.fromGetResponse(getResponse, memoryType));
+            }, actionListener::onFailure);
             // Get the memory document
             GetRequest getMemoryRequest = new GetRequest(memoryIndexName, memoryId);
-
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client
-                    .get(
-                        getMemoryRequest,
-                        ActionListener
-                            .wrap(getResponse -> processResponse(getResponse, memoryId, memoryContainerId, actionListener), exception -> {
-                                log.error("Failed to get memory {} from container {}", memoryId, memoryContainerId, exception);
-                                actionListener.onFailure(exception);
-                            })
-                    );
-            } catch (Exception e) {
-                log.error("Failed to get memory {} from container {}", memoryId, memoryContainerId, e);
-                actionListener.onFailure(e);
-            }
-
+            memoryContainerHelper.getData(container.getConfiguration(), getMemoryRequest, getResponseActionListener);
         }, actionListener::onFailure));
     }
 
-    private void processResponse(
-        GetResponse getResponse,
-        String memoryId,
-        String memoryContainerId,
-        ActionListener<MLGetMemoryResponse> actionListener
-    ) {
-        try {
-            if (getResponse.isExists()) {
-                try (
-                    XContentParser parser = jsonXContent
-                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
-                ) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLMemory mlMemory = MLMemory.parse(parser);
-                    MLGetMemoryResponse response = MLGetMemoryResponse.builder().mlMemory(mlMemory).build();
-                    actionListener.onResponse(response);
-                } catch (Exception e) {
-                    log.error("Failed to parse memory response for id: {}", memoryId, e);
-                    actionListener.onFailure(e);
-                }
-            } else {
-                actionListener.onFailure(new OpenSearchStatusException("Memory not found with id: " + memoryId, RestStatus.NOT_FOUND));
-            }
-        } catch (Exception e) {
-            log.error("Failed to process memory response for id: {} from container {}", memoryId, memoryContainerId, e);
-            actionListener.onFailure(e);
-        }
-    }
 }

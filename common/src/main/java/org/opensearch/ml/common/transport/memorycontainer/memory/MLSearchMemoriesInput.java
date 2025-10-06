@@ -5,19 +5,17 @@
 
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
 
 import java.io.IOException;
 
-import org.apache.commons.lang3.StringUtils;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -33,25 +31,29 @@ public class MLSearchMemoriesInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private String query;
+    private String memoryType;
+    private SearchSourceBuilder searchSourceBuilder;
 
-    public MLSearchMemoriesInput(String memoryContainerId, String query) {
-        if (StringUtils.isBlank(query)) {
-            throw new IllegalArgumentException("Query cannot be null or empty");
+    public MLSearchMemoriesInput(String memoryContainerId, String memoryType, SearchSourceBuilder searchSourceBuilder) {
+        if (searchSourceBuilder == null) {
+            throw new IllegalArgumentException("Query cannot be null");
         }
         this.memoryContainerId = memoryContainerId;
-        this.query = query.trim();
+        this.memoryType = memoryType;
+        this.searchSourceBuilder = searchSourceBuilder;
     }
 
     public MLSearchMemoriesInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.query = in.readString();
+        this.memoryType = in.readOptionalString();
+        this.searchSourceBuilder = new SearchSourceBuilder(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(memoryContainerId);
-        out.writeString(query);
+        out.writeOptionalString(memoryType);
+        searchSourceBuilder.writeTo(out);
     }
 
     @Override
@@ -60,33 +62,12 @@ public class MLSearchMemoriesInput implements ToXContentObject, Writeable {
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
-        builder.field(QUERY_FIELD, query);
+        if (memoryType != null) {
+            builder.field(PARAMETER_MEMORY_TYPE, memoryType);
+        }
+        builder.field(QUERY_FIELD, searchSourceBuilder);
         builder.endObject();
         return builder;
     }
 
-    public static MLSearchMemoriesInput parse(XContentParser parser) throws IOException {
-        String memoryContainerId = null;
-        String query = null;
-
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-            String fieldName = parser.currentName();
-            parser.nextToken();
-
-            switch (fieldName) {
-                case MEMORY_CONTAINER_ID_FIELD:
-                    memoryContainerId = parser.text();
-                    break;
-                case QUERY_FIELD:
-                    query = parser.text();
-                    break;
-                default:
-                    parser.skipChildren();
-                    break;
-            }
-        }
-
-        return MLSearchMemoriesInput.builder().memoryContainerId(memoryContainerId).query(query).build();
-    }
 }

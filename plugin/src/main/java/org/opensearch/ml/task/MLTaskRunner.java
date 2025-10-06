@@ -22,6 +22,7 @@ import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
@@ -117,14 +118,36 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
                 // Execute ML task remotely
                 log.debug("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
                 request.setDispatchTask(false);
-                transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                if (isStreamingRequest(request)) {
+                    log.debug("Using streaming transport for request {}", request.getRequestID());
+                    transportService
+                        .sendRequest(
+                            node,
+                            getTransportStreamActionName(),
+                            request,
+                            TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STREAM).build(),
+                            getResponseStreamHandler(request)
+                        );
+                } else {
+                    transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                }
             }
         }, listener::onFailure));
     }
 
     protected abstract String getTransportActionName();
 
+    protected abstract String getTransportStreamActionName();
+
     protected abstract TransportResponseHandler<Response> getResponseHandler(ActionListener<Response> listener);
+
+    protected TransportResponseHandler<Response> getResponseStreamHandler(Request request) {
+        throw new UnsupportedOperationException("Streaming is not supported.");
+    }
+
+    protected boolean isStreamingRequest(Request request) {
+        return false;
+    }
 
     protected abstract void executeTask(Request request, ActionListener<Response> listener);
 

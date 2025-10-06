@@ -41,6 +41,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -167,10 +168,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -206,10 +207,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -229,10 +230,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -252,10 +253,10 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
+            ActionListener<Boolean> listener = invocation.getArgument(7);
             listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(),  any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -306,6 +307,56 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                             + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
                     )
             )
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"integer\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testValidateBatchPredictInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "input",
+                "{\"properties\":{\"parameters\":{\"properties\":{\"messages\":{"
+                    + "\"description\":\"This is a test description field\",\"type\":\"string\"}}}}}"
+            );
+        when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
+        transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testInvalidateBatchPredictInputSchemaSuccess() {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
             .build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
         Map<String, String> modelInterface = Map

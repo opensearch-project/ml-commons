@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "owner_id": {
+      "type": "keyword"
+    },
+    "namespace": {
+      "type": "flat_object"
+    },
+    "namespace_size": {
+      "type": "integer"
+    },
+    "memory": {
+      "type": "text"
+    },
+    "tags": {
+      "type": "flat_object"
+    },
+    "strategy_type": {
+      "type": "keyword"
+    },
+    "strategy_id": {
+      "type": "keyword"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    }
+  }
+}

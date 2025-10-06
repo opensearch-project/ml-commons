@@ -422,6 +422,22 @@ public class TestHelper {
             .build();
     }
 
+    public static RestRequest getExecuteAgentStreamRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
+            + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
+            + "\"tools\":[{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\","
+            + "\"description\":\"Use this tool to get OpenSearch index information: "
+            + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
+            + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+            .build();
+    }
+
     public static RestRequest getExecuteToolRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_TOOL_NAME, "TestTool");
@@ -625,6 +641,60 @@ public class TestHelper {
         when(client.threadPool()).thenReturn(threadPool);
     }
 
+    /**
+     * Resets McpStatelessServerHolder singleton state between tests.
+     * Uses reflection to clear static fields, ensuring clean test isolation.
+     * This method should be called in both @Before and @After methods of test classes
+     * that test McpStatelessServerHolder functionality.
+     * 
+     * This method is designed to be safe to call multiple times and will not throw exceptions,
+     * ensuring test cleanup is always possible even if the class structure changes.
+     */
+    public static void resetMcpStatelessServerHolder() {
+        try {
+            Class<?> holderClass = Class.forName("org.opensearch.ml.action.mcpserver.McpStatelessServerHolder");
+
+            // Reset initialized flag
+            try {
+                java.lang.reflect.Field initializedField = holderClass.getDeclaredField("initialized");
+                initializedField.setAccessible(true);
+                initializedField.set(null, false);
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue with other fields
+            }
+
+            // Reset server instance
+            try {
+                java.lang.reflect.Field serverField = holderClass.getDeclaredField("mcpStatelessAsyncServer");
+                serverField.setAccessible(true);
+                serverField.set(null, null);
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue with other fields
+            }
+
+            // Reset transport provider
+            try {
+                java.lang.reflect.Field providerField = holderClass.getDeclaredField("mcpStatelessServerTransportProvider");
+                providerField.setAccessible(true);
+                providerField.set(null, null);
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue with other fields
+            }
+
+            // Reset in-memory tools map
+            try {
+                java.lang.reflect.Field toolsField = holderClass.getDeclaredField("IN_MEMORY_MCP_TOOLS");
+                toolsField.setAccessible(true);
+                toolsField.set(null, new java.util.concurrent.ConcurrentHashMap<>());
+            } catch (Exception e) {
+                // Field might not exist or be accessible - continue
+            }
+        } catch (Exception e) {
+            // Class might not exist or be accessible - this is expected in some test environments
+            // Continue silently to ensure tests don't fail due to reflection issues
+        }
+    }
+
     public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {
         if (size == 0) {
             return new SearchResponse(
@@ -667,5 +737,14 @@ public class TestHelper {
             ShardSearchFailure.EMPTY_ARRAY,
             SearchResponse.Clusters.EMPTY
         );
+    }
+
+    public static List<Map<String, Object>> createTestContent(String input) {
+        List<Map<String, Object>> content = new ArrayList<>();
+        Map<String, Object> message = new HashMap<>();
+        message.put("type", "text");
+        message.put("text", input);
+        content.add(message);
+        return content;
     }
 }

@@ -1,0 +1,63 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "owner_id": {
+      "type": "keyword"
+    },
+    "memory_container_id": {
+      "type": "keyword"
+    },
+    "payload_type": {
+      "type": "keyword"
+    },
+    "messages": {
+      "type": "nested",
+      "properties": {
+        "role": {
+          "type": "keyword"
+        },
+        "content": {
+          "type": "flat_object"
+        }
+      }
+    },
+    "message_id": {
+      "type": "integer"
+    },
+    "binary_data": {
+      "type": "binary"
+    },
+    "structured_data": {
+      "type": "flat_object"
+    },
+    "namespace": {
+      "type": "flat_object"
+    },
+    "namespace_size": {
+      "type": "integer"
+    },
+    "metadata": {
+      "type": "flat_object"
+    },
+    "tags": {
+      "type": "flat_object"
+    },
+    "parameters": {
+      "type": "flat_object"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

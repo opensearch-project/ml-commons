@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
@@ -18,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
@@ -25,12 +28,17 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
+import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -67,6 +75,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private volatile AtomicBoolean connectorPrivateIpEnabled;
 
     private SdkAsyncHttpClient httpClient;
+
+    @Setter
+    @Getter
+    private StreamTransportService streamTransportService;
 
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -133,6 +145,30 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
+    @Override
+    public void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        StreamPredictActionListener<MLTaskResponse, ?> actionListener
+    ) {
+        try {
+            String llmInterface = parameters.get(LLM_INTERFACE);
+            llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
+            llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
+            validateLLMInterface(llmInterface);
+
+            StreamingHandler handler = StreamingHandlerFactory
+                .createHandler(llmInterface, connector, null, super.getConnectorClientConfig());
+            handler.startStream(action, parameters, payload, actionListener);
+        } catch (Exception e) {
+            log.error("Failed to execute streaming", e);
+            actionListener.onFailure(new MLException("Fail to execute streaming", e));
+        }
+    }
+
     private void validateHttpClientParameters(String action, Map<String, String> parameters) throws Exception {
         String endpoint = connector.getActionEndpoint(action, parameters);
         URL url = new URL(endpoint);
@@ -140,5 +176,14 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         String host = url.getHost();
         int port = url.getPort();
         MLHttpClientFactory.validate(protocol, host, port, connectorPrivateIpEnabled);
+    }
+
+    private void validateLLMInterface(String llmInterface) {
+        switch (llmInterface) {
+            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+                break;
+            default:
+                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
+        }
     }
 }

@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.GET_MEMORY_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
@@ -68,7 +69,8 @@ public class RestMLGetMemoryAction extends BaseRestHandler {
     @VisibleForTesting
     MLGetMemoryRequest getRequest(RestRequest request) throws IOException {
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
+        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
-        return new MLGetMemoryRequest(memoryContainerId, memoryId);
+        return new MLGetMemoryRequest(memoryContainerId, memoryType, memoryId);
     }
 }

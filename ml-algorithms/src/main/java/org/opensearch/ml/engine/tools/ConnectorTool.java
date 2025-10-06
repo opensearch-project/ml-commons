@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
@@ -16,13 +15,13 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -65,14 +64,6 @@ public class ConnectorTool implements Tool {
 
         this.client = client;
         this.connectorId = connectorId;
-
-        outputParser = new Parser() {
-            @Override
-            public Object parse(Object o) {
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
     }
 
     @Override
@@ -88,12 +79,7 @@ public class ConnectorTool implements Tool {
 
             client.execute(MLExecuteConnectorAction.INSTANCE, request, ActionListener.wrap(r -> {
                 ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
-                modelTensorOutput.getMlModelOutputs();
-                if (outputParser == null) {
-                    listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
-                } else {
-                    listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
-                }
+                listener.onResponse((T) outputParser.parse(modelTensorOutput));
             }, e -> {
                 log.error("Failed to run model " + connectorId, e);
                 listener.onFailure(e);
@@ -138,8 +124,10 @@ public class ConnectorTool implements Tool {
         }
 
         @Override
-        public ConnectorTool create(Map<String, Object> map) {
-            return new ConnectorTool(client, (String) map.get(CONNECTOR_ID));
+        public ConnectorTool create(Map<String, Object> params) {
+            ConnectorTool connectorTool = new ConnectorTool(client, (String) params.get(CONNECTOR_ID));
+            connectorTool.setOutputParser(ToolParser.createFromToolParams(params));
+            return connectorTool;
         }
 
         @Override

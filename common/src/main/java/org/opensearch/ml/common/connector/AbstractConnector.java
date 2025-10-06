@@ -40,7 +40,6 @@ public abstract class AbstractConnector implements Connector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
     public static final String CLIENT_CONFIG_FIELD = "client_config";
@@ -111,6 +110,8 @@ public abstract class AbstractConnector implements Connector {
         if (response instanceof String && isJson((String) response)) {
             Map<String, Object> data = StringUtils.fromJson((String) response, ML_MAP_RESPONSE_KEY);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
+        } else if (response instanceof Map) {
+            modelTensors.add(ModelTensor.builder().name("response").dataAsMap((Map<String, ?>) response).build());
         } else {
             Map<String, Object> map = new HashMap<>();
             map.put("response", response);
