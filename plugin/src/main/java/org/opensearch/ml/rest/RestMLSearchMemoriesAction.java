@@ -18,6 +18,7 @@ import java.util.List;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
@@ -77,7 +78,8 @@ public class RestMLSearchMemoriesAction extends BaseRestHandler {
         }
 
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.parseXContent(request.contentOrSourceParamParser());

@@ -74,7 +74,7 @@ public class RestMLCreateSessionAction extends BaseRestHandler {
         }
 
         String containerId = RestActionUtils.getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        if (containerId == null || containerId.trim().isEmpty()) {
+        if (containerId == null || containerId.isBlank()) {
             throw new IllegalArgumentException("Memory container ID is required");
         }
 

@@ -31,6 +31,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
@@ -55,7 +56,7 @@ public class MemoryOperationsServiceAdditionalTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
-        strategy = MemoryStrategy.builder().type("semantic").enabled(true).id("strategy-123").build();
+        strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).enabled(true).id("strategy-123").build();
     }
 
     @Test
@@ -110,7 +111,17 @@ public class MemoryOperationsServiceAdditionalTests {
 
         Map<String, String> strategyNameSpace = Map.of(SESSION_ID_FIELD, sessionId);
         memoryOperationsService
-            .createFactMemoriesFromList(facts, indexName, input, strategyNameSpace, user, strategy, indexRequests, memoryInfos);
+            .createFactMemoriesFromList(
+                facts,
+                indexName,
+                input,
+                strategyNameSpace,
+                user,
+                strategy,
+                indexRequests,
+                memoryInfos,
+                "container-123"
+            );
 
         assert indexRequests.size() == 1;
         assert memoryInfos.size() == 1;

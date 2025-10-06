@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -38,14 +37,15 @@ import lombok.Setter;
 public class MemoryStrategy implements ToXContentObject, Writeable {
 
     private String id;
-    private boolean enabled;
-    private String type;
+    private Boolean enabled;
+    private MemoryStrategyType type;
     private List<String> namespace;
     private Map<String, Object> strategyConfig;
 
-    public MemoryStrategy(String id, boolean enabled, String type, List<String> namespace, Map<String, Object> strategyConfig) {
-        // Generate ID if not provided, using type prefix for better identification
-        this.id = (id != null && !id.trim().isEmpty()) ? id : generateStrategyId(type);
+    public MemoryStrategy(String id, Boolean enabled, MemoryStrategyType type, List<String> namespace, Map<String, Object> strategyConfig) {
+        // Do not auto-generate ID in constructor - let StrategyMergeHelper control ID generation
+        // This allows distinguishing between updates (ID provided) and additions (ID null/empty)
+        this.id = id;
         this.enabled = enabled;
         this.type = type;
         this.namespace = namespace;
@@ -54,21 +54,47 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
 
     public MemoryStrategy(StreamInput input) throws IOException {
         this.id = input.readString();
-        this.enabled = input.readBoolean();
-        this.type = input.readString();
-        this.namespace = input.readStringList();
+        this.enabled = input.readOptionalBoolean();
+
+        if (input.readBoolean()) {
+            this.type = input.readEnum(MemoryStrategyType.class);
+        } else {
+            this.type = null;
+        }
+
+        if (input.readBoolean()) {
+            this.namespace = input.readStringList();
+        } else {
+            this.namespace = null;
+        }
+
         if (input.readBoolean()) {
             this.strategyConfig = input.readMap();
+        } else {
+            this.strategyConfig = null;
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
-        out.writeBoolean(enabled);
-        out.writeString(type);
-        out.writeStringCollection(namespace);
-        if (!strategyConfig.isEmpty()) {
+        out.writeOptionalBoolean(enabled);
+
+        if (type != null) {
+            out.writeBoolean(true);
+            out.writeEnum(type);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        if (namespace != null) {
+            out.writeBoolean(true);
+            out.writeStringCollection(namespace);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        if (strategyConfig != null && !strategyConfig.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(strategyConfig);
         } else {
@@ -79,25 +105,30 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-
         builder.field(ID_FIELD, id);
         builder.field(ENABLED_FIELD, enabled);
-        builder.field(STRATEGY_TYPE_FIELD, type);
-        builder.field(NAMESPACE_FIELD, namespace);
-        if (!strategyConfig.isEmpty()) {
-            builder.field(STRATEGY_CONFIG_FIELD, strategyConfig);
+
+        if (type != null) {
+            builder.field(STRATEGY_TYPE_FIELD, type.getValue());
         }
 
+        if (namespace != null) {
+            builder.field(NAMESPACE_FIELD, namespace);
+        }
+
+        if (strategyConfig != null && !strategyConfig.isEmpty()) {
+            builder.field(STRATEGY_CONFIG_FIELD, strategyConfig);
+        }
         builder.endObject();
         return builder;
     }
 
     public static MemoryStrategy parse(XContentParser parser) throws IOException {
         String id = null;
-        boolean enabled = true;  // Default to true
-        String type = null;
+        Boolean enabled = null;
+        MemoryStrategyType type = null;
         List<String> namespace = null;
-        Map<String, Object> strategyConfig = new HashMap<>();
+        Map<String, Object> strategyConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -112,7 +143,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                     enabled = parser.booleanValue();
                     break;
                 case STRATEGY_TYPE_FIELD:
-                    type = parser.text();
+                    type = MemoryStrategyType.fromString(parser.text());
                     break;
                 case NAMESPACE_FIELD:
                     namespace = new ArrayList<>();
@@ -122,7 +153,7 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
                     }
                     break;
                 case STRATEGY_CONFIG_FIELD:
-                    strategyConfig.putAll(parser.map());
+                    strategyConfig = parser.map();
                     break;
                 default:
                     parser.skipChildren();
@@ -130,23 +161,43 @@ public class MemoryStrategy implements ToXContentObject, Writeable {
             }
         }
 
-        // Generate ID with type prefix if not provided
-        if (id == null) {
-            id = generateStrategyId(type);
-        }
         return MemoryStrategy.builder().id(id).enabled(enabled).type(type).namespace(namespace).strategyConfig(strategyConfig).build();
     }
 
     /**
-     * Generate a unique strategy ID with format: type_XXXXXXXX (8 char UUID)
-     * If type is null or empty, defaults to "strategy_XXXXXXXX"
+     * Returns whether this strategy is enabled. If enabled is null, defaults to true.
      *
-     * @param type The strategy type (e.g., "semantic", "user_preference")
+     * @return true if enabled or null, false otherwise
+     */
+    public boolean isEnabled() {
+        return enabled == null || enabled;
+    }
+
+    /**
+     * Validates a memory strategy for required fields.
+     * Since type is now @NonNull and an enum, no type validation needed.
+     * Only validates namespace is not empty.
+     *
+     * @param strategy The memory strategy to validate
+     * @throws IllegalArgumentException if validation fails
+     */
+    public static void validate(MemoryStrategy strategy) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("Strategy cannot be null");
+        }
+        if (strategy.getNamespace() == null || strategy.getNamespace().isEmpty()) {
+            throw new IllegalArgumentException("Strategy namespace is required. Please provide a non-empty namespace array.");
+        }
+    }
+
+    /**
+     * Generate a unique strategy ID with format: type_XXXXXXXX (8 char UUID)
+     *
+     * @param type The strategy type enum (required)
      * @return A unique strategy ID
      */
-    public static String generateStrategyId(String type) {
-        String prefix = (type != null && !type.trim().isEmpty()) ? type.toLowerCase().replace(" ", "_") : "strategy";
-        return prefix + "_" + UUID.randomUUID().toString().substring(0, 8);
+    public static String generateStrategyId(MemoryStrategyType type) {
+        return type.getValue().toLowerCase() + "_" + UUID.randomUUID().toString().substring(0, 8);
     }
 
 }

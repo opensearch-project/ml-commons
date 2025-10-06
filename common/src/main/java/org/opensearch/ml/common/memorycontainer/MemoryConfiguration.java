@@ -21,10 +21,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_PREFIX_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
@@ -38,7 +34,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -63,14 +58,6 @@ import lombok.Setter;
 @Builder
 @EqualsAndHashCode
 public class MemoryConfiguration implements ToXContentObject, Writeable {
-
-    public static final Set<String> VALID_MEMORY_TYPES = Set
-        .of(
-            MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-            MEM_CONTAINER_MEMORY_TYPE_WORKING,
-            MEM_CONTAINER_MEMORY_TYPE_LONG_TERM,
-            MEM_CONTAINER_MEMORY_TYPE_HISTORY
-        );
     private String indexPrefix;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
@@ -340,27 +327,34 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         }
     }
 
-    public String getIndexName(String memoryType) {
-        if (memoryType == null || !VALID_MEMORY_TYPES.contains(memoryType)) {
+    public String getIndexName(MemoryType memoryType) {
+        if (memoryType == null) {
             return null;
         }
-        return getFinalMemoryIndexPrefix() + memoryType;
+        // Check if disabled
+        if (memoryType == MemoryType.SESSIONS && isDisableSession()) {
+            return null;
+        }
+        if (memoryType == MemoryType.HISTORY && isDisableHistory()) {
+            return null;
+        }
+        return getFinalMemoryIndexPrefix() + memoryType.getIndexSuffix();
     }
 
     public String getSessionIndexName() {
-        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_SESSIONS);
+        return getIndexName(MemoryType.SESSIONS);
     }
 
     public String getWorkingMemoryIndexName() {
-        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_WORKING);
+        return getIndexName(MemoryType.WORKING);
     }
 
     public String getLongMemoryIndexName() {
-        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_LONG_TERM);
+        return getIndexName(MemoryType.LONG_TERM);
     }
 
     public String getLongMemoryHistoryIndexName() {
-        return getIndexName(MEM_CONTAINER_MEMORY_TYPE_HISTORY);
+        return getIndexName(MemoryType.HISTORY);
     }
 
     public Map<String, Object> getMemoryIndexMapping(String indexName) {

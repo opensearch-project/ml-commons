@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_BEFORE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
@@ -46,6 +47,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
 
     // Required fields
     private String ownerId;
+    private String memoryContainerId;
     private String memoryId;
     private MemoryEvent action;
     private Map<String, Object> before;
@@ -58,6 +60,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
 
     public MLMemoryHistory(
         String ownerId,
+        String memoryContainerId,
         String memoryId,
         MemoryEvent action,
         Map<String, Object> before,
@@ -69,6 +72,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         String error
     ) {
         this.ownerId = ownerId;
+        this.memoryContainerId = memoryContainerId;
         this.memoryId = memoryId;
         this.action = action;
         this.before = before;
@@ -82,6 +86,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
 
     public MLMemoryHistory(StreamInput in) throws IOException {
         this.ownerId = in.readOptionalString();
+        this.memoryContainerId = in.readOptionalString();
         this.memoryId = in.readOptionalString();
         if (in.readBoolean()) {
             this.action = in.readEnum(MemoryEvent.class);
@@ -106,6 +111,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(ownerId);
+        out.writeOptionalString(memoryContainerId);
         out.writeOptionalString(memoryId);
         if (action != null) {
             out.writeBoolean(true);
@@ -148,6 +154,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         if (ownerId != null) {
             builder.field(OWNER_ID_FIELD, ownerId);
         }
+        if (memoryContainerId != null) {
+            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        }
         if (memoryId != null) {
             builder.field(MEMORY_ID_FIELD, memoryId);
         }
@@ -182,6 +191,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
 
     public static MLMemoryHistory parse(XContentParser parser) throws IOException {
         String ownerId = null;
+        String memoryContainerId = null;
         String memoryId = null;
         MemoryEvent action = null;
         Map<String, Object> before = null;
@@ -200,6 +210,9 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case OWNER_ID_FIELD:
                     ownerId = parser.text();
+                    break;
+                case MEMORY_CONTAINER_ID_FIELD:
+                    memoryContainerId = parser.text();
                     break;
                 case MEMORY_ID_FIELD:
                     memoryId = parser.text();
@@ -237,6 +250,7 @@ public class MLMemoryHistory implements ToXContentObject, Writeable {
         return MLMemoryHistory
             .builder()
             .ownerId(ownerId)
+            .memoryContainerId(memoryContainerId)
             .memoryId(memoryId)
             .action(action)
             .before(before)

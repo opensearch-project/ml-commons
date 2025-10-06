@@ -15,12 +15,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -42,6 +39,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -291,15 +289,12 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         assertEquals(
-            ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-custom-memory-index-memory-" + MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-            helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
+            ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-custom-memory-index-memory-" + "sessions",
+            helper.getMemoryIndexName(container, MemoryType.SESSIONS)
         );
 
         config.setUseSystemIndex(false);
-        assertEquals(
-            "custom-memory-index-memory-" + MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-            helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS)
-        );
+        assertEquals("custom-memory-index-memory-" + "sessions", helper.getMemoryIndexName(container, MemoryType.SESSIONS));
 
     }
 
@@ -307,7 +302,7 @@ public class MemoryContainerHelperTests {
     public void testGetMemoryIndexNameWithoutConfig() {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
 
-        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS));
+        assertNotNull(helper.getMemoryIndexName(container, MemoryType.SESSIONS));
     }
 
     @Test
@@ -316,7 +311,7 @@ public class MemoryContainerHelperTests {
 
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
-        assertNull(helper.getMemoryIndexName(container, "wrong_value"));
+        assertNull(helper.getMemoryIndexName(container, null));
     }
 
     @Test
@@ -420,7 +415,7 @@ public class MemoryContainerHelperTests {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix").useSystemIndex(true).build();
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
-        String indexName = helper.getMemoryIndexName(container, "working");
+        String indexName = helper.getMemoryIndexName(container, MemoryType.WORKING);
         assertNotNull(indexName);
         assertTrue(indexName.contains("test-prefix"));
         assertTrue(indexName.contains("working"));
@@ -431,10 +426,10 @@ public class MemoryContainerHelperTests {
         MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix").useSystemIndex(false).build();
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
-        String indexName = helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_LONG_TERM);
+        String indexName = helper.getMemoryIndexName(container, MemoryType.LONG_TERM);
         assertNotNull(indexName);
         assertTrue(indexName.contains("test-prefix"));
-        assertTrue(indexName.contains(MEM_CONTAINER_MEMORY_TYPE_LONG_TERM));
+        assertTrue(indexName.contains("long-term"));
         assertFalse(indexName.startsWith("."));
     }
 
@@ -444,10 +439,10 @@ public class MemoryContainerHelperTests {
         MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
 
         // Test all valid memory types
-        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_SESSIONS));
-        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_WORKING));
-        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_LONG_TERM));
-        assertNotNull(helper.getMemoryIndexName(container, MEM_CONTAINER_MEMORY_TYPE_HISTORY));
+        assertNotNull(helper.getMemoryIndexName(container, MemoryType.SESSIONS));
+        assertNotNull(helper.getMemoryIndexName(container, MemoryType.WORKING));
+        assertNotNull(helper.getMemoryIndexName(container, MemoryType.LONG_TERM));
+        assertNotNull(helper.getMemoryIndexName(container, MemoryType.HISTORY));
     }
 
     @Test
@@ -507,28 +502,6 @@ public class MemoryContainerHelperTests {
         helper.getData(config, getRequest, listener);
 
         verify(client).get(any(org.opensearch.action.get.GetRequest.class), any());
-    }
-
-    @Test
-    public void testSearchDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.search.SearchRequest searchRequest = new org.opensearch.action.search.SearchRequest("test-index");
-        ActionListener<org.opensearch.action.search.SearchResponse> listener = mock(ActionListener.class);
-
-        helper.searchData(config, searchRequest, listener);
-
-        verify(client).search(any(org.opensearch.action.search.SearchRequest.class), any());
-    }
-
-    @Test
-    public void testSearchDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.search.SearchRequest searchRequest = new org.opensearch.action.search.SearchRequest("test-index");
-        ActionListener<org.opensearch.action.search.SearchResponse> listener = mock(ActionListener.class);
-
-        helper.searchData(config, searchRequest, listener);
-
-        verify(client).search(any(org.opensearch.action.search.SearchRequest.class), any());
     }
 
     @Test
@@ -722,4 +695,122 @@ public class MemoryContainerHelperTests {
         verify(client).threadPool();
         verify(threadPool).getThreadContext();
     }
+
+    @Test
+    public void testDeleteDataByQueryWithSystemIndex() {
+        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
+        org.opensearch.index.reindex.DeleteByQueryRequest deleteByQueryRequest = new org.opensearch.index.reindex.DeleteByQueryRequest(
+            "test-index"
+        );
+        ActionListener<org.opensearch.index.reindex.BulkByScrollResponse> listener = mock(ActionListener.class);
+
+        helper.deleteDataByQuery(config, deleteByQueryRequest, listener);
+
+        // Verify that the client executed the delete by query action
+        verify(client).execute(any(), any(org.opensearch.index.reindex.DeleteByQueryRequest.class), any());
+        verify(client).threadPool();
+        verify(threadPool).getThreadContext();
+    }
+
+    @Test
+    public void testDeleteDataByQueryWithoutSystemIndex() {
+        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
+        org.opensearch.index.reindex.DeleteByQueryRequest deleteByQueryRequest = new org.opensearch.index.reindex.DeleteByQueryRequest(
+            "test-index"
+        );
+        ActionListener<org.opensearch.index.reindex.BulkByScrollResponse> listener = mock(ActionListener.class);
+
+        helper.deleteDataByQuery(config, deleteByQueryRequest, listener);
+
+        // Verify that the client executed the delete by query action without thread context handling
+        verify(client).execute(any(), any(org.opensearch.index.reindex.DeleteByQueryRequest.class), any());
+    }
+
+    @Test
+    public void testCountContainersWithPrefixSuccess() {
+        String indexPrefix = "test-prefix";
+        String tenantId = "tenant-123";
+        ActionListener<Long> listener = mock(ActionListener.class);
+
+        // Mock SDK search response
+        CompletableFuture<org.opensearch.remote.metadata.client.SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class))).thenReturn(future);
+
+        helper.countContainersWithPrefix(indexPrefix, tenantId, listener);
+
+        // Verify the SDK client was called with the right request
+        verify(sdkClient).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
+    }
+
+    @Test
+    public void testCountContainersWithPrefixNullPrefix() {
+        ActionListener<Long> listener = mock(ActionListener.class);
+
+        helper.countContainersWithPrefix(null, null, listener);
+
+        // Verify that the listener was called with 0
+        verify(listener).onResponse(0L);
+    }
+
+    @Test
+    public void testCountContainersWithPrefixBlankPrefix() {
+        ActionListener<Long> listener = mock(ActionListener.class);
+
+        helper.countContainersWithPrefix("   ", null, listener);
+
+        // Verify that the listener was called with 0
+        verify(listener).onResponse(0L);
+    }
+
+    @Test
+    public void testCountContainersWithPrefixWithoutTenant() {
+        String indexPrefix = "test-prefix";
+        ActionListener<Long> listener = mock(ActionListener.class);
+
+        // Mock SDK search response
+        CompletableFuture<org.opensearch.remote.metadata.client.SearchDataObjectResponse> future = new CompletableFuture<>();
+        when(sdkClient.searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class))).thenReturn(future);
+
+        helper.countContainersWithPrefix(indexPrefix, null, listener);
+
+        // Verify the SDK client was called
+        verify(sdkClient).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
+    }
+
+    @Test
+    public void testAddOwnerIdFilterWithNullUser() {
+        org.opensearch.index.query.QueryBuilder baseQuery = org.opensearch.index.query.QueryBuilders.matchAllQuery();
+
+        org.opensearch.index.query.QueryBuilder result = helper.addOwnerIdFilter(null, baseQuery);
+
+        // For null user, should return the original query unchanged
+        assertEquals(baseQuery, result);
+    }
+
+    @Test
+    public void testAddOwnerIdFilterWithAdminUser() {
+        // Create admin user with all_access role - User.parse format is "username|backend-role1,backend-role2|role1,role2,..."
+        User adminUser = new User("admin", List.of("backend-role"), List.of("all_access"), List.of());
+        org.opensearch.index.query.QueryBuilder baseQuery = org.opensearch.index.query.QueryBuilders.matchAllQuery();
+
+        org.opensearch.index.query.QueryBuilder result = helper.addOwnerIdFilter(adminUser, baseQuery);
+
+        // For admin user, should return the original query unchanged
+        assertEquals(baseQuery, result);
+    }
+
+    @Test
+    public void testAddOwnerIdFilterWithRegularUser() {
+        User regularUser = User.parse("john|backend-role");
+        org.opensearch.index.query.QueryBuilder baseQuery = org.opensearch.index.query.QueryBuilders.matchAllQuery();
+
+        org.opensearch.index.query.QueryBuilder result = helper.addOwnerIdFilter(regularUser, baseQuery);
+
+        // For regular user, should wrap in a BoolQuery with owner filter
+        assertTrue(result instanceof org.opensearch.index.query.BoolQueryBuilder);
+        org.opensearch.index.query.BoolQueryBuilder boolQuery = (org.opensearch.index.query.BoolQueryBuilder) result;
+        assertEquals(1, boolQuery.must().size());
+        assertEquals(1, boolQuery.filter().size());
+    }
+
 }

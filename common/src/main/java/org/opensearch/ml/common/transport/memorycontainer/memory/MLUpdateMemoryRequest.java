@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -19,6 +18,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -29,11 +29,16 @@ public class MLUpdateMemoryRequest extends ActionRequest {
     @Setter
     private MLUpdateMemoryInput mlUpdateMemoryInput;
     private String memoryContainerId;
-    private String memoryType;
+    private MemoryType memoryType;
     private String memoryId;
 
     @Builder
-    public MLUpdateMemoryRequest(String memoryContainerId, String memoryType, String memoryId, MLUpdateMemoryInput mlUpdateMemoryInput) {
+    public MLUpdateMemoryRequest(
+        String memoryContainerId,
+        MemoryType memoryType,
+        String memoryId,
+        MLUpdateMemoryInput mlUpdateMemoryInput
+    ) {
         this.memoryContainerId = memoryContainerId;
         this.memoryType = memoryType;
         this.memoryId = memoryId;
@@ -43,7 +48,7 @@ public class MLUpdateMemoryRequest extends ActionRequest {
     public MLUpdateMemoryRequest(StreamInput in) throws IOException {
         super(in);
         this.memoryContainerId = in.readString();
-        this.memoryType = in.readString();
+        this.memoryType = in.readEnum(MemoryType.class);
         this.memoryId = in.readString();
         this.mlUpdateMemoryInput = new MLUpdateMemoryInput(in);
     }
@@ -52,7 +57,7 @@ public class MLUpdateMemoryRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(memoryContainerId);
-        out.writeString(memoryType);
+        out.writeEnum(memoryType);
         out.writeString(memoryId);
         mlUpdateMemoryInput.writeTo(out);
     }
@@ -66,10 +71,8 @@ public class MLUpdateMemoryRequest extends ActionRequest {
         if (memoryContainerId == null) {
             exception = addValidationError("Memory container id can't be null", exception);
         }
-        if (memoryType == null || memoryType.isEmpty()) {
-            exception = addValidationError("Memory type can't be null or empty", exception);
-        } else if (!VALID_MEMORY_TYPES.contains(memoryType)) {
-            exception = addValidationError("Invalid memory type", exception);
+        if (memoryType == null) {
+            exception = addValidationError("Memory type can't be null", exception);
         }
         if (memoryId == null) {
             exception = addValidationError("Memory id can't be null", exception);

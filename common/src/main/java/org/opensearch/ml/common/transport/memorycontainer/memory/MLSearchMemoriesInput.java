@@ -15,6 +15,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.Builder;
@@ -31,10 +32,10 @@ public class MLSearchMemoriesInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private String memoryType;
+    private MemoryType memoryType;
     private SearchSourceBuilder searchSourceBuilder;
 
-    public MLSearchMemoriesInput(String memoryContainerId, String memoryType, SearchSourceBuilder searchSourceBuilder) {
+    public MLSearchMemoriesInput(String memoryContainerId, MemoryType memoryType, SearchSourceBuilder searchSourceBuilder) {
         if (searchSourceBuilder == null) {
             throw new IllegalArgumentException("Query cannot be null");
         }
@@ -45,14 +46,17 @@ public class MLSearchMemoriesInput implements ToXContentObject, Writeable {
 
     public MLSearchMemoriesInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memoryType = in.readOptionalString();
+        this.memoryType = in.readBoolean() ? in.readEnum(MemoryType.class) : null;
         this.searchSourceBuilder = new SearchSourceBuilder(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(memoryContainerId);
-        out.writeOptionalString(memoryType);
+        out.writeBoolean(memoryType != null);
+        if (memoryType != null) {
+            out.writeEnum(memoryType);
+        }
         searchSourceBuilder.writeTo(out);
     }
 
@@ -63,7 +67,7 @@ public class MLSearchMemoriesInput implements ToXContentObject, Writeable {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         if (memoryType != null) {
-            builder.field(PARAMETER_MEMORY_TYPE, memoryType);
+            builder.field(PARAMETER_MEMORY_TYPE, memoryType.getValue());
         }
         builder.field(QUERY_FIELD, searchSourceBuilder);
         builder.endObject();
