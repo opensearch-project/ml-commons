@@ -149,10 +149,6 @@ public class MLRegexReplaceProcessor extends AbstractMLProcessor {
                 result = pattern.matcher(text).replaceFirst(replacement);
             }
 
-            if (log.isDebugEnabled() && !text.equals(result)) {
-                log.debug("Regex replacement applied: {} occurrence(s) replaced", replaceAll ? "all" : "first");
-            }
-
             return result;
         } catch (Exception e) {
             log.warn("Failed to apply regex replacement with pattern '{}': {}", pattern.pattern(), e.getMessage());

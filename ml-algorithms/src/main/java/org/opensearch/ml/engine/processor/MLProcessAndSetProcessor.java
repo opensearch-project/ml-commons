@@ -161,7 +161,7 @@ public class MLProcessAndSetProcessor extends AbstractMLProcessor {
             context.set(targetPath, value);
             return true;
         } catch (Exception setException) {
-            log.debug("Path '{}' doesn't exist, attempting to create it", targetPath);
+            log.debug("Failed to set value at path '{}': {}. Attempting to create it", targetPath, setException.getMessage());
             return createAndSetPath(context, value, setException);
         }
     }

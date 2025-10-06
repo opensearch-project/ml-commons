@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.processor;
 
+import lombok.Getter;
+
 public enum MLProcessorType {
     CONDITIONAL("CONDITIONAL"),
     EXTRACT_JSON("EXTRACT_JSON"),
@@ -16,14 +18,11 @@ public enum MLProcessorType {
     SET_FIELD("SET_FIELD"),
     TO_STRING("TO_STRING");
 
+    @Getter
     private final String value;
 
     MLProcessorType(String value) {
         this.value = value;
-    }
-
-    public String getValue() {
-        return value;
     }
 
     /**

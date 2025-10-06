@@ -98,16 +98,6 @@ public class MLEngineClassLoader {
                 connectorExecutorMap.put(connectorName, clazz);
             }
         }
-
-        Set<Class<?>> processorClasses = reflections.getTypesAnnotatedWith(Processor.class);
-        // Load connector class
-        for (Class<?> clazz : processorClasses) {
-            Processor processorExecutor = clazz.getAnnotation(Processor.class);
-            MLProcessorType processorType = processorExecutor.value();
-            if (processorType != null) {
-                mlProcessorMap.put(processorType, clazz);
-            }
-        }
     }
 
     private static void loadMLProcessorClassMapping() {
