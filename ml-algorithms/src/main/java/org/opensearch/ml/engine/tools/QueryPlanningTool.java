@@ -15,13 +15,15 @@ import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_USER_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE;
-import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.TEMPLATE_SELECTION_SYSTEM_PROMPT;
-import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.TEMPLATE_SELECTION_USER_PROMPT;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_TEMPLATE_SELECTION_USER_PROMPT;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchException;
@@ -59,8 +61,12 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String TYPE = "QueryPlanningTool";
     public static final String MODEL_ID_FIELD = "model_id";
     private final MLModelTool queryGenerationTool;
-    public static final String SYSTEM_PROMPT_FIELD = "query_planner_system_prompt";
-    public static final String USER_PROMPT_FIELD = "query_planner_user_prompt";
+    public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String USER_PROMPT_FIELD = "user_prompt";
+    public static final String QUERY_PLANNER_SYSTEM_PROMPT_FIELD = "query_planner_system_prompt";
+    public static final String QUERY_PLANNER_USER_PROMPT_FIELD = "query_planner_user_prompt";
+    public static final String TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD = "template_selection_system_prompt";
+    public static final String TEMPLATE_SELECTION_USER_PROMPT_FIELD = "template_selection_user_prompt";
     public static final String INDEX_MAPPING_FIELD = "index_mapping";
     public static final String QUERY_FIELDS_FIELD = "query_fields";
     public static final String GENERATION_TYPE_FIELD = "generation_type";
@@ -121,10 +127,23 @@ public class QueryPlanningTool implements WithModelTool {
         this.attributes = new HashMap<>(DEFAULT_ATTRIBUTES);
     }
 
+    private Map<String, String> stripAgentContextParameters(Map<String, String> originalParameters) {
+        // Drop agent-specific metadata that can bias or slow query planning; keep all other non-null params.
+        // This enables using the same LLM for both the agent and the Query Planning Tool.
+        // Excluded keys: _chat_history, _tools, _interactions, tool_configs
+        Set<String> blacklistedParams = Set.of("_chat_history", "_tools", "_interactions", "tool_configs");
+
+        return originalParameters
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getValue() != null && !blacklistedParams.contains(entry.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
-            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
+            Map<String, String> parameters = stripAgentContextParameters(ToolUtils.extractInputParameters(originalParameters, attributes));
             if (!validate(parameters)) {
                 listener
                     .onFailure(
@@ -149,8 +168,19 @@ public class QueryPlanningTool implements WithModelTool {
 
             // Template Selection, replace user and system prompts
             Map<String, String> templateSelectionParameters = new HashMap<>(parameters);
-            templateSelectionParameters.put(SYSTEM_PROMPT_FIELD, TEMPLATE_SELECTION_SYSTEM_PROMPT);
-            templateSelectionParameters.put(USER_PROMPT_FIELD, TEMPLATE_SELECTION_USER_PROMPT);
+            if (templateSelectionParameters.containsKey(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD)) {
+                templateSelectionParameters
+                    .put(SYSTEM_PROMPT_FIELD, templateSelectionParameters.get(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD));
+            } else {
+                templateSelectionParameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT);
+            }
+
+            if (templateSelectionParameters.containsKey(TEMPLATE_SELECTION_USER_PROMPT_FIELD)) {
+                templateSelectionParameters.put(USER_PROMPT_FIELD, templateSelectionParameters.get(TEMPLATE_SELECTION_USER_PROMPT_FIELD));
+            } else {
+                templateSelectionParameters.put(USER_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_USER_PROMPT);
+            }
+
             templateSelectionParameters.put(SEARCH_TEMPLATES_FIELD, searchTemplates);
 
             ActionListener<T> templateSelectionListener = ActionListener.wrap(r -> {
@@ -185,14 +215,19 @@ public class QueryPlanningTool implements WithModelTool {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private <T> void executeQueryPlanning(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             // Execute Query Planning, replace System and User prompt fields
-            if (!parameters.containsKey(SYSTEM_PROMPT_FIELD)) {
+            if (parameters.containsKey(QUERY_PLANNER_SYSTEM_PROMPT_FIELD)) {
+                parameters.put(SYSTEM_PROMPT_FIELD, parameters.get(QUERY_PLANNER_SYSTEM_PROMPT_FIELD));
+            } else {
                 parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
             }
 
-            if (!parameters.containsKey(USER_PROMPT_FIELD)) {
+            if (parameters.containsKey(QUERY_PLANNER_USER_PROMPT_FIELD)) {
+                parameters.put(USER_PROMPT_FIELD, parameters.get(QUERY_PLANNER_USER_PROMPT_FIELD));
+            } else {
                 parameters.put(USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT);
             }
 
@@ -377,7 +412,7 @@ public class QueryPlanningTool implements WithModelTool {
 
         public void init(Client client, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
             this.client = client;
-            this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+            Factory.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         }
 
         @Override

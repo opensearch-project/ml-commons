@@ -52,7 +52,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         + "        \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "        },\n"
-        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.query_planner_system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.query_planner_user_prompt}\\\"}]}\"\n"
+        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.user_prompt}\\\"}]}\"\n"
         + "      }\n"
         + "    ]\n"
         + "}";
@@ -106,9 +106,9 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
 
         // Create Search Templates
         String templateBody = "{\"script\":{\"lang\":\"mustache\",\"source\":{\"query\":{\"match\":{\"type\":\"{{type}}\"}}}}}";
-        Response response = createSearchTemplate("type_search_template", templateBody);
+        createSearchTemplate("type_search_template", templateBody);
         templateBody = "{\"script\":{\"lang\":\"mustache\",\"source\":{\"query\":{\"term\":{\"type\":\"{{type}}\"}}}}}";
-        response = createSearchTemplate("type_search_template_2", templateBody);
+        createSearchTemplate("type_search_template_2", templateBody);
 
         // Register agent with search template IDs
         String agentName = "Test_AgentWithQueryPlanningTool_SearchTemplates";

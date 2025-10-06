@@ -27,11 +27,13 @@ import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_NAME_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.LLM_GENERATED_TYPE_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_FIELDS_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_PLANNER_SYSTEM_PROMPT_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_PLANNER_USER_PROMPT_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUESTION_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SAMPLE_DOCUMENT_FIELD;
-import static org.opensearch.ml.engine.tools.QueryPlanningTool.SYSTEM_PROMPT_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.TEMPLATE_FIELD;
-import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_PROMPT_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.TEMPLATE_SELECTION_USER_PROMPT_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_SEARCH_TEMPLATES_TYPE_FIELD;
 
 import java.io.IOException;
@@ -44,9 +46,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -75,6 +75,7 @@ import lombok.extern.log4j.Log4j2;
  * Units test for QueryPlanningTools
  */
 @Log4j2
+@SuppressWarnings("unchecked")
 public class QueryPlanningToolTests {
 
     @Mock
@@ -132,7 +133,7 @@ public class QueryPlanningToolTests {
         factory.init(client, mlFeatureEnabledSetting);
 
         validParams = new HashMap<>();
-        validParams.put(SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
+        validParams.put(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
         emptyParams = Collections.emptyMap();
 
     }
@@ -154,7 +155,6 @@ public class QueryPlanningToolTests {
 
     public void mockGetIndexMapping() {
         // Mock the getIndex operation for getIndexMappingAsync (following IndexMappingToolTests pattern)
-        @SuppressWarnings("unchecked")
         ArgumentCaptor<ActionListener<GetIndexResponse>> captor = ArgumentCaptor.forClass(ActionListener.class);
         this.actionListenerCaptor = captor;
         doNothing().when(indicesAdminClient).getIndex(any(), actionListenerCaptor.capture());
@@ -187,7 +187,7 @@ public class QueryPlanningToolTests {
         params.put(MODEL_ID_FIELD, "test_model_id");
         params
             .put(
-                SYSTEM_PROMPT_FIELD,
+                QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
                 "You are a query generation agent. Generate a dsl query for the following question: ${parameters.question}"
             );
         params.put("question", "help me find some books related to wind");
@@ -206,7 +206,7 @@ public class QueryPlanningToolTests {
         params.put(MODEL_ID_FIELD, "test_model_id");
         params
             .put(
-                SYSTEM_PROMPT_FIELD,
+                QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
                 "You are a query generation agent. Generate a dsl query for the following question: ${parameters.question}"
             );
         params.put("question", "help me find some books related to wind");
@@ -236,7 +236,7 @@ public class QueryPlanningToolTests {
         // test try to update the prompt
         validParams
             .put(
-                SYSTEM_PROMPT_FIELD,
+                QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
                 "You are a query generation agent. Generate a dsl query for the following question: ${parameters.question}"
             );
         validParams.put(QUESTION_FIELD, "help me find some books related to wind");
@@ -288,7 +288,7 @@ public class QueryPlanningToolTests {
         // test try to update the prompt
         validParams
             .put(
-                SYSTEM_PROMPT_FIELD,
+                QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
                 "You are a query generation agent. Generate a dsl query for the following question: ${parameters.question}"
             );
         validParams.put("question", "help me find some books related to wind");
@@ -323,7 +323,7 @@ public class QueryPlanningToolTests {
         // test try to update the prompt
         validParams
             .put(
-                SYSTEM_PROMPT_FIELD,
+                QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
                 "You are a query generation agent. Generate a dsl query for the following question: ${parameters.question}"
             );
         validParams.put("question", "help me find some books related to wind");
@@ -341,7 +341,7 @@ public class QueryPlanningToolTests {
 
     @SneakyThrows
     @Test
-    public void testRimWithUserProvidedSearchTemplatesAndNoLMMTemplateChoice() throws ExecutionException, InterruptedException {
+    public void testRunWithUserProvidedSearchTemplatesAndNoLMMTemplateChoice() throws ExecutionException, InterruptedException {
         mockSampleDoc();
         mockGetIndexMapping();
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
@@ -365,7 +365,7 @@ public class QueryPlanningToolTests {
         // test try to update the prompt
         validParams
             .put(
-                SYSTEM_PROMPT_FIELD,
+                QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
                 "You are a query generation agent. Generate a dsl query for the following question: ${parameters.question}"
             );
         validParams.put("question", "help me find some books related to wind");
@@ -386,10 +386,6 @@ public class QueryPlanningToolTests {
     public void testRun_PredictionReturnsList_ThrowsIllegalArgumentException() throws ExecutionException, InterruptedException {
         mockSampleDoc();
         mockGetIndexMapping();
-        thrown.expect(ExecutionException.class);
-        thrown.expectCause(org.hamcrest.Matchers.isA(IllegalArgumentException.class));
-        thrown
-            .expectMessage("Error processing search template: [invalid_query]. Try using response_filter in agent registration if needed.");
 
         doAnswer(invocation -> {
             ActionListener<List<String>> listener = invocation.getArgument(1);
@@ -405,7 +401,15 @@ public class QueryPlanningToolTests {
         validParams.put(INDEX_NAME_FIELD, "testIndex");
         tool.run(validParams, listener);
 
-        future.get();
+        // Should throw ExecutionException with IllegalArgumentException cause
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get());
+        assertTrue(exception.getCause() instanceof IllegalArgumentException);
+        assertTrue(
+            exception
+                .getCause()
+                .getMessage()
+                .contains("Error processing search template: [invalid_query]. Try using response_filter in agent registration if needed.")
+        );
     }
 
     @SneakyThrows
@@ -512,9 +516,6 @@ public class QueryPlanningToolTests {
         assertEquals(List.of(MODEL_ID_FIELD), allModelKeys);
     }
 
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
-
     @SneakyThrows
     @Test
     public void testRunWithNoPrompt() {
@@ -525,7 +526,6 @@ public class QueryPlanningToolTests {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "some query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
-        @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
         doAnswer(invocation -> {
@@ -542,7 +542,58 @@ public class QueryPlanningToolTests {
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(queryGenerationTool).run(captor.capture(), any());
         Map<String, String> capturedParams = captor.getValue();
-        assertNotNull(capturedParams.get(SYSTEM_PROMPT_FIELD));
+        assertEquals(DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT, capturedParams.get("system_prompt"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testStripAgentContextParameters() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
+
+        // Capture parameters sent to the model
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(paramsCaptor.capture(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(QUESTION_FIELD, "test query");
+        parameters.put(INDEX_NAME_FIELD, "testIndex");
+        // Blacklisted keys that should be removed
+        parameters.put("_chat_history", "should be removed");
+        parameters.put("_tools", "should be removed");
+        parameters.put("_interactions", "should be removed");
+        parameters.put("tool_configs", "should be removed");
+        // Nulls should be filtered out
+        parameters.put("some_extra_field", null);
+
+        tool.run(parameters, listener);
+
+        // Trigger async chain
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        // Ensure run completed
+        future.get();
+
+        Map<String, String> capturedParams = paramsCaptor.getValue();
+        // Blacklist
+        assertFalse(capturedParams.containsKey("_chat_history"));
+        assertFalse(capturedParams.containsKey("_tools"));
+        assertFalse(capturedParams.containsKey("_interactions"));
+        assertFalse(capturedParams.containsKey("tool_configs"));
+        // Nulls
+        assertFalse(capturedParams.containsKey("some_extra_field"));
+        // Required parameters remain
+        assertEquals("test query", capturedParams.get(QUESTION_FIELD));
+        assertEquals("testIndex", capturedParams.get(INDEX_NAME_FIELD));
     }
 
     @SneakyThrows
@@ -551,7 +602,6 @@ public class QueryPlanningToolTests {
         mockSampleDoc();
         mockGetIndexMapping();
         QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
-        @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
         tool.run(Collections.emptyMap(), listener);
@@ -574,7 +624,6 @@ public class QueryPlanningToolTests {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "some query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
-        @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
         doAnswer(invocation -> {
@@ -640,7 +689,6 @@ public class QueryPlanningToolTests {
         parameters.put(QUERY_FIELDS_FIELD, "[\"title\", \"content\"]");
         // No system_prompt - should use default
 
-        @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
         doAnswer(invocation -> {
@@ -663,8 +711,8 @@ public class QueryPlanningToolTests {
         assertTrue(capturedParams.containsKey("question"));
         assertTrue(capturedParams.containsKey(INDEX_MAPPING_FIELD));
         assertTrue(capturedParams.containsKey(QUERY_FIELDS_FIELD));
-        assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
-        assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
+        assertTrue(capturedParams.containsKey("system_prompt"));
+        assertTrue(capturedParams.containsKey("user_prompt"));
 
         // LLM Generated type should have template param for default search template
         assertTrue(capturedParams.containsKey(TEMPLATE_FIELD));
@@ -689,7 +737,6 @@ public class QueryPlanningToolTests {
         parameters.put("search_templates", "[{'template_id': 'template_id', 'template_description': 'test_description'}]");
         // No system_prompt - should use default
 
-        @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
         // Use the common mocks from setup method - no need to override
@@ -715,8 +762,8 @@ public class QueryPlanningToolTests {
         assertTrue(capturedParams.containsKey("question"));
         assertTrue(capturedParams.containsKey(INDEX_MAPPING_FIELD));
         assertTrue(capturedParams.containsKey(QUERY_FIELDS_FIELD));
-        assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
-        assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
+        assertTrue(capturedParams.containsKey("system_prompt"));
+        assertTrue(capturedParams.containsKey("user_prompt"));
         assertTrue(capturedParams.containsKey(TEMPLATE_FIELD));
 
         // Processed parameters should be JSON strings
@@ -734,10 +781,9 @@ public class QueryPlanningToolTests {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("question", "test query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
-        parameters.put(USER_PROMPT_FIELD, "custom user prompt");
+        parameters.put(QUERY_PLANNER_USER_PROMPT_FIELD, "custom user prompt");
         // No system_prompt or user_prompt - should use defaults
 
-        @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
 
         doAnswer(invocation -> {
@@ -757,8 +803,8 @@ public class QueryPlanningToolTests {
         Map<String, String> capturedParams = captor.getValue();
 
         // User prompt should be processed
-        assertTrue(capturedParams.containsKey(USER_PROMPT_FIELD));
-        assertEquals("custom user prompt", capturedParams.get(USER_PROMPT_FIELD));
+        assertTrue(capturedParams.containsKey("user_prompt"));
+        assertEquals("custom user prompt", capturedParams.get("user_prompt"));
     }
 
     @Test
@@ -959,7 +1005,6 @@ public class QueryPlanningToolTests {
         }).when(client).search(any(), any());
 
         // Mock queryGenerationTool.run() to capture parameters and return success
-        @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
         doAnswer(invocation -> {
             ActionListener<String> modelListener = invocation.getArgument(1);
@@ -997,6 +1042,364 @@ public class QueryPlanningToolTests {
             "Sample document should contain short field without truncation",
             sampleDoc.contains("\\\"short_field\\\":\\\"short\\\"")      // double-encoded form
         );
+    }
+
+    @SneakyThrows
+    @Test
+    public void testGetSampleDoc_ErrorPaths() throws ExecutionException, InterruptedException {
+        // Success for index mapping
+        mockGetIndexMapping();
+
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        // Case 1: onResponse throws inside try (null SearchResponse)
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(null); // triggers NPE inside try -> caught -> IOException("Failed to process sample document")
+            return null;
+        }).when(client).search(any(), any());
+
+        CompletableFuture<String> f1 = new CompletableFuture<>();
+        ActionListener<String> l1 = ActionListener.wrap(f1::complete, f1::completeExceptionally);
+        Map<String, String> p1 = new HashMap<>();
+        p1.put(QUESTION_FIELD, "q");
+        p1.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(p1, l1);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+        ExecutionException ex1 = assertThrows(ExecutionException.class, () -> f1.get());
+        assertTrue(ex1.getCause() instanceof IOException);
+        assertTrue(ex1.getCause().getMessage().contains("Failed to process sample document"));
+
+        // Case 2: onFailure path
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("boom"));
+            return null;
+        }).when(client).search(any(), any());
+
+        CompletableFuture<String> f2 = new CompletableFuture<>();
+        ActionListener<String> l2 = ActionListener.wrap(f2::complete, f2::completeExceptionally);
+        Map<String, String> p2 = new HashMap<>();
+        p2.put(QUESTION_FIELD, "q");
+        p2.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(p2, l2);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+        ExecutionException ex2 = assertThrows(ExecutionException.class, () -> f2.get());
+        assertTrue(ex2.getCause() instanceof IOException);
+        assertTrue(ex2.getCause().getMessage().contains("Failed to get sample document"));
+
+        // Case 3: outer catch (search throws synchronously)
+        doAnswer(invocation -> { throw new RuntimeException("sync"); }).when(client).search(any(), any());
+
+        CompletableFuture<String> f3 = new CompletableFuture<>();
+        ActionListener<String> l3 = ActionListener.wrap(f3::complete, f3::completeExceptionally);
+        Map<String, String> p3 = new HashMap<>();
+        p3.put(QUESTION_FIELD, "q");
+        p3.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(p3, l3);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+        ExecutionException ex3 = assertThrows(ExecutionException.class, () -> f3.get());
+        assertTrue(ex3.getCause() instanceof IOException);
+        assertTrue(ex3.getCause().getMessage().contains("Failed to get sample document"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testGetIndexMapping_ErrorPaths() throws ExecutionException, InterruptedException {
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        // Common model stub to avoid NPE later if it gets that far
+        doAnswer(invocation -> {
+            ActionListener<String> ml = invocation.getArgument(1);
+            ml.onResponse("{}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        // Case 1: onResponse mapping null -> NPE inside try caught
+        ArgumentCaptor<ActionListener<GetIndexResponse>> captor1 = ArgumentCaptor.forClass(ActionListener.class);
+        doAnswer(invocation -> {
+            // capture and call onResponse with a response missing mapping
+            ActionListener<GetIndexResponse> al = invocation.getArgument(1);
+            if (actionListenerCaptor == null) {
+                actionListenerCaptor = captor1;
+            }
+            al.onResponse(getIndexResponse); // getIndexResponse will be mocked below
+            return null;
+        }).when(indicesAdminClient).getIndex(any(), any());
+
+        // Mock getIndexResponse to return no mapping for index
+        getIndexResponse = mock(GetIndexResponse.class);
+        when(getIndexResponse.mappings()).thenReturn(Collections.emptyMap());
+
+        CompletableFuture<String> f1 = new CompletableFuture<>();
+        ActionListener<String> l1 = ActionListener.wrap(f1::complete, f1::completeExceptionally);
+        Map<String, String> p1 = new HashMap<>();
+        p1.put(QUESTION_FIELD, "q");
+        p1.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(p1, l1);
+        ExecutionException ix1 = assertThrows(ExecutionException.class, () -> f1.get());
+        assertTrue(ix1.getCause() instanceof IllegalStateException);
+        assertTrue(ix1.getCause().getMessage().contains("Failed to extract index mapping"));
+
+        // Case 2: onFailure path with generic exception (non IndexNotFoundException)
+        doAnswer(invocation -> {
+            ActionListener<GetIndexResponse> al = invocation.getArgument(1);
+            al.onFailure(new RuntimeException("boom"));
+            return null;
+        }).when(indicesAdminClient).getIndex(any(), any());
+
+        CompletableFuture<String> f2 = new CompletableFuture<>();
+        ActionListener<String> l2 = ActionListener.wrap(f2::complete, f2::completeExceptionally);
+        Map<String, String> p2 = new HashMap<>();
+        p2.put(QUESTION_FIELD, "q");
+        p2.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(p2, l2);
+        ExecutionException ix2 = assertThrows(ExecutionException.class, () -> f2.get());
+        assertTrue(ix2.getCause() instanceof IllegalStateException);
+        assertTrue(ix2.getCause().getMessage().contains("Failed to extract index mapping"));
+
+        // Case 3: outer try-catch (getIndex throws synchronously)
+        doAnswer(invocation -> { throw new RuntimeException("sync"); }).when(indicesAdminClient).getIndex(any(), any());
+
+        CompletableFuture<String> f3 = new CompletableFuture<>();
+        ActionListener<String> l3 = ActionListener.wrap(f3::complete, f3::completeExceptionally);
+        Map<String, String> p3 = new HashMap<>();
+        p3.put(QUESTION_FIELD, "q");
+        p3.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(p3, l3);
+        ExecutionException ix3 = assertThrows(ExecutionException.class, () -> f3.get());
+        assertTrue(ix3.getCause() instanceof IllegalStateException);
+        assertTrue(ix3.getCause().getMessage().contains("Failed to extract index mapping"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testGetSampleDoc_NullCases_SetJsonNullInParameters() throws ExecutionException, InterruptedException {
+        mockGetIndexMapping();
+
+        String noHitsResponseJson = "{\n"
+            + "  \"took\": 1,\n"
+            + "  \"timed_out\": false,\n"
+            + "  \"_shards\": {\n"
+            + "    \"total\": 1,\n"
+            + "    \"successful\": 1,\n"
+            + "    \"skipped\": 0,\n"
+            + "    \"failed\": 0\n"
+            + "  },\n"
+            + "  \"hits\": {\n"
+            + "    \"total\": {\n"
+            + "      \"value\": 0,\n"
+            + "      \"relation\": \"eq\"\n"
+            + "    },\n"
+            + "    \"max_score\": null,\n"
+            + "    \"hits\": []\n"
+            + "  }\n"
+            + "}";
+
+        String emptySourceResponseJson = "{\n"
+            + "  \"took\": 1,\n"
+            + "  \"timed_out\": false,\n"
+            + "  \"_shards\": {\n"
+            + "    \"total\": 1,\n"
+            + "    \"successful\": 1,\n"
+            + "    \"skipped\": 0,\n"
+            + "    \"failed\": 0\n"
+            + "  },\n"
+            + "  \"hits\": {\n"
+            + "    \"total\": {\n"
+            + "      \"value\": 1,\n"
+            + "      \"relation\": \"eq\"\n"
+            + "    },\n"
+            + "    \"max_score\": 1.0,\n"
+            + "    \"hits\": [\n"
+            + "      {\n"
+            + "        \"_index\": \"testIndex\",\n"
+            + "        \"_id\": \"1\",\n"
+            + "        \"_score\": 1.0,\n"
+            + "        \"_source\": {}\n"
+            + "      }\n"
+            + "    ]\n"
+            + "  }\n"
+            + "}";
+
+        SearchResponse noHitsResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, noHitsResponseJson)
+            );
+
+        SearchResponse emptySourceResponse = SearchResponse
+            .fromXContent(
+                JsonXContent.jsonXContent
+                    .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, emptySourceResponseJson)
+            );
+
+        // Respond with noHits first, then emptySource
+        final SearchResponse[] responses = new SearchResponse[] { noHitsResponse, emptySourceResponse };
+        final int[] idx = { 0 };
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(responses[idx[0]]);
+            idx[0] = Math.min(idx[0] + 1, responses.length - 1);
+            return null;
+        }).when(client).search(any(), any());
+
+        // Capture parameters passed to the model
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("ok");
+            return null;
+        }).when(queryGenerationTool).run(paramsCaptor.capture(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        // Run 1: no hits
+        final CompletableFuture<String> future1 = new CompletableFuture<>();
+        ActionListener<String> listener1 = ActionListener.wrap(future1::complete, future1::completeExceptionally);
+        Map<String, String> params1 = new HashMap<>();
+        params1.put(QUESTION_FIELD, "test query");
+        params1.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(params1, listener1);
+        actionListenerCaptor.getAllValues().get(0).onResponse(getIndexResponse);
+        future1.get();
+
+        // Run 2: empty source map
+        final CompletableFuture<String> future2 = new CompletableFuture<>();
+        ActionListener<String> listener2 = ActionListener.wrap(future2::complete, future2::completeExceptionally);
+        Map<String, String> params2 = new HashMap<>();
+        params2.put(QUESTION_FIELD, "test query");
+        params2.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(params2, listener2);
+        actionListenerCaptor.getAllValues().get(1).onResponse(getIndexResponse);
+        future2.get();
+
+        // We should have two model invocations captured
+        assertEquals(2, paramsCaptor.getAllValues().size());
+        Map<String, String> captured1 = paramsCaptor.getAllValues().get(0);
+        Map<String, String> captured2 = paramsCaptor.getAllValues().get(1);
+
+        // SAMPLE_DOCUMENT_FIELD should be JSON null literal (gson.toJson(null) -> "null")
+        assertEquals("null", captured1.get(SAMPLE_DOCUMENT_FIELD));
+        assertEquals("null", captured2.get(SAMPLE_DOCUMENT_FIELD));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testTemplateSelectionCustomPrompts() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+
+        // Mock the cluster admin client for stored scripts
+        doAnswer(invocation -> {
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
+            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
+            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
+            when(storedScriptSource.getSource()).thenReturn("test");
+            actionListener.onResponse(getStoredScriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(), any());
+
+        // Stub template selection and query planning responses
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("template_id");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null);
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "help me find some books related to wind");
+        parameters.put(INDEX_NAME_FIELD, "testIndex");
+        parameters.put("search_templates", "[{'template_id': 'template_id', 'template_description': 'test_description'}]");
+        parameters.put(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD, "Custom template selection system prompt");
+        parameters.put(TEMPLATE_SELECTION_USER_PROMPT_FIELD, "Custom template selection user prompt");
+
+        tool.run(parameters, listener);
+
+        // Manually trigger the getIndex response
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        assertEquals(matchQueryString, future.get());
+
+        // Verify that the custom template selection prompts were used
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool, times(2)).run(captor.capture(), any());
+
+        // First call should be template selection with custom prompts
+        Map<String, String> firstCallParams = captor.getAllValues().get(0);
+        assertEquals("Custom template selection system prompt", firstCallParams.get("system_prompt"));
+        assertEquals("Custom template selection user prompt", firstCallParams.get("user_prompt"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void testTemplateSelectionPromptsWithDefaults() throws ExecutionException, InterruptedException {
+        mockSampleDoc();
+        mockGetIndexMapping();
+        String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
+
+        // Mock the cluster admin client for stored scripts
+        doAnswer(invocation -> {
+            ActionListener<GetStoredScriptResponse> actionListener = invocation.getArgument(1);
+            GetStoredScriptResponse getStoredScriptResponse = mock(GetStoredScriptResponse.class);
+            StoredScriptSource storedScriptSource = mock(StoredScriptSource.class);
+            when(getStoredScriptResponse.getSource()).thenReturn(storedScriptSource);
+            when(storedScriptSource.getSource()).thenReturn("test");
+            actionListener.onResponse(getStoredScriptResponse);
+            return null;
+        }).when(clusterAdminClient).getStoredScript(any(), any());
+
+        // Stub template selection and query planning responses
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("template_id");
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(USER_SEARCH_TEMPLATES_TYPE_FIELD, queryGenerationTool, client, null);
+
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("question", "help me find some books related to wind");
+        parameters.put(INDEX_NAME_FIELD, "testIndex");
+        parameters.put("search_templates", "[{'template_id': 'template_id', 'template_description': 'test_description'}]");
+        // No custom template selection prompts - should use defaults
+
+        tool.run(parameters, listener);
+
+        // Manually trigger the getIndex response
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        assertEquals(matchQueryString, future.get());
+
+        // Verify that the default template selection prompts were used
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool, times(2)).run(captor.capture(), any());
+
+        // First call should be template selection with default prompts
+        Map<String, String> firstCallParams = captor.getAllValues().get(0);
+        assertNotNull(firstCallParams.get("system_prompt"));
+        assertNotNull(firstCallParams.get("user_prompt"));
+        // Should contain the default template selection prompts - check for more specific content
+        assertTrue(firstCallParams.get("system_prompt").contains("template"));
+        assertTrue(firstCallParams.get("user_prompt").contains("INPUTS"));
     }
 
 }
