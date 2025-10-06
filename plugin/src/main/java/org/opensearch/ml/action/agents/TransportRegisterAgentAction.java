@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -91,13 +92,27 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
+        // Update QueryPlanningTool to include model_id if missing
         List<MLToolSpec> tools = agent.getTools();
+        List<MLToolSpec> updatedTools = tools;
         if (tools != null) {
-            for (MLToolSpec tool : tools) {
-                if (tool.getType().equals(QueryPlanningTool.TYPE) && !mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
-                    listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
-                    return;
-                }
+            // Check if agentic search is enabled when QueryPlanningTool is present
+            boolean hasQueryPlanningTool = tools.stream().anyMatch(tool -> tool.getType().equals(QueryPlanningTool.TYPE));
+            if (hasQueryPlanningTool && !mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
+                listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
+                return;
+            }
+
+            // Update QueryPlanningTool with model_id if missing and LLM exists
+            if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
+                updatedTools = tools.stream().map(tool -> {
+                    if (tool.getType().equals(QueryPlanningTool.TYPE)) {
+                        Map<String, String> params = tool.getParameters() != null ? new HashMap<>(tool.getParameters()) : new HashMap<>();
+                        params.putIfAbsent("model_id", agent.getLlm().getModelId());
+                        return tool.toBuilder().parameters(params).build();
+                    }
+                    return tool;
+                }).collect(Collectors.toList());
             }
         }
 
@@ -118,7 +133,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
-        MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
+        MLAgent mlAgent = agent.toBuilder().tools(updatedTools).createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
         String tenantId = agent.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
