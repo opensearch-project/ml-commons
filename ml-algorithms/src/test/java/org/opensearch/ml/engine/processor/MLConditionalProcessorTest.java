@@ -491,7 +491,7 @@ public class MLConditionalProcessorTest {
     public void testChainedProcessors() {
         Map<String, Object> removeConfig = new HashMap<>();
         removeConfig.put("type", "remove_jsonpath");
-        removeConfig.put("path", "$.password");
+        removeConfig.put("paths", Arrays.asList("$.password"));
 
         Map<String, Object> toStringConfig = new HashMap<>();
         toStringConfig.put("type", "to_string");
@@ -686,7 +686,7 @@ public class MLConditionalProcessorTest {
     public void testComplexConditionalChain() {
         Map<String, Object> removeConfig = new HashMap<>();
         removeConfig.put("type", "remove_jsonpath");
-        removeConfig.put("path", "$.sensitive");
+        removeConfig.put("paths", Arrays.asList("$.sensitive"));
 
         Map<String, Object> setConfig = new HashMap<>();
         setConfig.put("type", "set_field");

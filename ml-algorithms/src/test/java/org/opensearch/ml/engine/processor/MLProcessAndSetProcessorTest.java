@@ -240,7 +240,7 @@ public class MLProcessAndSetProcessorTest {
     public void testProcessAndSetWithRemoveJsonPath() {
         Map<String, Object> removeConfig = new HashMap<>();
         removeConfig.put("type", "remove_jsonpath");
-        removeConfig.put("path", "$.password");
+        removeConfig.put("paths", Arrays.asList("$.password"));
 
         Map<String, Object> toStringConfig = new HashMap<>();
         toStringConfig.put("type", "to_string");
@@ -321,7 +321,7 @@ public class MLProcessAndSetProcessorTest {
 
         Map<String, Object> removeConfig = new HashMap<>();
         removeConfig.put("type", "remove_jsonpath");
-        removeConfig.put("path", "$.sensitive");
+        removeConfig.put("paths", Arrays.asList("$.sensitive"));
 
         Map<String, Object> toStringConfig = new HashMap<>();
         toStringConfig.put("type", "to_string");

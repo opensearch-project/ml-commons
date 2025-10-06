@@ -283,6 +283,34 @@ public class MLSetFieldProcessorTest {
         new MLSetFieldProcessor(config);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testBothValueAndSourcePathProvided() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.field");
+        config.put("value", "staticValue");
+        config.put("source_path", "$.sourceField");
+
+        new MLSetFieldProcessor(config);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testEmptySourcePath() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.field");
+        config.put("source_path", "");
+
+        new MLSetFieldProcessor(config);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testWhitespaceOnlySourcePath() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.field");
+        config.put("source_path", "   ");
+
+        new MLSetFieldProcessor(config);
+    }
+
     @Test
     public void testSetFieldOnNonMapInput() {
         Map<String, Object> config = new HashMap<>();
@@ -375,5 +403,228 @@ public class MLSetFieldProcessorTest {
         assertNotNull(result);
         Double price = JsonPath.read(result, "$.price");
         assertEquals(Double.valueOf(19.99), price);
+    }
+
+    // Tests for source_path functionality
+
+    @Test
+    public void testCopyFieldToNewLocation() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.c");
+        config.put("source_path", "$.a");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("a", 1);
+        input.put("b", 2);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Integer c = JsonPath.read(result, "$.c");
+        assertEquals(Integer.valueOf(1), c);
+    }
+
+    @Test
+    public void testReplaceFieldWithAnotherFieldValue() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.b");
+        config.put("source_path", "$.a");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("a", 1);
+        input.put("b", 2);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Integer b = JsonPath.read(result, "$.b");
+        assertEquals(Integer.valueOf(1), b);
+    }
+
+    @Test
+    public void testCopyNestedFieldForStandardization() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.userId");
+        config.put("source_path", "$.user.id");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> user = new HashMap<>();
+        user.put("id", 123);
+        user.put("name", "John");
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("user", user);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Integer userId = JsonPath.read(result, "$.userId");
+        assertEquals(Integer.valueOf(123), userId);
+    }
+
+    @Test
+    public void testCopyStringField() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.displayName");
+        config.put("source_path", "$.name");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("name", "John Doe");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String displayName = JsonPath.read(result, "$.displayName");
+        assertEquals("John Doe", displayName);
+    }
+
+    @Test
+    public void testCopyObjectField() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.backup");
+        config.put("source_path", "$.original");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> original = new HashMap<>();
+        original.put("key1", "value1");
+        original.put("key2", "value2");
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("original", original);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Map<String, Object> backup = JsonPath.read(result, "$.backup");
+        assertEquals("value1", backup.get("key1"));
+        assertEquals("value2", backup.get("key2"));
+    }
+
+    @Test
+    public void testCopyArrayField() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.tagsCopy");
+        config.put("source_path", "$.tags");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("tags", Arrays.asList("tag1", "tag2", "tag3"));
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        Object tagsCopy = JsonPath.read(result, "$.tagsCopy");
+        assertTrue(tagsCopy instanceof java.util.List);
+        assertEquals(3, ((java.util.List<?>) tagsCopy).size());
+    }
+
+    @Test
+    public void testSourcePathNotFound() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.newField");
+        config.put("source_path", "$.nonExistent");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("existingField", "value");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String existingField = JsonPath.read(result, "$.existingField");
+        assertEquals("value", existingField);
+    }
+
+    @Test
+    public void testCopyDeepNestedField() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.flatValue");
+        config.put("source_path", "$.level1.level2.level3.value");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> level3 = new HashMap<>();
+        level3.put("value", "deep");
+        Map<String, Object> level2 = new HashMap<>();
+        level2.put("level3", level3);
+        Map<String, Object> level1 = new HashMap<>();
+        level1.put("level2", level2);
+        Map<String, Object> input = new HashMap<>();
+        input.put("level1", level1);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String flatValue = JsonPath.read(result, "$.flatValue");
+        assertEquals("deep", flatValue);
+    }
+
+    @Test
+    public void testCopyToDeepNestedPath() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.metadata.backup.value");
+        config.put("source_path", "$.originalValue");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("originalValue", "test");
+        Map<String, Object> backup = new HashMap<>();
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("backup", backup);
+        input.put("metadata", metadata);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String backupValue = JsonPath.read(result, "$.metadata.backup.value");
+        assertEquals("test", backupValue);
+    }
+
+    @Test
+    public void testCopyFromArrayElement() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.firstItem");
+        config.put("source_path", "$.items[0]");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("items", Arrays.asList("first", "second", "third"));
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String firstItem = JsonPath.read(result, "$.firstItem");
+        assertEquals("first", firstItem);
+    }
+
+    @Test
+    public void testCopyToExistingFieldOverwrites() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("path", "$.target");
+        config.put("source_path", "$.source");
+
+        MLSetFieldProcessor processor = new MLSetFieldProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("source", "newValue");
+        input.put("target", "oldValue");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        String target = JsonPath.read(result, "$.target");
+        assertEquals("newValue", target);
     }
 }

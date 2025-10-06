@@ -22,7 +22,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveSimpleField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.password");
+        config.put("paths", Arrays.asList("$.password"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -42,7 +42,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveNestedField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.user.email");
+        config.put("paths", Arrays.asList("$.user.email"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -67,7 +67,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveArrayElement() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.items[1]");
+        config.put("paths", Arrays.asList("$.items[1]"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -88,7 +88,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveFirstArrayElement() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.items[0]");
+        config.put("paths", Arrays.asList("$.items[0]"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -109,7 +109,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveLastArrayElement() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.items[-1:]");
+        config.put("paths", Arrays.asList("$.items[-1:]"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -130,7 +130,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveDeepNestedField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.level1.level2.level3.secret");
+        config.put("paths", Arrays.asList("$.level1.level2.level3.secret"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -160,23 +160,18 @@ public class MLRemoveJsonPathProcessorTest {
     }
 
     @Test
-    public void testRemoveMultipleFieldsSequentially() {
-        Map<String, Object> config1 = new HashMap<>();
-        config1.put("path", "$.password");
+    public void testRemoveMultipleFields() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("paths", Arrays.asList("$.password", "$.ssn"));
 
-        Map<String, Object> config2 = new HashMap<>();
-        config2.put("path", "$.ssn");
-
-        MLRemoveJsonPathProcessor processor1 = new MLRemoveJsonPathProcessor(config1);
-        MLRemoveJsonPathProcessor processor2 = new MLRemoveJsonPathProcessor(config2);
+        MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
         Map<String, Object> input = new HashMap<>();
         input.put("username", "john");
         input.put("password", "secret");
         input.put("ssn", "123-45-6789");
 
-        Object result = processor1.process(input);
-        result = processor2.process(result);
+        Object result = processor.process(input);
 
         assertNotNull(result);
         assertTrue(result instanceof Map);
@@ -189,7 +184,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveFieldFromArrayOfObjects() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.users[0].email");
+        config.put("paths", Arrays.asList("$.users[0].email"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -222,7 +217,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveNonExistentField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.nonExistent");
+        config.put("paths", Arrays.asList("$.nonExistent"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -231,7 +226,7 @@ public class MLRemoveJsonPathProcessorTest {
 
         Object result = processor.process(input);
 
-        // Should return original input when path doesn't exist
+        // Should continue processing when path doesn't exist
         assertNotNull(result);
         assertTrue(result instanceof Map);
         Map<String, Object> resultMap = (Map<String, Object>) result;
@@ -241,7 +236,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveFromStringInput() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.password");
+        config.put("paths", Arrays.asList("$.password"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -258,7 +253,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveEntireObject() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.metadata");
+        config.put("paths", Arrays.asList("$.metadata"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -281,7 +276,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveEntireArray() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.tags");
+        config.put("paths", Arrays.asList("$.tags"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -301,7 +296,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveWithNullInput() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.field");
+        config.put("paths", Arrays.asList("$.field"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -314,7 +309,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveWithEmptyObject() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.field");
+        config.put("paths", Arrays.asList("$.field"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -330,7 +325,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveWithComplexNestedStructure() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.response.data.sensitive");
+        config.put("paths", Arrays.asList("$.response.data.sensitive"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -359,7 +354,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemovePreservesOtherFields() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.remove");
+        config.put("paths", Arrays.asList("$.remove"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -380,15 +375,15 @@ public class MLRemoveJsonPathProcessorTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testMissingPathConfig() {
+    public void testMissingPathsConfig() {
         Map<String, Object> config = new HashMap<>();
         new MLRemoveJsonPathProcessor(config);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testEmptyPathConfig() {
+    public void testEmptyPathsList() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "");
+        config.put("paths", Arrays.asList());
 
         new MLRemoveJsonPathProcessor(config);
     }
@@ -396,15 +391,31 @@ public class MLRemoveJsonPathProcessorTest {
     @Test(expected = IllegalArgumentException.class)
     public void testWhitespaceOnlyPath() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "   ");
+        config.put("paths", Arrays.asList("   "));
 
         new MLRemoveJsonPathProcessor(config);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testNullPath() {
+    public void testNullPaths() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", null);
+        config.put("paths", null);
+
+        new MLRemoveJsonPathProcessor(config);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testPathsNotList() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("paths", "$.path");
+
+        new MLRemoveJsonPathProcessor(config);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testNullPathInList() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("paths", Arrays.asList("$.valid", null));
 
         new MLRemoveJsonPathProcessor(config);
     }
@@ -412,7 +423,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveWithInvalidPath() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.invalid..path");
+        config.put("paths", Arrays.asList("$.invalid..path"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -421,7 +432,7 @@ public class MLRemoveJsonPathProcessorTest {
 
         Object result = processor.process(input);
 
-        // Should return original input on error
+        // Should continue processing on error
         assertNotNull(result);
         assertTrue(result instanceof Map);
         Map<String, Object> resultMap = (Map<String, Object>) result;
@@ -431,7 +442,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveRootField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.name");
+        config.put("paths", Arrays.asList("$.name"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -453,7 +464,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveFromEmptyArray() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.items[0]");
+        config.put("paths", Arrays.asList("$.items[0]"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -462,7 +473,7 @@ public class MLRemoveJsonPathProcessorTest {
 
         Object result = processor.process(input);
 
-        // Should return original input when array is empty
+        // Should continue processing when array is empty
         assertNotNull(result);
         assertTrue(result instanceof Map);
         Map<String, Object> resultMap = (Map<String, Object>) result;
@@ -473,7 +484,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveFieldWithSpecialCharacters() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.field-with-dash");
+        config.put("paths", Arrays.asList("$.field-with-dash"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -493,7 +504,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveNumericField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.count");
+        config.put("paths", Arrays.asList("$.count"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -513,7 +524,7 @@ public class MLRemoveJsonPathProcessorTest {
     @Test
     public void testRemoveBooleanField() {
         Map<String, Object> config = new HashMap<>();
-        config.put("path", "$.active");
+        config.put("paths", Arrays.asList("$.active"));
 
         MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
 
@@ -528,5 +539,63 @@ public class MLRemoveJsonPathProcessorTest {
         Map<String, Object> resultMap = (Map<String, Object>) result;
         assertFalse(resultMap.containsKey("active"));
         assertEquals("test", resultMap.get("name"));
+    }
+
+    @Test
+    public void testRemoveMultipleNestedFields() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("paths", Arrays.asList("$.user.email", "$.user.phone", "$.metadata.internal"));
+
+        MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
+
+        Map<String, Object> user = new HashMap<>();
+        user.put("name", "John");
+        user.put("email", "john@example.com");
+        user.put("phone", "555-1234");
+
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("internal", "secret");
+        metadata.put("public", "info");
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("user", user);
+        input.put("metadata", metadata);
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        assertTrue(result instanceof Map);
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+
+        Map<String, Object> userResult = (Map<String, Object>) resultMap.get("user");
+        assertEquals("John", userResult.get("name"));
+        assertFalse(userResult.containsKey("email"));
+        assertFalse(userResult.containsKey("phone"));
+
+        Map<String, Object> metadataResult = (Map<String, Object>) resultMap.get("metadata");
+        assertEquals("info", metadataResult.get("public"));
+        assertFalse(metadataResult.containsKey("internal"));
+    }
+
+    @Test
+    public void testRemoveWithSomeInvalidPaths() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("paths", Arrays.asList("$.password", "$.nonExistent", "$.ssn"));
+
+        MLRemoveJsonPathProcessor processor = new MLRemoveJsonPathProcessor(config);
+
+        Map<String, Object> input = new HashMap<>();
+        input.put("username", "john");
+        input.put("password", "secret");
+        input.put("ssn", "123-45-6789");
+
+        Object result = processor.process(input);
+
+        assertNotNull(result);
+        assertTrue(result instanceof Map);
+        Map<String, Object> resultMap = (Map<String, Object>) result;
+        assertEquals("john", resultMap.get("username"));
+        assertFalse(resultMap.containsKey("password"));
+        assertFalse(resultMap.containsKey("ssn"));
     }
 }

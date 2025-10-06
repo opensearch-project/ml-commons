@@ -227,7 +227,7 @@ public class MLProcessorChainTest {
 
         Map<String, Object> removeConfig = new HashMap<>();
         removeConfig.put("type", "remove_jsonpath");
-        removeConfig.put("path", "$.password");
+        removeConfig.put("paths", Arrays.asList("$.password"));
 
         Map<String, Object> toStringConfig = new HashMap<>();
         toStringConfig.put("type", "to_string");
@@ -247,21 +247,16 @@ public class MLProcessorChainTest {
 
     @Test
     public void testProcessorChainWithRemoveFields() {
-        // Remove password field
-        Map<String, Object> removePasswordConfig = new HashMap<>();
-        removePasswordConfig.put("type", "remove_jsonpath");
-        removePasswordConfig.put("path", "$.password");
-
-        // Remove ssn field
-        Map<String, Object> removeSsnConfig = new HashMap<>();
-        removeSsnConfig.put("type", "remove_jsonpath");
-        removeSsnConfig.put("path", "$.ssn");
+        // Remove password and ssn fields in a single processor
+        Map<String, Object> removeConfig = new HashMap<>();
+        removeConfig.put("type", "remove_jsonpath");
+        removeConfig.put("paths", Arrays.asList("$.password", "$.ssn"));
 
         // Convert to string
         Map<String, Object> toStringConfig = new HashMap<>();
         toStringConfig.put("type", "to_string");
 
-        ProcessorChain chain = new ProcessorChain(Arrays.asList(removePasswordConfig, removeSsnConfig, toStringConfig));
+        ProcessorChain chain = new ProcessorChain(Arrays.asList(removeConfig, toStringConfig));
 
         Map<String, Object> input = new HashMap<>();
         input.put("username", "john");
