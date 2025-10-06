@@ -509,7 +509,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         // Verify that the agent was indexed with updated tools containing model_id
         ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(client).index(indexRequestCaptor.capture(), any());
-        
+
         IndexRequest indexRequest = indexRequestCaptor.getValue();
         assertNotNull(indexRequest);
         String source = indexRequest.source().utf8ToString();
@@ -565,7 +565,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         // Verify that the agent was indexed with tools preserving existing model_id
         ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
         verify(client).index(indexRequestCaptor.capture(), any());
-        
+
         IndexRequest indexRequest = indexRequestCaptor.getValue();
         assertNotNull(indexRequest);
         String source = indexRequest.source().utf8ToString();
