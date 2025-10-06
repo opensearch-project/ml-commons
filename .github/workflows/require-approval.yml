@@ -36,7 +36,8 @@ jobs:
               # Check if the author is in the approvers list
               approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
               is_approved=false
-              for approver in $approvers; do
+              IFS=',' read -ra APPROVER_ARRAY <<< "$approvers"
+              for approver in "${APPROVER_ARRAY[@]}"; do
                 if [[ "$approver" == "$author" ]]; then
                   is_approved=true
                   break
