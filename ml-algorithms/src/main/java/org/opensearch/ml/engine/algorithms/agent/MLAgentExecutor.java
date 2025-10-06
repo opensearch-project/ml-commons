@@ -512,7 +512,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     memory
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
-                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                try {
+                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                } catch (Exception e) {
+                    log.error("Failed to run agent", e);
+                    agentActionListener.onFailure(e);
+                }
             }, e -> {
                 log.error("Failed to create task for agent async execution", e);
                 listener.onFailure(e);
@@ -526,7 +531,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 parentInteractionId,
                 memory
             );
-            mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+            try {
+                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+            } catch (Exception e) {
+                log.error("Failed to run agent", e);
+                agentActionListener.onFailure(e);
+            }
         }
     }
 

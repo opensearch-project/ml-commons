@@ -28,7 +28,7 @@ public class FunctionCallingFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1:
                 return new BedrockConverseDeepseekR1FunctionCalling();
             default:
-                throw new MLException(String.format("Unsupported llm interface: {}.", llmInterface));
+                throw new MLException(String.format("Invalid _llm_interface: %s", llmInterface));
         }
     }
 }
