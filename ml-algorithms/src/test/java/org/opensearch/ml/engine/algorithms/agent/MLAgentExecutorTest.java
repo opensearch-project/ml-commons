@@ -1670,4 +1670,31 @@ public class MLAgentExecutorTest {
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
     }
+
+    @Test
+    public void test_AgentRunnerException_CaughtAndHandled() throws IOException {
+        RuntimeException testException = new RuntimeException("Agent runner threw exception");
+        Mockito.doThrow(testException).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception caughtException = exceptionCaptor.getValue();
+        Assert.assertEquals(testException, caughtException);
+    }
 }

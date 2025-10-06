@@ -17,6 +17,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD;
 
 import java.io.IOException;
@@ -499,5 +500,29 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_execute_registerAgent_InvalidLlmInterface() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_INTERFACE, "invalid_interface");
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .parameters(parameters)
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("Invalid _llm_interface: invalid_interface"));
     }
 }
