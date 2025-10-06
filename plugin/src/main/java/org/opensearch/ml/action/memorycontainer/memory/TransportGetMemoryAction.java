@@ -19,6 +19,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
@@ -66,7 +67,7 @@ public class TransportGetMemoryAction extends HandledTransportAction<ActionReque
         }
         MLGetMemoryRequest getRequest = MLGetMemoryRequest.fromActionRequest(request);
         String memoryContainerId = getRequest.getMemoryContainerId();
-        String memoryType = getRequest.getMemoryType();
+        MemoryType memoryType = getRequest.getMemoryType();
         String memoryId = getRequest.getMemoryId();
 
         // Get memory container to validate access and get memory index name

@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_SUMMARY_PROMPT;
@@ -36,6 +37,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryDecisionRequest;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -68,13 +70,12 @@ public class MemoryProcessingService {
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
-        if ("semantic".equalsIgnoreCase(strategy.getType())
-            || "user_preference".equalsIgnoreCase(strategy.getType())
-            || "summary".equalsIgnoreCase(strategy.getType())) {
+        MemoryStrategyType type = strategy.getType();
+        if (type == MemoryStrategyType.SEMANTIC || type == MemoryStrategyType.USER_PREFERENCE || type == MemoryStrategyType.SUMMARY) {
             extractFactsFromConversation(messages, strategy, memoryConfig, listener);
         } else {
-            log.error("Unsupported memory strategy type: {}", strategy.getType());
-            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + strategy.getType()));
+            log.error("Unsupported memory strategy type: {}", type);
+            listener.onFailure(new IllegalArgumentException("Unsupported memory strategy type: " + type));
         }
     }
 
@@ -84,19 +85,32 @@ public class MemoryProcessingService {
         MemoryConfiguration memoryConfig,
         ActionListener<List<String>> listener
     ) {
-        if (memoryConfig == null || memoryConfig.getLlmId() == null) {
+        String llmModelId = getEffectiveLlmId(strategy, memoryConfig);
+        if (llmModelId == null) {
+            log.debug("No LLM model configured for fact extraction, skipping");
             listener.onResponse(new ArrayList<>());
             return;
         }
 
-        String llmModelId = memoryConfig.getLlmId();
+        boolean isOverride = strategy != null
+            && strategy.getStrategyConfig() != null
+            && strategy.getStrategyConfig().containsKey(LLM_ID_FIELD);
+        log
+            .debug(
+                "Extracting long-term memory facts using LLM model: {} (strategy: {}, source: {})",
+                llmModelId,
+                strategy != null ? strategy.getType() : "unknown",
+                isOverride ? "strategy-override" : "container-config"
+            );
+
         Map<String, String> stringParameters = new HashMap<>();
 
         // Determine default prompt based on strategy type
         String defaultPrompt;
-        if ("user_preference".equalsIgnoreCase(strategy.getType())) {
+        MemoryStrategyType type = strategy.getType();
+        if (type == MemoryStrategyType.USER_PREFERENCE) {
             defaultPrompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
-        } else if ("summary".equalsIgnoreCase(strategy.getType())) {
+        } else if (type == MemoryStrategyType.SUMMARY) {
             defaultPrompt = SUMMARY_FACTS_EXTRACTION_PROMPT;
         } else {
             defaultPrompt = SEMANTIC_FACTS_EXTRACTION_PROMPT;
@@ -106,7 +120,7 @@ public class MemoryProcessingService {
             stringParameters.put("system_prompt", defaultPrompt);
         } else {
             Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
-            if (customPrompt == null || customPrompt.toString().trim().isEmpty()) {
+            if (customPrompt == null || customPrompt.toString().isBlank()) {
                 stringParameters.put("system_prompt", defaultPrompt);
             } else if (!validatePromptFormat(customPrompt.toString())) {
                 log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");
@@ -121,7 +135,7 @@ public class MemoryProcessingService {
             XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
             messagesBuilder.startArray();
             Map<String, Object> strategyConfig = strategy.getStrategyConfig();
-            if (strategyConfig.containsKey("system_prompt_message")) {
+            if (strategyConfig != null && strategyConfig.containsKey("system_prompt_message")) {
                 Object systemPromptMsg = strategyConfig.get("system_prompt_message");
                 if (systemPromptMsg != null && systemPromptMsg instanceof Map) {
                     messagesBuilder.map((Map) systemPromptMsg);
@@ -130,12 +144,12 @@ public class MemoryProcessingService {
             for (MessageInput message : messages) {
                 message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
-            if (strategyConfig.containsKey("user_prompt_message")) {
+            if (strategyConfig != null && strategyConfig.containsKey("user_prompt_message")) {
                 Object userPromptMsg = strategyConfig.get("user_prompt_message");
                 if (userPromptMsg != null && userPromptMsg instanceof Map) {
                     messagesBuilder.map((Map) userPromptMsg);
                 }
-            } else { // Add default user prompt
+            } else { // Add default user prompt (when strategyConfig is null or doesn't have user_prompt_message)
                 MessageInput message = getMessageInput("Please extract information from our conversation so far");
                 message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
@@ -184,16 +198,29 @@ public class MemoryProcessingService {
     public void makeMemoryDecisions(
         List<String> extractedFacts,
         List<FactSearchResult> allSearchResults,
+        MemoryStrategy strategy,
         MemoryConfiguration memoryConfig,
         ActionListener<List<MemoryDecision>> listener
     ) {
-        if (memoryConfig == null || memoryConfig.getLlmId() == null) {
+        String llmModelId = getEffectiveLlmId(strategy, memoryConfig);
+        if (llmModelId == null) {
             log.error("LLM model is required for memory decisions but not configured");
             listener.onFailure(new IllegalStateException("LLM model is required for memory decisions"));
             return;
         }
 
-        String llmModelId = memoryConfig.getLlmId();
+        boolean isOverride = strategy != null
+            && strategy.getStrategyConfig() != null
+            && strategy.getStrategyConfig().containsKey(LLM_ID_FIELD);
+        log
+            .debug(
+                "Making memory decisions using LLM model: {} (strategy: {}, source: {}, facts: {}, similar-memories: {})",
+                llmModelId,
+                strategy != null ? strategy.getType() : "unknown",
+                isOverride ? "strategy-override" : "container-config",
+                extractedFacts.size(),
+                allSearchResults.size()
+            );
 
         List<MemoryDecisionRequest.OldMemory> oldMemories = new ArrayList<>();
         for (FactSearchResult result : allSearchResults) {
@@ -283,7 +310,8 @@ public class MemoryProcessingService {
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
             String llmResultPath = Optional
-                .ofNullable(strategy.getStrategyConfig().get("llm_result_path"))
+                .ofNullable(strategy.getStrategyConfig())
+                .map(config -> config.get("llm_result_path"))
                 .map(Object::toString)
                 .orElse(DEFAULT_LLM_RESULT_PATH);
             Object filterdResult = JsonPath.read(dataMap, llmResultPath);
@@ -471,5 +499,25 @@ public class MemoryProcessingService {
         }
 
         return response;
+    }
+
+    /**
+     * Get the effective LLM model ID, checking strategy override first, then falling back to memory config.
+     *
+     * @param strategy The memory strategy that may contain an llm_id override
+     * @param memoryConfig The memory configuration with default llm_id
+     * @return The effective LLM ID to use, or null if neither provides one
+     */
+    private String getEffectiveLlmId(MemoryStrategy strategy, MemoryConfiguration memoryConfig) {
+        // Check strategy config for override
+        if (strategy != null && strategy.getStrategyConfig() != null) {
+            Object strategyLlmId = strategy.getStrategyConfig().get(LLM_ID_FIELD);
+            if (strategyLlmId != null && !strategyLlmId.toString().isBlank()) {
+                return strategyLlmId.toString();
+            }
+        }
+
+        // Fall back to memory config
+        return memoryConfig != null ? memoryConfig.getLlmId() : null;
     }
 }

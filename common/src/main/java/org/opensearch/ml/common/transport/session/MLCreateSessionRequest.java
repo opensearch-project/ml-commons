@@ -49,7 +49,7 @@ public class MLCreateSessionRequest extends ActionRequest {
             return addValidationError("Session input can't be null", null);
         }
 
-        if (mlCreateSessionInput.getMemoryContainerId() == null || mlCreateSessionInput.getMemoryContainerId().trim().isEmpty()) {
+        if (mlCreateSessionInput.getMemoryContainerId() == null || mlCreateSessionInput.getMemoryContainerId().isBlank()) {
             return addValidationError("Memory container ID is required", null);
         }
 

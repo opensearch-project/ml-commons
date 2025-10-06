@@ -17,6 +17,7 @@ import java.util.List;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
@@ -69,7 +70,8 @@ public class RestMLDeleteMemoryAction extends BaseRestHandler {
     @VisibleForTesting
     MLDeleteMemoryRequest getRequest(RestRequest request) {
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
 
         return MLDeleteMemoryRequest.builder().memoryContainerId(memoryContainerId).memoryType(memoryType).memoryId(memoryId).build();

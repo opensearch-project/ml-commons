@@ -9,8 +9,10 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.List;
 
@@ -26,7 +28,6 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.action.update.UpdateRequest;
@@ -52,6 +53,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -205,13 +207,13 @@ public class MemoryContainerHelper {
 
     /**
      * Get memory index name from container
-     * 
+     *
      * @param container the memory container
      * @return the memory index name or null if not configured
      */
-    public String getMemoryIndexName(MLMemoryContainer container, String memoryType) {
+    public String getMemoryIndexName(MLMemoryContainer container, MemoryType memoryType) {
         MemoryConfiguration config = container.getConfiguration();
-        if (config != null) {
+        if (config != null && memoryType != null) {
             return config.getIndexName(memoryType);
         }
         return null;
@@ -227,40 +229,29 @@ public class MemoryContainerHelper {
         }
     }
 
-    // public void getData(MemoryConfiguration configuration, GetDataObjectRequest getRequest, ActionListener<GetResponse> listener) {
-    // if (configuration.isUseSystemIndex()) {
-    // try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-    // sdkClient.getDataObjectAsync(getRequest).whenComplete(SdkClientUtils.wrapGetCompletion(ActionListener.runBefore(listener,
-    // context::restore)));
-    // }
-    // } else {
-    // sdkClient.getDataObjectAsync(getRequest).whenComplete(SdkClientUtils.wrapGetCompletion(listener));
-    // }
-    // }
-
-    public void searchData(MemoryConfiguration configuration, SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
-        if (configuration.isUseSystemIndex()) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.search(searchRequest, ActionListener.runBefore(listener, context::restore));
-            }
-        } else {
-            client.search(searchRequest, listener);
-        }
-    }
-
     public void searchData(
         MemoryConfiguration configuration,
         SearchDataObjectRequest searchRequest,
         ActionListener<SearchResponse> listener
     ) {
-        if (configuration.isUseSystemIndex()) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                sdkClient
-                    .searchDataObjectAsync(searchRequest)
-                    .whenComplete(SdkClientUtils.wrapSearchCompletion(ActionListener.runBefore(listener, context::restore)));
+        try {
+            if (configuration.isUseSystemIndex()) {
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+                    final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                        .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
+
+                    sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
+                }
+            } else {
+                final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
+                    .wrap(listener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, listener));
+
+                sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
             }
-        } else {
-            sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(listener));
+        } catch (Exception e) {
+            log.error("Failed to search data", e);
+            listener.onFailure(e);
         }
     }
 
@@ -412,7 +403,93 @@ public class MemoryContainerHelper {
         return filteredQuery;
     }
 
+    /**
+     * Add memory container ID filter to a SearchSourceBuilder.
+     * This ensures that searches only return memories from the specified container,
+     * preventing cross-container access when multiple containers share the same index prefix.
+     *
+     * @param containerId The memory container ID to filter by
+     * @param searchSourceBuilder The search source builder to update
+     * @return The updated search source builder with container ID filter applied
+     */
+    public SearchSourceBuilder addContainerIdFilter(String containerId, SearchSourceBuilder searchSourceBuilder) {
+        if (containerId == null || containerId.isBlank()) {
+            return searchSourceBuilder;
+        }
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+
+        return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
+    }
+
+    /**
+     * Add memory container ID filter to a QueryBuilder.
+     * This ensures that queries only match memories from the specified container,
+     * preventing cross-container access when multiple containers share the same index prefix.
+     *
+     * @param containerId The memory container ID to filter by
+     * @param query The original query to filter
+     * @return The filtered query with container ID restriction
+     */
+    public QueryBuilder addContainerIdFilter(String containerId, QueryBuilder query) {
+        if (containerId == null || containerId.isBlank()) {
+            return query;
+        }
+
+        BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+        filteredQuery.must(query);
+        filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+
+        return filteredQuery;
+    }
+
     public String getOwnerId(User user) {
         return user != null ? user.getName() : null;
+    }
+
+    /**
+     * Count memory containers with the specified index prefix
+     *
+     * @param indexPrefix the index prefix to search for
+     * @param tenantId the tenant ID (optional)
+     * @param listener action listener returning the count
+     */
+    public void countContainersWithPrefix(String indexPrefix, String tenantId, ActionListener<Long> listener) {
+        if (indexPrefix == null || indexPrefix.isBlank()) {
+            listener.onResponse(0L);
+            return;
+        }
+
+        // Build search query for containers with matching index prefix
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(QueryBuilders.termQuery("configuration.index_prefix", indexPrefix));
+        searchSourceBuilder.size(0); // We only need the total count
+        searchSourceBuilder.trackTotalHits(true);
+
+        SearchDataObjectRequest.Builder requestBuilder = SearchDataObjectRequest
+            .builder()
+            .indices(ML_MEMORY_CONTAINER_INDEX)
+            .searchSourceBuilder(searchSourceBuilder);
+
+        if (tenantId != null) {
+            requestBuilder.tenantId(tenantId);
+        }
+
+        SearchDataObjectRequest searchRequest = requestBuilder.build();
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(ActionListener.wrap(response -> {
+                long totalHits = response.getHits().getTotalHits().value();
+                listener.onResponse(totalHits);
+            }, e -> {
+                log.error("Failed to count containers with prefix: " + indexPrefix, e);
+                listener.onFailure(e);
+            }), context::restore);
+
+            sdkClient.searchDataObjectAsync(searchRequest).whenComplete(SdkClientUtils.wrapSearchCompletion(wrappedListener));
+        } catch (Exception e) {
+            log.error("Failed to search for containers with prefix: " + indexPrefix, e);
+            listener.onFailure(e);
+        }
     }
 }
