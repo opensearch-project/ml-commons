@@ -83,6 +83,11 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String INDEX_NAME_FIELD = "index_name";
     private static final int MAX_TRUNCATE_CHARS = 250;
     private static final String TRUNC_PREFIX = "[truncated]";
+    // Agent context parameter keys to ignore
+    private static final String CHAT_HISTORY_FIELD = "_chat_history";
+    private static final String TOOLS_FIELD = "_tools";
+    private static final String INTERACTIONS_FIELD = "_interactions";
+    private static final String TOOL_CONFIGS_FIELD = "tool_configs";
 
     @Getter
     private final String generationType;
@@ -131,7 +136,7 @@ public class QueryPlanningTool implements WithModelTool {
         // Drop agent-specific metadata that can bias or slow query planning; keep all other non-null params.
         // This enables using the same LLM for both the agent and the Query Planning Tool.
         // Excluded keys: _chat_history, _tools, _interactions, tool_configs
-        Set<String> blacklistedParams = Set.of("_chat_history", "_tools", "_interactions", "tool_configs");
+        Set<String> blacklistedParams = Set.of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
 
         return originalParameters
             .entrySet()
@@ -168,18 +173,18 @@ public class QueryPlanningTool implements WithModelTool {
 
             // Template Selection, replace user and system prompts
             Map<String, String> templateSelectionParameters = new HashMap<>(parameters);
-            if (templateSelectionParameters.containsKey(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD)) {
-                templateSelectionParameters
-                    .put(SYSTEM_PROMPT_FIELD, templateSelectionParameters.get(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD));
-            } else {
-                templateSelectionParameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT);
-            }
+            templateSelectionParameters
+                .put(
+                    SYSTEM_PROMPT_FIELD,
+                    templateSelectionParameters
+                        .getOrDefault(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT)
+                );
 
-            if (templateSelectionParameters.containsKey(TEMPLATE_SELECTION_USER_PROMPT_FIELD)) {
-                templateSelectionParameters.put(USER_PROMPT_FIELD, templateSelectionParameters.get(TEMPLATE_SELECTION_USER_PROMPT_FIELD));
-            } else {
-                templateSelectionParameters.put(USER_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_USER_PROMPT);
-            }
+            templateSelectionParameters
+                .put(
+                    USER_PROMPT_FIELD,
+                    templateSelectionParameters.getOrDefault(TEMPLATE_SELECTION_USER_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_USER_PROMPT)
+                );
 
             templateSelectionParameters.put(SEARCH_TEMPLATES_FIELD, searchTemplates);
 
@@ -219,17 +224,10 @@ public class QueryPlanningTool implements WithModelTool {
     private <T> void executeQueryPlanning(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             // Execute Query Planning, replace System and User prompt fields
-            if (parameters.containsKey(QUERY_PLANNER_SYSTEM_PROMPT_FIELD)) {
-                parameters.put(SYSTEM_PROMPT_FIELD, parameters.get(QUERY_PLANNER_SYSTEM_PROMPT_FIELD));
-            } else {
-                parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
-            }
+            parameters
+                .put(SYSTEM_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT));
 
-            if (parameters.containsKey(QUERY_PLANNER_USER_PROMPT_FIELD)) {
-                parameters.put(USER_PROMPT_FIELD, parameters.get(QUERY_PLANNER_USER_PROMPT_FIELD));
-            } else {
-                parameters.put(USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT);
-            }
+            parameters.put(USER_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT));
 
             if (parameters.containsKey(QUERY_FIELDS_FIELD)) {
                 parameters.put(QUERY_FIELDS_FIELD, gson.toJson(parameters.get(QUERY_FIELDS_FIELD)));
