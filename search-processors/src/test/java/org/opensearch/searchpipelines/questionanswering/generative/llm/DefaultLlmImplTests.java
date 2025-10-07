@@ -143,6 +143,58 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
     }
 
+    public void testChatCompletionApiForBedrockClaudeV3() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        // Claude V3-style response
+        Map<String, Object> textPart = Map.of("type", "text", "text", "Hello from Claude V3");
+        Map<String, Object> dataAsMap = Map.of("content", List.of(textPart));
+
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+
+        ChatCompletionInput input = new ChatCompletionInput(
+            "bedrock/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK,
+            null,
+            null
+        );
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                // Verify that we parsed the Claude V3 response correctly
+                assertEquals("Hello from Claude V3", output.getAnswers().get(0));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Claude V3 test failed: " + e.getMessage());
+            }
+        });
+
+        verify(mlClient, times(1)).predict(any(), captor.capture(), any());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+    }
+
     public void testChatCompletionApiForBedrock() throws Exception {
         MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
