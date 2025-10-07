@@ -45,7 +45,6 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
@@ -92,7 +91,6 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isMetricCollectionEnabled());
         assertTrue(setting.isStaticMetricCollectionEnabled());
         assertTrue(setting.isMcpConnectorEnabled());
-        assertTrue(setting.isAgenticSearchEnabled());
         assertTrue(setting.isAgenticMemoryEnabled());
         assertTrue(setting.isStreamEnabled());
     }
@@ -134,7 +132,6 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isMetricCollectionEnabled());
         assertFalse(setting.isStaticMetricCollectionEnabled());
         assertFalse(setting.isMcpConnectorEnabled());
-        assertFalse(setting.isAgenticSearchEnabled());
         assertFalse(setting.isAgenticMemoryEnabled());
         assertFalse(setting.isStreamEnabled());
     }
