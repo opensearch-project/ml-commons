@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_FORMAT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
@@ -15,16 +14,17 @@ import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_USER_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE;
-import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.TEMPLATE_SELECTION_SYSTEM_PROMPT;
-import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.TEMPLATE_SELECTION_USER_PROMPT;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_TEMPLATE_SELECTION_USER_PROMPT;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -35,7 +35,6 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -59,8 +58,12 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String TYPE = "QueryPlanningTool";
     public static final String MODEL_ID_FIELD = "model_id";
     private final MLModelTool queryGenerationTool;
-    public static final String SYSTEM_PROMPT_FIELD = "query_planner_system_prompt";
-    public static final String USER_PROMPT_FIELD = "query_planner_user_prompt";
+    public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String USER_PROMPT_FIELD = "user_prompt";
+    public static final String QUERY_PLANNER_SYSTEM_PROMPT_FIELD = "query_planner_system_prompt";
+    public static final String QUERY_PLANNER_USER_PROMPT_FIELD = "query_planner_user_prompt";
+    public static final String TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD = "template_selection_system_prompt";
+    public static final String TEMPLATE_SELECTION_USER_PROMPT_FIELD = "template_selection_user_prompt";
     public static final String INDEX_MAPPING_FIELD = "index_mapping";
     public static final String QUERY_FIELDS_FIELD = "query_fields";
     public static final String GENERATION_TYPE_FIELD = "generation_type";
@@ -77,6 +80,13 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String INDEX_NAME_FIELD = "index_name";
     private static final int MAX_TRUNCATE_CHARS = 250;
     private static final String TRUNC_PREFIX = "[truncated]";
+    // Agent context parameter keys to ignore
+    private static final String CHAT_HISTORY_FIELD = "_chat_history";
+    private static final String TOOLS_FIELD = "_tools";
+    private static final String INTERACTIONS_FIELD = "_interactions";
+    private static final String TOOL_CONFIGS_FIELD = "tool_configs";
+    private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set
+        .of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
 
     @Getter
     private final String generationType;
@@ -121,10 +131,22 @@ public class QueryPlanningTool implements WithModelTool {
         this.attributes = new HashMap<>(DEFAULT_ATTRIBUTES);
     }
 
+    private Map<String, String> stripAgentContextParameters(Map<String, String> originalParameters) {
+        // Drop agent-specific metadata that can bias or slow query planning; keep all other non-null params.
+        // This enables using the same LLM for both the agent and the Query Planning Tool.
+        // Excluded keys: _chat_history, _tools, _interactions, tool_configs
+
+        return originalParameters
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getValue() != null && !AGENT_CONTEXT_EXCLUDED_PARAMS.contains(entry.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
-            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
+            Map<String, String> parameters = stripAgentContextParameters(ToolUtils.extractInputParameters(originalParameters, attributes));
             if (!validate(parameters)) {
                 listener
                     .onFailure(
@@ -149,8 +171,19 @@ public class QueryPlanningTool implements WithModelTool {
 
             // Template Selection, replace user and system prompts
             Map<String, String> templateSelectionParameters = new HashMap<>(parameters);
-            templateSelectionParameters.put(SYSTEM_PROMPT_FIELD, TEMPLATE_SELECTION_SYSTEM_PROMPT);
-            templateSelectionParameters.put(USER_PROMPT_FIELD, TEMPLATE_SELECTION_USER_PROMPT);
+            templateSelectionParameters
+                .put(
+                    SYSTEM_PROMPT_FIELD,
+                    templateSelectionParameters
+                        .getOrDefault(TEMPLATE_SELECTION_SYSTEM_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT)
+                );
+
+            templateSelectionParameters
+                .put(
+                    USER_PROMPT_FIELD,
+                    templateSelectionParameters.getOrDefault(TEMPLATE_SELECTION_USER_PROMPT_FIELD, DEFAULT_TEMPLATE_SELECTION_USER_PROMPT)
+                );
+
             templateSelectionParameters.put(SEARCH_TEMPLATES_FIELD, searchTemplates);
 
             ActionListener<T> templateSelectionListener = ActionListener.wrap(r -> {
@@ -185,16 +218,14 @@ public class QueryPlanningTool implements WithModelTool {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private <T> void executeQueryPlanning(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             // Execute Query Planning, replace System and User prompt fields
-            if (!parameters.containsKey(SYSTEM_PROMPT_FIELD)) {
-                parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
-            }
+            parameters
+                .put(SYSTEM_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT));
 
-            if (!parameters.containsKey(USER_PROMPT_FIELD)) {
-                parameters.put(USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT);
-            }
+            parameters.put(USER_PROMPT_FIELD, parameters.getOrDefault(QUERY_PLANNER_USER_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_USER_PROMPT));
 
             if (parameters.containsKey(QUERY_FIELDS_FIELD)) {
                 parameters.put(QUERY_FIELDS_FIELD, gson.toJson(parameters.get(QUERY_FIELDS_FIELD)));
@@ -360,7 +391,6 @@ public class QueryPlanningTool implements WithModelTool {
     public static class Factory implements WithModelTool.Factory<QueryPlanningTool> {
         private Client client;
         private static volatile Factory INSTANCE;
-        private static MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
         public static Factory getInstance() {
             if (INSTANCE != null) {
@@ -375,17 +405,12 @@ public class QueryPlanningTool implements WithModelTool {
             }
         }
 
-        public void init(Client client, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        public void init(Client client) {
             this.client = client;
-            this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         }
 
         @Override
         public QueryPlanningTool create(Map<String, Object> map) {
-
-            if (!mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
-                throw new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE);
-            }
 
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(map);
 

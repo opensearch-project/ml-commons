@@ -13,8 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
@@ -33,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.service.ClusterService;
@@ -109,8 +108,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENTIC_SEARCH_ENABLED)));
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
         transportRegisterAgentAction = new TransportRegisterAgentAction(
             transportService,
             actionFilters,
@@ -377,13 +375,13 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_execute_registerAgent_QueryPlanningTool_AgenticSearchDisabled() {
-        // Create an MLAgent with QueryPlanningTool
+    public void test_execute_registerAgent_QueryPlanningTool_addsModelId_whenMissing() {
+        // Create QueryPlanningTool without model_id parameter
         MLToolSpec queryPlanningTool = new MLToolSpec(
             QueryPlanningTool.TYPE,
             "QueryPlanningTool",
             "QueryPlanningTool",
-            Collections.emptyMap(),
+            Collections.emptyMap(), // No parameters
             Collections.emptyMap(),
             false,
             Collections.emptyMap(),
@@ -396,52 +394,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             .name("agent")
             .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
+            .llm(new LLMSpec("test_model_id", new HashMap<>()))
             .tools(List.of(queryPlanningTool))
             .build();
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
-
-        // Explicitly disable agentic search feature
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(false);
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void test_execute_registerAgent_QueryPlanningTool_AgenticSearchEnabled() {
-        // Create an MLAgent with QueryPlanningTool
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        // Enable agentic search feature
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -457,10 +415,70 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         transportRegisterAgentAction.doExecute(task, request, actionListener);
 
-        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-        assertNotNull(argumentCaptor.getValue());
-        assertEquals("AGENT_ID", argumentCaptor.getValue().getAgentId());
+        // Verify that the agent was indexed with updated tools containing model_id
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertNotNull(indexRequest);
+        String source = indexRequest.source().utf8ToString();
+        assertTrue("Agent source should contain model_id", source.contains("\"model_id\":\"test_model_id\""));
+    }
+
+    @Test
+    public void test_execute_registerAgent_QueryPlanningTool_preservesExistingModelId() {
+        // Create QueryPlanningTool with existing model_id parameter
+        Map<String, String> existingParams = new HashMap<>();
+        existingParams.put("model_id", "existing_model_id");
+        existingParams.put("other_param", "other_value");
+
+        MLToolSpec queryPlanningTool = new MLToolSpec(
+            QueryPlanningTool.TYPE,
+            "QueryPlanningTool",
+            "QueryPlanningTool",
+            existingParams,
+            Collections.emptyMap(),
+            false,
+            Collections.emptyMap(),
+            null,
+            null
+        );
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("description")
+            .llm(new LLMSpec("new_model_id", new HashMap<>()))
+            .tools(List.of(queryPlanningTool))
+            .build();
+
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        // Verify that the agent was indexed with tools preserving existing model_id
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest indexRequest = indexRequestCaptor.getValue();
+        assertNotNull(indexRequest);
+        String source = indexRequest.source().utf8ToString();
+        assertTrue("Agent source should contain existing model_id", source.contains("\"model_id\":\"existing_model_id\""));
+        assertTrue("Agent source should contain other_param", source.contains("\"other_param\":\"other_value\""));
     }
 
     @Test
