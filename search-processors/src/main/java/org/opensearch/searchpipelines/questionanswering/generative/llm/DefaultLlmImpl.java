@@ -191,8 +191,40 @@ public class DefaultLlmImpl implements Llm {
                 answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
             }
         } else if (provider == ModelProvider.BEDROCK) {
-            answerField = "completion";
-            fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
+            // Handle both Claude V2 and V3 response formats
+            if (dataAsMap.containsKey("completion")) {
+                // Old Claude V2 format
+                answerField = "completion";
+                fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
+            } else if (dataAsMap.containsKey("content")) {
+                // New Claude V3 format
+                Object contentObj = dataAsMap.get("content");
+                if (contentObj instanceof List) {
+                    List<?> contentList = (List<?>) contentObj;
+                    if (!contentList.isEmpty()) {
+                        Object first = contentList.get(0);
+                        if (first instanceof Map) {
+                            Map<?, ?> firstMap = (Map<?, ?>) first;
+                            Object text = firstMap.get("text");
+                            if (text != null) {
+                                answers.add(text.toString());
+                            } else {
+                                errors.add("Claude V3 response missing 'text' field.");
+                            }
+                        } else {
+                            errors.add("Unexpected content format in Claude V3 response.");
+                        }
+                    } else {
+                        errors.add("Empty content list in Claude V3 response.");
+                    }
+                } else {
+                    errors.add("Unexpected type for 'content' in Claude V3 response.");
+                }
+            } else {
+                // Fallback error handling
+                errors.add("Unsupported Claude response format: " + dataAsMap.keySet());
+                log.error("Unknown Bedrock/Claude response format: {}", dataAsMap);
+            }
         } else if (provider == ModelProvider.COHERE) {
             answerField = "text";
             fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
