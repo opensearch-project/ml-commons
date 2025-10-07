@@ -19,7 +19,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIELD;
@@ -93,9 +92,6 @@ public class QueryPlanningToolTests {
     @Mock
     private MLModelTool queryGenerationTool;
 
-    @Mock
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
     private Map<String, String> validParams;
     private Map<String, String> emptyParams;
 
@@ -126,11 +122,10 @@ public class QueryPlanningToolTests {
         when(adminClient.cluster()).thenReturn(clusterAdminClient);
 
         // Mock the MLFeatureEnabledSetting to return true for agentic search
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         // Initialize the factory with mocked dependencies
         factory = QueryPlanningTool.Factory.getInstance();
-        factory.init(client, mlFeatureEnabledSetting);
+        factory.init(client);
 
         validParams = new HashMap<>();
         validParams.put(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT);
@@ -567,7 +562,7 @@ public class QueryPlanningToolTests {
         Map<String, String> parameters = new HashMap<>();
         parameters.put(QUESTION_FIELD, "test query");
         parameters.put(INDEX_NAME_FIELD, "testIndex");
-        // Blacklisted keys that should be removed
+        // Excluded keys that should be removed
         parameters.put("_chat_history", "should be removed");
         parameters.put("_tools", "should be removed");
         parameters.put("_interactions", "should be removed");
@@ -584,7 +579,7 @@ public class QueryPlanningToolTests {
         future.get();
 
         Map<String, String> capturedParams = paramsCaptor.getValue();
-        // Blacklist
+        // Excluded parameters
         assertFalse(capturedParams.containsKey("_chat_history"));
         assertFalse(capturedParams.containsKey("_tools"));
         assertFalse(capturedParams.containsKey("_interactions"));
@@ -805,18 +800,6 @@ public class QueryPlanningToolTests {
         // User prompt should be processed
         assertTrue(capturedParams.containsKey("user_prompt"));
         assertEquals("custom user prompt", capturedParams.get("user_prompt"));
-    }
-
-    @Test
-    public void testFactoryCreateWhenAgenticSearchDisabled() {
-        // Mock the MLFeatureEnabledSetting to return false for agentic search
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(false);
-
-        Map<String, Object> map = new HashMap<>();
-        map.put(MODEL_ID_FIELD, "modelId");
-
-        Exception exception = assertThrows(OpenSearchException.class, () -> factory.create(map));
-        assertEquals(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE, exception.getMessage());
     }
 
     @Test

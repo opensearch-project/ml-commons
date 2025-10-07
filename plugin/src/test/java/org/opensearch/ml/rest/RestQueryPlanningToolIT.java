@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.GENERATION_TYPE_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SEARCH_TEMPLATES_FIELD;
@@ -63,8 +62,6 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         if (OPENAI_KEY == null) {
             return;
         }
-        // enable agentic search
-        updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey(), true);
         queryPlanningModelId = registerQueryPlanningModel();
     }
 

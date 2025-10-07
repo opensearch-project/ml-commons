@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_FORMAT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
@@ -88,6 +87,7 @@ public class QueryPlanningTool implements WithModelTool {
     private static final String TOOLS_FIELD = "_tools";
     private static final String INTERACTIONS_FIELD = "_interactions";
     private static final String TOOL_CONFIGS_FIELD = "tool_configs";
+    private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set.of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
 
     @Getter
     private final String generationType;
@@ -136,12 +136,11 @@ public class QueryPlanningTool implements WithModelTool {
         // Drop agent-specific metadata that can bias or slow query planning; keep all other non-null params.
         // This enables using the same LLM for both the agent and the Query Planning Tool.
         // Excluded keys: _chat_history, _tools, _interactions, tool_configs
-        Set<String> blacklistedParams = Set.of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
 
         return originalParameters
             .entrySet()
             .stream()
-            .filter(entry -> entry.getValue() != null && !blacklistedParams.contains(entry.getKey()))
+            .filter(entry -> entry.getValue() != null && !AGENT_CONTEXT_EXCLUDED_PARAMS.contains(entry.getKey()))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
@@ -393,7 +392,6 @@ public class QueryPlanningTool implements WithModelTool {
     public static class Factory implements WithModelTool.Factory<QueryPlanningTool> {
         private Client client;
         private static volatile Factory INSTANCE;
-        private static MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
         public static Factory getInstance() {
             if (INSTANCE != null) {
@@ -408,17 +406,12 @@ public class QueryPlanningTool implements WithModelTool {
             }
         }
 
-        public void init(Client client, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        public void init(Client client) {
             this.client = client;
-            Factory.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         }
 
         @Override
         public QueryPlanningTool create(Map<String, Object> map) {
-
-            if (!mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
-                throw new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE);
-            }
 
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(map);
 

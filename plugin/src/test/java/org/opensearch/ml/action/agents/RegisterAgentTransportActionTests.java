@@ -13,8 +13,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
@@ -111,7 +109,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENTIC_SEARCH_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
         transportRegisterAgentAction = new TransportRegisterAgentAction(
             transportService,
             actionFilters,
@@ -378,93 +376,6 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void test_execute_registerAgent_QueryPlanningTool_AgenticSearchDisabled() {
-        // Create an MLAgent with QueryPlanningTool
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        // Explicitly disable agentic search feature
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(false);
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<OpenSearchException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE, argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void test_execute_registerAgent_QueryPlanningTool_AgenticSearchEnabled() {
-        // Create an MLAgent with QueryPlanningTool
-        MLToolSpec queryPlanningTool = new MLToolSpec(
-            QueryPlanningTool.TYPE,
-            "QueryPlanningTool",
-            "QueryPlanningTool",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            false,
-            Collections.emptyMap(),
-            null,
-            null
-        );
-
-        MLAgent mlAgent = MLAgent
-            .builder()
-            .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
-            .description("description")
-            .llm(new LLMSpec("model_id", new HashMap<>()))
-            .tools(List.of(queryPlanningTool))
-            .build();
-
-        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-        when(request.getMlAgent()).thenReturn(mlAgent);
-
-        // Enable agentic search feature
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLAgentIndex(any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        transportRegisterAgentAction.doExecute(task, request, actionListener);
-
-        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-        assertNotNull(argumentCaptor.getValue());
-        assertEquals("AGENT_ID", argumentCaptor.getValue().getAgentId());
-    }
-
-    @Test
     public void test_execute_registerAgent_QueryPlanningTool_addsModelId_whenMissing() {
         // Create QueryPlanningTool without model_id parameter
         MLToolSpec queryPlanningTool = new MLToolSpec(
@@ -490,7 +401,6 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -546,7 +456,6 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
         when(request.getMlAgent()).thenReturn(mlAgent);
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);

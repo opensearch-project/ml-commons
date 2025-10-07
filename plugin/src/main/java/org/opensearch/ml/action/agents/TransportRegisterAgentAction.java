@@ -7,7 +7,6 @@ package org.opensearch.ml.action.agents;
 
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 
@@ -93,28 +92,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
 
         // Update QueryPlanningTool to include model_id if missing
-        List<MLToolSpec> tools = agent.getTools();
-        List<MLToolSpec> updatedTools = tools;
-        if (tools != null) {
-            // Check if agentic search is enabled when QueryPlanningTool is present
-            boolean hasQueryPlanningTool = tools.stream().anyMatch(tool -> tool.getType().equals(QueryPlanningTool.TYPE));
-            if (hasQueryPlanningTool && !mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
-                listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
-                return;
-            }
-
-            // Update QueryPlanningTool with model_id if missing and LLM exists
-            if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
-                updatedTools = tools.stream().map(tool -> {
-                    if (tool.getType().equals(QueryPlanningTool.TYPE)) {
-                        Map<String, String> params = tool.getParameters() != null ? new HashMap<>(tool.getParameters()) : new HashMap<>();
-                        params.putIfAbsent("model_id", agent.getLlm().getModelId());
-                        return tool.toBuilder().parameters(params).build();
-                    }
-                    return tool;
-                }).collect(Collectors.toList());
-            }
-        }
+        List<MLToolSpec> updatedTools = processQueryPlanenrTools(agent);
 
         String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
         if (llmInterface != null) {
@@ -151,6 +129,25 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         } else {
             registerAgentToIndex(mlAgent, tenantId, listener);
         }
+    }
+
+    private List<MLToolSpec> processQueryPlanenrTools(MLAgent agent){
+        List<MLToolSpec> tools = agent.getTools();
+        List<MLToolSpec> updatedTools = tools;
+        if (tools != null) {
+            // Update QueryPlanningTool with model_id if missing and LLM exists
+            if (agent.getLlm() != null && agent.getLlm().getModelId() != null && !agent.getLlm().getModelId().isBlank()) {
+                updatedTools = tools.stream().map(tool -> {
+                    if (tool.getType().equals(QueryPlanningTool.TYPE)) {
+                        Map<String, String> params = tool.getParameters() != null ? new HashMap<>(tool.getParameters()) : new HashMap<>();
+                        params.putIfAbsent("model_id", agent.getLlm().getModelId());
+                        return tool.toBuilder().parameters(params).build();
+                    }
+                    return tool;
+                }).collect(Collectors.toList());
+            }
+        }
+        return updatedTools;
     }
 
     private void createConversationAgent(MLAgent planExecuteReflectAgent, String tenantId, ActionListener<String> listener) {
