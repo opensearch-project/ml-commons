@@ -19,6 +19,7 @@ import java.util.List;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryInput;
@@ -76,7 +77,8 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
         }
 
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
 
         XContentParser parser = request.contentParser();

@@ -38,6 +38,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -137,7 +138,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_Success() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -193,7 +194,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_GetContainerFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -221,7 +222,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_AccessDenied() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -256,7 +257,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_MemoryIndexNotExists() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -287,7 +288,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_DeleteFailue_MemoryNotExists() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -332,7 +333,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_ExceptionDuringDelete_NoAccess() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -383,7 +384,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_ExceptionDuringDelete_FailedToDelete() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -434,7 +435,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testDoExecute_NullContainer() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest deleteRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
@@ -465,7 +466,7 @@ public class TransportDeleteMemoryActionTests extends OpenSearchTestCase {
     public void testFromActionRequest() {
         // Test that MLDeleteMemoryRequest.fromActionRequest works correctly
         String memoryContainerId = "container-123";
-        String memoryType = "conversation";
+        MemoryType memoryType = MemoryType.SESSIONS;
         String memoryId = "memory-456";
         MLDeleteMemoryRequest originalRequest = new MLDeleteMemoryRequest(memoryContainerId, memoryType, memoryId);
 
