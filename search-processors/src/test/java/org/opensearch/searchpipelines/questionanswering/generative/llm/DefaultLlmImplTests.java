@@ -629,7 +629,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         connector.setMlClient(mlClient);
 
-        String errorMessage = "throttled";
+        String errorMessage = "Unsupported Claude response format";
         Map<String, String> messageMap = Map.of("message", errorMessage);
         Map<String, ?> dataAsMap = Map.of("error", messageMap);
         ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
@@ -657,7 +657,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             @Override
             public void onResponse(ChatCompletionOutput output) {
                 assertTrue(output.isErrorOccurred());
-                assertEquals(errorMessage, output.getErrors().get(0));
+                assertTrue(output.getErrors().get(0).startsWith(errorMessage));
             }
 
             @Override
