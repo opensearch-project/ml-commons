@@ -32,6 +32,9 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * Change the setting name to same naming convention with others ([#4215](https://github.com/opensearch-project/ml-commons/pull/4215))
 * Enabling agentic memory feature by default as we are going GA ([#4240](https://github.com/opensearch-project/ml-commons/pull/4240))
 * Add parameter to control delete memories when delete container ([#4238](https://github.com/opensearch-project/ml-commons/pull/4238))
+* [Agent Framework] Exception handling for runtime exceptions during async execution ([#4263](https://github.com/opensearch-project/ml-commons/pull/4263))
+* Refactor and add more validation to processor chain ([#4260](https://github.com/opensearch-project/ml-commons/pull/4260))
+* [Agentic Search] Use same model for Agent and QPT ([#4262](https://github.com/opensearch-project/ml-commons/pull/4262))
 
 ### Bug Fixes
 * Fix NPE when execute flow agent with mutli tenancy is off ([#4189](https://github.com/opensearch-project/ml-commons/pull/4189))
@@ -53,10 +56,14 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * Skip the model interface validation for batch predict ([#4219](https://github.com/opensearch-project/ml-commons/pull/4219))
 * Fix: use builtin BulkByScrollResponse parser to parse delete by query response in memories ([#4237](https://github.com/opensearch-project/ml-commons/pull/4237))
 * Fix stream predict with security enabled ([#4248](https://github.com/opensearch-project/ml-commons/pull/4248))
+* Fix wrong field name in get working memory API ([#4255](https://github.com/opensearch-project/ml-commons/pull/4255))
+* Fix: allow only container owner to delete memory container ([#4258](https://github.com/opensearch-project/ml-commons/pull/4258))
 
 ### Infrastructure
 * Update maintainer list ([#4139](https://github.com/opensearch-project/ml-commons/pull/4139))
 * Downloads test certificates from security plugin ([#4245](https://github.com/opensearch-project/ml-commons/pull/4245))
+* Update approver matching to be exact match ([#4247](https://github.com/opensearch-project/ml-commons/pull/4247))
+* Fix approver parsing bug in require-approval workflow ([#4259](https://github.com/opensearch-project/ml-commons/pull/4259))
 
 ### Documentation
 * Add colpali blueprint ([#4130](https://github.com/opensearch-project/ml-commons/pull/4130))
