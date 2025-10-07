@@ -1670,4 +1670,43 @@ public class MLAgentExecutorTest {
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
     }
+
+    @Test
+    public void test_AgentRunnerException() throws IOException {
+        // Reset mocks to ensure clean state
+        Mockito.reset(mlAgentRunner);
+
+        RuntimeException testException = new RuntimeException("Agent runner threw exception");
+        Mockito.doThrow(testException).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task-123", 1, 0, 2, true);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput output = (MLTaskOutput) objectCaptor.getValue();
+        Assert.assertEquals("task-123", output.getTaskId());
+    }
 }

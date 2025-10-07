@@ -40,6 +40,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -143,6 +144,21 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                     listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
                     return;
                 }
+            }
+        }
+
+        String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
+        if (llmInterface != null) {
+            if (llmInterface.trim().isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("_llm_interface cannot be blank or empty"));
+                return;
+            }
+
+            try {
+                FunctionCallingFactory.create(llmInterface);
+            } catch (Exception e) {
+                listener.onFailure(new IllegalArgumentException("Invalid _llm_interface: " + llmInterface));
+                return;
             }
         }
 
