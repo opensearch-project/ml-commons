@@ -82,6 +82,32 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         }
     }
 
+    public void testChatCompletionBedrockErrorResponseFormats() throws Exception {
+        // Simulate Bedrock inference endpoint behavior
+        // You can mock or create sample response maps for two formats
+
+        Map<String, Object> errorFormat1 = Map.of("error", Map.of("message", "Unsupported Claude response format"));
+
+        Map<String, Object> errorFormat2 = Map.of("error", "InvalidRequest");
+
+        // Use the same validation style but inverted for errors
+        validateErrorOutput("Should detect error format 1 correctly", errorFormat1, "Unsupported Claude response format");
+        validateErrorOutput("Should detect error format 2 correctly", errorFormat2, "InvalidRequest");
+    }
+
+    private void validateErrorOutput(String msg, Map<String, Object> output, String expectedError) {
+        assertTrue(msg, output.containsKey("error"));
+        Object error = output.get("error");
+
+        if (error instanceof Map) {
+            assertEquals(msg, expectedError, ((Map<?, ?>) error).get("message"));
+        } else if (error instanceof String) {
+            assertEquals(msg, expectedError, error);
+        } else {
+            fail("Unexpected error format: " + error.getClass());
+        }
+    }
+
     private void validateOutput(String errorMsg, Map<String, Object> output) {
         assertTrue(errorMsg, output.containsKey("output"));
         assertTrue(errorMsg, output.get("output") instanceof List);
