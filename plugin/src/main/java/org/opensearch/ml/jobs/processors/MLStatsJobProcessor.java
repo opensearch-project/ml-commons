@@ -159,7 +159,6 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                                         ActionListener.wrap(connector -> {
                                             Tags modelTags = model.getTags(connector);
                                             modelTagsCache.put(modelId, modelTags);
-                                            log.info("model: {}", modelTags.getTagsMap());
                                             MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.MODEL_COUNT, modelTags);
                                         }, e -> log.error("Failed to get connector for model: {}", modelId, e))
                                     );
@@ -170,7 +169,6 @@ public class MLStatsJobProcessor extends MLJobProcessor {
 
                         Tags modelTags = model.getTags();
                         modelTagsCache.put(modelId, modelTags);
-                        log.info("model: {}", modelTags.getTagsMap());
                         MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.MODEL_COUNT, modelTags);
                     } catch (Exception e) {
                         log.error("Failed to parse model from hit: {}", hit.getId(), e);
@@ -228,7 +226,6 @@ public class MLStatsJobProcessor extends MLJobProcessor {
                                 addTagIfExists(tagsMap, MODEL_TAG_TYPE, TAG_AGENT_MODEL_TYPE, agentTags);
                             });
 
-                        log.info("Agent: {}", agentTags.getTagsMap());
                         MLAdoptionMetricsCounter.getInstance().incrementCounter(AdoptionMetric.AGENT_COUNT, agentTags);
                     } catch (Exception e) {
                         log.error("Failed to parse agent from hit: {}", hit.getId(), e);
