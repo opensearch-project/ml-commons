@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.GENERATION_TYPE_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SEARCH_TEMPLATES_FIELD;
@@ -52,7 +51,7 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         + "        \"headers\": {\n"
         + "          \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
         + "        },\n"
-        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.query_planner_system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.query_planner_user_prompt}\\\"}]}\"\n"
+        + "        \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": [{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"${parameters.system_prompt}\\\"},{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"${parameters.user_prompt}\\\"}]}\"\n"
         + "      }\n"
         + "    ]\n"
         + "}";
@@ -63,8 +62,6 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         if (OPENAI_KEY == null) {
             return;
         }
-        // enable agentic search
-        updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey(), true);
         queryPlanningModelId = registerQueryPlanningModel();
     }
 
@@ -106,9 +103,9 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
 
         // Create Search Templates
         String templateBody = "{\"script\":{\"lang\":\"mustache\",\"source\":{\"query\":{\"match\":{\"type\":\"{{type}}\"}}}}}";
-        Response response = createSearchTemplate("type_search_template", templateBody);
+        createSearchTemplate("type_search_template", templateBody);
         templateBody = "{\"script\":{\"lang\":\"mustache\",\"source\":{\"query\":{\"term\":{\"type\":\"{{type}}\"}}}}}";
-        response = createSearchTemplate("type_search_template_2", templateBody);
+        createSearchTemplate("type_search_template_2", templateBody);
 
         // Register agent with search template IDs
         String agentName = "Test_AgentWithQueryPlanningTool_SearchTemplates";
