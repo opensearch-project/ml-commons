@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 
@@ -75,7 +74,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
-import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
@@ -475,15 +473,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
-        }
-        List<MLToolSpec> tools = mlAgent.getTools();
-        if (tools != null) {
-            for (MLToolSpec tool : tools) {
-                if (tool.getType().equals(QueryPlanningTool.TYPE) && !mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
-                    listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
-                    return;
-                }
-            }
         }
 
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
