@@ -92,7 +92,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
 
         // Update QueryPlanningTool to include model_id if missing
-        List<MLToolSpec> updatedTools = processQueryPlanenrTools(agent);
+        List<MLToolSpec> updatedTools = processQueryPlannerTools(agent);
 
         String llmInterface = (agent.getParameters() != null) ? agent.getParameters().get(LLM_INTERFACE) : null;
         if (llmInterface != null) {
@@ -131,7 +131,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
     }
 
-    private List<MLToolSpec> processQueryPlanenrTools(MLAgent agent) {
+    private List<MLToolSpec> processQueryPlannerTools(MLAgent agent) {
         List<MLToolSpec> tools = agent.getTools();
         List<MLToolSpec> updatedTools = tools;
         if (tools != null) {
