@@ -95,6 +95,7 @@ public class StringUtils {
             .registerTypeAdapter(ModelTensor.class, new ToStringTypeAdapter<>(ModelTensor.class))
             .registerTypeAdapter(ModelTensorOutput.class, new ToStringTypeAdapter<>(ModelTensorOutput.class))
             .registerTypeAdapter(ModelTensors.class, new ToStringTypeAdapter<>(ModelTensors.class))
+            .serializeNulls()
             .create();
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
