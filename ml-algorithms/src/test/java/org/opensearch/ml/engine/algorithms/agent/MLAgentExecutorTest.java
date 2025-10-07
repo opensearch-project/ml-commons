@@ -178,8 +178,7 @@ public class MLAgentExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
 
         // Mock MLFeatureEnabledSetting
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);

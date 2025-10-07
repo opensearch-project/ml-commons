@@ -108,8 +108,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
         transportRegisterAgentAction = new TransportRegisterAgentAction(
             transportService,
             actionFilters,

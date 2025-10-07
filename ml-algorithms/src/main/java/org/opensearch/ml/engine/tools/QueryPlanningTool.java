@@ -25,7 +25,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.admin.cluster.storedscripts.GetStoredScriptRequest;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -36,7 +35,6 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -87,7 +85,8 @@ public class QueryPlanningTool implements WithModelTool {
     private static final String TOOLS_FIELD = "_tools";
     private static final String INTERACTIONS_FIELD = "_interactions";
     private static final String TOOL_CONFIGS_FIELD = "tool_configs";
-    private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set.of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
+    private static final Set<String> AGENT_CONTEXT_EXCLUDED_PARAMS = Set
+        .of(CHAT_HISTORY_FIELD, TOOLS_FIELD, INTERACTIONS_FIELD, TOOL_CONFIGS_FIELD);
 
     @Getter
     private final String generationType;

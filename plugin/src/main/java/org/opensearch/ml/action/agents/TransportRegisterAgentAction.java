@@ -131,7 +131,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
     }
 
-    private List<MLToolSpec> processQueryPlanenrTools(MLAgent agent){
+    private List<MLToolSpec> processQueryPlanenrTools(MLAgent agent) {
         List<MLToolSpec> tools = agent.getTools();
         List<MLToolSpec> updatedTools = tools;
         if (tools != null) {
