@@ -26,12 +26,19 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.AgentModelService;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.tools.QueryPlanningTool;
@@ -78,8 +85,57 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
-        registerAgent(mlAgent, listener);
+        
+        // Check if this agent needs model creation (new simplified format)
+        if (mlAgent.getModel() != null) {
+            createModelForAgent(mlAgent, mlAgent.getModel(), listener);
+        } else {
+            // Legacy format or already has model ID
+            registerAgent(mlAgent, listener);
+        }
     }
+
+    private void createModelForAgent(MLAgent mlAgent, MLAgentModelSpec modelSpec, ActionListener<MLRegisterAgentResponse> listener) {
+        try {
+            MLRegisterModelInput modelInput = AgentModelService.createModelFromSpec(modelSpec);
+            MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
+            
+            client.execute(MLRegisterModelAction.INSTANCE, modelRequest, 
+                ActionListener.wrap(modelResponse -> {
+                    String modelId = modelResponse.getModelId();
+
+                    // Infer _llm_interface from model_provider if not provided
+                    Map<String, String> parameters = new HashMap<>();
+                    if (mlAgent.getParameters() != null) {
+                        parameters.putAll(mlAgent.getParameters());
+                    }
+                    
+                    if (!parameters.containsKey("_llm_interface") && modelSpec.getModelProvider() != null) {
+                        String llmInterface = AgentModelService.inferLLMInterface(modelSpec.getModelProvider());
+                        if (llmInterface != null) {
+                            parameters.put("_llm_interface", llmInterface);
+                        }
+                    }
+
+                    LLMSpec llmSpec = LLMSpec.builder()
+                        .modelId(modelId)
+                        .parameters(parameters)
+                        .build();
+                    
+                    // Create final agent with LLM spec and remove model spec
+                    MLAgent finalAgent = mlAgent.toBuilder()
+                        .llm(llmSpec)
+                        .parameters(parameters)
+                        .build();
+                        
+                    registerAgent(finalAgent, listener);
+                }, listener::onFailure));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+    
+
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         String mcpConnectorConfigJSON = (agent.getParameters() != null) ? agent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
