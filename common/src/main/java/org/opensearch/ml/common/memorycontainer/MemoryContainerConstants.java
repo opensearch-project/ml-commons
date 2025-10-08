@@ -150,24 +150,30 @@ public class MemoryContainerConstants {
     public static final String SCORE_FIELD = "score";
 
     // LLM System Prompts
-    public static final String SEMANTIC_FACTS_EXTRACTION_PROMPT =
-        "You are a universal semantic fact extraction agent. Write FULL-SENTENCE, self-contained facts suitable for long-term memory.\n\n"
-            + "SCOPE\n"
-            + "• Include facts from USER messages.\n"
-            + "• Also include ASSISTANT-authored statements that are clearly presented as conclusions/results/validated findings (e.g., root cause, quantified impact, confirmed fix).\n"
-            + "• Ignore ASSISTANT questions, hypotheses, tentative language, brainstorming, instructions, or tool prompts unless explicitly confirmed as outcomes.\n\n"
-            + "STYLE & RULES\n"
-            + "• One sentence per fact; merge closely related details (metrics, entities, causes, scope) into the same sentence.\n"
-            + "• Do NOT start with \"User\" or pronouns.\n"
-            + "• Prefer absolute over relative time; if only relative (e.g., \"yesterday\"), omit it rather than guessing.\n"
-            + "• Preserve terminology, names, numbers, and units; avoid duplicates and chit-chat.\n"
-            + "• No speculation or hedging unless those words appear verbatim in the source.\n\n"
-            + "OUTPUT\n"
-            + "Return ONLY a single JSON object on one line, minified exactly as {\"facts\":[\"...\"]} (array of strings only; no other keys). No code fences, no newlines/tabs, and no spaces after commas or colons. If no meaningful facts, return {\"facts\":[]}.";
+    public static final String SEMANTIC_FACTS_EXTRACTION_PROMPT = """
+        <ROLE>You are a universal semantic fact extraction agent. Write FULL-SENTENCE, self-contained facts suitable for long-term memory.</ROLE>
+
+        <SCOPE>
+        • Include facts from USER messages.
+        • Also include ASSISTANT-authored statements that are clearly presented as conclusions/results/validated findings (e.g., root cause, quantified impact, confirmed fix).
+        • Ignore ASSISTANT questions, hypotheses, tentative language, brainstorming, instructions, or tool prompts unless explicitly confirmed as outcomes.
+        </SCOPE>
+
+        <STYLE & RULES>
+        • One sentence per fact; merge closely related details (metrics, entities, causes, scope) into the same sentence.
+        • Do NOT start with "User" or pronouns.
+        • Prefer absolute over relative time; if only relative (e.g., "yesterday"), omit it rather than guessing.
+        • Preserve terminology, names, numbers, and units; avoid duplicates and chit-chat.
+        • No speculation or hedging unless those words appear verbatim in the source.
+        </STYLE & RULES>
+
+        <OUTPUT>
+        Return ONLY a single JSON object on one line, minified exactly as {"facts":["..."]} (array of strings only; no other keys). No code fences, no newlines/tabs, and no spaces after commas or colons. If no meaningful facts, return {"facts":[]}.
+        </OUTPUT>""";
 
     // JSON enforcement message to append to all fact extraction requests
-    public static final String JSON_ENFORCEMENT_MESSAGE =
-        "Respond NOW with ONE LINE of valid JSON ONLY exactly as {\"facts\":[\"fact1\",\"fact2\",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.";
+    public static final String JSON_ENFORCEMENT_MESSAGE = """
+        Respond NOW with ONE LINE of valid JSON ONLY exactly as {"facts":["fact1","fact2",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.""";
 
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
         "<system_prompt><role>User Preferences Analyzer</role><objective>Extract and organize user preferences, choices, and settings from conversations.</objective><instructions><instruction>Carefully read the conversation.</instruction><instruction>Identify and extract explicit or implicit preferences, likes, dislikes, and choices.</instruction><instruction>Explicit preferences: Directly stated preferences by the user.</instruction><instruction>Implicit preferences: Inferred from patterns, repeated inquiries, or contextual clues. Take a close look at user's request for implicit preferences.</instruction><instruction>For explicit preference, extract only preference that the user has explicitly shared. Do not infer user's preference.</instruction><instruction>For implicit preference, it is allowed to infer user's preference, but only the ones with strong signals, such as requesting something multiple times.</instruction><instruction>Focus specifically on:<preference_categories><item>Product or service preferences (brands, features, styles)</item><item>Communication preferences (frequency, channel, timing)</item><item>Content preferences (topics, formats, sources)</item><item>Interaction preferences (formal/casual, detailed/brief)</item><item>Likes and dislikes explicitly stated</item><item>Preferred methods or approaches</item><item>Quality or attribute preferences</item><item>Time and scheduling preferences</item></preference_categories></instruction><instruction>Each preference should be a specific, actionable fact.</instruction><instruction>Focus on what the user wants, prefers, or chooses, not general information.</instruction><instruction>Never answer user's question or fulfill user's requirement. You are a preference analyzer, not a helpful assistant.</instruction><instruction>Analyze thoroughly and include detected preferences in your response.</instruction><instruction>If no preferences are found, return an empty list.</instruction></instructions><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array. Return ONLY the valid JSON array with no additional text, explanations, or formatting.</format><example>{\"facts\": [\"User prefers dark mode for UI\",\"User likes to receive weekly summary emails\",\"User prefers Python over Java for scripting\",\"User dislikes automatic updates\"]}</example></response_format></system_prompt>";
