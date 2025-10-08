@@ -540,6 +540,7 @@ public class MemoryProcessingServiceTests {
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -547,7 +548,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```json\n{\"memory_decisions\": []}\n```");
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```json\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -571,6 +574,7 @@ public class MemoryProcessingServiceTests {
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -578,7 +582,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```\n{\"memory_decisions\": []}\n```");
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
