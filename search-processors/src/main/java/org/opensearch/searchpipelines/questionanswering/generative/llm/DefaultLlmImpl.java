@@ -52,6 +52,9 @@ public class DefaultLlmImpl implements Llm {
     private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
     private static final String CONNECTOR_OUTPUT_MESSAGE_CONTENT = "content";
     private static final String CONNECTOR_OUTPUT_ERROR = "error";
+    private static final String CLAUDE_V2_COMPLETION_FIELD = "completion";
+    private static final String CLAUDE_V3_CONTENT_FIELD = "content";
+    private static final String CLAUDE_V3_TEXT_FIELD = "text";
 
     private final String openSearchModelId;
 
@@ -192,24 +195,24 @@ public class DefaultLlmImpl implements Llm {
             }
         } else if (provider == ModelProvider.BEDROCK) {
             // Handle both Claude V2 and V3 response formats
-            if (dataAsMap.containsKey("completion")) {
+            if (dataAsMap.containsKey(CLAUDE_V2_COMPLETION_FIELD)) {
                 // Old Claude V2 format
-                answerField = "completion";
+                answerField = CLAUDE_V2_COMPLETION_FIELD;
                 fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
-            } else if (dataAsMap.containsKey("content")) {
+            } else if (dataAsMap.containsKey(CLAUDE_V3_CONTENT_FIELD)) {
                 // New Claude V3 format
-                Object contentObj = dataAsMap.get("content");
+                Object contentObj = dataAsMap.get(CLAUDE_V3_CONTENT_FIELD);
                 if (contentObj instanceof List) {
                     List<?> contentList = (List<?>) contentObj;
                     if (!contentList.isEmpty()) {
                         Object first = contentList.get(0);
                         if (first instanceof Map) {
                             Map<?, ?> firstMap = (Map<?, ?>) first;
-                            Object text = firstMap.get("text");
+                            Object text = firstMap.get(CLAUDE_V3_TEXT_FIELD);
                             if (text != null) {
                                 answers.add(text.toString());
                             } else {
-                                errors.add("Claude V3 response missing 'text' field.");
+                                errors.add("Claude V3 response missing '" + CLAUDE_V3_TEXT_FIELD + "' field.");
                             }
                         } else {
                             errors.add("Unexpected content format in Claude V3 response.");
@@ -218,7 +221,7 @@ public class DefaultLlmImpl implements Llm {
                         errors.add("Empty content list in Claude V3 response.");
                     }
                 } else {
-                    errors.add("Unexpected type for 'content' in Claude V3 response.");
+                    errors.add("Unexpected type for '" + CLAUDE_V3_CONTENT_FIELD + "' in Claude V3 response.");
                 }
             } else {
                 // Fallback error handling
