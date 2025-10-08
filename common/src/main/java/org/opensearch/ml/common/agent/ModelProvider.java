@@ -15,7 +15,6 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
  * Abstract base class for model providers
  */
 public abstract class ModelProvider {
-
     /**
      * Creates a connector for this model provider
      * @param modelName the model name (e.g., "us.anthropic.claude-3-7-sonnet-20250219-v1:0")
@@ -41,7 +40,6 @@ public abstract class ModelProvider {
     public abstract String getLLMInterface();
 
     // Input mapping methods for converting standardized AgentInput to provider-specific parameters
-
     /**
      * Maps simple text input to provider-specific request body parameters.
      * Each provider implements this to convert text to their specific format.
