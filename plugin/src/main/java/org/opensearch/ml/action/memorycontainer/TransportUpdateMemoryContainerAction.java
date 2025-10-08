@@ -29,14 +29,19 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryContainerRequest;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.helper.MemoryContainerModelValidator;
+import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
+import org.opensearch.ml.helper.MemoryContainerSharedIndexValidator;
 import org.opensearch.ml.helper.StrategyMergeHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -60,6 +65,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
     final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     final MLModelManager mlModelManager;
     final MemoryContainerHelper memoryContainerHelper;
+    final MLIndicesHandler mlIndicesHandler;
 
     @Inject
     public TransportUpdateMemoryContainerAction(
@@ -71,7 +77,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLModelManager mlModelManager,
-        MemoryContainerHelper memoryContainerHelper
+        MemoryContainerHelper memoryContainerHelper,
+        MLIndicesHandler mlIndicesHandler
     ) {
         super(MLUpdateMemoryContainerAction.NAME, transportService, actionFilters, MLUpdateMemoryContainerRequest::new);
         this.client = client;
@@ -81,6 +88,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlModelManager = mlModelManager;
         this.memoryContainerHelper = memoryContainerHelper;
+        this.mlIndicesHandler = mlIndicesHandler;
     }
 
     @Override
@@ -98,8 +106,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         String newName = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getName();
         String newDescription = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getDescription();
         List<String> allowedBackendRoles = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getBackendRoles();
-        List<MemoryStrategy> updateStrategies = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getStrategies();
-        String newLlmId = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getLlmId();
+        MemoryConfiguration updateConfiguration = mlUpdateMemoryContainerRequest.getMlUpdateMemoryContainerInput().getConfiguration();
 
         // Get memory container to validate access
         memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
@@ -128,49 +135,57 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                 updateFields.put(BACKEND_ROLES_FIELD, allowedBackendRoles);
             }
 
-            // Handle configuration updates (strategies and/or llmId)
-            if ((updateStrategies != null && !updateStrategies.isEmpty()) || newLlmId != null) {
+            // Handle configuration updates
+            if (updateConfiguration != null) {
                 try {
                     MemoryConfiguration currentConfig = container.getConfiguration();
 
-                    // Merge strategies if provided, otherwise keep existing
-                    List<MemoryStrategy> finalStrategies;
-                    if (updateStrategies != null && !updateStrategies.isEmpty()) {
-                        List<MemoryStrategy> existingStrategies = currentConfig.getStrategies();
-                        finalStrategies = StrategyMergeHelper.mergeStrategies(existingStrategies, updateStrategies);
+                    // Validate embedding update (prevent changing existing embedding configuration)
+                    validateEmbeddingUpdate(currentConfig, updateConfiguration);
+
+                    // Capture original state BEFORE any updates (to detect transition)
+                    boolean hadNoStrategies = currentConfig.getStrategies() == null || currentConfig.getStrategies().isEmpty();
+
+                    // Merge strategies if provided
+                    final MemoryConfiguration finalUpdateConfig;
+                    if (updateConfiguration.getStrategies() != null && !updateConfiguration.getStrategies().isEmpty()) {
+                        List<MemoryStrategy> mergedStrategies = StrategyMergeHelper
+                            .mergeStrategies(currentConfig.getStrategies(), updateConfiguration.getStrategies());
+                        // Create a new configuration with merged strategies for update
+                        // IMPORTANT: Preserve embedding fields from update request
+                        finalUpdateConfig = MemoryConfiguration
+                            .builder()
+                            .llmId(updateConfiguration.getLlmId())
+                            .maxInferSize(updateConfiguration.getMaxInferSize())
+                            .strategies(mergedStrategies)
+                            .embeddingModelId(updateConfiguration.getEmbeddingModelId())
+                            .embeddingModelType(updateConfiguration.getEmbeddingModelType())
+                            .dimension(updateConfiguration.getDimension())
+                            .build();
                     } else {
-                        finalStrategies = currentConfig.getStrategies();
+                        finalUpdateConfig = updateConfiguration;
                     }
 
-                    // Use new llmId if provided, otherwise keep current
-                    String finalLlmId = newLlmId != null ? newLlmId : currentConfig.getLlmId();
+                    // Update current configuration with non-null values from finalUpdateConfig
+                    currentConfig.update(finalUpdateConfig);
 
-                    // Create updated configuration with merged/updated values
-                    MemoryConfiguration updatedConfig = MemoryConfiguration
-                        .builder()
-                        .indexPrefix(currentConfig.getIndexPrefix())
-                        .llmId(finalLlmId)
-                        .embeddingModelType(currentConfig.getEmbeddingModelType())
-                        .embeddingModelId(currentConfig.getEmbeddingModelId())
-                        .dimension(currentConfig.getDimension())
-                        .maxInferSize(currentConfig.getMaxInferSize())
-                        .strategies(finalStrategies)
-                        .indexSettings(currentConfig.getIndexSettings())
-                        .parameters(currentConfig.getParameters())
-                        .disableHistory(currentConfig.isDisableHistory())
-                        .disableSession(currentConfig.isDisableSession())
-                        .useSystemIndex(currentConfig.isUseSystemIndex())
-                        .tenantId(currentConfig.getTenantId())
-                        .build();
+                    // Validate the merged configuration satisfies all input constraints
+                    currentConfig.validate();
 
-                    updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, updatedConfig);
-                    log
-                        .info(
-                            "Updated configuration for container {}: llmId={}, strategies={}",
-                            memoryContainerId,
-                            newLlmId != null,
-                            updateStrategies != null && !updateStrategies.isEmpty()
-                        );
+                    // Validate the merged configuration has required AI models for strategies
+                    MemoryConfiguration.validateStrategiesRequireModels(currentConfig);
+
+                    // Detect no-strategies → has-strategies transition (hadNoStrategies captured before update)
+                    boolean nowHasStrategies = currentConfig.getStrategies() != null && !currentConfig.getStrategies().isEmpty();
+
+                    if (hadNoStrategies && nowHasStrategies) {
+                        // Transition detected - must create long-term and history indices
+                        validateAndCreateIndices(container, currentConfig, updateFields, memoryContainerId, actionListener);
+                        return; // Early return - validateAndCreateIndices will call performUpdate
+                    }
+
+                    // No transition - proceed with normal update
+                    updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, currentConfig);
                 } catch (Exception e) {
                     log.error("Failed to update configuration for container {}", memoryContainerId, e);
                     actionListener.onFailure(e);
@@ -181,6 +196,59 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
             updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
             performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, actionListener);
         }, actionListener::onFailure));
+    }
+
+    /**
+     * Validates that embedding configuration updates are allowed.
+     *
+     * Rules:
+     * - If container has NO strategies: Embedding updates are allowed (no long-term index exists)
+     * - If container HAS strategies: Embedding cannot be changed (long-term index exists with locked mapping)
+     * - Idempotent updates (same values) are always allowed
+     *
+     * @param currentConfig Current memory configuration
+     * @param updateConfig Update request configuration
+     * @throws IllegalArgumentException if attempting to change existing embedding when strategies exist
+     */
+    private void validateEmbeddingUpdate(MemoryConfiguration currentConfig, MemoryConfiguration updateConfig) {
+        // If current container has no strategies, allow embedding config updates
+        // No long-term memory index exists yet, so no conflict
+        if (currentConfig.getStrategies() == null || currentConfig.getStrategies().isEmpty()) {
+            log.debug("Container has no strategies - allowing embedding configuration update");
+            return;
+        }
+
+        // Container HAS strategies - long-term index exists
+        // Apply strict validation to prevent changing existing embedding config
+        boolean currentHasEmbedding = currentConfig.getEmbeddingModelId() != null;
+        boolean updateHasEmbedding = updateConfig.getEmbeddingModelId() != null
+            || updateConfig.getEmbeddingModelType() != null
+            || updateConfig.getDimension() != null;
+
+        if (currentHasEmbedding && updateHasEmbedding) {
+            // Check if trying to change to different values
+            boolean idChanged = updateConfig.getEmbeddingModelId() != null
+                && !updateConfig.getEmbeddingModelId().equals(currentConfig.getEmbeddingModelId());
+            boolean typeChanged = updateConfig.getEmbeddingModelType() != null
+                && !updateConfig.getEmbeddingModelType().equals(currentConfig.getEmbeddingModelType());
+            boolean dimensionChanged = updateConfig.getDimension() != null
+                && !updateConfig.getDimension().equals(currentConfig.getDimension());
+
+            if (idChanged || typeChanged || dimensionChanged) {
+                throw new IllegalArgumentException(
+                    "Cannot change embedding configuration once strategies are configured. "
+                        + "The long-term memory index already exists with specific embedding mappings. "
+                        + "Current: {embedding_model_id="
+                        + currentConfig.getEmbeddingModelId()
+                        + ", embedding_model_type="
+                        + currentConfig.getEmbeddingModelType()
+                        + ", dimension="
+                        + currentConfig.getDimension()
+                        + "}. "
+                        + "Create a new memory container if you need different embedding configuration."
+                );
+            }
+        }
     }
 
     private void performUpdate(
@@ -197,5 +265,132 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
             log.error("Failed to update memory container {}", memoryContainerId, e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Validates models and creates long-term/history indices when adding strategies.
+     * Entry point for validation chain - validates LLM and embedding models, then creates indices.
+     */
+    private void validateAndCreateIndices(
+        MLMemoryContainer container,
+        MemoryConfiguration config,
+        Map<String, Object> updateFields,
+        String memoryContainerId,
+        ActionListener<UpdateResponse> listener
+    ) {
+        // Validate LLM model using helper
+        MemoryContainerModelValidator.validateLlmModel(config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
+            // LLM validated, now validate embedding model
+            MemoryContainerModelValidator
+                .validateEmbeddingModel(
+                    config.getEmbeddingModelId(),
+                    config.getEmbeddingModelType(),
+                    mlModelManager,
+                    client,
+                    ActionListener.wrap(embeddingValid -> {
+                        // Both models validated, proceed to shared index validation and creation
+                        validateSharedIndexAndCreateIndices(container, config, updateFields, memoryContainerId, listener);
+                    }, listener::onFailure)
+                );
+        }, listener::onFailure));
+    }
+
+    /**
+     * Validates shared index compatibility and creates indices.
+     * Checks if long-term index already exists (shared scenario).
+     */
+    private void validateSharedIndexAndCreateIndices(
+        MLMemoryContainer container,
+        MemoryConfiguration config,
+        Map<String, Object> updateFields,
+        String memoryContainerId,
+        ActionListener<UpdateResponse> listener
+    ) {
+        String longTermIndexName = config.getLongMemoryIndexName();
+
+        // Use helper to validate shared index compatibility
+        MemoryContainerSharedIndexValidator
+            .validateSharedIndexCompatibility(config, longTermIndexName, client, ActionListener.wrap(result -> {
+                if (result.isIndexExists() && result.isCompatible()) {
+                    // Index exists and is compatible - only create history index
+                    createHistoryIndexOnly(config, updateFields, memoryContainerId, listener);
+                } else if (!result.isIndexExists()) {
+                    // Index doesn't exist - create both long-term and history indices
+                    createLongTermAndHistoryIndices(container, config, updateFields, memoryContainerId, listener);
+                } else {
+                    // Index exists but is incompatible (should not reach here as validator throws exception)
+                    listener.onFailure(new IllegalStateException("Unexpected validation state: index exists but compatibility is false"));
+                }
+            }, listener::onFailure));
+    }
+
+    /**
+     * Creates only history index (long-term index already exists in shared scenario).
+     */
+    private void createHistoryIndexOnly(
+        MemoryConfiguration config,
+        Map<String, Object> updateFields,
+        String memoryContainerId,
+        ActionListener<UpdateResponse> listener
+    ) {
+        if (!config.isDisableHistory()) {
+            String historyIndexName = config.getLongMemoryHistoryIndexName();
+
+            mlIndicesHandler.createLongTermMemoryHistoryIndex(historyIndexName, config, ActionListener.wrap(success -> {
+                updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
+                updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+                performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
+            }, e -> {
+                log.error("Failed to create history index '{}': {}", historyIndexName, e.getMessage(), e);
+                listener.onFailure(new IllegalStateException("Failed to create history index: " + e.getMessage()));
+            }));
+        } else {
+            updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
+            updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+            performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
+        }
+    }
+
+    /**
+     * Creates both long-term and history indices (fresh creation scenario).
+     */
+    private void createLongTermAndHistoryIndices(
+        MLMemoryContainer container,
+        MemoryConfiguration config,
+        Map<String, Object> updateFields,
+        String memoryContainerId,
+        ActionListener<UpdateResponse> listener
+    ) {
+        String longTermIndexName = config.getLongMemoryIndexName();
+        String historyIndexName = config.getLongMemoryHistoryIndexName();
+
+        // Create ingest pipeline and long-term index
+        createLongTermMemoryIngestPipeline(longTermIndexName, config, ActionListener.wrap(success -> {
+            // Create history index if not disabled
+            if (!config.isDisableHistory()) {
+                mlIndicesHandler.createLongTermMemoryHistoryIndex(historyIndexName, config, ActionListener.wrap(historySuccess -> {
+                    updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
+                    updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+                    performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
+                }, e -> {
+                    log.error("Failed to create history index '{}': {}", historyIndexName, e.getMessage(), e);
+                    listener.onFailure(new IllegalStateException("Failed to create history index: " + e.getMessage()));
+                }));
+            } else {
+                updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
+                updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+                performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
+            }
+        }, e -> {
+            log.error("Failed to create long-term index '{}': {}", longTermIndexName, e.getMessage(), e);
+            listener.onFailure(new IllegalStateException("Failed to create long-term index: " + e.getMessage()));
+        }));
+    }
+
+    /**
+     * Creates ingest pipeline and long-term index.
+     */
+    private void createLongTermMemoryIngestPipeline(String indexName, MemoryConfiguration config, ActionListener<Boolean> listener) {
+        MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline(indexName, config, mlIndicesHandler, client, listener);
     }
 }
