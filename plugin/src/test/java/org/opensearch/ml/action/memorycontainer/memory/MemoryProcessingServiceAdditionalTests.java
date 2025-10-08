@@ -174,4 +174,238 @@ public class MemoryProcessingServiceAdditionalTests {
 
         verify(client).execute(any(), any(), any());
     }
+
+    @Test
+    public void testExtractFactsFromConversation_WithProcessorChainExtractingJson() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        Map<String, Object> contentItem = new HashMap<>();
+        // Simulate LLM response with JSON wrapped in markdown code block
+        contentItem.put("text", "```json\n{\"facts\": [\"User prefers dark mode\", \"User is from Seattle\"]}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+        verify(factsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithProcessorChainExtractingNestedJson() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        Map<String, Object> contentItem = new HashMap<>();
+        // Simulate LLM response with nested JSON object
+        contentItem.put("text", "{\"result\": {\"facts\": [\"User name is Alice\", \"User age is 30\"]}}");
+        dataMap.put("content", Arrays.asList(contentItem));
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+        verify(factsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithProcessorChainMultipleTensors() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor1 = mock(ModelTensor.class);
+        ModelTensor mockTensor2 = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap1 = new HashMap<>();
+        Map<String, Object> contentItem1 = new HashMap<>();
+        contentItem1.put("text", "{\"facts\": [\"Fact from tensor 1\"]}");
+        dataMap1.put("content", Arrays.asList(contentItem1));
+
+        Map<String, Object> dataMap2 = new HashMap<>();
+        Map<String, Object> contentItem2 = new HashMap<>();
+        contentItem2.put("text", "{\"facts\": [\"Fact from tensor 2\"]}");
+        dataMap2.put("content", Arrays.asList(contentItem2));
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor1, mockTensor2));
+        when(mockTensor1.getDataAsMap()).thenReturn((Map) dataMap1);
+        when(mockTensor2.getDataAsMap()).thenReturn((Map) dataMap2);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+        verify(factsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithProcessorChainCleaningMarkdown() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        Map<String, Object> contentItem = new HashMap<>();
+        // Simulate LLM response with markdown code block (common LLM behavior)
+        contentItem.put("text", "```\n{\"facts\": [\"User prefers light theme\"]}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+        // cleanMarkdownFromJson should strip the markdown before ProcessorChain processes it
+        verify(factsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithProcessorChainEmptyFacts() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        Map<String, Object> contentItem = new HashMap<>();
+        // LLM returns empty facts array
+        contentItem.put("text", "{\"facts\": []}");
+        dataMap.put("content", Arrays.asList(contentItem));
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+        verify(factsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_WithProcessorChainComplexJsonStructure() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(createTestContent("Test message")).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
+        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        Map<String, Object> contentItem = new HashMap<>();
+        // Complex JSON with additional metadata that should be ignored
+        contentItem
+            .put(
+                "text",
+                "{\"facts\": [\"User speaks English\", \"User is a developer\"], \"metadata\": {\"confidence\": 0.95}, \"timestamp\": \"2024-01-01\"}"
+            );
+        dataMap.put("content", Arrays.asList(contentItem));
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+        // Should extract only the facts array, ignoring other fields
+        verify(factsListener).onResponse(any(List.class));
+    }
 }
