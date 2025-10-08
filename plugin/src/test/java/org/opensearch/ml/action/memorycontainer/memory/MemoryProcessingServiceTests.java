@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -25,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -36,6 +38,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceTests {
@@ -928,6 +931,50 @@ public class MemoryProcessingServiceTests {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_JsonEnforcementMessageAppended() {
+        // Test that JSON enforcement message is always appended to fact extraction requests
+        Map<String, Object> strategyConfig = new HashMap<>();
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        // Capture the request to verify JSON enforcement message is included
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            Map<String, String> parameters = dataset.getParameters();
+            String messagesJson = parameters.get("messages");
+
+            // Verify that the JSON enforcement message is included in the messages
+            assertTrue(
+                "JSON enforcement message should be included",
+                messagesJson.contains("Respond NOW with ONE LINE of valid JSON ONLY")
+            );
+
+            // Mock successful response
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "{\"facts\":[\"Test fact\"]}")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            MLTaskResponse output = MLTaskResponse
+                .builder()
+                .output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build())
+                .build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
         memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
 
