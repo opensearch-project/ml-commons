@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_FACTS_EXTRACTION_PROMPT;
@@ -159,6 +160,11 @@ public class MemoryProcessingService {
                 MessageInput message = getMessageInput("Please extract information from our conversation so far");
                 message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
             }
+
+            // Always add JSON enforcement message for fact extraction
+            MessageInput enforcementMessage = getMessageInput(JSON_ENFORCEMENT_MESSAGE);
+            enforcementMessage.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
+
             messagesBuilder.endArray();
             String messagesJson = messagesBuilder.toString();
             stringParameters.put("messages", messagesJson);
