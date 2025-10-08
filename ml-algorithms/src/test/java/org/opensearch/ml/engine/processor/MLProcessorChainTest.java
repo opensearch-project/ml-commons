@@ -220,6 +220,95 @@ public class MLProcessorChainTest {
     }
 
     @Test
+    public void testExtractProcessorConfigsWithCustomParamName() {
+        Map<String, Object> params = new HashMap<>();
+        params
+            .put(
+                "input_processors",
+                Arrays.asList(createProcessorConfig("to_string"), createProcessorConfig("regex_replace", "pattern", "test"))
+            );
+
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(params, "input_processors");
+
+        assertNotNull(configs);
+        assertEquals(2, configs.size());
+        assertEquals("to_string", configs.get(0).get("type"));
+        assertEquals("regex_replace", configs.get(1).get("type"));
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithCustomParamNameFromJsonString() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("custom_processors", "[{\"type\": \"to_string\"}, {\"type\": \"regex_replace\"}]");
+
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(params, "custom_processors");
+
+        assertNotNull(configs);
+        assertEquals(2, configs.size());
+        assertEquals("to_string", configs.get(0).get("type"));
+        assertEquals("regex_replace", configs.get(1).get("type"));
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithCustomParamNameNotFound() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("output_processors", Arrays.asList(createProcessorConfig("to_string")));
+
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(params, "input_processors");
+
+        assertNotNull(configs);
+        assertEquals(0, configs.size());
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithCustomParamNameNullParams() {
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(null, "input_processors");
+
+        assertNotNull(configs);
+        assertEquals(0, configs.size());
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithCustomParamNameInvalidJson() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("custom_processors", "{invalid json}");
+
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(params, "custom_processors");
+
+        assertNotNull(configs);
+        assertEquals(0, configs.size());
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithCustomParamNameNullJsonResult() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("custom_processors", "null");
+
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(params, "custom_processors");
+
+        assertNotNull(configs);
+        assertEquals(0, configs.size());
+    }
+
+    @Test
+    public void testExtractProcessorConfigsWithCustomParamNameComplexJson() {
+        Map<String, Object> params = new HashMap<>();
+        String jsonConfig = "[{\"type\": \"extract_json\", \"extract_type\": \"object\"}, "
+            + "{\"type\": \"remove_jsonpath\", \"paths\": [\"$.password\"]}, "
+            + "{\"type\": \"to_string\"}]";
+        params.put("pipeline_processors", jsonConfig);
+
+        List<Map<String, Object>> configs = ProcessorChain.extractProcessorConfigs(params, "pipeline_processors");
+
+        assertNotNull(configs);
+        assertEquals(3, configs.size());
+        assertEquals("extract_json", configs.get(0).get("type"));
+        assertEquals("object", configs.get(0).get("extract_type"));
+        assertEquals("remove_jsonpath", configs.get(1).get("type"));
+        assertEquals("to_string", configs.get(2).get("type"));
+    }
+
+    @Test
     public void testComplexProcessorChain() {
         Map<String, Object> extractConfig = new HashMap<>();
         extractConfig.put("type", "extract_json");
