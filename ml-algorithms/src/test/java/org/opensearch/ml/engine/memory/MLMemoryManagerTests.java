@@ -138,10 +138,6 @@ public class MLMemoryManagerTests {
 
     @Test
     public void testCreateConversation() {
-        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "user:admin");
-        doReturn(threadContext).when(threadPool).getThreadContext();
-
         ArgumentCaptor<CreateConversationRequest> captor = ArgumentCaptor.forClass(CreateConversationRequest.class);
         doAnswer(invocation -> {
             ActionListener<CreateConversationResponse> al = invocation.getArgument(2);
@@ -168,10 +164,6 @@ public class MLMemoryManagerTests {
 
     @Test
     public void testCreateInteraction() {
-        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "user:admin");
-        doReturn(threadContext).when(threadPool).getThreadContext();
-
         ArgumentCaptor<CreateInteractionRequest> captor = ArgumentCaptor.forClass(CreateInteractionRequest.class);
         doAnswer(invocation -> {
             ActionListener<CreateInteractionResponse> al = invocation.getArgument(2);

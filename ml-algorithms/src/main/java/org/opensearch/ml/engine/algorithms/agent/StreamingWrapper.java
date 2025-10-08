@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -77,12 +76,9 @@ public class StreamingWrapper {
 
     public void executeRequest(ActionRequest request, ActionListener<MLTaskResponse> listener) {
         if (isStreaming) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
-                ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
-                client.execute(MLPredictionStreamTaskAction.INSTANCE, request, wrappedListener);
-                return;
-            }
+            ((MLPredictionTaskRequest) request).setStreamingChannel(channel);
+            client.execute(MLPredictionStreamTaskAction.INSTANCE, request, listener);
+            return;
         }
         client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
     }

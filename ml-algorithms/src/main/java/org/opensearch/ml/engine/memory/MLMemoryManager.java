@@ -14,10 +14,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 
 import org.opensearch.OpenSearchSecurityException;
-import org.opensearch.action.ActionRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateResponse;
@@ -78,12 +76,11 @@ public class MLMemoryManager {
      * @param actionListener action listener to process the response
      */
     public void createConversation(String name, String applicationType, ActionListener<CreateConversationResponse> actionListener) {
-        CreateConversationRequest request = new CreateConversationRequest(name, applicationType);
-        executeWithContextHandling(
-            request,
-            actionListener,
-            (req, listener) -> client.execute(CreateConversationAction.INSTANCE, req, listener)
-        );
+        try {
+            client.execute(CreateConversationAction.INSTANCE, new CreateConversationRequest(name, applicationType), actionListener);
+        } catch (Exception exception) {
+            actionListener.onFailure(exception);
+        }
     }
 
     /**
@@ -114,21 +111,25 @@ public class MLMemoryManager {
         Preconditions.checkNotNull(response);
         // additionalInfo cannot be null as flat object
         additionalInfo = (additionalInfo == null) ? new HashMap<>() : additionalInfo;
-        CreateInteractionRequest request = new CreateInteractionRequest(
-            conversationId,
-            input,
-            promptTemplate,
-            response,
-            origin,
-            additionalInfo,
-            parentIntId,
-            traceNum
-        );
-        executeWithContextHandling(
-            request,
-            actionListener,
-            (req, listener) -> client.execute(CreateInteractionAction.INSTANCE, req, listener)
-        );
+        try {
+            client
+                .execute(
+                    CreateInteractionAction.INSTANCE,
+                    new CreateInteractionRequest(
+                        conversationId,
+                        input,
+                        promptTemplate,
+                        response,
+                        origin,
+                        additionalInfo,
+                        parentIntId,
+                        traceNum
+                    ),
+                    actionListener
+                );
+        } catch (Exception exception) {
+            actionListener.onFailure(exception);
+        }
     }
 
     /**
@@ -230,12 +231,11 @@ public class MLMemoryManager {
     public void updateInteraction(String interactionId, Map<String, Object> updateContent, ActionListener<UpdateResponse> actionListener) {
         Preconditions.checkNotNull(interactionId);
         Preconditions.checkNotNull(updateContent);
-        UpdateInteractionRequest request = new UpdateInteractionRequest(interactionId, updateContent);
-        executeWithContextHandling(
-            request,
-            actionListener,
-            (req, listener) -> client.execute(UpdateInteractionAction.INSTANCE, req, listener)
-        );
+        try {
+            client.execute(UpdateInteractionAction.INSTANCE, new UpdateInteractionRequest(interactionId, updateContent), actionListener);
+        } catch (Exception exception) {
+            actionListener.onFailure(exception);
+        }
     }
 
     /**
@@ -294,27 +294,5 @@ public class MLMemoryManager {
         // interaction trace
         boolQueryBuilder.should(traceBoolBuilder);
         return boolQueryBuilder;
-    }
-
-    private <T> void executeWithContextHandling(
-        ActionRequest request,
-        ActionListener<T> listener,
-        BiConsumer<ActionRequest, ActionListener<T>> executor
-    ) {
-        try {
-            ThreadContext threadContext = client.threadPool().getThreadContext();
-            String userStr = threadContext.getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-
-            if (userStr == null) {
-                try (ThreadContext.StoredContext context = threadContext.stashContext()) {
-                    ActionListener<T> wrappedListener = ActionListener.runBefore(listener, context::restore);
-                    executor.accept(request, wrappedListener);
-                }
-            } else {
-                executor.accept(request, listener);
-            }
-        } catch (Exception exception) {
-            listener.onFailure(exception);
-        }
     }
 }

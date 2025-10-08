@@ -28,8 +28,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.common.settings.Settings;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -65,8 +63,6 @@ public class StreamingWrapperTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(new ThreadContext(Settings.EMPTY));
         streamingWrapper = new StreamingWrapper(channel, client);
         nonStreamingWrapper = new StreamingWrapper(null, client);
     }
@@ -152,7 +148,7 @@ public class StreamingWrapperTest {
         streamingWrapper.executeRequest(request, mlTaskListener);
 
         verify(request).setStreamingChannel(channel);
-        verify(client).execute(eq(MLPredictionStreamTaskAction.INSTANCE), eq(request), any(ActionListener.class));
+        verify(client).execute(eq(MLPredictionStreamTaskAction.INSTANCE), eq(request), eq(mlTaskListener));
     }
 
     @Test

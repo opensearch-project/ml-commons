@@ -25,6 +25,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.task.MLExecuteTaskRunner;
@@ -33,6 +34,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportChannel;
+import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -102,7 +104,14 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
         Task task = mock(Task.class);
         transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
 
-        verify(transportExecuteStreamTaskAction).doExecute(eq(task), eq(mlExecuteTaskRequest), any(), eq(transportChannel));
+        assertEquals(transportChannel, mlExecuteTaskRequest.getStreamingChannel());
+        verify(transportService)
+            .sendRequest(
+                eq(transportService.getLocalNode()),
+                eq(MLExecuteStreamTaskAction.NAME),
+                eq(mlExecuteTaskRequest),
+                any(TransportResponseHandler.class)
+            );
     }
 
     @Test
