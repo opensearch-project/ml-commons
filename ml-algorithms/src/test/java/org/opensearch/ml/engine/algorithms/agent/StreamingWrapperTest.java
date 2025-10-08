@@ -36,7 +36,6 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
@@ -53,9 +52,6 @@ public class StreamingWrapperTest {
 
     @Mock
     private ActionListener<MLTaskResponse> mlTaskListener;
-
-    @Mock
-    private ThreadPool threadPool;
 
     private StreamingWrapper streamingWrapper;
     private StreamingWrapper nonStreamingWrapper;
