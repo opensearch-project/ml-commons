@@ -6,34 +6,20 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_FOUND_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
-import java.io.IOException;
 import java.time.Instant;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.ingest.PutPipelineRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -44,6 +30,9 @@ import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContaine
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerModelValidator;
+import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
+import org.opensearch.ml.helper.MemoryContainerSharedIndexValidator;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -176,7 +165,9 @@ public class TransportCreateMemoryContainerAction extends
         final String longTermMemoryIndexName = configuration.getLongMemoryIndexName();
         final String longTermMemoryHistoryIndexName = configuration.getLongMemoryHistoryIndexName();
 
-        if (configuration.getLlmId() == null || configuration.getStrategies().isEmpty()) {
+        // Decision: strategies present = 4 indices (session/working/long-term/history)
+        // No strategies = 2 indices (session/working only)
+        if (configuration.getStrategies() == null || configuration.getStrategies().isEmpty()) {
             if (configuration.isDisableSession()) {
                 mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
                     // Return the actual index name that was created
@@ -245,54 +236,7 @@ public class TransportCreateMemoryContainerAction extends
     }
 
     private void createLongTermMemoryIngestPipeline(String indexName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener) {
-        try {
-            if (memoryConfig.getEmbeddingModelType() != null) {
-                String pipelineName = indexName + "-embedding";
-                createTextEmbeddingPipeline(pipelineName, memoryConfig, ActionListener.wrap(success -> {
-                    log.info("Successfully created text embedding pipeline: {}", indexName + "-embedding");
-                    mlIndicesHandler.createLongTermMemoryIndex(pipelineName, indexName, memoryConfig, listener);
-                }, e -> {
-                    log.error("Failed to create text embedding pipeline", e);
-                    listener.onFailure(e);
-                }));
-            } else {
-                mlIndicesHandler.createLongTermMemoryIndex(null, indexName, memoryConfig, listener);
-            }
-        } catch (Exception e) {
-            log.error("Failed to create memory data index", e);
-            listener.onFailure(e);
-        }
-    }
-
-    private void createTextEmbeddingPipeline(String pipelineName, MemoryConfiguration memoryConfig, ActionListener<Boolean> listener)
-        throws IOException {
-        String processorName = memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING ? "text_embedding" : "sparse_encoding";
-        XContentBuilder builder = XContentFactory
-            .jsonBuilder()
-            .startObject()
-            .field("description", "Agentic Memory Text embedding pipeline")
-            .startArray("processors")
-            .startObject()
-            .startObject(processorName)
-            .field("model_id", memoryConfig.getEmbeddingModelId())
-            .startObject("field_map")
-            .field(MEMORY_FIELD, MEMORY_EMBEDDING_FIELD)
-            .endObject()
-            .endObject()
-            .endObject()
-            .endArray()
-            .endObject();
-
-        BytesReference source = BytesReference.bytes(builder);
-        PutPipelineRequest request = new PutPipelineRequest(pipelineName, source, XContentType.JSON);
-
-        client.admin().cluster().putPipeline(request, ActionListener.wrap(response -> {
-            log.info("Pipeline created: {}", pipelineName);
-            listener.onResponse(true);
-        }, error -> {
-            log.error("Failed to create pipeline", error);
-            listener.onFailure(error);
-        }));
+        MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline(indexName, memoryConfig, mlIndicesHandler, client, listener);
     }
 
     private void indexMemoryContainer(MLMemoryContainer container, ActionListener<String> listener) {
@@ -340,6 +284,15 @@ public class TransportCreateMemoryContainerAction extends
     }
 
     private void validateConfiguration(MemoryConfiguration config, ActionListener<Boolean> listener) {
+        // Validate that strategies have required AI models
+        try {
+            MemoryConfiguration.validateStrategiesRequireModels(config);
+        } catch (IllegalArgumentException e) {
+            log.error("Strategy validation failed: {}", e.getMessage());
+            listener.onFailure(e);
+            return;
+        }
+
         // Validate strategy types and namespace using centralized validator
         if (config.getStrategies() != null) {
             for (MemoryStrategy strategy : config.getStrategies()) {
@@ -353,63 +306,30 @@ public class TransportCreateMemoryContainerAction extends
             }
         }
 
-        // Validate LLM model
-        if (config.getLlmId() != null) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(llmModel -> {
-                    if (llmModel.getAlgorithm() != FunctionName.REMOTE) {
-                        listener
-                            .onFailure(new IllegalArgumentException(String.format(LLM_MODEL_NOT_REMOTE_ERROR, llmModel.getAlgorithm())));
-                        return;
-                    }
-                    // LLM model is valid, now validate embedding model
-                    validateEmbeddingModel(config, listener);
-                }, e -> {
-                    log.error("Failed to get LLM model: {}", config.getLlmId(), e);
-                    listener.onFailure(new IllegalArgumentException(String.format(LLM_MODEL_NOT_FOUND_ERROR, config.getLlmId())));
-                }), context::restore);
-
-                mlModelManager.getModel(config.getLlmId(), wrappedListener);
-            }
-        } else {
-            // No LLM model specified, just validate embedding model
-            validateEmbeddingModel(config, listener);
-        }
-    }
-
-    private void validateEmbeddingModel(MemoryConfiguration config, ActionListener<Boolean> listener) {
-        if (config.getEmbeddingModelId() != null) {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(embeddingModel -> {
-                    FunctionName modelAlgorithm = embeddingModel.getAlgorithm();
-                    FunctionName expectedType = config.getEmbeddingModelType();
-
-                    // Model must be either the expected type or REMOTE
-                    if (modelAlgorithm != expectedType && modelAlgorithm != FunctionName.REMOTE) {
-                        listener
-                            .onFailure(
-                                new IllegalArgumentException(
-                                    String.format(EMBEDDING_MODEL_TYPE_MISMATCH_ERROR, expectedType, modelAlgorithm)
-                                )
+        // Validate LLM model using helper
+        MemoryContainerModelValidator.validateLlmModel(config.getLlmId(), mlModelManager, client, ActionListener.wrap(isValid -> {
+            // LLM model is valid, now validate embedding model
+            MemoryContainerModelValidator
+                .validateEmbeddingModel(
+                    config.getEmbeddingModelId(),
+                    config.getEmbeddingModelType(),
+                    mlModelManager,
+                    client,
+                    ActionListener.wrap(embeddingValid -> {
+                        // Both models are valid, now validate shared index compatibility
+                        MemoryContainerSharedIndexValidator
+                            .validateSharedIndexCompatibility(
+                                config,
+                                config.getLongMemoryIndexName(),
+                                client,
+                                ActionListener.wrap(result -> {
+                                    // Validation successful
+                                    listener.onResponse(true);
+                                }, listener::onFailure)
                             );
-                        return;
-                    }
-
-                    // Both models are valid
-                    listener.onResponse(true);
-                }, e -> {
-                    log.error("Failed to get embedding model: {}", config.getEmbeddingModelId(), e);
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException(String.format(EMBEDDING_MODEL_NOT_FOUND_ERROR, config.getEmbeddingModelId()))
-                        );
-                }), context::restore);
-
-                mlModelManager.getModel(config.getEmbeddingModelId(), wrappedListener);
-            }
-        } else {
-            // No embedding model specified, validation passes
-            listener.onResponse(true);
-        }
+                    }, listener::onFailure)
+                );
+        }, listener::onFailure));
     }
+
 }
