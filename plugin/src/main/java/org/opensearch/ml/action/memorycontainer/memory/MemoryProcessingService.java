@@ -46,6 +46,8 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.processor.MLProcessorType;
+import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
@@ -58,10 +60,14 @@ public class MemoryProcessingService {
     public static final String DEFAULT_LLM_RESULT_PATH = "$.content[0].text";
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
+    private final ProcessorChain extractJsonProcessorChain;
 
     public MemoryProcessingService(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        List<Map<String, Object>> processorConfigs = new ArrayList<>();
+        processorConfigs.add(Map.of("type", MLProcessorType.EXTRACT_JSON.getValue(), "extract_type", "object"));
+        this.extractJsonProcessorChain = new ProcessorChain(processorConfigs);
     }
 
     public void runMemoryStrategy(
@@ -321,6 +327,7 @@ public class MemoryProcessingService {
                 llmResult = cleanMarkdownFromJson(llmResult);
             }
             if (llmResult != null) {
+                llmResult = StringUtils.toJson(extractJsonProcessorChain.process(llmResult));
                 try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
