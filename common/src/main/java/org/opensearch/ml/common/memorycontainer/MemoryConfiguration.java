@@ -45,10 +45,14 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Configuration for memory storage in memory containers
@@ -57,6 +61,7 @@ import lombok.Setter;
 @Setter
 @Builder
 @EqualsAndHashCode
+@Log4j2
 public class MemoryConfiguration implements ToXContentObject, Writeable {
     private String indexPrefix;
     private FunctionName embeddingModelType;
@@ -366,6 +371,16 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     }
 
     /**
+     * Validates this configuration's state.
+     * Ensures embedding configuration and max infer size satisfy all constraints.
+     *
+     * @throws IllegalArgumentException if configuration is invalid
+     */
+    public void validate() {
+        validateInputs(this.embeddingModelType, this.embeddingModelId, this.dimension, this.maxInferSize);
+    }
+
+    /**
      * Validates input parameters before construction.
      */
     private static void validateInputs(FunctionName embeddingModelType, String embeddingModelId, Integer dimension, Integer maxInferSize) {
@@ -421,6 +436,280 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
 
         if (embeddingModelType == FunctionName.SPARSE_ENCODING && dimension != null) {
             throw new IllegalArgumentException(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
+        }
+    }
+
+    /**
+     * Validates that strategies have required AI models.
+     * Strategies require both LLM (for fact extraction) and embedding model (for semantic search).
+     *
+     * @param config The memory configuration to validate
+     * @throws IllegalArgumentException if strategies exist without required models
+     */
+    public static void validateStrategiesRequireModels(MemoryConfiguration config) {
+        if (config == null || config.getStrategies() == null || config.getStrategies().isEmpty()) {
+            return;
+        }
+
+        boolean hasLlm = config.getLlmId() != null;
+        boolean hasEmbedding = config.getEmbeddingModelId() != null && config.getEmbeddingModelType() != null;
+
+        if (!hasLlm || !hasEmbedding) {
+            String missing = !hasLlm && !hasEmbedding ? "LLM model and embedding model"
+                : !hasLlm ? "LLM model (llm_id)"
+                : "embedding model (embedding_model_id, embedding_model_type, dimension)";
+
+            throw new IllegalArgumentException(
+                String
+                    .format(
+                        "Strategies require both an LLM model and embedding model to be configured. Missing: %s. "
+                            + "Strategies use LLM for fact extraction and embedding model for semantic search.",
+                        missing
+                    )
+            );
+        }
+    }
+
+    /**
+     * Updates this configuration with non-null values from the update content.
+     * Follows the pattern from HttpConnector.update() for partial updates.
+     * Note: Embedding fields (embeddingModelId, embeddingModelType, dimension) CAN be updated
+     * to support gradual configuration, but changes to existing values are validated elsewhere
+     * to prevent multiple embeddings in the same index.
+     *
+     * @param updateContent Configuration containing fields to update
+     */
+    public void update(MemoryConfiguration updateContent) {
+        if (updateContent.getLlmId() != null) {
+            this.llmId = updateContent.getLlmId();
+        }
+        if (updateContent.getStrategies() != null && !updateContent.getStrategies().isEmpty()) {
+            this.strategies = updateContent.getStrategies();
+        }
+        if (updateContent.getMaxInferSize() != null) {
+            this.maxInferSize = updateContent.getMaxInferSize();
+        }
+        // Allow embedding fields to be set (for gradual configuration)
+        // Validation elsewhere ensures existing embeddings cannot be changed
+        if (updateContent.getEmbeddingModelId() != null) {
+            this.embeddingModelId = updateContent.getEmbeddingModelId();
+        }
+        if (updateContent.getEmbeddingModelType() != null) {
+            this.embeddingModelType = updateContent.getEmbeddingModelType();
+        }
+        if (updateContent.getDimension() != null) {
+            this.dimension = updateContent.getDimension();
+        }
+        // Note: indexPrefix and other structural fields are intentionally not updated
+        // as they would require index recreation
+    }
+
+    /**
+     * Configuration extracted from existing index/pipeline for validation.
+     */
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class EmbeddingConfig {
+        private FunctionName type;
+        private Integer dimension;
+    }
+
+    /**
+     * Extracts embedding configuration from index mapping properties.
+     * Used to validate that new containers match existing shared index configuration.
+     *
+     * @param mappingProperties Index mapping properties map
+     * @return EmbeddingConfig with type and dimension, or null if no embedding field
+     */
+    public static EmbeddingConfig extractEmbeddingConfigFromMapping(Map<String, Object> mappingProperties) {
+        if (mappingProperties == null) {
+            return null;
+        }
+
+        Map<String, Object> fieldMap = asMap(mappingProperties.get("memory_embedding"));
+        if (fieldMap == null) {
+            log.debug("Embedding field 'memory_embedding' is null or not a Map");
+            return null;
+        }
+
+        String type = (String) fieldMap.get("type");
+
+        if ("knn_vector".equals(type)) {
+            Integer dimension = (Integer) fieldMap.get("dimension");
+            return new EmbeddingConfig(FunctionName.TEXT_EMBEDDING, dimension);
+        } else if ("rank_features".equals(type)) {
+            return new EmbeddingConfig(FunctionName.SPARSE_ENCODING, null);
+        }
+
+        return null;
+    }
+
+    /**
+     * Safely casts object to Map, returns null if not a Map.
+     * Used to prevent ClassCastException when processing OpenSearch responses.
+     *
+     * @param obj Object to cast
+     * @return Map if obj is a Map, null otherwise
+     */
+    public static Map<String, Object> asMap(Object obj) {
+        return obj instanceof Map ? (Map<String, Object>) obj : null;
+    }
+
+    /**
+     * Safely casts object to List, returns null if not a List.
+     * Used to prevent ClassCastException when processing OpenSearch responses.
+     *
+     * @param obj Object to cast
+     * @return List if obj is a List, null otherwise
+     */
+    public static List<?> asList(Object obj) {
+        return obj instanceof List ? (List<?>) obj : null;
+    }
+
+    /**
+     * Extracts embedding model ID from ingest pipeline definition.
+     * Used to validate that new containers match existing shared index configuration.
+     *
+     * @param pipelineSource Pipeline source map from GetPipelineResponse
+     * @return model_id string, or null if not found
+     */
+    public static String extractModelIdFromPipeline(Map<String, Object> pipelineSource) {
+        if (pipelineSource == null) {
+            return null;
+        }
+
+        try {
+            List<?> processors = asList(pipelineSource.get("processors"));
+            if (processors == null || processors.isEmpty()) {
+                log.debug("Pipeline processors list is {} - no embedding processor found", processors == null ? "null" : "empty");
+                return null;
+            }
+
+            for (Object processorObj : processors) {
+                Map<String, Object> processor = asMap(processorObj);
+                if (processor == null)
+                    continue; // Skip malformed entries
+
+                // Check text_embedding processor
+                if (processor.containsKey("text_embedding")) {
+                    Map<String, Object> config = asMap(processor.get("text_embedding"));
+                    if (config != null) {
+                        Object modelId = config.get("model_id");
+                        if (modelId instanceof String) {
+                            return (String) modelId;
+                        }
+                        log
+                            .warn(
+                                "Pipeline text_embedding model_id is not a String: {}",
+                                modelId != null ? modelId.getClass().getSimpleName() : "null"
+                            );
+                    }
+                }
+                // Check sparse_encoding processor
+                if (processor.containsKey("sparse_encoding")) {
+                    Map<String, Object> config = asMap(processor.get("sparse_encoding"));
+                    if (config != null) {
+                        Object modelId = config.get("model_id");
+                        if (modelId instanceof String) {
+                            return (String) modelId;
+                        }
+                        log
+                            .warn(
+                                "Pipeline sparse_encoding model_id is not a String: {}",
+                                modelId != null ? modelId.getClass().getSimpleName() : "null"
+                            );
+                    }
+                }
+            }
+
+            return null;
+        } catch (Exception e) {
+            log.error("Unexpected error extracting model_id from pipeline: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Compares requested embedding configuration with existing configuration.
+     * Throws detailed exception if there's a mismatch.
+     *
+     * @param requested The requested configuration
+     * @param existingModelId The model ID from existing pipeline
+     * @param existingConfig The embedding config extracted from existing index mapping
+     * @throws IllegalArgumentException if configurations don't match
+     */
+    public static void compareEmbeddingConfig(MemoryConfiguration requested, String existingModelId, EmbeddingConfig existingConfig) {
+        List<String> mismatches = new ArrayList<>();
+
+        // Compare model ID (null-safe)
+        String requestedModelId = requested.getEmbeddingModelId();
+        if (requestedModelId == null || !requestedModelId.equals(existingModelId)) {
+            mismatches
+                .add(
+                    String
+                        .format(
+                            "  • embedding_model_id: existing='%s', requested='%s'",
+                            existingModelId,
+                            requestedModelId != null ? requestedModelId : "null"
+                        )
+                );
+        }
+
+        // Compare model type (null-safe)
+        FunctionName requestedType = requested.getEmbeddingModelType();
+        FunctionName existingType = existingConfig.getType();
+        if (requestedType != existingType) {
+            mismatches
+                .add(
+                    String
+                        .format(
+                            "  • embedding_model_type: existing='%s', requested='%s'",
+                            existingType != null ? existingType : "null",
+                            requestedType != null ? requestedType : "null"
+                        )
+                );
+        }
+
+        // Compare dimension (TEXT_EMBEDDING only, null-safe)
+        if (requested.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+            Integer requestedDim = requested.getDimension();
+            Integer existingDim = existingConfig.getDimension();
+            if (requestedDim == null || existingDim == null || !requestedDim.equals(existingDim)) {
+                mismatches
+                    .add(
+                        String
+                            .format(
+                                "  • dimension: existing=%s, requested=%s",
+                                existingDim != null ? existingDim.toString() : "null",
+                                requestedDim != null ? requestedDim.toString() : "null"
+                            )
+                    );
+            }
+        }
+
+        if (!mismatches.isEmpty()) {
+            throw new IllegalArgumentException(
+                "Cannot create memory container: Embedding configuration conflicts with existing shared index.\n\n"
+                    + "Index prefix '"
+                    + requested.getIndexPrefix()
+                    + "' is already in use with different settings:\n"
+                    + String.join("\n", mismatches)
+                    + "\n\n"
+                    + "This shared index was configured with:\n"
+                    + "  embedding_model_id: \""
+                    + existingModelId
+                    + "\"\n"
+                    + "  embedding_model_type: \""
+                    + existingConfig.getType()
+                    + "\""
+                    + (existingConfig.getDimension() != null ? "\n  dimension: " + existingConfig.getDimension() : "")
+                    + "\n\n"
+                    + "To resolve this issue, you can either:\n"
+                    + "1. Use a different index_prefix for this container\n"
+                    + "2. Match the existing configuration in your request"
+            );
         }
     }
 }

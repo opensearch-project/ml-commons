@@ -21,7 +21,9 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -31,20 +33,28 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsRequest;
+import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.ingest.GetPipelineRequest;
+import org.opensearch.action.ingest.GetPipelineResponse;
 import org.opensearch.action.ingest.PutPipelineRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
+import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
@@ -232,9 +242,20 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.cluster()).thenReturn(clusterAdminClient);
 
+        // Mock GetPipelineRequest to simulate pipeline doesn't exist yet
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(1);
+            // Return response with empty pipelines list (pipeline doesn't exist)
+            org.opensearch.action.ingest.GetPipelineResponse getPipelineResponse = new org.opensearch.action.ingest.GetPipelineResponse(
+                Collections.emptyList()
+            );
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
+
+        // Mock PutPipelineRequest to simulate successful pipeline creation
         doAnswer(invocation -> {
             ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
-            // Create a real CreateIndexResponse that returns true for isAcknowledged
             AcknowledgedResponse response = new AcknowledgedResponse(true);
             listener.onResponse(response);
             return null;
@@ -273,6 +294,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
     public void testDoExecuteSuccess_WorkingMemoryOnly_NullLLMId() throws InterruptedException {
         when(memoryStorageConfig.getLlmId()).thenReturn(null);
+        when(memoryStorageConfig.getStrategies()).thenReturn(List.of()); // No strategies for working memory only
         mockAndRunExecuteMethod(request);
     }
 
@@ -896,6 +918,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     @Test
     public void testDoExecuteWithEmptyStrategyNamespace() throws InterruptedException {
         // Test behavior when strategy namespace is empty list
+        // Our new validation will fail earlier because strategies require AI models
         MemoryStrategy strategyWithEmptyNamespace = MemoryStrategy
             .builder()
             .type(MemoryStrategyType.SEMANTIC)
@@ -911,12 +934,12 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         // Act
         action.doExecute(task, request, actionListener);
 
-        // Assert
+        // Assert - validates strategies require AI models before namespace validation
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
         assertTrue(exception instanceof IllegalArgumentException);
-        assertTrue(exception.getMessage().contains("namespace is required"));
+        assertTrue(exception.getMessage().contains("Strategies require both an LLM model and embedding model"));
     }
 
     // Helper method to mock successful model validation
@@ -938,6 +961,23 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(embeddingModel);
             return null;
         }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+
+        // Mock shared index validation (index doesn't exist - validation passes)
+        mockSharedIndexValidation();
+    }
+
+    // Helper method to mock shared index validation - simulates index doesn't exist
+    private void mockSharedIndexValidation() {
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        // Mock getMappings to simulate index doesn't exist (throw IndexNotFoundException)
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(1);
+            // Simulate index not found error with proper exception type
+            listener.onFailure(new IndexNotFoundException("test-index"));
+            return null;
+        }).when(indicesAdminClient).getMappings(any(), any(ActionListener.class));
     }
 
     private void mockSuccessfulIndexCreation() {
@@ -976,5 +1016,912 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             listener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).createLongTermMemoryHistoryIndex(anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testCreateContainer_StrategiesWithoutLlm_ShouldFail() {
+        // Test that creating a container with strategies but no LLM fails validation
+        MemoryStrategy strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).namespace(Arrays.asList("user_id")).build();
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .embeddingModelId("embedding-123")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(384)
+            .strategies(Arrays.asList(strategy))
+            .build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").configuration(config).build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(input);
+        ActionListener<MLCreateMemoryContainerResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("Strategies require both an LLM model and embedding model"));
+        assertTrue(captor.getValue().getMessage().contains("Missing: LLM model"));
+    }
+
+    @Test
+    public void testCreateContainer_StrategiesWithoutEmbedding_ShouldFail() {
+        // Test that creating a container with strategies but no embedding model fails validation
+        MemoryStrategy strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).namespace(Arrays.asList("user_id")).build();
+
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .indexPrefix("test")
+            .llmId("llm-123")
+            .strategies(Arrays.asList(strategy))
+            .build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").configuration(config).build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(input);
+        ActionListener<MLCreateMemoryContainerResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("Strategies require both an LLM model and embedding model"));
+        assertTrue(captor.getValue().getMessage().contains("Missing: embedding model"));
+    }
+
+    @Test
+    public void testCreateContainer_StrategiesWithoutBoth_ShouldFail() {
+        // Test that creating a container with strategies but neither LLM nor embedding fails validation
+        MemoryStrategy strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).namespace(Arrays.asList("user_id")).build();
+
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").strategies(Arrays.asList(strategy)).build();
+
+        MLCreateMemoryContainerInput input = MLCreateMemoryContainerInput.builder().name("test-container").configuration(config).build();
+
+        MLCreateMemoryContainerRequest request = new MLCreateMemoryContainerRequest(input);
+        ActionListener<MLCreateMemoryContainerResponse> listener = mock(ActionListener.class);
+
+        action.doExecute(task, request, listener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("Strategies require both an LLM model and embedding model"));
+        assertTrue(captor.getValue().getMessage().contains("LLM model and embedding model"));
+    }
+
+    @Test
+    public void testCreateContainer_WithStrategies_DisableSession() throws InterruptedException {
+        // Test container with strategies but disable_session = true
+        mockSuccessfulCreatePipeline();
+
+        when(memoryStorageConfig.isDisableSession()).thenReturn(true);
+        mockAndRunExecuteMethod(request);
+    }
+
+    @Test
+    public void testCreateContainer_WithStrategies_DisableHistory() throws InterruptedException {
+        // Test container with strategies but disable_history = true
+        mockSuccessfulCreatePipeline();
+
+        when(memoryStorageConfig.isDisableHistory()).thenReturn(true);
+        mockAndRunExecuteMethod(request);
+    }
+
+    @Test
+    public void testCreateContainer_WithoutStrategies_DisableSession() throws InterruptedException {
+        // Test container without strategies and disable_session = true
+        when(memoryStorageConfig.getStrategies()).thenReturn(List.of());
+        when(memoryStorageConfig.isDisableSession()).thenReturn(true);
+        mockAndRunExecuteMethod(request);
+    }
+
+    @Test
+    public void testCreateContainer_PipelineAlreadyExists() throws InterruptedException {
+        // Test shared index scenario where pipeline already exists
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock GetPipelineRequest to return existing pipeline
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(1);
+            org.opensearch.ingest.PipelineConfiguration pipelineConfig = new org.opensearch.ingest.PipelineConfiguration(
+                "test-pipeline",
+                new BytesArray("{}"),
+                org.opensearch.common.xcontent.XContentType.JSON
+            );
+            org.opensearch.action.ingest.GetPipelineResponse getPipelineResponse = new org.opensearch.action.ingest.GetPipelineResponse(
+                Collections.singletonList(pipelineConfig)
+            );
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
+
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
+            listener.onResponse(response);
+            return null;
+        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(responseCaptor.capture());
+        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
+        assertNotNull(response);
+        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
+    }
+
+    @Test
+    public void testCreateContainer_PutPipelineFailure() throws InterruptedException {
+        // Test pipeline creation failure
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock GetPipelineRequest to simulate pipeline doesn't exist
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(1);
+            org.opensearch.action.ingest.GetPipelineResponse getPipelineResponse = new org.opensearch.action.ingest.GetPipelineResponse(
+                Collections.emptyList()
+            );
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
+
+        // Mock PutPipelineRequest to fail
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Pipeline creation failed"));
+            return null;
+        }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any(ActionListener.class));
+
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof RuntimeException);
+        assertTrue(captor.getValue().getMessage().contains("Pipeline creation failed"));
+    }
+
+    @Test
+    public void testCreateContainer_GetPipelineError() throws InterruptedException {
+        // Test getPipeline error path
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock GetPipelineRequest to fail (triggers error handler which should create pipeline)
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Pipeline fetch error"));
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
+
+        // Mock successful putPipeline in error handler path
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            AcknowledgedResponse response = new AcknowledgedResponse(true);
+            listener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any(ActionListener.class));
+
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
+            listener.onResponse(response);
+            return null;
+        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(responseCaptor.capture());
+        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testCreateContainer_IndexResponseNotCreated() throws InterruptedException {
+        // Test when indexResponse result is not CREATED
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+
+        IndexResponse mockIndexResponse = mock(IndexResponse.class);
+        when(mockIndexResponse.getResult()).thenReturn(DocWriteResponse.Result.UPDATED); // Not CREATED
+
+        PutDataObjectResponse mockPutResponse = mock(PutDataObjectResponse.class);
+        when(mockPutResponse.indexResponse()).thenReturn(mockIndexResponse);
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(mockPutResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        mockSuccessfulCreatePipeline();
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
+            listener.onResponse(response);
+            return null;
+        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof RuntimeException);
+        assertTrue(captor.getValue().getMessage().contains("Failed to create memory container"));
+    }
+
+    @Test
+    public void testCreateContainer_SparseEncodingProcessor() throws InterruptedException {
+        // Test SPARSE_ENCODING processor type
+        when(memoryStorageConfig.getEmbeddingModelType()).thenReturn(FunctionName.SPARSE_ENCODING);
+
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(1);
+            org.opensearch.action.ingest.GetPipelineResponse getPipelineResponse = new org.opensearch.action.ingest.GetPipelineResponse(
+                Collections.emptyList()
+            );
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            AcknowledgedResponse response = new AcknowledgedResponse(true);
+            listener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any(ActionListener.class));
+
+        // Mock valid LLM model
+        MLModel llmModel = mock(MLModel.class);
+        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(llmModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        // Mock valid SPARSE_ENCODING embedding model
+        MLModel embeddingModel = mock(MLModel.class);
+        when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.SPARSE_ENCODING);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(embeddingModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+
+        mockSharedIndexValidation();
+        mockSuccessfulIndexCreation();
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
+            listener.onResponse(response);
+            return null;
+        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(responseCaptor.capture());
+        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testCreateContainer_NoEmbeddingModelType() throws InterruptedException {
+        // Test when embeddingModelType is null (no pipeline needed, no embedding validation)
+        // Must have empty strategies because strategies require both LLM and embedding
+        when(memoryStorageConfig.getEmbeddingModelType()).thenReturn(null);
+        when(memoryStorageConfig.getEmbeddingModelId()).thenReturn(null);
+        when(memoryStorageConfig.getStrategies()).thenReturn(List.of());
+
+        // Mock valid LLM model only
+        MLModel llmModel = mock(MLModel.class);
+        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(llmModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        mockSharedIndexValidation();
+        mockSuccessfulIndexCreation();
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> listener = invocation.getArgument(1);
+            CreateIndexResponse response = new CreateIndexResponse(true, true, "test-index");
+            listener.onResponse(response);
+            return null;
+        }).when(indicesAdminClient).create(any(CreateIndexRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(responseCaptor.capture());
+        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
+        assertNotNull(response);
+    }
+
+    @Test
+    public void testCreateContainer_LLMModelNotRemote() throws InterruptedException {
+        // Test LLM model validation failure - not REMOTE type
+        MLModel llmModel = mock(MLModel.class);
+        when(llmModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING); // Wrong type
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(llmModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        mockSharedIndexValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("must be a REMOTE model"));
+    }
+
+    @Test
+    public void testCreateContainer_LLMModelNotFound() throws InterruptedException {
+        // Test LLM model not found
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Model not found"));
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        mockSharedIndexValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("not found"));
+    }
+
+    @Test
+    public void testCreateContainer_EmbeddingModelTypeMismatch() throws InterruptedException {
+        // Test embedding model type mismatch
+        MLModel llmModel = mock(MLModel.class);
+        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(llmModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        // Embedding model with wrong type
+        MLModel embeddingModel = mock(MLModel.class);
+        when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.SPARSE_ENCODING); // Expected TEXT_EMBEDDING
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(embeddingModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+
+        mockSharedIndexValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("must be of type"));
+    }
+
+    @Test
+    public void testCreateContainer_EmbeddingModelNotFound() throws InterruptedException {
+        // Test embedding model not found
+        MLModel llmModel = mock(MLModel.class);
+        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(llmModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Embedding model not found"));
+            return null;
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+
+        mockSharedIndexValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("not found"));
+    }
+
+    @Test
+    public void testCreateContainer_IndexMemoryContainerException() throws InterruptedException {
+        // Test exception in indexMemoryContainer outer catch block
+        mockSuccessfulModelValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        // Make putDataObjectAsync throw exception
+        CompletableFuture<PutDataObjectResponse> future = new CompletableFuture<>();
+        future.completeExceptionally(new RuntimeException("SDK client error"));
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertNotNull(captor.getValue());
+    }
+
+    @Test
+    public void testCreateContainer_SharedIndexConfigMatch() throws InterruptedException {
+        // Test successful validation when existing index config matches request
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with matching config
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> embeddingField = new HashMap<>();
+        embeddingField.put("type", "knn_vector");
+        embeddingField.put("dimension", 768);
+        properties.put("memory_embedding", embeddingField);
+
+        Map<String, Object> mappingMap = new HashMap<>();
+        mappingMap.put("properties", properties);
+
+        when(mappingMetadata.getSourceAsMap()).thenReturn(mappingMap);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, mappingMetadata));
+
+        // Mock GetPipelineResponse with matching model_id
+        GetPipelineResponse getPipelineResponse = mock(GetPipelineResponse.class);
+
+        // Create real PipelineConfiguration (final class, can't be mocked)
+        String pipelineJson = "{" + "\"processors\": [" + "  {\"text_embedding\": {\"model_id\": \"test-embedding-model\"}}" + "]" + "}";
+        org.opensearch.ingest.PipelineConfiguration pipelineConfig = new org.opensearch.ingest.PipelineConfiguration(
+            indexName + "-embedding",
+            new BytesArray(pipelineJson),
+            org.opensearch.common.xcontent.XContentType.JSON
+        );
+
+        when(getPipelineResponse.pipelines()).thenReturn(Collections.singletonList(pipelineConfig));
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        // Mock getPipeline call
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any(ActionListener.class));
+
+        CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
+        when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(responseCaptor.capture());
+        MLCreateMemoryContainerResponse response = responseCaptor.getValue();
+        assertNotNull(response);
+        assertEquals(MEMORY_CONTAINER_ID, response.getMemoryContainerId());
+    }
+
+    @Test
+    public void testCreateContainer_SharedIndexConfigMismatch() throws InterruptedException {
+        // Test failure when existing config doesn't match request
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+        mockSuccessfulCreatePipeline();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with different dimension
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> embeddingField = new HashMap<>();
+        embeddingField.put("type", "knn_vector");
+        embeddingField.put("dimension", 384); // Different from requested 768
+        properties.put("memory_embedding", embeddingField);
+
+        Map<String, Object> mappingMap = new HashMap<>();
+        mappingMap.put("properties", properties);
+
+        when(mappingMetadata.getSourceAsMap()).thenReturn(mappingMap);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, mappingMetadata));
+
+        // Mock GetPipelineResponse with different model_id
+        GetPipelineResponse getPipelineResponse = mock(GetPipelineResponse.class);
+
+        // Create real PipelineConfiguration with different model_id (final class, can't be mocked)
+        String pipelineJson = "{" + "\"processors\": [" + "  {\"text_embedding\": {\"model_id\": \"different-model\"}}" + "]" + "}";
+        org.opensearch.ingest.PipelineConfiguration pipelineConfig = new org.opensearch.ingest.PipelineConfiguration(
+            indexName + "-embedding",
+            new BytesArray(pipelineJson),
+            org.opensearch.common.xcontent.XContentType.JSON
+        );
+
+        when(getPipelineResponse.pipelines()).thenReturn(Collections.singletonList(pipelineConfig));
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        // Mock getPipeline call
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("Embedding configuration conflicts"));
+    }
+
+    @Test
+    public void testCreateContainer_IndexExistsMappingNull() throws InterruptedException {
+        // Test failure when mapping metadata is null
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with null MappingMetadata
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, null));
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalStateException);
+        assertTrue(captor.getValue().getMessage().contains("mapping is unavailable"));
+    }
+
+    @Test
+    public void testCreateContainer_IndexExistsNoEmbeddingField() throws InterruptedException {
+        // Test failure when mapping has no embedding field
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with no embedding field
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+
+        Map<String, Object> properties = new HashMap<>();
+        // No memory_embedding field
+
+        Map<String, Object> mappingMap = new HashMap<>();
+        mappingMap.put("properties", properties);
+
+        when(mappingMetadata.getSourceAsMap()).thenReturn(mappingMap);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, mappingMetadata));
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("malformed or missing embedding configuration"));
+    }
+
+    @Test
+    public void testCreateContainer_IndexExistsPipelineNotFound() throws InterruptedException {
+        // Test failure when pipeline doesn't exist
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with valid mapping
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> embeddingField = new HashMap<>();
+        embeddingField.put("type", "knn_vector");
+        embeddingField.put("dimension", 768);
+        properties.put("memory_embedding", embeddingField);
+
+        Map<String, Object> mappingMap = new HashMap<>();
+        mappingMap.put("properties", properties);
+
+        when(mappingMetadata.getSourceAsMap()).thenReturn(mappingMap);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, mappingMetadata));
+
+        // Mock GetPipelineResponse with empty list (pipeline not found)
+        GetPipelineResponse getPipelineResponse = mock(GetPipelineResponse.class);
+        when(getPipelineResponse.pipelines()).thenReturn(Collections.emptyList());
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        // Mock getPipeline call
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("required ingest pipeline"));
+    }
+
+    @Test
+    public void testCreateContainer_PipelineExistsNoModelId() throws InterruptedException {
+        // Test failure when pipeline exists but has no model_id
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with valid mapping
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> embeddingField = new HashMap<>();
+        embeddingField.put("type", "knn_vector");
+        embeddingField.put("dimension", 768);
+        properties.put("memory_embedding", embeddingField);
+
+        Map<String, Object> mappingMap = new HashMap<>();
+        mappingMap.put("properties", properties);
+
+        when(mappingMetadata.getSourceAsMap()).thenReturn(mappingMap);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, mappingMetadata));
+
+        // Mock GetPipelineResponse with empty processors (no model_id)
+        GetPipelineResponse getPipelineResponse = mock(GetPipelineResponse.class);
+
+        // Create real PipelineConfiguration with empty processors (final class, can't be mocked)
+        String pipelineJson = "{" + "\"processors\": []" + "}";
+        org.opensearch.ingest.PipelineConfiguration pipelineConfig = new org.opensearch.ingest.PipelineConfiguration(
+            indexName + "-embedding",
+            new BytesArray(pipelineJson),
+            org.opensearch.common.xcontent.XContentType.JSON
+        );
+
+        when(getPipelineResponse.pipelines()).thenReturn(Collections.singletonList(pipelineConfig));
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        // Mock getPipeline call
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getPipelineResponse);
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalArgumentException);
+        assertTrue(captor.getValue().getMessage().contains("not configured correctly"));
+    }
+
+    @Test
+    public void testCreateContainer_GetPipelineValidationError() throws InterruptedException {
+        // Test failure when getPipeline throws non-404 error
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+
+        // Get the actual index name from config
+        String indexName = memoryStorageConfig.getLongMemoryIndexName();
+
+        // Mock GetMappingsResponse with valid mapping
+        GetMappingsResponse getMappingsResponse = mock(GetMappingsResponse.class);
+        MappingMetadata mappingMetadata = mock(MappingMetadata.class);
+
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> embeddingField = new HashMap<>();
+        embeddingField.put("type", "knn_vector");
+        embeddingField.put("dimension", 768);
+        properties.put("memory_embedding", embeddingField);
+
+        Map<String, Object> mappingMap = new HashMap<>();
+        mappingMap.put("properties", properties);
+
+        when(mappingMetadata.getSourceAsMap()).thenReturn(mappingMap);
+        when(getMappingsResponse.getMappings()).thenReturn(Collections.singletonMap(indexName, mappingMetadata));
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+
+        // Mock getMappings call
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getMappingsResponse);
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        // Mock getPipeline call to throw RuntimeException
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Pipeline validation error"));
+            return null;
+        }).when(clusterAdminClient).getPipeline(any(GetPipelineRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalStateException);
+        assertTrue(captor.getValue().getMessage().contains("Failed to retrieve ingest pipeline"));
+    }
+
+    @Test
+    public void testCreateContainer_GetMappingsValidationError() throws InterruptedException {
+        // Test failure when getMappings throws non-IndexNotFoundException error
+        mockSuccessfulLLMValidation();
+        mockSuccessfulIndexCreation();
+
+        // Setup admin clients
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        // Mock getMappings call to throw RuntimeException (not IndexNotFoundException)
+        doAnswer(invocation -> {
+            ActionListener<GetMappingsResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Mapping retrieval error"));
+            return null;
+        }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(captor.capture());
+        assertTrue(captor.getValue() instanceof IllegalStateException);
+        assertTrue(captor.getValue().getMessage().contains("Failed to retrieve index mapping"));
+    }
+
+    // Helper method to mock successful LLM validation (without embedding validation which will be tested)
+    private void mockSuccessfulLLMValidation() {
+        // Mock valid LLM model
+        MLModel llmModel = mock(MLModel.class);
+        when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(llmModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+
+        // Mock valid embedding model
+        MLModel embeddingModel = mock(MLModel.class);
+        when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(embeddingModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
     }
 }
