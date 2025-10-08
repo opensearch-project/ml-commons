@@ -5,812 +5,645 @@
 
 package org.opensearch.ml.helper;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX;
 
+import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.Answers;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.admin.indices.delete.DeleteIndexRequest;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.reindex.BulkByScrollResponse;
+import org.opensearch.index.reindex.DeleteByQueryAction;
+import org.opensearch.index.reindex.DeleteByQueryRequest;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
-import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
-import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.profile.SearchProfileShardResults;
+import org.opensearch.search.suggest.Suggest;
+import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.ClusterAdminClient;
 import org.opensearch.transport.client.IndicesAdminClient;
 
-public class MemoryContainerHelperTests {
+public class MemoryContainerHelperTests extends OpenSearchTestCase {
 
-    @Mock
     private Client client;
-
-    @Mock
-    private SdkClient sdkClient;
-
-    @Mock
-    private NamedXContentRegistry xContentRegistry;
-
-    @Mock
+    private org.opensearch.remote.metadata.client.SdkClient sdkClient;
     private ThreadPool threadPool;
-
     private ThreadContext threadContext;
-
-    @Mock
-    private ActionListener<MLMemoryContainer> listener;
-
     private MemoryContainerHelper helper;
 
-    @Mock
-    private AdminClient adminClient;
-
-    @Mock
-    private IndicesAdminClient indicesAdminClient;
-
     @Before
-    public void setUp() {
-        MockitoAnnotations.openMocks(this);
-
-        // Create real ThreadContext since it's final and can't be mocked
-        Settings settings = Settings.builder().build();
-        threadContext = new ThreadContext(settings);
-
+    public void setUpTest() {
+        client = mock(Client.class, Answers.RETURNS_DEEP_STUBS);
+        sdkClient = mock(org.opensearch.remote.metadata.client.SdkClient.class);
+        threadPool = mock(ThreadPool.class);
+        threadContext = new ThreadContext(Settings.builder().build());
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        helper = new MemoryContainerHelper(client, sdkClient, xContentRegistry);
-
-        // Mock the admin client chain
-        when(client.admin()).thenReturn(adminClient);
-        when(adminClient.indices()).thenReturn(indicesAdminClient);
+        helper = new MemoryContainerHelper(client, sdkClient, NamedXContentRegistry.EMPTY);
     }
 
-    @Test
-    public void testGetMemoryContainerSuccess() {
-        String memoryContainerId = "container-123";
-        String mockJsonSource = "{\"name\":\"test-container\",\"memory_storage_config\":{\"memory_index_name\":\"test-index\"}}";
+    public void testGetMemoryContainerSuccess() throws Exception {
+        MLMemoryContainer container = createContainer();
+        String source = containerToJson(container);
 
-        // Create mock GetResponse
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn(mockJsonSource);
+        when(getResponse.getSourceAsString()).thenReturn(source);
 
-        // Create mock GetDataObjectResponse
-        GetDataObjectResponse getDataObjectResponse = mock(GetDataObjectResponse.class);
-        when(getDataObjectResponse.getResponse()).thenReturn(getResponse);
-        when(getDataObjectResponse.id()).thenReturn(memoryContainerId);
+        GetDataObjectResponse dataResponse = mock(GetDataObjectResponse.class);
+        when(dataResponse.getResponse()).thenReturn(getResponse);
 
-        // Create CompletableFuture with proper typed response
-        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(dataResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
 
-        helper.getMemoryContainer(memoryContainerId, listener);
+        PlainActionFuture<MLMemoryContainer> listener = PlainActionFuture.newFuture();
+        helper.getMemoryContainer("container-id", listener);
 
-        // Complete the future with the mock response
-        future.complete(getDataObjectResponse);
-
-        // Verify sdkClient was called with GetDataObjectRequest
-        verify(sdkClient).getDataObjectAsync(any(GetDataObjectRequest.class));
+        MLMemoryContainer result = listener.actionGet();
+        assertEquals(container.getName(), result.getName());
+        assertEquals(container.getConfiguration().getIndexPrefix(), result.getConfiguration().getIndexPrefix());
     }
 
-    @Test
-    public void testGetMemoryContainerWithTenantId() {
-        String memoryContainerId = "container-123";
-        String tenantId = "tenant-456";
-        String mockJsonSource = "{\"name\":\"test-container\"}";
-
-        // Create mock GetResponse
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn(mockJsonSource);
-
-        // Create mock GetDataObjectResponse
-        GetDataObjectResponse getDataObjectResponse = mock(GetDataObjectResponse.class);
-        when(getDataObjectResponse.getResponse()).thenReturn(getResponse);
-        when(getDataObjectResponse.id()).thenReturn(memoryContainerId);
-
-        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
-
-        helper.getMemoryContainer(memoryContainerId, tenantId, listener);
-        future.complete(getDataObjectResponse);
-
-        // Verify sdkClient was called with GetDataObjectRequest
-        verify(sdkClient).getDataObjectAsync(any(GetDataObjectRequest.class));
-    }
-
-    @Test
     public void testGetMemoryContainerNotFound() {
-        String memoryContainerId = "container-123";
-
-        // Create mock GetResponse for non-existent container
         GetResponse getResponse = mock(GetResponse.class);
         when(getResponse.isExists()).thenReturn(false);
-        when(getResponse.getSourceAsString()).thenReturn(null);
 
-        // Create mock GetDataObjectResponse
-        GetDataObjectResponse getDataObjectResponse = mock(GetDataObjectResponse.class);
-        when(getDataObjectResponse.getResponse()).thenReturn(getResponse);
-        when(getDataObjectResponse.id()).thenReturn(memoryContainerId);
+        GetDataObjectResponse dataResponse = mock(GetDataObjectResponse.class);
+        when(dataResponse.getResponse()).thenReturn(getResponse);
 
+        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(dataResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
+
+        PlainActionFuture<MLMemoryContainer> listener = PlainActionFuture.newFuture();
+        helper.getMemoryContainer("missing", listener);
+
+        OpenSearchStatusException exception = expectThrows(OpenSearchStatusException.class, listener::actionGet);
+        assertEquals(RestStatus.NOT_FOUND, exception.status());
+    }
+
+    public void testGetMemoryContainerIndexMissing() {
         CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+        future.completeExceptionally(new IndexNotFoundException("missing"));
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
 
-        helper.getMemoryContainer(memoryContainerId, listener);
-        future.complete(getDataObjectResponse);
+        PlainActionFuture<MLMemoryContainer> listener = PlainActionFuture.newFuture();
+        helper.getMemoryContainer("missing", listener);
 
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals("Memory container not found", exception.getMessage());
-        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exception).status());
+        OpenSearchStatusException exception = expectThrows(OpenSearchStatusException.class, listener::actionGet);
+        assertEquals(RestStatus.NOT_FOUND, exception.status());
     }
 
-    @Test
-    public void testGetMemoryContainerIndexNotFoundException() {
-        String memoryContainerId = "container-123";
-
-        IndexNotFoundException indexNotFoundException = new IndexNotFoundException("index not found");
+    public void testGetMemoryContainerFailure() {
         CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        future.completeExceptionally(indexNotFoundException);
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+        future.completeExceptionally(new IllegalStateException("boom"));
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
 
-        helper.getMemoryContainer(memoryContainerId, listener);
+        PlainActionFuture<MLMemoryContainer> listener = PlainActionFuture.newFuture();
+        helper.getMemoryContainer("id", listener);
 
-        // Need to wait a bit for async completion
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {}
-
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals("Memory container not found", exception.getMessage());
-        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exception).status());
+        IllegalStateException exception = expectThrows(IllegalStateException.class, listener::actionGet);
+        assertEquals("boom", exception.getMessage());
     }
 
-    @Test
-    public void testGetMemoryContainerGeneralError() {
-        String memoryContainerId = "container-123";
+    public void testCheckMemoryContainerAccess() {
+        assertTrue(helper.checkMemoryContainerAccess(null, createContainer()));
 
-        RuntimeException runtimeException = new RuntimeException("General error");
-        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        future.completeExceptionally(runtimeException);
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+        User admin = new User("admin", Collections.emptyList(), Arrays.asList("all_access"), Map.of());
+        assertTrue(helper.checkMemoryContainerAccess(admin, createContainer()));
 
-        helper.getMemoryContainer(memoryContainerId, listener);
+        User owner = new User("owner", Collections.emptyList(), Collections.emptyList(), Map.of());
+        MLMemoryContainer container = createContainerBuilder().owner(owner).build();
+        assertTrue(helper.checkMemoryContainerAccess(owner, container));
 
-        // Need to wait a bit for async completion
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {}
+        User userWithRole = new User("user", Arrays.asList("roleB"), Collections.emptyList(), Map.of());
+        assertTrue(helper.checkMemoryContainerAccess(userWithRole, createContainer()));
 
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof RuntimeException);
-        assertEquals("General error", exception.getMessage());
-    }
+        User unrelated = new User("user", Arrays.asList("roleZ"), Collections.emptyList(), Map.of());
+        assertFalse(helper.checkMemoryContainerAccess(unrelated, createContainer()));
 
-    @Test
-    public void testCheckMemoryContainerAccessWithNullUser() {
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").build();
-
-        assertTrue(helper.checkMemoryContainerAccess(null, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessWithAdminUser() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        // The "all_access" should be in roles (third parameter), not backend_roles
-        User adminUser = new User("admin", Arrays.asList("backend-role"), Arrays.asList("all_access"), Map.of());
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").build();
-
-        assertTrue(helper.checkMemoryContainerAccess(adminUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessAsOwner() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
-        User accessingUser = new User("owner-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
-
-        assertTrue(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessWithMatchingBackendRole() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", Arrays.asList("backend-role1", "backend-role2"), Arrays.asList("role1"), Map.of());
-        User accessingUser = new User("different-user", Arrays.asList("backend-role2", "backend-role3"), Arrays.asList("role2"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
-
-        assertTrue(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessDenied() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
-        User accessingUser = new User("different-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
-
-        assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessWithNullOwner() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        User accessingUser = new User("some-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(null).build();
-
-        assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testGetMemoryIndexNameWithConfig() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("custom-memory-index").build();
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
-        assertEquals(
-            ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "-custom-memory-index-memory-" + "sessions",
-            helper.getMemoryIndexName(container, MemoryType.SESSIONS)
+        // Test case where owner has backend roles and user has matching backend role
+        User ownerWithBackendRoles = new User(
+            "ownerWithRoles",
+            Arrays.asList("backend-role-1", "backend-role-2"),
+            Collections.emptyList(),
+            Map.of()
         );
+        User userWithMatchingBackendRole = new User("userWithRole", Arrays.asList("backend-role-1"), Collections.emptyList(), Map.of());
+        MLMemoryContainer containerWithOwnerBackendRoles = createContainerBuilder()
+            .owner(ownerWithBackendRoles)
+            .backendRoles(null) // No explicit backend roles on container
+            .build();
+        assertTrue(helper.checkMemoryContainerAccess(userWithMatchingBackendRole, containerWithOwnerBackendRoles));
 
-        config.setUseSystemIndex(false);
-        assertEquals("custom-memory-index-memory-" + "sessions", helper.getMemoryIndexName(container, MemoryType.SESSIONS));
+        // Test case where user has no matching backend roles
+        User userWithoutMatchingRole = new User("userNoMatch", Arrays.asList("other-role"), Collections.emptyList(), Map.of());
+        assertFalse(helper.checkMemoryContainerAccess(userWithoutMatchingRole, containerWithOwnerBackendRoles));
 
+        // Test case where container has empty backend roles list
+        MLMemoryContainer containerWithEmptyRoles = createContainerBuilder().backendRoles(Collections.emptyList()).owner(owner).build();
+        User userWithBackendRoles = new User("userWithRoles", Arrays.asList("role1"), Collections.emptyList(), Map.of());
+        assertFalse(helper.checkMemoryContainerAccess(userWithBackendRoles, containerWithEmptyRoles));
+
+        // Test case where user has null backend roles
+        User userWithNullBackendRoles = new User("userNull", null, Collections.emptyList(), Map.of());
+        assertFalse(helper.checkMemoryContainerAccess(userWithNullBackendRoles, createContainer()));
     }
 
-    @Test
-    public void testGetMemoryIndexNameWithoutConfig() {
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(null).build();
+    public void testCheckMemoryAccess() {
+        // Test with null user (security disabled)
+        assertTrue(helper.checkMemoryAccess(null, "any"));
 
-        assertNotNull(helper.getMemoryIndexName(container, MemoryType.SESSIONS));
+        User admin = new User("admin", Collections.emptyList(), Arrays.asList("all_access"), Map.of());
+        assertTrue(helper.checkMemoryAccess(admin, "any"));
+
+        // Test user with null roles
+        User adminWithNullRoles = new User("admin", null, null, Map.of());
+        assertFalse(helper.checkMemoryAccess(adminWithNullRoles, "owner"));
+
+        User owner = new User("owner", Collections.emptyList(), Collections.emptyList(), Map.of());
+        assertTrue(helper.checkMemoryAccess(owner, "owner"));
+
+        User other = new User("other", Collections.emptyList(), Collections.emptyList(), Map.of());
+        assertFalse(helper.checkMemoryAccess(other, "owner"));
     }
 
-    @Test
-    public void testGetMemoryIndexNameWithEmptyConfig() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix(null).build();
+    public void testGetMemoryIndexName() {
+        MemoryConfiguration configuration = MemoryConfiguration
+            .builder()
+            .indexPrefix("prefix")
+            .embeddingModelId("embedding")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .dimension(4)
+            .build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
+        MLMemoryContainer container = createContainerBuilder().configuration(configuration).build();
+        assertNotNull(helper.getMemoryIndexName(container, MemoryType.LONG_TERM));
         assertNull(helper.getMemoryIndexName(container, null));
-    }
 
-    @Test
-    public void testCheckMemoryContainerAccessWithNullBackendRoles() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", null, Arrays.asList("role1"), Map.of());
-        User accessingUser = new User("different-user", Arrays.asList("backend-role1"), Arrays.asList("role2"), Map.of());
+        // Test with null configuration - returns default index name
+        MLMemoryContainer containerNullConfig = createContainerBuilder().configuration(null).build();
+        // When configuration is null, a default index name is used
+        assertNotNull(helper.getMemoryIndexName(containerNullConfig, MemoryType.LONG_TERM));
+        assertEquals(".plugins-ml-am-default-memory-long-term", helper.getMemoryIndexName(containerNullConfig, MemoryType.LONG_TERM));
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
-
-        assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessBothNullBackendRoles() {
-        // User constructor: name, backend_roles, roles, custom_attributes
-        User owner = new User("owner-user", null, Arrays.asList("role1"), Map.of());
-        User accessingUser = new User("different-user", null, Arrays.asList("role2"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
-
-        assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessWithAllowedBackendRoles() {
-        // Test container with explicit backend roles (not from owner)
-        User accessingUser = new User("user1", Arrays.asList("backend-role-a"), Arrays.asList("role1"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer
-            .builder()
-            .name("test-container")
-            .backendRoles(Arrays.asList("backend-role-a", "backend-role-b"))
-            .build();
-
-        assertTrue(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryContainerAccessWithNonMatchingAllowedBackendRoles() {
-        // Test container with explicit backend roles that don't match user's roles
-        User accessingUser = new User("user1", Arrays.asList("backend-role-c"), Arrays.asList("role1"), Map.of());
-
-        MLMemoryContainer container = MLMemoryContainer
-            .builder()
-            .name("test-container")
-            .backendRoles(Arrays.asList("backend-role-a", "backend-role-b"))
-            .build();
-
-        assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
-    }
-
-    @Test
-    public void testCheckMemoryAccessWithNullUser() {
-        assertTrue(helper.checkMemoryAccess(null, "some-owner"));
-    }
-
-    @Test
-    public void testCheckMemoryAccessWithAdminUser() {
-        User adminUser = new User("admin", Arrays.asList("backend-role"), Arrays.asList("all_access"), Map.of());
-        assertTrue(helper.checkMemoryAccess(adminUser, "different-owner"));
-    }
-
-    @Test
-    public void testCheckMemoryAccessAsOwner() {
-        User user = new User("owner-user", Arrays.asList("backend-role"), Arrays.asList("role1"), Map.of());
-        assertTrue(helper.checkMemoryAccess(user, "owner-user"));
-    }
-
-    @Test
-    public void testCheckMemoryAccessDenied() {
-        User user = new User("user1", Arrays.asList("backend-role"), Arrays.asList("role1"), Map.of());
-        assertFalse(helper.checkMemoryAccess(user, "different-user"));
-    }
-
-    @Test
-    public void testIsAdminUserWithNullUser() {
-        assertFalse(helper.isAdminUser(null));
-    }
-
-    @Test
-    public void testIsAdminUserWithAdminRole() {
-        User adminUser = new User("admin", Arrays.asList("backend-role"), Arrays.asList("all_access"), Map.of());
-        assertTrue(helper.isAdminUser(adminUser));
-    }
-
-    @Test
-    public void testIsAdminUserWithoutAdminRole() {
-        User regularUser = new User("user1", Arrays.asList("backend-role"), Arrays.asList("role1"), Map.of());
-        assertFalse(helper.isAdminUser(regularUser));
-    }
-
-    @Test
-    public void testIsAdminUserWithNullRoles() {
-        User user = new User("user1", Arrays.asList("backend-role"), null, Map.of());
-        assertFalse(helper.isAdminUser(user));
-    }
-
-    @Test
-    public void testGetMemoryIndexNameWithSystemIndexEnabled() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix").useSystemIndex(true).build();
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
-        String indexName = helper.getMemoryIndexName(container, MemoryType.WORKING);
-        assertNotNull(indexName);
-        assertTrue(indexName.contains("test-prefix"));
-        assertTrue(indexName.contains("working"));
-    }
-
-    @Test
-    public void testGetMemoryIndexNameWithSystemIndexDisabled() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test-prefix").useSystemIndex(false).build();
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
-        String indexName = helper.getMemoryIndexName(container, MemoryType.LONG_TERM);
-        assertNotNull(indexName);
-        assertTrue(indexName.contains("test-prefix"));
-        assertTrue(indexName.contains("long-term"));
-        assertFalse(indexName.startsWith("."));
-    }
-
-    @Test
-    public void testGetMemoryIndexNameForAllMemoryTypes() {
-        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("test").build();
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").configuration(config).build();
-
-        // Test all valid memory types
+        // Test all memory types - by default all are enabled
         assertNotNull(helper.getMemoryIndexName(container, MemoryType.SESSIONS));
         assertNotNull(helper.getMemoryIndexName(container, MemoryType.WORKING));
-        assertNotNull(helper.getMemoryIndexName(container, MemoryType.LONG_TERM));
         assertNotNull(helper.getMemoryIndexName(container, MemoryType.HISTORY));
     }
 
-    @Test
-    public void testCheckMemoryContainerAccessWithEmptyBackendRoles() {
-        User owner = new User("owner-user", Arrays.asList(), Arrays.asList("role1"), Map.of());
-        User accessingUser = new User("different-user", Arrays.asList("backend-role"), Arrays.asList("role2"), Map.of());
+    public void testSearchData() {
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
+        SearchDataObjectRequest request = SearchDataObjectRequest
+            .builder()
+            .indices("index")
+            .searchSourceBuilder(new SearchSourceBuilder())
+            .build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
+        SearchResponse searchResponse = createSearchResponse(2);
+        SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(response));
 
-        assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
+        PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
+        helper.searchData(configuration, request, future);
+        assertSame(searchResponse, future.actionGet());
+
+        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new RuntimeException("search failure"));
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
+
+        PlainActionFuture<SearchResponse> failure = PlainActionFuture.newFuture();
+        helper.searchData(configuration, request, failure);
+        RuntimeException exception = expectThrows(RuntimeException.class, failure::actionGet);
+        assertEquals("search failure", exception.getMessage());
     }
 
-    @Test
-    public void testGetMemoryContainerParseException() {
-        String memoryContainerId = "container-123";
-        String invalidJsonSource = "{invalid json}";
+    public void testSearchDataWithSystemIndex() {
+        // Test search with system index
+        MemoryConfiguration systemConfig = MemoryConfiguration.builder().indexPrefix("prefix").useSystemIndex(true).build();
+        SearchDataObjectRequest request = SearchDataObjectRequest
+            .builder()
+            .indices("index")
+            .searchSourceBuilder(new SearchSourceBuilder())
+            .build();
 
-        // Create mock GetResponse with invalid JSON
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn(invalidJsonSource);
+        SearchResponse searchResponse = createSearchResponse(3);
+        SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(response));
 
-        // Create mock GetDataObjectResponse
-        GetDataObjectResponse getDataObjectResponse = mock(GetDataObjectResponse.class);
-        when(getDataObjectResponse.getResponse()).thenReturn(getResponse);
-        when(getDataObjectResponse.id()).thenReturn(memoryContainerId);
+        PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
+        helper.searchData(systemConfig, request, future);
+        assertSame(searchResponse, future.actionGet());
 
-        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+        // Test failure with system index
+        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new RuntimeException("system index search failure"));
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
 
-        helper.getMemoryContainer(memoryContainerId, listener);
-        future.complete(getDataObjectResponse);
-
-        // Should handle parse exception
-        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exceptionCaptor.capture());
-        assertNotNull(exceptionCaptor.getValue());
+        PlainActionFuture<SearchResponse> failure = PlainActionFuture.newFuture();
+        helper.searchData(systemConfig, request, failure);
+        RuntimeException exception = expectThrows(RuntimeException.class, failure::actionGet);
+        assertEquals("system index search failure", exception.getMessage());
     }
 
-    @Test
-    public void testGetDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.get.GetRequest getRequest = new org.opensearch.action.get.GetRequest("test-index", "doc-id");
-        ActionListener<GetResponse> listener = mock(ActionListener.class);
+    public void testDataOperations() {
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
 
-        helper.getData(config, getRequest, listener);
+        GetRequest getRequest = new GetRequest("index", "id");
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(GetResponse.class));
+            return null;
+        }).when(client).get(eq(getRequest), any());
+        helper.getData(configuration, getRequest, getFuture);
+        assertNotNull(getFuture.actionGet());
 
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any());
+        IndexRequest indexRequest = new IndexRequest("index");
+        PlainActionFuture<IndexResponse> indexFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(eq(indexRequest), any());
+        helper.indexData(configuration, indexRequest, indexFuture);
+        assertNotNull(indexFuture.actionGet());
+
+        UpdateRequest updateRequest = new UpdateRequest("index", "id");
+        PlainActionFuture<UpdateResponse> updateFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(UpdateResponse.class));
+            return null;
+        }).when(client).update(eq(updateRequest), any());
+        helper.updateData(configuration, updateRequest, updateFuture);
+        assertNotNull(updateFuture.actionGet());
+
+        DeleteRequest deleteRequest = new DeleteRequest("index", "id");
+        PlainActionFuture<DeleteResponse> deleteFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(DeleteResponse.class));
+            return null;
+        }).when(client).delete(eq(deleteRequest), any());
+        helper.deleteData(configuration, deleteRequest, deleteFuture);
+        assertNotNull(deleteFuture.actionGet());
     }
 
-    @Test
-    public void testGetDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.get.GetRequest getRequest = new org.opensearch.action.get.GetRequest("test-index", "doc-id");
-        ActionListener<GetResponse> listener = mock(ActionListener.class);
+    public void testDataOperationsWithSystemIndex() {
+        // Test operations with system index (useSystemIndex = true)
+        MemoryConfiguration systemConfig = MemoryConfiguration.builder().indexPrefix("prefix").useSystemIndex(true).build();
 
-        helper.getData(config, getRequest, listener);
+        GetRequest getRequest = new GetRequest("index", "id");
+        PlainActionFuture<GetResponse> getFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(GetResponse.class));
+            return null;
+        }).when(client).get(eq(getRequest), any());
+        helper.getData(systemConfig, getRequest, getFuture);
+        assertNotNull(getFuture.actionGet());
 
-        verify(client).get(any(org.opensearch.action.get.GetRequest.class), any());
+        IndexRequest indexRequest = new IndexRequest("index");
+        PlainActionFuture<IndexResponse> indexFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(eq(indexRequest), any());
+        helper.indexData(systemConfig, indexRequest, indexFuture);
+        assertNotNull(indexFuture.actionGet());
+
+        UpdateRequest updateRequest = new UpdateRequest("index", "id");
+        PlainActionFuture<UpdateResponse> updateFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(UpdateResponse.class));
+            return null;
+        }).when(client).update(eq(updateRequest), any());
+        helper.updateData(systemConfig, updateRequest, updateFuture);
+        assertNotNull(updateFuture.actionGet());
+
+        DeleteRequest deleteRequest = new DeleteRequest("index", "id");
+        PlainActionFuture<DeleteResponse> deleteFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(DeleteResponse.class));
+            return null;
+        }).when(client).delete(eq(deleteRequest), any());
+        helper.deleteData(systemConfig, deleteRequest, deleteFuture);
+        assertNotNull(deleteFuture.actionGet());
     }
 
-    @Test
-    public void testIndexDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.index.IndexRequest indexRequest = new org.opensearch.action.index.IndexRequest("test-index");
-        ActionListener<org.opensearch.action.index.IndexResponse> listener = mock(ActionListener.class);
+    public void testDeleteIndexAndBulk() {
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
+        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("index");
+        BulkRequest bulkRequest = new BulkRequest();
 
-        helper.indexData(config, indexRequest, listener);
+        AdminClient adminClient = mock(AdminClient.class);
+        ClusterAdminClient clusterAdminClient = mock(ClusterAdminClient.class);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.cluster()).thenReturn(clusterAdminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
 
-        verify(client).index(any(org.opensearch.action.index.IndexRequest.class), any());
+        PlainActionFuture<AcknowledgedResponse> deleteIndexFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(AcknowledgedResponse.class));
+            return null;
+        }).when(indicesAdminClient).delete(eq(deleteIndexRequest), any());
+        helper.deleteIndex(configuration, deleteIndexRequest, deleteIndexFuture);
+        assertNotNull(deleteIndexFuture.actionGet());
+
+        PlainActionFuture<BulkResponse> bulkFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(BulkResponse.class));
+            return null;
+        }).when(client).bulk(eq(bulkRequest), any());
+        helper.bulkIngestData(configuration, bulkRequest, bulkFuture);
+        assertNotNull(bulkFuture.actionGet());
     }
 
-    @Test
-    public void testIndexDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.index.IndexRequest indexRequest = new org.opensearch.action.index.IndexRequest("test-index");
-        ActionListener<org.opensearch.action.index.IndexResponse> listener = mock(ActionListener.class);
+    public void testDeleteIndexAndBulkWithSystemIndex() {
+        // Test with system index
+        MemoryConfiguration systemConfig = MemoryConfiguration.builder().indexPrefix("prefix").useSystemIndex(true).build();
+        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("index");
+        BulkRequest bulkRequest = new BulkRequest();
 
-        helper.indexData(config, indexRequest, listener);
+        AdminClient adminClient = mock(AdminClient.class);
+        IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        when(client.admin()).thenReturn(adminClient);
+        when(adminClient.indices()).thenReturn(indicesAdminClient);
 
-        verify(client).index(any(org.opensearch.action.index.IndexRequest.class), any());
+        PlainActionFuture<AcknowledgedResponse> deleteIndexFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(AcknowledgedResponse.class));
+            return null;
+        }).when(indicesAdminClient).delete(eq(deleteIndexRequest), any());
+        helper.deleteIndex(systemConfig, deleteIndexRequest, deleteIndexFuture);
+        assertNotNull(deleteIndexFuture.actionGet());
+
+        PlainActionFuture<BulkResponse> bulkFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(BulkResponse.class));
+            return null;
+        }).when(client).bulk(eq(bulkRequest), any());
+        helper.bulkIngestData(systemConfig, bulkRequest, bulkFuture);
+        assertNotNull(bulkFuture.actionGet());
     }
 
-    @Test
-    public void testUpdateDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.update.UpdateRequest updateRequest = new org.opensearch.action.update.UpdateRequest("test-index", "doc-id");
-        ActionListener<org.opensearch.action.update.UpdateResponse> listener = mock(ActionListener.class);
+    public void testBulkIngestData() {
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
+        BulkRequest bulkRequest = new BulkRequest();
 
-        helper.updateData(config, updateRequest, listener);
-
-        verify(client).update(any(org.opensearch.action.update.UpdateRequest.class), any());
+        PlainActionFuture<BulkResponse> bulkFuture = PlainActionFuture.newFuture();
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(BulkResponse.class));
+            return null;
+        }).when(client).bulk(eq(bulkRequest), any());
+        helper.bulkIngestData(configuration, bulkRequest, bulkFuture);
+        assertNotNull(bulkFuture.actionGet());
     }
 
-    @Test
-    public void testUpdateDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.update.UpdateRequest updateRequest = new org.opensearch.action.update.UpdateRequest("test-index", "doc-id");
-        ActionListener<org.opensearch.action.update.UpdateResponse> listener = mock(ActionListener.class);
+    public void testDeleteByQuery() {
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
+        DeleteByQueryRequest request = new DeleteByQueryRequest("index");
+        PlainActionFuture<BulkByScrollResponse> future = PlainActionFuture.newFuture();
 
-        helper.updateData(config, updateRequest, listener);
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mock(BulkByScrollResponse.class));
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), eq(request), any());
 
-        verify(client).update(any(org.opensearch.action.update.UpdateRequest.class), any());
+        helper.deleteDataByQuery(configuration, request, future);
+        assertNotNull(future.actionGet());
     }
 
-    @Test
-    public void testDeleteDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.delete.DeleteRequest deleteRequest = new org.opensearch.action.delete.DeleteRequest("test-index", "doc-id");
-        ActionListener<org.opensearch.action.delete.DeleteResponse> listener = mock(ActionListener.class);
+    public void testDeleteByQueryWithSystemIndex() {
+        // Test delete by query with system index
+        MemoryConfiguration systemConfig = MemoryConfiguration.builder().indexPrefix("prefix").useSystemIndex(true).build();
+        DeleteByQueryRequest request = new DeleteByQueryRequest("index");
+        PlainActionFuture<BulkByScrollResponse> future = PlainActionFuture.newFuture();
 
-        helper.deleteData(config, deleteRequest, listener);
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mock(BulkByScrollResponse.class));
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), eq(request), any());
 
-        verify(client).delete(any(org.opensearch.action.delete.DeleteRequest.class), any());
+        helper.deleteDataByQuery(systemConfig, request, future);
+        assertNotNull(future.actionGet());
     }
 
-    @Test
-    public void testDeleteDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.delete.DeleteRequest deleteRequest = new org.opensearch.action.delete.DeleteRequest("test-index", "doc-id");
-        ActionListener<org.opensearch.action.delete.DeleteResponse> listener = mock(ActionListener.class);
+    public void testFiltersAndAdminHelpers() {
+        User user = new User("alice", Arrays.asList("role1"), Collections.emptyList(), Map.of());
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        helper.addUserBackendRolesFilter(user, searchSourceBuilder);
+        assertTrue(searchSourceBuilder.query() instanceof BoolQueryBuilder);
 
-        helper.deleteData(config, deleteRequest, listener);
+        // Test with existing BoolQueryBuilder
+        SearchSourceBuilder builderWithBoolQuery = new SearchSourceBuilder();
+        builderWithBoolQuery.query(QueryBuilders.boolQuery().must(QueryBuilders.matchAllQuery()));
+        helper.addUserBackendRolesFilter(user, builderWithBoolQuery);
+        assertTrue(builderWithBoolQuery.query() instanceof BoolQueryBuilder);
 
-        verify(client).delete(any(org.opensearch.action.delete.DeleteRequest.class), any());
+        // Test with existing non-BoolQueryBuilder
+        SearchSourceBuilder builderWithMatchQuery = new SearchSourceBuilder();
+        builderWithMatchQuery.query(QueryBuilders.matchAllQuery());
+        helper.addUserBackendRolesFilter(user, builderWithMatchQuery);
+        assertTrue(builderWithMatchQuery.query() instanceof BoolQueryBuilder);
+
+        SearchSourceBuilder ownerBuilder = new SearchSourceBuilder();
+        helper.addOwnerIdFilter(user, ownerBuilder);
+        assertTrue(ownerBuilder.query() instanceof BoolQueryBuilder);
+
+        QueryBuilder matchAll = QueryBuilders.matchAllQuery();
+        QueryBuilder filtered = helper.addOwnerIdFilter(user, matchAll);
+        assertTrue(filtered instanceof BoolQueryBuilder);
+
+        // Test addOwnerIdFilter with null user (security disabled)
+        QueryBuilder filteredWithNullUser = helper.addOwnerIdFilter(null, matchAll);
+        assertEquals(matchAll, filteredWithNullUser);
+
+        // Test addOwnerIdFilter with admin user
+        User admin = new User("admin", Collections.emptyList(), Arrays.asList("all_access"), Map.of());
+        QueryBuilder filteredWithAdmin = helper.addOwnerIdFilter(admin, matchAll);
+        assertEquals(matchAll, filteredWithAdmin);
+
+        SearchSourceBuilder containerBuilder = new SearchSourceBuilder();
+        helper.addContainerIdFilter("container", containerBuilder);
+        assertTrue(containerBuilder.query() instanceof BoolQueryBuilder);
+
+        // Test addContainerIdFilter with null/blank containerId
+        SearchSourceBuilder builderWithNullId = new SearchSourceBuilder();
+        helper.addContainerIdFilter(null, builderWithNullId);
+        assertNull(builderWithNullId.query());
+
+        SearchSourceBuilder builderWithBlankId = new SearchSourceBuilder();
+        helper.addContainerIdFilter("", builderWithBlankId);
+        assertNull(builderWithBlankId.query());
+
+        QueryBuilder containerFiltered = helper.addContainerIdFilter("container", matchAll);
+        assertTrue(containerFiltered instanceof BoolQueryBuilder);
+
+        // Test addContainerIdFilter QueryBuilder with null/blank containerId
+        QueryBuilder filteredWithNullId = helper.addContainerIdFilter(null, matchAll);
+        assertEquals(matchAll, filteredWithNullId);
+
+        QueryBuilder filteredWithBlankId = helper.addContainerIdFilter("", matchAll);
+        assertEquals(matchAll, filteredWithBlankId);
+
+        assertTrue(helper.isAdminUser(admin));
+        assertFalse(helper.isAdminUser(user));
+
+        // Test isAdminUser with null user
+        assertFalse(helper.isAdminUser(null));
+
+        // Test isAdminUser with empty roles
+        User userWithEmptyRoles = new User("user", Collections.emptyList(), Collections.emptyList(), Map.of());
+        assertFalse(helper.isAdminUser(userWithEmptyRoles));
+
+        // Test isAdminUser with null roles
+        User userWithNullRoles = new User("user", null, null, Map.of());
+        assertFalse(helper.isAdminUser(userWithNullRoles));
+
+        assertEquals("alice", helper.getOwnerId(user));
+        assertNull(helper.getOwnerId(null));
     }
 
-    @Test
-    public void testBulkIngestDataWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.action.bulk.BulkRequest bulkRequest = new org.opensearch.action.bulk.BulkRequest();
-        ActionListener<org.opensearch.action.bulk.BulkResponse> listener = mock(ActionListener.class);
+    public void testCountContainersWithPrefix() {
+        // Test with null prefix
+        PlainActionFuture<Long> nullFuture = PlainActionFuture.newFuture();
+        helper.countContainersWithPrefix(null, null, nullFuture);
+        assertEquals(0L, nullFuture.actionGet().longValue());
 
-        helper.bulkIngestData(config, bulkRequest, listener);
+        // Test with blank prefix
+        PlainActionFuture<Long> blankFuture = PlainActionFuture.newFuture();
+        helper.countContainersWithPrefix("", null, blankFuture);
+        assertEquals(0L, blankFuture.actionGet().longValue());
 
-        verify(client).bulk(any(org.opensearch.action.bulk.BulkRequest.class), any());
+        SearchResponse searchResponse = createSearchResponse(3);
+        SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(response));
+
+        PlainActionFuture<Long> future = PlainActionFuture.newFuture();
+        helper.countContainersWithPrefix("prefix", null, future);
+        assertEquals(3L, future.actionGet().longValue());
+
+        // Test with tenant ID
+        PlainActionFuture<Long> tenantFuture = PlainActionFuture.newFuture();
+        helper.countContainersWithPrefix("prefix", "tenant123", tenantFuture);
+        assertEquals(3L, tenantFuture.actionGet().longValue());
+
+        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
+        failed.completeExceptionally(new RuntimeException("fail"));
+        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
+
+        PlainActionFuture<Long> failure = PlainActionFuture.newFuture();
+        helper.countContainersWithPrefix("prefix", null, failure);
+        RuntimeException exception = expectThrows(RuntimeException.class, failure::actionGet);
+        assertEquals("fail", exception.getMessage());
     }
 
-    @Test
-    public void testBulkIngestDataWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.action.bulk.BulkRequest bulkRequest = new org.opensearch.action.bulk.BulkRequest();
-        ActionListener<org.opensearch.action.bulk.BulkResponse> listener = mock(ActionListener.class);
-
-        helper.bulkIngestData(config, bulkRequest, listener);
-
-        verify(client).bulk(any(org.opensearch.action.bulk.BulkRequest.class), any());
+    private MLMemoryContainer createContainer() {
+        return createContainerBuilder().build();
     }
 
-    @Test
-    public void testGetOwnerIdWithUser() {
-        User user = new User("testuser", Arrays.asList("role1"), Arrays.asList("role2"), Map.of());
-        String ownerId = helper.getOwnerId(user);
-        assertEquals("testuser", ownerId);
+    private MLMemoryContainer.MLMemoryContainerBuilder createContainerBuilder() {
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
+        User owner = new User("owner", Collections.emptyList(), Collections.emptyList(), Map.of());
+        return MLMemoryContainer
+            .builder()
+            .name("container")
+            .description("desc")
+            .owner(owner)
+            .configuration(configuration)
+            .backendRoles(Arrays.asList("roleA", "roleB"));
     }
 
-    @Test
-    public void testGetOwnerIdWithNullUser() {
-        String ownerId = helper.getOwnerId(null);
-        assertNull(ownerId);
+    private String containerToJson(MLMemoryContainer container) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        container.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        return BytesReference.bytes(builder).utf8ToString();
     }
 
-    @Test
-    public void testAddUserBackendRolesFilter() {
-        User user = new User("testuser", Arrays.asList("backend-role1", "backend-role2"), Arrays.asList("role1"), Map.of());
-        org.opensearch.search.builder.SearchSourceBuilder searchSourceBuilder = new org.opensearch.search.builder.SearchSourceBuilder();
-
-        org.opensearch.search.builder.SearchSourceBuilder result = helper.addUserBackendRolesFilter(user, searchSourceBuilder);
-
-        assertNotNull(result);
-        assertNotNull(result.query());
-    }
-
-    @Test
-    public void testAddOwnerIdFilter() {
-        User user = new User("testuser", Arrays.asList("backend-role1"), Arrays.asList("role1"), Map.of());
-        org.opensearch.search.builder.SearchSourceBuilder searchSourceBuilder = new org.opensearch.search.builder.SearchSourceBuilder();
-
-        helper.addOwnerIdFilter(user, searchSourceBuilder);
-
-        assertNotNull(searchSourceBuilder.query());
-    }
-
-    @Test
-    public void testSearchDataWithSearchDataObjectRequestSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.remote.metadata.client.SearchDataObjectRequest searchRequest = mock(
-            org.opensearch.remote.metadata.client.SearchDataObjectRequest.class
+    private SearchResponse createSearchResponse(long totalHits) {
+        SearchHit[] hits = new SearchHit[0];
+        SearchHits searchHits = new SearchHits(hits, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), 1.0f);
+        org.opensearch.search.internal.InternalSearchResponse internal = new org.opensearch.search.internal.InternalSearchResponse(
+            searchHits,
+            InternalAggregations.EMPTY,
+            new Suggest(Collections.emptyList()),
+            new SearchProfileShardResults(Collections.emptyMap()),
+            false,
+            false,
+            1
         );
-        ActionListener<org.opensearch.action.search.SearchResponse> listener = mock(ActionListener.class);
-
-        CompletableFuture<org.opensearch.remote.metadata.client.SearchDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(future);
-
-        helper.searchData(config, searchRequest, listener);
-
-        verify(sdkClient).searchDataObjectAsync(any());
-    }
-
-    @Test
-    public void testSearchDataWithSearchDataObjectRequestNonSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.remote.metadata.client.SearchDataObjectRequest searchRequest = mock(
-            org.opensearch.remote.metadata.client.SearchDataObjectRequest.class
+        return new SearchResponse(
+            internal,
+            "",
+            1,
+            1,
+            0,
+            0,
+            org.opensearch.action.search.ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
         );
-        ActionListener<org.opensearch.action.search.SearchResponse> listener = mock(ActionListener.class);
-
-        CompletableFuture<org.opensearch.remote.metadata.client.SearchDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(future);
-
-        helper.searchData(config, searchRequest, listener);
-
-        verify(sdkClient).searchDataObjectAsync(any());
     }
-
-    @Test
-    public void testDeleteIndexWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("test-index");
-        ActionListener<AcknowledgedResponse> listener = mock(ActionListener.class);
-
-        helper.deleteIndex(config, deleteIndexRequest, listener);
-
-        verify(indicesAdminClient).delete(any(DeleteIndexRequest.class), any());
-    }
-
-    @Test
-    public void testDeleteIndexWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("test-index");
-        ActionListener<AcknowledgedResponse> listener = mock(ActionListener.class);
-
-        helper.deleteIndex(config, deleteIndexRequest, listener);
-
-        verify(indicesAdminClient).delete(any(DeleteIndexRequest.class), any());
-    }
-
-    @Test
-    public void testDeleteIndexThreadContextHandling() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        DeleteIndexRequest deleteIndexRequest = new DeleteIndexRequest("test-index");
-        ActionListener<AcknowledgedResponse> listener = mock(ActionListener.class);
-
-        helper.deleteIndex(config, deleteIndexRequest, listener);
-
-        // Verify that the client.admin().indices().delete() was called
-        verify(indicesAdminClient).delete(any(DeleteIndexRequest.class), any());
-
-        // Verify that threadPool and threadContext were accessed for system index
-        verify(client).threadPool();
-        verify(threadPool).getThreadContext();
-    }
-
-    @Test
-    public void testDeleteDataByQueryWithSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(true).build();
-        org.opensearch.index.reindex.DeleteByQueryRequest deleteByQueryRequest = new org.opensearch.index.reindex.DeleteByQueryRequest(
-            "test-index"
-        );
-        ActionListener<org.opensearch.index.reindex.BulkByScrollResponse> listener = mock(ActionListener.class);
-
-        helper.deleteDataByQuery(config, deleteByQueryRequest, listener);
-
-        // Verify that the client executed the delete by query action
-        verify(client).execute(any(), any(org.opensearch.index.reindex.DeleteByQueryRequest.class), any());
-        verify(client).threadPool();
-        verify(threadPool).getThreadContext();
-    }
-
-    @Test
-    public void testDeleteDataByQueryWithoutSystemIndex() {
-        MemoryConfiguration config = MemoryConfiguration.builder().useSystemIndex(false).build();
-        org.opensearch.index.reindex.DeleteByQueryRequest deleteByQueryRequest = new org.opensearch.index.reindex.DeleteByQueryRequest(
-            "test-index"
-        );
-        ActionListener<org.opensearch.index.reindex.BulkByScrollResponse> listener = mock(ActionListener.class);
-
-        helper.deleteDataByQuery(config, deleteByQueryRequest, listener);
-
-        // Verify that the client executed the delete by query action without thread context handling
-        verify(client).execute(any(), any(org.opensearch.index.reindex.DeleteByQueryRequest.class), any());
-    }
-
-    @Test
-    public void testCountContainersWithPrefixSuccess() {
-        String indexPrefix = "test-prefix";
-        String tenantId = "tenant-123";
-        ActionListener<Long> listener = mock(ActionListener.class);
-
-        // Mock SDK search response
-        CompletableFuture<org.opensearch.remote.metadata.client.SearchDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class))).thenReturn(future);
-
-        helper.countContainersWithPrefix(indexPrefix, tenantId, listener);
-
-        // Verify the SDK client was called with the right request
-        verify(sdkClient).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
-    }
-
-    @Test
-    public void testCountContainersWithPrefixNullPrefix() {
-        ActionListener<Long> listener = mock(ActionListener.class);
-
-        helper.countContainersWithPrefix(null, null, listener);
-
-        // Verify that the listener was called with 0
-        verify(listener).onResponse(0L);
-    }
-
-    @Test
-    public void testCountContainersWithPrefixBlankPrefix() {
-        ActionListener<Long> listener = mock(ActionListener.class);
-
-        helper.countContainersWithPrefix("   ", null, listener);
-
-        // Verify that the listener was called with 0
-        verify(listener).onResponse(0L);
-    }
-
-    @Test
-    public void testCountContainersWithPrefixWithoutTenant() {
-        String indexPrefix = "test-prefix";
-        ActionListener<Long> listener = mock(ActionListener.class);
-
-        // Mock SDK search response
-        CompletableFuture<org.opensearch.remote.metadata.client.SearchDataObjectResponse> future = new CompletableFuture<>();
-        when(sdkClient.searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class))).thenReturn(future);
-
-        helper.countContainersWithPrefix(indexPrefix, null, listener);
-
-        // Verify the SDK client was called
-        verify(sdkClient).searchDataObjectAsync(any(org.opensearch.remote.metadata.client.SearchDataObjectRequest.class));
-    }
-
-    @Test
-    public void testAddOwnerIdFilterWithNullUser() {
-        org.opensearch.index.query.QueryBuilder baseQuery = org.opensearch.index.query.QueryBuilders.matchAllQuery();
-
-        org.opensearch.index.query.QueryBuilder result = helper.addOwnerIdFilter(null, baseQuery);
-
-        // For null user, should return the original query unchanged
-        assertEquals(baseQuery, result);
-    }
-
-    @Test
-    public void testAddOwnerIdFilterWithAdminUser() {
-        // Create admin user with all_access role - User.parse format is "username|backend-role1,backend-role2|role1,role2,..."
-        User adminUser = new User("admin", List.of("backend-role"), List.of("all_access"), List.of());
-        org.opensearch.index.query.QueryBuilder baseQuery = org.opensearch.index.query.QueryBuilders.matchAllQuery();
-
-        org.opensearch.index.query.QueryBuilder result = helper.addOwnerIdFilter(adminUser, baseQuery);
-
-        // For admin user, should return the original query unchanged
-        assertEquals(baseQuery, result);
-    }
-
-    @Test
-    public void testAddOwnerIdFilterWithRegularUser() {
-        User regularUser = User.parse("john|backend-role");
-        org.opensearch.index.query.QueryBuilder baseQuery = org.opensearch.index.query.QueryBuilders.matchAllQuery();
-
-        org.opensearch.index.query.QueryBuilder result = helper.addOwnerIdFilter(regularUser, baseQuery);
-
-        // For regular user, should wrap in a BoolQuery with owner filter
-        assertTrue(result instanceof org.opensearch.index.query.BoolQueryBuilder);
-        org.opensearch.index.query.BoolQueryBuilder boolQuery = (org.opensearch.index.query.BoolQueryBuilder) result;
-        assertEquals(1, boolQuery.must().size());
-        assertEquals(1, boolQuery.filter().size());
-    }
-
 }
