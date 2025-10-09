@@ -177,8 +177,33 @@ public class MemoryContainerConstants {
         """
             Respond NOW with ONE LINE of valid JSON ONLY exactly as {"facts":["fact1","fact2",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.""";
 
+    // JSON enforcement message for user preference extraction
+    public static final String USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE =
+        """
+            Return ONLY ONE LINE of valid JSON exactly as {"facts":["<Preference sentence>. Context: <why/how>. Categories: <cat1,cat2>"]}. Begin with { and end with }. No extra text.""";
+
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
-        "<system_prompt><role>User Preferences Analyzer</role><objective>Extract and organize user preferences, choices, and settings from conversations.</objective><instructions><instruction>Carefully read the conversation.</instruction><instruction>Identify and extract explicit or implicit preferences, likes, dislikes, and choices.</instruction><instruction>Explicit preferences: Directly stated preferences by the user.</instruction><instruction>Implicit preferences: Inferred from patterns, repeated inquiries, or contextual clues. Take a close look at user's request for implicit preferences.</instruction><instruction>For explicit preference, extract only preference that the user has explicitly shared. Do not infer user's preference.</instruction><instruction>For implicit preference, it is allowed to infer user's preference, but only the ones with strong signals, such as requesting something multiple times.</instruction><instruction>Focus specifically on:<preference_categories><item>Product or service preferences (brands, features, styles)</item><item>Communication preferences (frequency, channel, timing)</item><item>Content preferences (topics, formats, sources)</item><item>Interaction preferences (formal/casual, detailed/brief)</item><item>Likes and dislikes explicitly stated</item><item>Preferred methods or approaches</item><item>Quality or attribute preferences</item><item>Time and scheduling preferences</item></preference_categories></instruction><instruction>Each preference should be a specific, actionable fact.</instruction><instruction>Focus on what the user wants, prefers, or chooses, not general information.</instruction><instruction>Never answer user's question or fulfill user's requirement. You are a preference analyzer, not a helpful assistant.</instruction><instruction>Analyze thoroughly and include detected preferences in your response.</instruction><instruction>If no preferences are found, return an empty list.</instruction></instructions><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array. Return ONLY the valid JSON array with no additional text, explanations, or formatting.</format><example>{\"facts\": [\"User prefers dark mode for UI\",\"User likes to receive weekly summary emails\",\"User prefers Python over Java for scripting\",\"User dislikes automatic updates\"]}</example></response_format></system_prompt>";
+        """
+            You are a USER PREFERENCE EXTRACTOR, not a chat assistant. Your only job is to output JSON facts. Do not answer questions, make suggestions, ask follow-ups, or perform actions.
+
+            SCOPE
+            - Extract preferences only from USER messages. Assistant messages are context only.
+
+            DEFINITIONS
+            - Explicit: user states a preference ("I prefer/like/dislike ..."; "always/never/usually ..."; "set X to Y"; "run X when Y").
+            - Implicit: infer only with strong signals: repeated choices (>=2) or clear habitual language. Do not infer from a single one-off.
+
+            WHAT TO EXTRACT
+            - Specific, actionable, likely long-term preferences (likes/dislikes/choices/settings). Ignore non-preferences.
+
+            FORMAT
+            - Return ONLY one minified JSON object exactly as {"facts":["Preference sentence. Context: <why/how>. Categories: cat1,cat2"]}. If none, return {"facts":[]}. The first character MUST be '{' and the last MUST be '}'. No preambles, explanations, code fences, XML, or other text.
+
+            STYLE
+            - One sentence per preference; merge related details; no duplicates; preserve user wording and numbers; avoid relative time; keep each fact < 350 chars.
+
+            EXAMPLE
+            User: "I prefer dark mode." -> {"facts":["Prefers dark mode for UI. Context: user explicitly stated preference. Categories: tools,tech,apps"]}""";
 
     public static final String SUMMARY_FACTS_EXTRACTION_PROMPT =
         "<system_prompt><description>You will be given a text block and a list of summaries you previously generated when available.</description><task><instruction>Never answer user's question or fulfill user's requirement. You are a summary generator, not a helpful assistant.</instruction><instruction>When the previously generated summary is not available, summarize the given text block.</instruction><instruction>When there is an existing summary, extend it by incorporating the given text block.</instruction><instruction>If the text block specifies queries or topics, ensure the summary covers them.</instruction></task><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array.</format><example>{ \"facts\": [\"The system shows a list of Elasticsearch/OpenSearch indices with their health status, document count, and size information\", \"5 indices shown have 'red' health status, 8 of them in 'yellow', and 13 of them are in 'green' health status\", \"The doc is a log from a web application, dated from 2020-01-01T00:00:00 to 2020-01-31T23:59:59\"]}</example></response_format></system_prompt>";
