@@ -21,6 +21,7 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -58,7 +59,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     }
 
     @Override
-    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
         log.info("Starting AG-UI agent execution for agent: {}", mlAgent.getName());
 
         // Create event collector to accumulate AG-UI events
@@ -90,7 +91,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 listener.onFailure(error);
             });
 
-            underlyingRunner.run(mlAgent, params, aguiListener);
+            underlyingRunner.run(mlAgent, params, aguiListener, channel);
 
         } catch (Exception e) {
             log.error("Error starting AG-UI agent execution", e);
