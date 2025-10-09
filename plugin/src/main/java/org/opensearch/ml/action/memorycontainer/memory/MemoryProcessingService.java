@@ -142,8 +142,8 @@ public class MemoryProcessingService {
         try {
             // Always add JSON enforcement message for fact extraction
             String enforcementMsg = (strategy.getType() == MemoryStrategyType.USER_PREFERENCE)
-                    ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
-                    : JSON_ENFORCEMENT_MESSAGE;
+                ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
+                : JSON_ENFORCEMENT_MESSAGE;
             MessageInput enforcementMessage = getMessageInput(enforcementMsg);
             messages.add(enforcementMessage);
             String conversationJson = serializeMessagesToJson(messages);
