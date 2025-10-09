@@ -13,7 +13,6 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -60,15 +59,24 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
-        log.info("Starting AG-UI agent execution for agent: {}", mlAgent.getName());
+        log.info("Starting AG-UI agent execution for conversational agent: {}", mlAgent.getName());
 
         // Create event collector to accumulate AG-UI events
         AGUIEventCollector eventCollector = new AGUIEventCollector();
         eventCollector.startRun();
 
         try {
-            String underlyingAgentType = params.getOrDefault("underlying_agent_type", "CONVERSATIONAL");
-            MLAgentRunner underlyingRunner = createUnderlyingRunner(underlyingAgentType);
+            // Only support conversational agents
+            MLAgentRunner conversationalRunner = new MLChatAgentRunner(
+                client,
+                settings,
+                clusterService,
+                xContentRegistry,
+                toolFactories,
+                memoryFactoryMap,
+                sdkClient,
+                encryptor
+            );
 
             String messageId = eventCollector.startTextMessage("assistant");
             ActionListener<Object> aguiListener = ActionListener.wrap(result -> {
@@ -91,65 +99,12 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 listener.onFailure(error);
             });
 
-            underlyingRunner.run(mlAgent, params, aguiListener, channel);
+            conversationalRunner.run(mlAgent, params, aguiListener, channel);
 
         } catch (Exception e) {
             log.error("Error starting AG-UI agent execution", e);
             eventCollector.finishRun(null);
             listener.onFailure(e);
-        }
-    }
-
-    private MLAgentRunner createUnderlyingRunner(String agentType) {
-        MLAgentType type = MLAgentType.from(agentType.toUpperCase());
-
-        switch (type) {
-            case CONVERSATIONAL:
-                return new MLChatAgentRunner(
-                    client,
-                    settings,
-                    clusterService,
-                    xContentRegistry,
-                    toolFactories,
-                    memoryFactoryMap,
-                    sdkClient,
-                    encryptor
-                );
-            case FLOW:
-                return new MLFlowAgentRunner(
-                    client,
-                    settings,
-                    clusterService,
-                    xContentRegistry,
-                    toolFactories,
-                    memoryFactoryMap,
-                    sdkClient,
-                    encryptor
-                );
-            case CONVERSATIONAL_FLOW:
-                return new MLConversationalFlowAgentRunner(
-                    client,
-                    settings,
-                    clusterService,
-                    xContentRegistry,
-                    toolFactories,
-                    memoryFactoryMap,
-                    sdkClient,
-                    encryptor
-                );
-            case PLAN_EXECUTE_AND_REFLECT:
-                return new MLPlanExecuteAndReflectAgentRunner(
-                    client,
-                    settings,
-                    clusterService,
-                    xContentRegistry,
-                    toolFactories,
-                    memoryFactoryMap,
-                    sdkClient,
-                    encryptor
-                );
-            default:
-                throw new IllegalArgumentException("Unsupported underlying agent type: " + agentType);
         }
     }
 
