@@ -670,6 +670,171 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
     }
 
+    public void testChatCompletionBedrockV3ValidResponse() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        // Simulate valid Claude V3 response
+        Map<String, Object> innerMap = Map.of("text", "Hello from Claude V3");
+        Map<String, Object> dataAsMap = Map.of("content", List.of(innerMap));
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK,
+            null,
+            null
+        );
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertFalse(output.isErrorOccurred());
+                assertEquals("Hello from Claude V3", output.getAnswers().get(0));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                fail("Should not fail");
+            }
+        });
+    }
+
+    public void testChatCompletionBedrockV3MissingTextField() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        Map<String, Object> innerMap = Map.of("wrong_key", "oops");
+        Map<String, Object> dataAsMap = Map.of("content", List.of(innerMap));
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK,
+            null,
+            null
+        );
+
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertTrue(output.isErrorOccurred());
+                assertTrue(output.getErrors().get(0).contains("missing 'text'"));
+            }
+
+            @Override
+            public void onFailure(Exception e) {}
+        });
+    }
+
+    public void testChatCompletionBedrockV3EmptyContentList() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        Map<String, Object> dataAsMap = Map.of("content", List.of());
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK,
+            null,
+            null
+        );
+
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertTrue(output.isErrorOccurred());
+                assertTrue(output.getErrors().get(0).contains("Empty content list"));
+            }
+
+            @Override
+            public void onFailure(Exception e) {}
+        });
+    }
+
+    public void testChatCompletionBedrockV3UnexpectedType() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        Map<String, Object> dataAsMap = Map.of("content", "not a list");
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+
+        doAnswer(invocation -> {
+            ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK,
+            null,
+            null
+        );
+
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertTrue(output.isErrorOccurred());
+                assertTrue(output.getErrors().get(0).contains("Unexpected type"));
+            }
+
+            @Override
+            public void onFailure(Exception e) {}
+        });
+    }
+
     public void testIllegalArgument1() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule
