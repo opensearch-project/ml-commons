@@ -145,8 +145,10 @@ public class MemoryProcessingService {
                 ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
                 : JSON_ENFORCEMENT_MESSAGE;
             MessageInput enforcementMessage = getMessageInput(enforcementMsg);
-            messages.add(enforcementMessage);
-            String conversationJson = serializeMessagesToJson(messages);
+            // Create mutable copy to avoid UnsupportedOperationException
+            List<MessageInput> mutableMessages = new ArrayList<>(messages);
+            mutableMessages.add(enforcementMessage);
+            String conversationJson = serializeMessagesToJson(mutableMessages);
             String userPrompt = "Analyze the following conversation and extract information:\n```json\n" + conversationJson + "\n```";
             stringParameters.put("user_prompt", userPrompt);
         } catch (Exception e) {
