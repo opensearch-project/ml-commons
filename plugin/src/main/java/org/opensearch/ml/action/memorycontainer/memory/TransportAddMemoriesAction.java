@@ -263,7 +263,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         List<MessageInput> messages = input.getMessages();
-        log.debug("Processing {} messages for fact extraction", messages.size());
+        log.debug("Processing {} messages for fact extraction", messages != null ? messages.size() : 0);
 
         List<MemoryStrategy> strategies = container.getConfiguration().getStrategies();
         MemoryConfiguration memoryConfig = container.getConfiguration();

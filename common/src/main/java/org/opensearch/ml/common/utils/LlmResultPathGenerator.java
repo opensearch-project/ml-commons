@@ -62,25 +62,29 @@ public class LlmResultPathGenerator {
             return null;
         }
 
+        log.info("Starting llm_result_path auto-generation (schema size: {} bytes)", outputSchemaJson.length());
+
         try {
             JsonNode schemaRoot = MAPPER.readTree(outputSchemaJson);
 
             // Navigate to dataAsMap schema node using hardcoded path; if not found, search from root
             JsonNode searchRoot = navigateToDataAsMapSchema(schemaRoot);
             if (searchRoot == null) {
-                log.debug("No dataAsMap schema found, searching from root");
+                log.info("No dataAsMap schema found in standard ModelTensorOutput path, searching from schema root");
                 searchRoot = schemaRoot;
+            } else {
+                log.info("Found dataAsMap schema at standard path, searching within dataAsMap structure");
             }
 
             // Search for LLM output field with x-llm-output marker
             String jsonPath = findLlmTextField(searchRoot, "$");
 
             if (jsonPath == null) {
-                log.warn("Could not find field with x-llm-output marker in schema");
+                log.warn("No field with x-llm-output marker found in schema, will use fallback path");
                 return null;
             }
 
-            log.debug("Generated llm_result_path: {}", jsonPath);
+            log.info("Successfully generated llm_result_path: {}", jsonPath);
             return jsonPath;
 
         } catch (Exception e) {
@@ -104,8 +108,14 @@ public class LlmResultPathGenerator {
      */
     private static JsonNode navigateToDataAsMapSchema(JsonNode schemaRoot) {
         if (schemaRoot == null || schemaRoot.isMissingNode()) {
+            log.debug("Schema root is null or missing");
             return null;
         }
+
+        log
+            .debug(
+                "Navigating to dataAsMap using rigid path: properties.inference_results.items.properties.output.items.properties.dataAsMap"
+            );
 
         // Follow the rigid ModelTensorOutput → ModelTensors → ModelTensor structure
         JsonNode dataAsMapSchema = schemaRoot
@@ -118,7 +128,13 @@ public class LlmResultPathGenerator {
             .path("properties")
             .path("dataAsMap");
 
-        return dataAsMapSchema.isMissingNode() ? null : dataAsMapSchema;
+        if (dataAsMapSchema.isMissingNode()) {
+            log.debug("dataAsMap not found at standard path");
+            return null;
+        }
+
+        log.debug("Successfully navigated to dataAsMap schema");
+        return dataAsMapSchema;
     }
 
     /**
@@ -148,6 +164,7 @@ public class LlmResultPathGenerator {
         // Check if this field has the x-llm-output marker
         JsonNode marker = schemaNode.get(LLM_OUTPUT_MARKER);
         if (marker != null && marker.isBoolean() && marker.asBoolean()) {
+            log.info("Found x-llm-output marker at path: {}", currentPath);
             return currentPath;
         }
 
@@ -166,6 +183,7 @@ public class LlmResultPathGenerator {
                     JsonNode fieldSchema = field.getValue();
 
                     String newPath = currentPath + "." + fieldName;
+                    log.debug("Checking field: {}", newPath);
                     String result = findLlmTextFieldWithMarker(fieldSchema, newPath);
                     if (result != null) {
                         return result;
@@ -179,6 +197,7 @@ public class LlmResultPathGenerator {
             JsonNode items = schemaNode.get("items");
             if (items != null) {
                 String newPath = currentPath + "[0]";
+                log.debug("Navigating into array: {}", newPath);
                 String result = findLlmTextFieldWithMarker(items, newPath);
                 if (result != null) {
                     return result;

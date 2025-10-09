@@ -549,7 +549,10 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```json\n{\"memory_decisions\": []}\n```");
+        // Use Claude format with content array
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```json\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -580,7 +583,10 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```\n{\"memory_decisions\": []}\n```");
+        // Use Claude format with content array
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -908,6 +914,9 @@ public class MemoryProcessingServiceTests {
     public void testSummarizeMessages_WithMessages() {
         ActionListener<String> stringListener = mock(ActionListener.class);
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+
+        // Configure LLM ID for summarization
+        when(memoryConfig.getLlmId()).thenReturn("llm-model-123");
 
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);

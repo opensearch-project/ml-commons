@@ -15,7 +15,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_SUMMARY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -28,8 +27,6 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -48,6 +45,8 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.LlmResultPathGenerator;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.message.MessageFormatter;
+import org.opensearch.ml.common.utils.message.MessageFormatterFactory;
 import org.opensearch.ml.engine.processor.MLProcessorType;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.ml.model.MLModelCacheHelper;
@@ -119,75 +118,24 @@ public class MemoryProcessingService {
                 isOverride ? "strategy-override" : "container-config"
             );
 
-        Map<String, String> stringParameters = new HashMap<>();
+        // Get appropriate formatter for the model
+        MessageFormatter formatter = getFormatterForModel(llmModelId);
+        log.debug("Using {} for model {}", formatter.getClass().getSimpleName(), llmModelId);
 
-        // Determine default prompt based on strategy type
-        String defaultPrompt;
-        MemoryStrategyType type = strategy.getType();
-        if (type == MemoryStrategyType.USER_PREFERENCE) {
-            defaultPrompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
-        } else if (type == MemoryStrategyType.SUMMARY) {
-            defaultPrompt = SUMMARY_FACTS_EXTRACTION_PROMPT;
-        } else {
-            defaultPrompt = SEMANTIC_FACTS_EXTRACTION_PROMPT;
-        }
-
-        if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
-            stringParameters.put("system_prompt", defaultPrompt);
-        } else {
-            Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
-            if (customPrompt == null || customPrompt.toString().isBlank()) {
-                stringParameters.put("system_prompt", defaultPrompt);
-            } else if (!validatePromptFormat(customPrompt.toString())) {
-                log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");
-                listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
-                return;
-            } else {
-                stringParameters.put("system_prompt", customPrompt.toString()); // use custom strategy
-            }
-        }
-
-        try {
-            XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-            messagesBuilder.startArray();
-            Map<String, Object> strategyConfig = strategy.getStrategyConfig();
-            if (strategyConfig != null && strategyConfig.containsKey("system_prompt_message")) {
-                Object systemPromptMsg = strategyConfig.get("system_prompt_message");
-                if (systemPromptMsg != null && systemPromptMsg instanceof Map) {
-                    messagesBuilder.map((Map) systemPromptMsg);
-                }
-            }
-            for (MessageInput message : messages) {
-                message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-            }
-            if (strategyConfig != null && strategyConfig.containsKey("user_prompt_message")) {
-                Object userPromptMsg = strategyConfig.get("user_prompt_message");
-                if (userPromptMsg != null && userPromptMsg instanceof Map) {
-                    messagesBuilder.map((Map) userPromptMsg);
-                }
-            } else { // Add default user prompt (when strategyConfig is null or doesn't have user_prompt_message)
-                MessageInput message = getMessageInput("Please extract information from our conversation so far");
-                message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-            }
-
-            // Always add JSON enforcement message for fact extraction
-            String enforcementMsg = (strategy.getType() == MemoryStrategyType.USER_PREFERENCE)
-                ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
-                : JSON_ENFORCEMENT_MESSAGE;
-            MessageInput enforcementMessage = getMessageInput(enforcementMsg);
-            enforcementMessage.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-
-            messagesBuilder.endArray();
-            String messagesJson = messagesBuilder.toString();
-            stringParameters.put("messages", messagesJson);
-
-            log.debug("LLM request - processing {} messages", messages.size());
-        } catch (Exception e) {
-            log.error("Failed to build messages JSON", e);
-            listener.onResponse(new ArrayList<>());
+        // Determine system prompt (default or custom)
+        String systemPrompt = determineSystemPrompt(strategy, listener);
+        if (systemPrompt == null) {
+            // Validation failed, listener already called
             return;
         }
 
+        // Build full message list with additional messages from config
+        List<MessageInput> allMessages = buildFullMessageList(messages, strategy);
+
+        // Format the request using the appropriate formatter
+        Map<String, String> stringParameters = formatter.formatRequest(systemPrompt, allMessages, strategy.getStrategyConfig());
+
+        // Continue with existing MLInput building and execution
         MLInput mlInput = MLInput
             .builder()
             .algorithm(FunctionName.REMOTE)
@@ -246,6 +194,10 @@ public class MemoryProcessingService {
                 allSearchResults.size()
             );
 
+        // Get appropriate formatter for the model
+        MessageFormatter formatter = getFormatterForModel(llmModelId);
+        log.debug("Using {} for model {}", formatter.getClass().getSimpleName(), llmModelId);
+
         List<MemoryDecisionRequest.OldMemory> oldMemories = new ArrayList<>();
         for (FactSearchResult result : allSearchResults) {
             oldMemories
@@ -258,57 +210,42 @@ public class MemoryProcessingService {
             .retrievedFacts(extractedFacts)
             .build();
 
-        Map<String, String> stringParameters = new HashMap<>();
-        stringParameters.put("system_prompt", DEFAULT_UPDATE_MEMORY_PROMPT);
-
         String decisionRequestJson = decisionRequest.toJsonString();
 
-        try {
-            XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-            messagesBuilder.startArray();
-            messagesBuilder.startObject();
-            messagesBuilder.field("role", "user");
-            messagesBuilder.startArray("content");
-            messagesBuilder.startObject();
-            messagesBuilder.field("type", "text");
-            messagesBuilder.field("text", decisionRequestJson);
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
+        // Create user message with decision request JSON
+        List<MessageInput> messages = new ArrayList<>();
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", decisionRequestJson));
+        messages.add(MessageInput.builder().role("user").content(content).build());
 
-            String messagesJson = messagesBuilder.toString();
-            stringParameters.put("messages", messagesJson);
+        // Format the request using the appropriate formatter
+        Map<String, String> stringParameters = formatter.formatRequest(DEFAULT_UPDATE_MEMORY_PROMPT, messages, null);
 
-            log
-                .debug(
-                    "Making memory decisions for {} extracted facts and {} existing memories",
-                    extractedFacts.size(),
-                    allSearchResults.size()
-                );
+        log
+            .debug(
+                "Making memory decisions for {} extracted facts and {} existing memories",
+                extractedFacts.size(),
+                allSearchResults.size()
+            );
 
-            RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
-            MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
 
-            MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
+        MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
 
-            client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
-                try {
-                    List<MemoryDecision> decisions = parseMemoryDecisions(response);
-                    log.debug("LLM made {} memory decisions", decisions.size());
-                    listener.onResponse(decisions);
-                } catch (Exception e) {
-                    log.error("Failed to parse memory decisions from LLM response", e);
-                    listener.onFailure(e);
-                }
-            }, e -> {
-                log.error("Failed to get memory decisions from LLM", e);
+        client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
+            try {
+                List<MemoryDecision> decisions = parseMemoryDecisions(response, llmModelId);
+                log.debug("LLM made {} memory decisions", decisions.size());
+                listener.onResponse(decisions);
+            } catch (Exception e) {
+                log.error("Failed to parse memory decisions from LLM response", e);
                 listener.onFailure(e);
-            }));
-        } catch (Exception e) {
-            log.error("Failed to build memory decision request", e);
+            }
+        }, e -> {
+            log.error("Failed to get memory decisions from LLM", e);
             listener.onFailure(e);
-        }
+        }));
     }
 
     private List<String> parseFactsFromLLMResponse(MemoryStrategy strategy, MLOutput mlOutput, String modelId) {
@@ -333,8 +270,10 @@ public class MemoryProcessingService {
 
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
+
             // Auto-generate the result path based on model's output schema
             String llmResultPath = getAutoGeneratedLlmResultPath(modelId);
+            log.debug("Using llm_result_path: {}", llmResultPath);
 
             // Gracefully handle malformed responses
             Object filterdResult = null;
@@ -376,7 +315,7 @@ public class MemoryProcessingService {
         return facts;
     }
 
-    private List<MemoryDecision> parseMemoryDecisions(MLTaskResponse response) {
+    private List<MemoryDecision> parseMemoryDecisions(MLTaskResponse response, String modelId) {
         try {
             MLOutput mlOutput = response.getOutput();
             if (!(mlOutput instanceof ModelTensorOutput)) {
@@ -391,20 +330,31 @@ public class MemoryProcessingService {
 
             Map<String, ?> dataMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
 
-            String responseContent = null;
-            if (dataMap.containsKey("response")) {
-                responseContent = (String) dataMap.get("response");
-            } else if (dataMap.containsKey("content")) {
-                List<Map<String, Object>> contentList = (List<Map<String, Object>>) dataMap.get("content");
-                if (contentList != null && !contentList.isEmpty()) {
-                    Map<String, Object> firstContent = contentList.get(0);
-                    responseContent = (String) firstContent.get("text");
-                }
+            // Auto-generate the result path based on model's output schema (same as fact extraction)
+            String llmResultPath = getAutoGeneratedLlmResultPath(modelId);
+            log.debug("Using llm_result_path: {}", llmResultPath);
+
+            // Extract response content using the auto-generated path
+            Object filteredResult = null;
+            try {
+                filteredResult = JsonPath.read(dataMap, llmResultPath);
+            } catch (Exception e) {
+                log
+                    .error(
+                        "Failed to extract response from path '{}': {}. Available keys: {}",
+                        llmResultPath,
+                        e.getMessage(),
+                        dataMap.keySet()
+                    );
+                throw new IllegalStateException("Failed to extract response content from LLM output using path: " + llmResultPath, e);
             }
 
-            if (responseContent == null) {
-                throw new IllegalStateException("No response content found in LLM output");
+            if (filteredResult == null) {
+                throw new IllegalStateException("Extracted null content from LLM output using path: " + llmResultPath);
             }
+
+            // Convert to JSON string
+            String responseContent = StringUtils.toJson(filteredResult);
 
             // Clean response content
             responseContent = cleanMarkdownFromJson(responseContent);
@@ -437,56 +387,63 @@ public class MemoryProcessingService {
     public void summarizeMessages(MemoryConfiguration configuration, List<MessageInput> messages, ActionListener<String> listener) {
         if (messages == null || messages.isEmpty()) {
             listener.onResponse("");
-        } else {
-            Map<String, String> stringParameters = new HashMap<>();
-            Map<String, Object> memoryParams = configuration.getParameters();
-            Map<String, String> sessionParams = (Map<String, String>) memoryParams.getOrDefault("session", new HashMap<>());
-            stringParameters.put("system_prompt", SESSION_SUMMARY_PROMPT);
-            stringParameters.putAll(getParameterMap(sessionParams));
-            stringParameters.putIfAbsent("max_summary_size", "10");
+            return;
+        }
 
-            String llmModelId = configuration.getLlmId();
+        String llmModelId = configuration.getLlmId();
+        if (llmModelId == null) {
+            log.error("LLM model is required for summarization but not configured");
+            listener.onFailure(new IllegalStateException("LLM model is required for summarization"));
+            return;
+        }
 
+        // Get appropriate formatter for the model
+        MessageFormatter formatter = getFormatterForModel(llmModelId);
+        log.debug("Using {} for model {}", formatter.getClass().getSimpleName(), llmModelId);
+
+        Map<String, Object> memoryParams = configuration.getParameters();
+        Map<String, String> sessionParams = (Map<String, String>) memoryParams.getOrDefault("session", new HashMap<>());
+
+        // Prepare additional parameters (non-formatter params)
+        Map<String, String> additionalParams = new HashMap<>();
+        additionalParams.putAll(getParameterMap(sessionParams));
+        additionalParams.putIfAbsent("max_summary_size", "10");
+
+        // Build message list
+        List<MessageInput> allMessages = new ArrayList<>(messages);
+
+        // Add user prompt if not in config
+        if (!sessionParams.containsKey("user_prompt_message")) {
+            MessageInput summaryPrompt = getMessageInput(
+                "Please summarize our conversation, not exceed " + additionalParams.get("max_summary_size") + " words"
+            );
+            allMessages.add(summaryPrompt);
+        }
+
+        // Format the request using the appropriate formatter
+        Map<String, String> formatterParams = formatter.formatRequest(SESSION_SUMMARY_PROMPT, allMessages, null);
+
+        // Combine formatter params with additional params
+        Map<String, String> stringParameters = new HashMap<>();
+        stringParameters.putAll(formatterParams); // system_prompt and messages from formatter
+        stringParameters.putAll(additionalParams); // max_summary_size, etc.
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+        MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
+
+        client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
             try {
-                XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-                messagesBuilder.startArray();
-                for (MessageInput message : messages) {
-                    message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-                }
-                if (sessionParams.containsKey("user_prompt_message")) {
-                    Object userPromptMsg = sessionParams.get("user_prompt_message");
-                    if (userPromptMsg != null && userPromptMsg instanceof Map) {
-                        messagesBuilder.map((Map) userPromptMsg);
-                    }
-                } else {
-                    MessageInput message = getMessageInput(
-                        "Please summarize our conversation, not exceed " + stringParameters.get("max_summary_size") + " words"
-                    );
-                    message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-                }
-                messagesBuilder.endArray();
-                stringParameters.put("messages", messagesBuilder.toString());
-
-                RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
-                MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
-                MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
-
-                client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
-                    try {
-                        String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmModelId);
-                        listener.onResponse(summary);
-                    } catch (Exception e) {
-                        log.error("Failed to parse session summary from LLM response", e);
-                        listener.onFailure(e);
-                    }
-                }, e -> {
-                    log.error("Failed to get session summary from LLM", e);
-                    listener.onFailure(e);
-                }));
+                String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmModelId);
+                listener.onResponse(summary);
             } catch (Exception e) {
+                log.error("Failed to parse session summary from LLM response", e);
                 listener.onFailure(e);
             }
-        }
+        }, e -> {
+            log.error("Failed to get session summary from LLM", e);
+            listener.onFailure(e);
+        }));
     }
 
     private String parseSessionSummary(ModelTensorOutput output, String modelId) {
@@ -538,6 +495,99 @@ public class MemoryProcessingService {
         }
 
         return response;
+    }
+
+    /**
+     * Get appropriate message formatter for a model based on its input schema.
+     *
+     * @param modelId The model ID to get formatter for
+     * @return MessageFormatter instance (never null, defaults to Claude)
+     */
+    private MessageFormatter getFormatterForModel(String modelId) {
+        if (modelId == null) {
+            log.debug("No model ID provided, using default Claude formatter");
+            return MessageFormatterFactory.getClaudeFormatter();
+        }
+
+        try {
+            Map<String, String> modelInterface = modelCacheHelper.getModelInterface(modelId);
+
+            if (modelInterface != null && modelInterface.containsKey("input")) {
+                String inputSchema = modelInterface.get("input");
+                log.debug("Retrieved input schema for model {}", modelId);
+                return MessageFormatterFactory.getFormatter(inputSchema);
+            }
+
+            log.debug("No input schema found for model {}, using default Claude formatter", modelId);
+        } catch (Exception e) {
+            log.warn("Failed to get formatter for model {}, using default: {}", modelId, e.getMessage());
+        }
+
+        return MessageFormatterFactory.getClaudeFormatter();
+    }
+
+    /**
+     * Determine the system prompt to use (default or custom).
+     *
+     * @param strategy The memory strategy that may contain custom prompt
+     * @param listener The listener to call on validation failure
+     * @return The system prompt to use, or null if validation failed (listener already called)
+     */
+    private String determineSystemPrompt(MemoryStrategy strategy, ActionListener<List<String>> listener) {
+        // Determine default prompt based on strategy type
+        String defaultPrompt;
+        MemoryStrategyType type = strategy.getType();
+        if (type == MemoryStrategyType.USER_PREFERENCE) {
+            defaultPrompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+        } else if (type == MemoryStrategyType.SUMMARY) {
+            defaultPrompt = SUMMARY_FACTS_EXTRACTION_PROMPT;
+        } else {
+            defaultPrompt = SEMANTIC_FACTS_EXTRACTION_PROMPT;
+        }
+
+        // Check for custom prompt in strategy config
+        if (strategy.getStrategyConfig() == null || strategy.getStrategyConfig().isEmpty()) {
+            return defaultPrompt;
+        }
+
+        Object customPrompt = strategy.getStrategyConfig().get("system_prompt");
+        if (customPrompt == null || customPrompt.toString().isBlank()) {
+            return defaultPrompt;
+        }
+
+        // Validate custom prompt format
+        if (!validatePromptFormat(customPrompt.toString())) {
+            log.error("Invalid custom prompt format - must specify JSON response format with 'facts' array");
+            listener.onFailure(new IllegalArgumentException("Custom prompt must specify JSON response format with 'facts' array"));
+            return null;
+        }
+
+        return customPrompt.toString();
+    }
+
+    /**
+     * Build full message list including additional messages from config.
+     *
+     * @param messages Original messages from conversation
+     * @param strategy Memory strategy that may contain additional messages
+     * @return Full list of messages including any additional config messages
+     */
+    private List<MessageInput> buildFullMessageList(List<MessageInput> messages, MemoryStrategy strategy) {
+        List<MessageInput> allMessages = new ArrayList<>(messages);
+
+        Map<String, Object> strategyConfig = strategy.getStrategyConfig();
+
+        // Add user prompt message if not in config
+        if (strategyConfig == null || !strategyConfig.containsKey("user_prompt_message")) {
+            MessageInput userPrompt = getMessageInput("Please extract information from our conversation so far");
+            allMessages.add(userPrompt);
+        }
+
+        // Always add JSON enforcement message
+        MessageInput enforcementMessage = getMessageInput(JSON_ENFORCEMENT_MESSAGE);
+        allMessages.add(enforcementMessage);
+
+        return allMessages;
     }
 
     /**
