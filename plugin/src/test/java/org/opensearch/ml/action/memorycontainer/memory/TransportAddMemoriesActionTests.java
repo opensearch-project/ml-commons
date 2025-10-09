@@ -52,6 +52,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -90,6 +91,9 @@ public class TransportAddMemoriesActionTests {
 
     @Mock
     private MemoryContainerHelper memoryContainerHelper;
+
+    @Mock
+    private MLModelCacheHelper mlModelCacheHelper;
 
     @Mock
     private MemoryProcessingService memoryProcessingService;
@@ -137,6 +141,7 @@ public class TransportAddMemoriesActionTests {
             xContentRegistry,
             mlFeatureEnabledSetting,
             memoryContainerHelper,
+            mlModelCacheHelper,
             threadPool
         );
 

@@ -76,7 +76,8 @@
                                   {
                                     "type": "null"
                                   }
-                                ]
+                                ],
+                                "x-llm-output": true
                               }
                             },
                             "additionalProperties": true

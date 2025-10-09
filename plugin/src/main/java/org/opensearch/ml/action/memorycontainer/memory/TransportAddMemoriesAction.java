@@ -52,6 +52,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -86,6 +87,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         NamedXContentRegistry xContentRegistry,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MemoryContainerHelper memoryContainerHelper,
+        MLModelCacheHelper mlModelCacheHelper,
         ThreadPool threadPool
     ) {
         super(MLAddMemoriesAction.NAME, transportService, actionFilters, MLAddMemoriesRequest::new);
@@ -94,7 +96,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         this.memoryContainerHelper = memoryContainerHelper;
 
         // Initialize services
-        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, mlModelCacheHelper);
         this.memorySearchService = new MemorySearchService(memoryContainerHelper);
         this.memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
         this.threadPool = threadPool;

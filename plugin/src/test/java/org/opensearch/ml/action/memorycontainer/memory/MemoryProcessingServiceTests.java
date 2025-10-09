@@ -44,6 +44,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceTests {
@@ -53,6 +54,9 @@ public class MemoryProcessingServiceTests {
 
     @Mock
     private NamedXContentRegistry xContentRegistry;
+
+    @Mock
+    private MLModelCacheHelper mlModelCacheHelper;
 
     @Mock
     private ActionListener<List<String>> factsListener;
@@ -72,8 +76,7 @@ public class MemoryProcessingServiceTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        memoryStrategy.getStrategyConfig().put("llm_result_path", "$");
-        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, mlModelCacheHelper);
         testContent = createTestContent("Hello");
         when(memoryConfig.getParameters()).thenReturn(new HashMap<>());
     }
@@ -290,7 +293,6 @@ public class MemoryProcessingServiceTests {
             Arrays.asList("user_id"),
             new HashMap<>()
         );
-        memoryStrategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 

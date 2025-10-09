@@ -37,6 +37,10 @@
                         "properties": {
                           "type": {
                             "type": "string"
+                          },
+                          "text": {
+                            "type": "string",
+                            "x-llm-output": true
                           }
                         },
                         "required": ["type"],
