@@ -7,10 +7,14 @@ package org.opensearch.ml.action.execute;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.io.IOException;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -22,6 +26,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -34,6 +39,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.TransportChannel;
+import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -115,6 +121,55 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testMessageReceivedHandlerMethods() throws Exception {
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            TransportResponseHandler<MLExecuteTaskResponse> handler = invocation.getArgument(3);
+
+            // Test read method
+            StreamInput streamInput = mock(StreamInput.class);
+            MLExecuteTaskResponse response = handler.read(streamInput);
+            assertNotNull(response);
+
+            // Test executor method
+            assertEquals(ThreadPool.Names.SAME, handler.executor());
+
+            // Test handleResponse method
+            MLExecuteTaskResponse mockResponse = mock(MLExecuteTaskResponse.class);
+            handler.handleResponse(mockResponse);
+
+            // Test handleException method
+            TransportException transportException = new TransportException("test exception");
+            handler.handleException(transportException);
+
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any(TransportResponseHandler.class));
+
+        transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
+
+        verify(transportChannel).sendResponse(any(TransportException.class));
+    }
+
+    @Test
+    public void testMessageReceivedHandlerException() throws Exception {
+        Task task = mock(Task.class);
+        doThrow(new IOException("channel error")).when(transportChannel).sendResponse(any(Exception.class));
+
+        doAnswer(invocation -> {
+            TransportResponseHandler<MLExecuteTaskResponse> handler = invocation.getArgument(3);
+
+            TransportException transportException = new TransportException("test exception");
+            handler.handleException(transportException);
+
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any(TransportResponseHandler.class));
+
+        transportExecuteStreamTaskAction.messageReceived(mlExecuteTaskRequest, transportChannel, task);
+        verify(transportChannel).sendResponse(any(TransportException.class));
+    }
+
+    @Test
     public void testDoExecuteWithoutChannel() {
         transportExecuteStreamTaskAction.doExecute(null, mlExecuteTaskRequest, actionListener);
 
@@ -124,4 +179,20 @@ public class TransportExecuteStreamTaskActionTests extends OpenSearchTestCase {
         assertEquals("Use doExecute with TransportChannel for streaming requests", captor.getValue().getMessage());
     }
 
+    @Test
+    public void testDoExecuteWithChannel() {
+        MLExecuteTaskRequest requestWithChannel = MLExecuteTaskRequest
+            .builder()
+            .functionName(FunctionName.AGENT)
+            .input(mock(Input.class))
+            .build();
+        requestWithChannel.setStreamingChannel(transportChannel);
+
+        Task task = mock(Task.class);
+        ActionListener<MLExecuteTaskResponse> listener = mock(ActionListener.class);
+        transportExecuteStreamTaskAction.doExecute(task, requestWithChannel, listener);
+
+        verify(mlExecuteTaskRunner)
+            .run(eq(FunctionName.AGENT), any(MLExecuteTaskRequest.class), any(StreamTransportService.class), eq(listener));
+    }
 }
