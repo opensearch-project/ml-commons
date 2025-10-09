@@ -1,0 +1,55 @@
+{
+    "type": "object",
+    "properties": {
+        "inference_results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "output": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "data_type": {
+                                    "type": "string"
+                                },
+                                "shape": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "data": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "number"
+                                    }
+                                }
+                            },
+                            "required": [
+                                "name",
+                                "data_type",
+                                "shape",
+                                "data"
+                            ]
+                        }
+                    },
+                    "status_code": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "output",
+                    "status_code"
+                ]
+            }
+        }
+    },
+    "required": [
+        "inference_results"
+    ]
+}

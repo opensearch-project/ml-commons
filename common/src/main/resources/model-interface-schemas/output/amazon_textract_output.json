@@ -1,0 +1,110 @@
+{
+    "type": "object",
+    "properties": {
+        "inference_results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "output": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "dataAsMap": {
+                                    "type": "object",
+                                    "properties": {
+                                        "Blocks": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "BlockType": {
+                                                        "type": "string"
+                                                    },
+                                                    "Geometry": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "BoundingBox": {
+                                                                "type": "object",
+                                                                "properties": {
+                                                                    "Height": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "Left": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "Top": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "Width": {
+                                                                        "type": "number"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Polygon": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "X": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "Y": {
+                                                                            "type": "number"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "Id": {
+                                                        "type": "string"
+                                                    },
+                                                    "Relationships": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "Ids": {
+                                                                    "type": "array",
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "Type": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "DetectDocumentTextModelVersion": {
+                                            "type": "string"
+                                        },
+                                        "DocumentMetadata": {
+                                            "type": "object",
+                                            "properties": {
+                                                "Pages": {
+                                                    "type": "number"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "status_code": {
+                        "type": "number"
+                    }
+                }
+            }
+        }
+    }
+}

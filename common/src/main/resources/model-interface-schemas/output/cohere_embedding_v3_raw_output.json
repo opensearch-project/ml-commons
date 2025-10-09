@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "properties": {
+    "inference_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "dataAsMap": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "texts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "embeddings": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "response_type": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["id", "texts", "embeddings", "response_type"]
+                }
+              },
+              "required": ["name", "dataAsMap"]
+            }
+          },
+          "status_code": {
+            "type": "integer"
+          }
+        },
+        "required": ["output", "status_code"]
+      }
+    }
+  },
+  "required": ["inference_results"]
+}

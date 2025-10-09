@@ -1,0 +1,77 @@
+{
+  "type": "object",
+  "properties": {
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "system_prompt": {
+          "type": "string",
+          "description": "System prompt to guide the model's behavior"
+        },
+        "messages": {
+          "type": "array",
+          "description": "Array of message objects in conversational format",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Role of the message sender (e.g., user, assistant, system)"
+              },
+              "content": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "Simple text content"
+                  },
+                  {
+                    "type": "array",
+                    "description": "Array of content blocks for multi-part messages",
+                    "items": {
+                      "type": "object",
+                      "description": "Content block with type-specific properties (e.g., text, image, video, tool_use, tool_result)",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "description": "Type of content block"
+                        }
+                      },
+                      "required": ["type"],
+                      "additionalProperties": true
+                    }
+                  }
+                ]
+              }
+            },
+            "required": ["role", "content"]
+          }
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Maximum number of tokens to generate"
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Sampling temperature (0.0 to 1.0)"
+        },
+        "top_p": {
+          "type": "number",
+          "description": "Nucleus sampling parameter"
+        },
+        "top_k": {
+          "type": "integer",
+          "description": "Top-k sampling parameter"
+        },
+        "stop_sequences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Sequences that will stop generation"
+        }
+      },
+      "required": ["messages"]
+    }
+  },
+  "required": ["parameters"]
+}

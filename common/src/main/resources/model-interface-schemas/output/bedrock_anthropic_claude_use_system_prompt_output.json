@@ -1,0 +1,76 @@
+{
+  "type": "object",
+  "properties": {
+    "inference_results": {
+      "type": "array",
+      "description": "Array of inference results from model prediction",
+      "items": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "array",
+            "description": "Array of model tensor outputs",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the output tensor"
+                },
+                "dataAsMap": {
+                  "type": "object",
+                  "description": "Claude Messages API response",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["type"],
+                        "additionalProperties": true
+                      }
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "stop_reason": {
+                      "type": "string"
+                    },
+                    "stop_sequence": {
+                      "type": ["string", "null"]
+                    },
+                    "usage": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": ["id", "type", "role", "content", "model"]
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "status_code": {
+            "type": "integer",
+            "description": "HTTP status code of the response"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["inference_results"]
+}
