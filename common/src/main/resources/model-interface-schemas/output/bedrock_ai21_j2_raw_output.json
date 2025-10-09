@@ -1,0 +1,136 @@
+{
+  "type": "object",
+  "properties": {
+    "inference_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "dataAsMap": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "number"
+                    },
+                    "prompt": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "tokens": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "generatedToken": {
+                                "type": "object",
+                                "properties": {
+                                  "token": {
+                                    "type": "string"
+                                  },
+                                  "logprob": {
+                                    "type": "number"
+                                  },
+                                  "raw_logprob": {
+                                    "type": "number"
+                                  }
+                                }
+                              },
+                              "textRange": {
+                                "type": "object",
+                                "properties": {
+                                  "start": {
+                                    "type": "number"
+                                  },
+                                  "end": {
+                                    "type": "number"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "completions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "data": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string"
+                              },
+                              "tokens": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "generatedToken": {
+                                      "type": "object",
+                                      "properties": {
+                                        "token": {
+                                          "type": "string"
+                                        },
+                                        "logprob": {
+                                          "type": "number"
+                                        },
+                                        "raw_logprob": {
+                                          "type": "number"
+                                        }
+                                      }
+                                    },
+                                    "textRange": {
+                                      "type": "object",
+                                      "properties": {
+                                        "start": {
+                                          "type": "number"
+                                        },
+                                        "end": {
+                                          "type": "number"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "finishReason": {
+                            "type": "object",
+                            "properties": {
+                              "reason": {
+                                "type": "string"
+                              },
+                              "length": {
+                                "type": "number"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "status_code": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

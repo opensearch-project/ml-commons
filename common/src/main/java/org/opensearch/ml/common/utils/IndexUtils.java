@@ -52,16 +52,32 @@ public class IndexUtils {
     public static final Map<String, String> MAPPING_PLACEHOLDERS = Map
         .of(USER_PLACEHOLDER, "index-mappings/placeholders/user.json", CONNECTOR_PLACEHOLDER, "index-mappings/placeholders/connector.json");
 
-    public static String getMappingFromFile(String path) throws IOException {
+    /**
+     * Loads a resource file from the classpath as a String.
+     * This is a utility method for loading JSON or text resources.
+     *
+     * @param path The path to the resource file relative to the classpath root
+     * @param resourceType A descriptive name for the resource type (e.g., "mapping", "schema") for error messages
+     * @return The resource content as a trimmed String
+     * @throws IOException if the resource cannot be found or loaded
+     * @throws IllegalArgumentException if the resource is empty
+     */
+    public static String loadResourceFromFile(String path, String resourceType) throws IOException {
         URL url = IndexUtils.class.getClassLoader().getResource(path);
         if (url == null) {
-            throw new IOException("Resource not found: " + path);
+            throw new IOException(resourceType + " resource not found: " + path);
         }
 
-        String mapping = Resources.toString(url, Charsets.UTF_8).trim();
-        if (mapping.isEmpty()) {
-            throw new IllegalArgumentException("Empty mapping found at: " + path);
+        String content = Resources.toString(url, Charsets.UTF_8).trim();
+        if (content.isEmpty()) {
+            throw new IllegalArgumentException("Empty " + resourceType + " found at: " + path);
         }
+
+        return content;
+    }
+
+    public static String getMappingFromFile(String path) throws IOException {
+        String mapping = loadResourceFromFile(path, "Mapping");
 
         mapping = replacePlaceholders(mapping);
         validateMapping(mapping);

@@ -1,0 +1,130 @@
+{
+  "type": "object",
+  "properties": {
+    "inference_results": {
+      "type": "array",
+      "description": "Array of inference results from model prediction",
+      "items": {
+        "type": "object",
+        "properties": {
+          "output": {
+            "type": "array",
+            "description": "Array of model tensor outputs",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the output tensor"
+                },
+                "dataAsMap": {
+                  "type": "object",
+                  "description": "OpenAI Chat Completions API response",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "Unique identifier for the chat completion"
+                    },
+                    "object": {
+                      "type": "string",
+                      "description": "Object type (e.g., chat.completion)"
+                    },
+                    "created": {
+                      "type": ["integer", "number"],
+                      "description": "Unix timestamp of when the completion was created"
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "The model used for completion"
+                    },
+                    "choices": {
+                      "type": "array",
+                      "description": "Array of chat completion choices",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer",
+                            "description": "Index of this choice"
+                          },
+                          "message": {
+                            "type": "object",
+                            "description": "The generated message",
+                            "properties": {
+                              "role": {
+                                "type": "string",
+                                "description": "Role of the message sender"
+                              },
+                              "content": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": ["type"],
+                                      "additionalProperties": true
+                                    }
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "x-llm-output": true
+                              }
+                            },
+                            "additionalProperties": true
+                          },
+                          "finish_reason": {
+                            "type": ["string", "null"],
+                            "description": "Reason why the completion finished"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "description": "Token usage information",
+                      "properties": {
+                        "prompt_tokens": {
+                          "type": ["integer", "number"]
+                        },
+                        "completion_tokens": {
+                          "type": ["integer", "number"]
+                        },
+                        "total_tokens": {
+                          "type": ["integer", "number"]
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "system_fingerprint": {
+                      "type": ["string", "null"],
+                      "description": "Backend configuration fingerprint"
+                    }
+                  },
+                  "required": ["id", "object", "created", "model", "choices"]
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "status_code": {
+            "type": "integer",
+            "description": "HTTP status code of the response"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["inference_results"]
+}

@@ -1,0 +1,16 @@
+{
+    "type": "object",
+    "properties": {
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "inputText": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "inputText"
+            ]
+        }
+    }
+}

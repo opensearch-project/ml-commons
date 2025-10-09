@@ -34,6 +34,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceAdditionalTests {
@@ -43,6 +44,9 @@ public class MemoryProcessingServiceAdditionalTests {
 
     @Mock
     private NamedXContentRegistry xContentRegistry;
+
+    @Mock
+    private MLModelCacheHelper mlModelCacheHelper;
 
     @Mock
     private ActionListener<List<String>> factsListener;
@@ -58,7 +62,7 @@ public class MemoryProcessingServiceAdditionalTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, mlModelCacheHelper);
     }
 
     @Test
@@ -182,7 +186,6 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -219,7 +222,6 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -256,7 +258,6 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -299,7 +300,6 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -337,7 +337,6 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -374,7 +373,6 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);

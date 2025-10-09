@@ -6,9 +6,7 @@
 package org.opensearch.ml.utils;
 
 import static java.util.Collections.emptyMap;
-import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
-import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
-import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.ModelInterfaceSchema;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.io.IOException;
@@ -71,42 +69,42 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
 
     @Test
     public void testValidateEmbeddingInputWithGeneralEmbeddingRemoteSchema() throws IOException {
-        String schema = BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE.get("input");
+        String schema = ModelInterfaceSchema.BEDROCK_COHERE_EMBED_ENGLISH_V3.getInterface().get("input");
         String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
         MLNodeUtils.validateSchema(schema, json);
     }
 
     @Test
     public void testValidateRemoteInputWithGeneralEmbeddingRemoteSchema() throws IOException {
-        String schema = BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE.get("input");
+        String schema = ModelInterfaceSchema.BEDROCK_COHERE_EMBED_ENGLISH_V3.getInterface().get("input");
         String json = "{\"parameters\": {\"texts\": [\"Hello\",\"world\"]}}";
         MLNodeUtils.validateSchema(schema, json);
     }
 
     @Test
     public void testValidateEmbeddingInputWithTitanTextRemoteSchema() throws IOException {
-        String schema = BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE.get("input");
+        String schema = ModelInterfaceSchema.BEDROCK_TITAN_EMBED_TEXT_V1.getInterface().get("input");
         String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
         MLNodeUtils.validateSchema(schema, json);
     }
 
     @Test
     public void testValidateRemoteInputWithTitanTextRemoteSchema() throws IOException {
-        String schema = BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE.get("input");
+        String schema = ModelInterfaceSchema.BEDROCK_TITAN_EMBED_TEXT_V1.getInterface().get("input");
         String json = "{\"parameters\": {\"inputText\": \"Say this is a test\"}}";
         MLNodeUtils.validateSchema(schema, json);
     }
 
     @Test
     public void testValidateEmbeddingInputWithTitanMultiModalRemoteSchema() throws IOException {
-        String schema = BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE.get("input");
+        String schema = ModelInterfaceSchema.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1.getInterface().get("input");
         String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
         MLNodeUtils.validateSchema(schema, json);
     }
 
     @Test
     public void testValidateRemoteInputWithTitanMultiModalRemoteSchema() throws IOException {
-        String schema = BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE.get("input");
+        String schema = ModelInterfaceSchema.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1.getInterface().get("input");
         String json = "{\n"
             + "  \"parameters\": {\n"
             + "    \"inputText\": \"Say this is a test\",\n"
