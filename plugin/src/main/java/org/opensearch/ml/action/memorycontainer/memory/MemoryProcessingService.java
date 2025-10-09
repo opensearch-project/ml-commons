@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_SUMMARY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SUMMARY_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -162,7 +163,10 @@ public class MemoryProcessingService {
             }
 
             // Always add JSON enforcement message for fact extraction
-            MessageInput enforcementMessage = getMessageInput(JSON_ENFORCEMENT_MESSAGE);
+            String enforcementMsg = (strategy.getType() == MemoryStrategyType.USER_PREFERENCE)
+                ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
+                : JSON_ENFORCEMENT_MESSAGE;
+            MessageInput enforcementMessage = getMessageInput(enforcementMsg);
             enforcementMessage.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
 
             messagesBuilder.endArray();
