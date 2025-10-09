@@ -9,6 +9,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -20,12 +22,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.output.AGUIOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-
-import java.util.ArrayList;
-import java.util.List;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import lombok.Builder;
 import lombok.Getter;
