@@ -34,6 +34,8 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * Add parameter to control delete memories when delete container ([#4238](https://github.com/opensearch-project/ml-commons/pull/4238))
 * Refactor and add more validation to processor chain ([#4260](https://github.com/opensearch-project/ml-commons/pull/4260))
 * [Agentic Search] Use same model for Agent and QPT ([#4262](https://github.com/opensearch-project/ml-commons/pull/4262))
+* Improve semantic fact extraction prompt and add JSON enforcement ([#4282](https://github.com/opensearch-project/ml-commons/pull/4282))
+* Improve user preference extraction prompt with XML-based structure ([#4288](https://github.com/opensearch-project/ml-commons/pull/4288))
 
 ### Bug Fixes
 * Fix NPE when execute flow agent with mutli tenancy is off ([#4189](https://github.com/opensearch-project/ml-commons/pull/4189))
@@ -60,6 +62,8 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * [Agent Framework] Exception handling for runtime exceptions during async execution ([#4263](https://github.com/opensearch-project/ml-commons/pull/4263))
 * Fix json parsing error by extracing json first; add for each processor; support input processor ([#4278](https://github.com/opensearch-project/ml-commons/pull/4278))
 * Fix: add validations during create and update memory container ([#4284](https://github.com/opensearch-project/ml-commons/pull/4284))
+* Fix agent streaming with security enabled + error handling ([#4256](https://github.com/opensearch-project/ml-commons/pull/4256))
+* Fix llm result path; convert message to user prompt string ([#4283](https://github.com/opensearch-project/ml-commons/pull/4283))
 
 ### Infrastructure
 * Update maintainer list ([#4139](https://github.com/opensearch-project/ml-commons/pull/4139))
