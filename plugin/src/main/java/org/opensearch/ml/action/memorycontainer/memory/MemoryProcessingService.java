@@ -140,40 +140,17 @@ public class MemoryProcessingService {
         }
 
         try {
-            XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-            messagesBuilder.startArray();
-            Map<String, Object> strategyConfig = strategy.getStrategyConfig();
-            if (strategyConfig != null && strategyConfig.containsKey("system_prompt_message")) {
-                Object systemPromptMsg = strategyConfig.get("system_prompt_message");
-                if (systemPromptMsg != null && systemPromptMsg instanceof Map) {
-                    messagesBuilder.map((Map) systemPromptMsg);
-                }
-            }
-            for (MessageInput message : messages) {
-                message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-            }
-            if (strategyConfig != null && strategyConfig.containsKey("user_prompt_message")) {
-                Object userPromptMsg = strategyConfig.get("user_prompt_message");
-                if (userPromptMsg != null && userPromptMsg instanceof Map) {
-                    messagesBuilder.map((Map) userPromptMsg);
-                }
-            } else { // Add default user prompt (when strategyConfig is null or doesn't have user_prompt_message)
-                MessageInput message = getMessageInput("Please extract information from our conversation so far");
-                message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-            }
-
             // Always add JSON enforcement message for fact extraction
             String enforcementMsg = (strategy.getType() == MemoryStrategyType.USER_PREFERENCE)
                 ? USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE
                 : JSON_ENFORCEMENT_MESSAGE;
             MessageInput enforcementMessage = getMessageInput(enforcementMsg);
-            enforcementMessage.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-
-            messagesBuilder.endArray();
-            String messagesJson = messagesBuilder.toString();
-            stringParameters.put("messages", messagesJson);
-
-            log.debug("LLM request - processing {} messages", messages.size());
+            // Create mutable copy to avoid UnsupportedOperationException
+            List<MessageInput> mutableMessages = new ArrayList<>(messages);
+            mutableMessages.add(enforcementMessage);
+            String conversationJson = serializeMessagesToJson(mutableMessages);
+            String userPrompt = "Analyze the following conversation and extract information:\n```json\n" + conversationJson + "\n```";
+            stringParameters.put("user_prompt", userPrompt);
         } catch (Exception e) {
             log.error("Failed to build messages JSON", e);
             listener.onResponse(new ArrayList<>());
@@ -254,23 +231,12 @@ public class MemoryProcessingService {
         stringParameters.put("system_prompt", DEFAULT_UPDATE_MEMORY_PROMPT);
 
         String decisionRequestJson = decisionRequest.toJsonString();
+        String userPrompt = "Analyze the following old memories and newly extracted facts, then make memory decisions:\n```json\n"
+            + decisionRequestJson
+            + "\n```";
+        stringParameters.put("user_prompt", userPrompt);
 
         try {
-            XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-            messagesBuilder.startArray();
-            messagesBuilder.startObject();
-            messagesBuilder.field("role", "user");
-            messagesBuilder.startArray("content");
-            messagesBuilder.startObject();
-            messagesBuilder.field("type", "text");
-            messagesBuilder.field("text", decisionRequestJson);
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
-
-            String messagesJson = messagesBuilder.toString();
-            stringParameters.put("messages", messagesJson);
 
             log
                 .debug(
@@ -284,9 +250,16 @@ public class MemoryProcessingService {
 
             MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
 
+            String defaultLlmResultPath = memoryConfig.getParameters().getOrDefault("llm_result_path", DEFAULT_LLM_RESULT_PATH).toString();
+            String llmResultPath = (String) Optional
+                .ofNullable(strategy)
+                .map(MemoryStrategy::getStrategyConfig)
+                .map(config -> config.get("llm_result_path"))
+                .orElse(defaultLlmResultPath);
+
             client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
                 try {
-                    List<MemoryDecision> decisions = parseMemoryDecisions(response);
+                    List<MemoryDecision> decisions = parseMemoryDecisions(llmResultPath, response);
                     log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
@@ -334,7 +307,6 @@ public class MemoryProcessingService {
             String llmResult = null;
             if (filterdResult != null) {
                 llmResult = StringUtils.toJson(filterdResult);
-                llmResult = cleanMarkdownFromJson(llmResult);
             }
             if (llmResult != null) {
                 llmResult = StringUtils.toJson(extractJsonProcessorChain.process(llmResult));
@@ -362,7 +334,7 @@ public class MemoryProcessingService {
         return facts;
     }
 
-    private List<MemoryDecision> parseMemoryDecisions(MLTaskResponse response) {
+    private List<MemoryDecision> parseMemoryDecisions(String llmResultPath, MLTaskResponse response) {
         try {
             MLOutput mlOutput = response.getOutput();
             if (!(mlOutput instanceof ModelTensorOutput)) {
@@ -375,25 +347,15 @@ public class MemoryProcessingService {
                 throw new IllegalStateException("No model output tensors found");
             }
 
-            Map<String, ?> dataMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
-
-            String responseContent = null;
-            if (dataMap.containsKey("response")) {
-                responseContent = (String) dataMap.get("response");
-            } else if (dataMap.containsKey("content")) {
-                List<Map<String, Object>> contentList = (List<Map<String, Object>>) dataMap.get("content");
-                if (contentList != null && !contentList.isEmpty()) {
-                    Map<String, Object> firstContent = contentList.get(0);
-                    responseContent = (String) firstContent.get("text");
-                }
-            }
-
-            if (responseContent == null) {
+            Map<String, ?> dataAsMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
+            Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+            if (filterdResult == null) {
                 throw new IllegalStateException("No response content found in LLM output");
             }
+            String responseContent = StringUtils.toJson(filterdResult);
 
             // Clean response content
-            responseContent = cleanMarkdownFromJson(responseContent);
+            responseContent = StringUtils.toJson(extractJsonProcessorChain.process(responseContent));
 
             List<MemoryDecision> decisions = new ArrayList<>();
             try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)) {
@@ -433,24 +395,13 @@ public class MemoryProcessingService {
             stringParameters.putIfAbsent("max_summary_size", "10");
 
             try {
-                XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
-                messagesBuilder.startArray();
-                for (MessageInput message : messages) {
-                    message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-                }
-                if (sessionParams.containsKey("user_prompt_message")) {
-                    Object userPromptMsg = sessionParams.get("user_prompt_message");
-                    if (userPromptMsg != null && userPromptMsg instanceof Map) {
-                        messagesBuilder.map((Map) userPromptMsg);
-                    }
-                } else {
-                    MessageInput message = getMessageInput(
-                        "Please summarize our conversation, not exceed " + stringParameters.get("max_summary_size") + " words"
-                    );
-                    message.toXContent(messagesBuilder, ToXContent.EMPTY_PARAMS);
-                }
-                messagesBuilder.endArray();
-                stringParameters.put("messages", messagesBuilder.toString());
+                String conversationJson = serializeMessagesToJson(messages);
+                String userPrompt = "Summarize the following conversation in no more than "
+                    + stringParameters.get("max_summary_size")
+                    + " words:\n```json\n"
+                    + conversationJson
+                    + "\n```";
+                stringParameters.put("user_prompt", userPrompt);
 
                 RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(stringParameters).build();
                 MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
@@ -495,27 +446,14 @@ public class MemoryProcessingService {
         return true;
     }
 
-    /**
-     * Utility method to clean markdown formatting from JSON responses.
-     * Strips ```json...``` and ```...``` wrappers that LLMs commonly add.
-     */
-    private String cleanMarkdownFromJson(String response) {
-        if (response == null) {
-            return null;
+    private String serializeMessagesToJson(List<MessageInput> messages) throws IOException {
+        XContentBuilder builder = jsonXContent.contentBuilder();
+        builder.startArray();
+        for (MessageInput message : messages) {
+            message.toXContent(builder, ToXContent.EMPTY_PARAMS);
         }
-
-        response = response.trim();
-
-        // Remove ```json...``` wrapper
-        if (response.startsWith("```json") && response.endsWith("```")) {
-            response = response.substring(7, response.length() - 3).trim();
-        }
-        // Remove ```...``` wrapper
-        else if (response.startsWith("```") && response.endsWith("```")) {
-            response = response.substring(3, response.length() - 3).trim();
-        }
-
-        return response;
+        builder.endArray();
+        return builder.toString();
     }
 
     /**

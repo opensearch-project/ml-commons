@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -540,6 +541,7 @@ public class MemoryProcessingServiceTests {
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -547,7 +549,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```json\n{\"memory_decisions\": []}\n```");
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```json\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -571,6 +575,7 @@ public class MemoryProcessingServiceTests {
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -578,7 +583,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```\n{\"memory_decisions\": []}\n```");
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -957,13 +964,11 @@ public class MemoryProcessingServiceTests {
             MLPredictionTaskRequest request = invocation.getArgument(1);
             RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
             Map<String, String> parameters = dataset.getParameters();
-            String messagesJson = parameters.get("messages");
+            String userPrompt = parameters.get("user_prompt");
 
-            // Verify that the JSON enforcement message is included in the messages
-            assertTrue(
-                "JSON enforcement message should be included",
-                messagesJson.contains("Respond NOW with ONE LINE of valid JSON ONLY")
-            );
+            // Verify that the JSON enforcement message is included in the user_prompt
+            assertNotNull("user_prompt should not be null", userPrompt);
+            assertTrue("JSON enforcement message should be included", userPrompt.contains("Respond NOW with ONE LINE of valid JSON ONLY"));
 
             // Mock successful response
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
