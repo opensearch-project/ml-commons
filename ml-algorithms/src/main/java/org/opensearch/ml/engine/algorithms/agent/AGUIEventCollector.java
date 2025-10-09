@@ -11,8 +11,10 @@ import java.util.UUID;
 
 import org.opensearch.ml.common.agui.BaseEvent;
 import org.opensearch.ml.common.agui.MessagesSnapshotEvent;
+import org.opensearch.ml.common.agui.RunErrorEvent;
 import org.opensearch.ml.common.agui.RunFinishedEvent;
 import org.opensearch.ml.common.agui.RunStartedEvent;
+import org.opensearch.ml.common.agui.TextMessageContentEvent;
 import org.opensearch.ml.common.agui.TextMessageEndEvent;
 import org.opensearch.ml.common.agui.TextMessageStartEvent;
 import org.opensearch.ml.common.agui.ToolCallEndEvent;
@@ -48,11 +50,21 @@ public class AGUIEventCollector {
         log.debug("AG-UI: Run finished with thread_id={}, run_id={}", threadId, runId);
     }
 
+    public void errorRun(String message, String code) {
+        events.add(new RunErrorEvent(message, code));
+        log.debug("AG-UI: Run error with message={}, code={}", message, code);
+    }
+
     public String startTextMessage(String role) {
         String messageId = UUID.randomUUID().toString();
         events.add(new TextMessageStartEvent(messageId, role));
         log.debug("AG-UI: Text message started with message_id={}, role={}", messageId, role);
         return messageId;
+    }
+
+    public void addTextMessageContent(String messageId, String delta) {
+        events.add(new TextMessageContentEvent(messageId, delta));
+        log.debug("AG-UI: Text message content added with message_id={}, delta_length={}", messageId, delta != null ? delta.length() : 0);
     }
 
     public void endTextMessage(String messageId) {

@@ -153,7 +153,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     "Cache-Control",
                     List.of("no-cache"),
                     "Connection",
-                    List.of("keep-alive")
+                    List.of("keep-alive"),
+                    "Access-Control-Allow-Origin",
+                    List.of("*"),
+                    "Access-Control-Allow-Methods",
+                    List.of("GET, POST, PUT, DELETE, OPTIONS, HEAD"),
+                    "Access-Control-Allow-Headers",
+                    List.of("X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization")
                 );
             channel.prepareResponse(RestStatus.OK, headers);
 
@@ -161,6 +167,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 try {
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
+                    boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
@@ -170,7 +177,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 MLTaskResponse response = streamResponse.nextResponse();
 
                                 if (response != null) {
-                                    HttpChunk responseChunk = convertToHttpChunk(response);
+                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
                                     channel.sendChunk(responseChunk);
 
                                     // Recursively handle the next response
@@ -319,61 +326,108 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         FunctionName functionName = FunctionName.AGENT;
-        Input input = MLInput.parse(parser, functionName.name());
-        AgentMLInput agentInput = (AgentMLInput) input;
-        agentInput.setAgentId(agentId);
-        agentInput.setTenantId(tenantId);
-        agentInput.setIsAsync(async);
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+        // Check if this is AG-UI input format
+        String requestBodyJson = content.utf8ToString();
+        Input input;
+        if (org.opensearch.ml.common.agui.AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+            log.info("Detected AG-UI input format for streaming agent: {}", agentId);
+            input = org.opensearch.ml.common.agui.AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
+        } else {
+            input = MLInput.parse(parser, functionName.name());
+            AgentMLInput agentInput = (AgentMLInput) input;
+            agentInput.setAgentId(agentId);
+            agentInput.setTenantId(tenantId);
+            agentInput.setIsAsync(async);
+        }
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) input).getInputDataset();
         inputDataSet.getParameters().put("stream", String.valueOf(true));
         return new MLExecuteTaskRequest(functionName, input);
     }
 
-    private HttpChunk convertToHttpChunk(MLTaskResponse response) throws IOException {
-        String sseData;
+    private boolean isAGUIAgent(MLExecuteTaskRequest request) {
+        if (request.getInput() instanceof org.opensearch.ml.common.input.execute.agent.AgentMLInput) {
+            org.opensearch.ml.common.input.execute.agent.AgentMLInput agentInput =
+                (org.opensearch.ml.common.input.execute.agent.AgentMLInput) request.getInput();
+            org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet inputDataSet =
+                (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+            // Check if this request came from AG-UI by looking for AG-UI specific parameters
+            return inputDataSet.getParameters().containsKey("agui_thread_id") ||
+                   inputDataSet.getParameters().containsKey("agui_run_id");
+        }
+        return false;
+    }
+
+
+    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
+        String memoryId = "";
+        String parentInteractionId = "";
+        String content = "";
         boolean isLast = false;
 
         try {
             Map<String, ?> dataMap = extractDataMap(response);
 
             if (dataMap.containsKey("error")) {
-                // Error response
-                String errorMessage = (String) dataMap.get("error");
-                sseData = String.format("data: {\"error\": \"%s\"}\n\n", errorMessage.replace("\"", "\\\"").replace("\n", "\\n"));
+                // Error response - handle errors
+                content = (String) dataMap.get("error");
                 isLast = true;
             } else {
                 // TODO: refactor to handle other types of agents
                 // Regular response - extract values and build proper structure
-                String memoryId = extractTensorResult(response, "memory_id");
-                String parentInteractionId = extractTensorResult(response, "parent_interaction_id");
-                String content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
+                memoryId = extractTensorResult(response, "memory_id");
+                parentInteractionId = extractTensorResult(response, "parent_interaction_id");
+                content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
                 isLast = dataMap.containsKey("is_last") ? Boolean.TRUE.equals(dataMap.get("is_last")) : false;
-                boolean finalIsLast = isLast;
-
-                List<ModelTensor> orderedTensors = List
-                    .of(
-                        ModelTensor.builder().name("memory_id").result(memoryId).build(),
-                        ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
-                        ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
-                            {
-                                put("content", content);
-                                put("is_last", finalIsLast);
-                            }
-                        }).build()
-                    );
-
-                ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
-                ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-
-                XContentBuilder builder = XContentFactory.jsonBuilder();
-                tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                sseData = "data: " + builder.toString() + "\n\n";
             }
         } catch (Exception e) {
             log.error("Failed to process response", e);
-            sseData = "data: {\"error\": \"Processing failed\"}\n\n";
+            content = "Processing failed";
             isLast = true;
         }
+
+        String finalContent = content;
+        boolean finalIsLast = isLast;
+
+        log
+            .info(
+                "Converting to HttpChunk - memoryId: '{}', parentId: '{}', content: '{}', isLast: {}, isAGUIAgent: {}",
+                memoryId,
+                parentInteractionId,
+                content,
+                isLast,
+                isAGUIAgent
+            );
+
+        // If this is an AG-UI agent, convert to AG-UI event format
+        if (isAGUIAgent) {
+            return convertToAGUIEvent(content, memoryId, parentInteractionId, isLast);
+        }
+
+        // Create ordered tensors
+        List<ModelTensor> orderedTensors = List
+            .of(
+                ModelTensor.builder().name("memory_id").result(memoryId).build(),
+                ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
+                ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
+                    {
+                        put("content", finalContent);
+                        put("is_last", finalIsLast);
+                    }
+                }).build()
+            );
+
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
+
+        ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonData = builder.toString();
+
+        String sseData = "data: " + jsonData + "\n\n";
         return createHttpChunk(sseData, isLast);
     }
 
@@ -419,6 +473,46 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             log.error("Failed to combine chunks", e);
             throw new OpenSearchStatusException("Failed to combine request chunks", RestStatus.INTERNAL_SERVER_ERROR, e);
         }
+    }
+
+    private HttpChunk convertToAGUIEvent(String content, String memoryId, String parentInteractionId, boolean isLast) throws IOException {
+        // Extract threadId and runId from memoryId/parentInteractionId or generate new ones
+        String threadId = memoryId != null ? memoryId : "thread_" + System.currentTimeMillis();
+        String runId = parentInteractionId != null ? parentInteractionId : "run_" + System.currentTimeMillis();
+
+        StringBuilder sseResponse = new StringBuilder();
+
+        // Get required startup events (RUN_STARTED, TEXT_MESSAGE_START if needed)
+        String[] startupEvents = AGUIStreamingEventManager.getRequiredStartEvents(threadId, runId);
+        for (String event : startupEvents) {
+            sseResponse.append("data: ").append(event).append("\n\n");
+        }
+
+        // Add content event if there's content
+        if (content != null && !content.isEmpty()) {
+            String contentEvent = AGUIStreamingEventManager.createTextMessageContentEvent(threadId, runId, content);
+            sseResponse.append("data: ").append(contentEvent).append("\n\n");
+        }
+
+        // Add ending events if this is the last chunk
+        if (isLast) {
+            String[] endEvents = AGUIStreamingEventManager.getRequiredEndEvents(threadId, runId);
+            for (String event : endEvents) {
+                sseResponse.append("data: ").append(event).append("\n\n");
+            }
+        }
+
+        return createHttpChunk(sseResponse.toString(), isLast);
+    }
+
+    private String escapeJsonString(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\")
+                   .replace("\"", "\\\"")
+                   .replace("\n", "\\n")
+                   .replace("\r", "\\r")
+                   .replace("\t", "\\t");
+    }
     }
 
     private HttpChunk createHttpChunk(String sseData, boolean isLast) {
