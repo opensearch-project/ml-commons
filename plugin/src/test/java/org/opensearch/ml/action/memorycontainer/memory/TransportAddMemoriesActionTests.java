@@ -473,6 +473,130 @@ public class TransportAddMemoriesActionTests {
     // ===== Group 2: Session Creation Tests (Key Branches) =====
 
     @Test
+    public void testDoExecute_SuccessfulSessionCreation() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+        // No session_id - should trigger session creation
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock summarizeMessages
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(2);
+            listener.onResponse("Session summary");
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+
+        // Mock indexData for both session and working memory
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            IndexRequest indexRequest = invocation.getArgument(1);
+            // Return different IDs based on index name
+            if (indexRequest.index().equals("session-index")) {
+                when(indexResponse.getId()).thenReturn("session-123");
+            } else {
+                when(indexResponse.getId()).thenReturn("working-mem-123");
+            }
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Verify session creation flow
+        verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        // Verify indexData called twice: once for session, once for working memory
+        verify(memoryContainerHelper, org.mockito.Mockito.times(2)).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_SessionCreation_SummarizeFailure() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+        // No session_id - should trigger session creation
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock summarizeMessages to fail
+        Exception summarizeException = new RuntimeException("Summarization failed");
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(2);
+            listener.onFailure(summarizeException);
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Verify summarize was called and failure was propagated
+        verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+        verify(actionListener).onFailure(summarizeException);
+    }
+
+    @Test
     public void testDoExecute_UserProvidedSessionId_SkipsCreation() {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 

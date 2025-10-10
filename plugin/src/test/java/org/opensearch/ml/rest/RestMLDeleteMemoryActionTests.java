@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.util.HashMap;
 import java.util.List;
@@ -201,6 +202,22 @@ public class RestMLDeleteMemoryActionTests extends OpenSearchTestCase {
         assertEquals("container-with-dashes-123", capturedRequest.getMemoryContainerId());
         assertEquals(MemoryType.WORKING, capturedRequest.getMemoryType());
         assertEquals("memory_with_underscores_456", capturedRequest.getMemoryId());
+    }
+
+    public void testPrepareRequestWithAgenticMemoryDisabled() throws Exception {
+        // Create new instance with disabled setting
+        MLFeatureEnabledSetting disabledSetting = org.mockito.Mockito.mock(MLFeatureEnabledSetting.class);
+        when(disabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+        RestMLDeleteMemoryAction actionWithDisabledFeature = new RestMLDeleteMemoryAction(disabledSetting);
+
+        RestRequest request = getRestRequest();
+
+        Exception exception = expectThrows(org.opensearch.OpenSearchStatusException.class, () -> {
+            actionWithDisabledFeature.handleRequest(request, channel, client);
+        });
+
+        assertNotNull(exception);
+        assertEquals(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, exception.getMessage());
     }
 
     private RestRequest getRestRequest() {

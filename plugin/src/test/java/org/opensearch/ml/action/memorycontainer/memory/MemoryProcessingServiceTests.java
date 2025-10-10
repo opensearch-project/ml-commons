@@ -5,12 +5,20 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.util.ArrayList;
@@ -25,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
@@ -36,6 +45,8 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceTests {
@@ -51,6 +62,10 @@ public class MemoryProcessingServiceTests {
 
     @Mock
     private ActionListener<List<MemoryDecision>> decisionsListener;
+
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
+
     private MemoryStrategy memoryStrategy;
 
     private MemoryProcessingService memoryProcessingService;
@@ -64,10 +79,12 @@ public class MemoryProcessingServiceTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        memoryStrategy.getStrategyConfig().put("llm_result_path", "$");
-        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        memoryStrategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$");
+        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
         testContent = createTestContent("Hello");
         when(memoryConfig.getParameters()).thenReturn(new HashMap<>());
+        // Mock the getLlmResultPath to return the default path
+        when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.content[0].text");
     }
 
     @Test
@@ -282,7 +299,7 @@ public class MemoryProcessingServiceTests {
             Arrays.asList("user_id"),
             new HashMap<>()
         );
-        memoryStrategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        memoryStrategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
@@ -383,7 +400,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(Exception.class));
     }
 
     @Test
@@ -413,7 +430,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(Exception.class));
     }
 
     @Test
@@ -445,7 +462,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(Exception.class));
     }
 
     @Test
@@ -532,6 +549,7 @@ public class MemoryProcessingServiceTests {
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -539,7 +557,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```json\n{\"memory_decisions\": []}\n```");
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```json\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -563,6 +583,7 @@ public class MemoryProcessingServiceTests {
         List<FactSearchResult> searchResults = Arrays.asList();
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -570,7 +591,9 @@ public class MemoryProcessingServiceTests {
         ModelTensor mockTensor = mock(ModelTensor.class);
 
         Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("response", "```\n{\"memory_decisions\": []}\n```");
+        Map<String, Object> contentItem = new HashMap<>();
+        contentItem.put("text", "```\n{\"memory_decisions\": []}\n```");
+        dataMap.put("content", Arrays.asList(contentItem));
 
         when(mockResponse.getOutput()).thenReturn(mockOutput);
         when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
@@ -904,14 +927,18 @@ public class MemoryProcessingServiceTests {
             List<ModelTensors> mlModelOutputs = new ArrayList<>();
             List<ModelTensor> tensors = new ArrayList<>();
             Map<String, Object> contents = new HashMap<>();
-            contents.put("content", List.of(Map.of("text", "test summary")));
+            Map<String, Object> message = new HashMap<>();
+            message.put("content", List.of(Map.of("text", "test summary")));
+            Map<String, Object> output = new HashMap<>();
+            output.put("message", message);
+            contents.put("output", output);
             tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
             mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
-            MLTaskResponse output = MLTaskResponse
+            MLTaskResponse mlTaskResponse = MLTaskResponse
                 .builder()
                 .output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build())
                 .build();
-            actionListener.onResponse(output);
+            actionListener.onResponse(mlTaskResponse);
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
         memoryProcessingService.summarizeMessages(memoryConfig, messages, stringListener);
@@ -932,5 +959,137 @@ public class MemoryProcessingServiceTests {
         memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_JsonEnforcementMessageAppended() {
+        // Test that JSON enforcement message is always appended to fact extraction requests
+        Map<String, Object> strategyConfig = new HashMap<>();
+        MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), strategyConfig);
+
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        // Capture the request to verify JSON enforcement message is included
+        doAnswer(invocation -> {
+            MLPredictionTaskRequest request = invocation.getArgument(1);
+            RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            Map<String, String> parameters = dataset.getParameters();
+            String userPrompt = parameters.get("user_prompt");
+
+            // Verify that the JSON enforcement message is included in the user_prompt
+            assertNotNull("user_prompt should not be null", userPrompt);
+            assertTrue("JSON enforcement message should be included", userPrompt.contains("Respond NOW with ONE LINE of valid JSON ONLY"));
+
+            // Mock successful response
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            List<ModelTensors> mlModelOutputs = new ArrayList<>();
+            List<ModelTensor> tensors = new ArrayList<>();
+            Map<String, Object> contents = new HashMap<>();
+            contents.put("content", List.of(Map.of("text", "{\"facts\":[\"Test fact\"]}")));
+            tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
+            mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
+            MLTaskResponse output = MLTaskResponse
+                .builder()
+                .output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build())
+                .build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+
+        verify(client).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testUserPreferencePromptFormat() {
+        // Test that the new user preference prompt contains required elements
+        String prompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+
+        // Verify XML-based structure like SEMANTIC_FACTS_EXTRACTION_PROMPT
+        assertTrue("Should have ROLE section", prompt.contains("<ROLE>"));
+        assertTrue("Should have SCOPE section", prompt.contains("<SCOPE>"));
+        assertTrue("Should have OUTPUT section", prompt.contains("<OUTPUT>"));
+        assertTrue("Should be role-based", prompt.contains("USER PREFERENCE EXTRACTOR"));
+
+        // Verify key requirements
+        assertTrue("Should have character limit", prompt.contains("< 350 chars"));
+        assertTrue("Should specify context format", prompt.contains("Context: <why/how>"));
+
+        // Verify old problematic format is removed
+        assertFalse("Should not use pipe delimiters", prompt.contains("preference | context:"));
+    }
+
+    @Test
+    public void testUserPreferenceEnforcementMessage() {
+        // Test that enforcement message matches the new format
+        String enforcement = USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
+
+        assertTrue("Should specify natural language format", enforcement.contains("Context: <why/how>. Categories:"));
+        assertFalse("Should not use old pipe format", enforcement.contains("preference | context:"));
+    }
+
+    @Test
+    public void testEnforcementMessageSelection() {
+        // Test that correct enforcement message is selected based on strategy type
+        MemoryStrategy userPrefStrategy = new MemoryStrategy(
+            "id",
+            true,
+            MemoryStrategyType.USER_PREFERENCE,
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
+        MemoryStrategy semanticStrategy = new MemoryStrategy(
+            "id",
+            true,
+            MemoryStrategyType.SEMANTIC,
+            Arrays.asList("user_id"),
+            new HashMap<>()
+        );
+
+        // This tests the logic in MemoryProcessingService.java lines 165-168
+        // We can't easily test the private method, but we can verify the constants exist and are different
+        assertNotEquals(
+            "User preference and semantic should have different enforcement messages",
+            USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE,
+            JSON_ENFORCEMENT_MESSAGE
+        );
+
+        assertTrue(
+            "User preference enforcement should be for natural format",
+            USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE.contains("Context: <why/how>")
+        );
+        assertTrue("Semantic enforcement should be for standard format", JSON_ENFORCEMENT_MESSAGE.contains("fact1"));
+    }
+
+    @Test
+    public void testUserPreferenceExtractionScenarios() {
+        // Test various user preference extraction scenarios
+        String prompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+
+        // Verify explicit preference handling
+        assertTrue("Should handle explicit preferences", prompt.contains("user states a preference"));
+        assertTrue("Should handle implicit preferences", prompt.contains("repeated choices"));
+
+        // Verify format requirements
+        assertTrue("Should require JSON format", prompt.contains("{\"facts\":["));
+        assertTrue("Should specify context format", prompt.contains("Context: <why/how>"));
+        assertTrue("Should limit character count", prompt.contains("< 350 chars"));
+    }
+
+    @Test
+    public void testMultiTurnConversationHandling() {
+        // Test that prompt correctly handles multi-turn conversations
+        String prompt = USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
+
+        // Verify assistant message handling
+        assertTrue("Should use assistant messages as context only", prompt.contains("Assistant messages are context only"));
+        assertTrue("Should extract from USER messages", prompt.contains("Extract preferences only from USER messages"));
+
+        // Verify role clarity
+        assertTrue("Should not be a chat assistant", prompt.contains("not a chat assistant"));
+        assertTrue("Should only output JSON facts", prompt.contains("only job is to output JSON facts"));
     }
 }

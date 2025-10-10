@@ -9,6 +9,8 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
@@ -53,6 +55,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -491,5 +494,37 @@ public class MemoryContainerHelper {
             log.error("Failed to search for containers with prefix: " + indexPrefix, e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Get the LLM result path from strategy or memory configuration.
+     * Priority order:
+     * 1. Strategy config's llm_result_path
+     * 2. Memory config parameters' llm_result_path
+     * 3. Default path
+     *
+     * @param strategy the memory strategy (can be null)
+     * @param memoryConfig the memory configuration (can be null)
+     * @return the LLM result path, never null
+     */
+    public String getLlmResultPath(MemoryStrategy strategy, MemoryConfiguration memoryConfig) {
+        // Try to get from strategy config first
+        if (strategy != null && strategy.getStrategyConfig() != null) {
+            Object strategyPath = strategy.getStrategyConfig().get(LLM_RESULT_PATH_FIELD);
+            if (strategyPath != null) {
+                return strategyPath.toString();
+            }
+        }
+
+        // Fall back to memory config parameters
+        if (memoryConfig != null && memoryConfig.getParameters() != null) {
+            Object configPath = memoryConfig.getParameters().get(LLM_RESULT_PATH_FIELD);
+            if (configPath != null) {
+                return configPath.toString();
+            }
+        }
+
+        // Use default if nothing found
+        return DEFAULT_LLM_RESULT_PATH;
     }
 }

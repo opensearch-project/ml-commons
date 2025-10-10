@@ -42,6 +42,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class ProcessorChain {
 
+    public static final String INPUT_PROCESSORS = "input_processors";
     /**
      * Configuration key for output processors in tool parameters.
      * Used to extract processor configurations from parameter maps.
@@ -253,11 +254,46 @@ public class ProcessorChain {
      */
     @SuppressWarnings("unchecked")
     public static List<Map<String, Object>> extractProcessorConfigs(Map<String, ?> params) {
-        if (params == null || !params.containsKey(OUTPUT_PROCESSORS)) {
+        return extractProcessorConfigs(params, OUTPUT_PROCESSORS);
+    }
+
+    /**
+     * Extracts processor configurations from parameters using a custom parameter name.
+     * <p>
+     * This method provides flexible extraction of processor configurations from parameter maps
+     * by allowing the caller to specify which parameter key to look for. Supports multiple formats:
+     * <ul>
+     *   <li>List of Maps - Direct processor configurations</li>
+     *   <li>JSON String - Parses JSON array of processor configurations</li>
+     * </ul>
+     * <p>
+     * Example usage:
+     * <pre>
+     * // Extract input processors
+     * List&lt;Map&lt;String, Object&gt;&gt; inputConfigs = 
+     *     extractProcessorConfigs(params, "input_processors");
+     * 
+     * // Extract output processors
+     * List&lt;Map&lt;String, Object&gt;&gt; outputConfigs = 
+     *     extractProcessorConfigs(params, "output_processors");
+     * </pre>
+     * 
+     * @param params Parameter map that may contain processor configurations
+     * @param paramName The key name to look for in the params map (e.g., "input_processors", "output_processors")
+     * @return List of processor configuration maps. Returns empty list if:
+     *         <ul>
+     *           <li>params is null</li>
+     *           <li>paramName key is not present in params</li>
+     *           <li>Configuration format is invalid</li>
+     *           <li>JSON parsing fails (logged as error)</li>
+     *         </ul>
+     */
+    public static List<Map<String, Object>> extractProcessorConfigs(Map<String, ?> params, String paramName) {
+        if (params == null || !params.containsKey(paramName)) {
             return Collections.emptyList();
         }
 
-        Object configObj = params.get(OUTPUT_PROCESSORS);
+        Object configObj = params.get(paramName);
         if (configObj instanceof List) {
             return (List<Map<String, Object>>) configObj;
         }
