@@ -10,6 +10,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -596,13 +598,13 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         MemoryConfiguration memoryConfigNoPath = MemoryConfiguration.builder().parameters(Map.of()).build();
 
         result = helper.getLlmResultPath(strategyNoPath, memoryConfigNoPath);
-        assertEquals("$.content[0].text", result);
+        assertEquals(DEFAULT_LLM_RESULT_PATH, result);
 
         // Test 5: Memory config parameters is null, use default
         MemoryConfiguration memoryConfigNullParams = MemoryConfiguration.builder().parameters(null).build();
 
         result = helper.getLlmResultPath(strategyNoPath, memoryConfigNullParams);
-        assertEquals("$.content[0].text", result);
+        assertEquals(DEFAULT_LLM_RESULT_PATH, result);
 
         // Test 6: Strategy config has null value for llm_result_path, fallback to memory config
         Map<String, Object> strategyConfigWithNull = Map.of("other_key", "value");
@@ -613,11 +615,11 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
 
         // Test 7: Both strategy and memory config are null - use default
         result = helper.getLlmResultPath(null, null);
-        assertEquals("$.content[0].text", result);
+        assertEquals(DEFAULT_LLM_RESULT_PATH, result);
 
         // Test 8: Strategy is null, memory config is null - use default
         result = helper.getLlmResultPath(null, memoryConfigNullParams);
-        assertEquals("$.content[0].text", result);
+        assertEquals(DEFAULT_LLM_RESULT_PATH, result);
 
         // Test 9: Strategy is null, memory config has path - use memory config
         result = helper.getLlmResultPath(null, memoryConfig);
@@ -625,17 +627,17 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
 
         // Test 10: Strategy is null, memory config is null - use default
         result = helper.getLlmResultPath(null, null);
-        assertEquals("$.content[0].text", result);
+        assertEquals(DEFAULT_LLM_RESULT_PATH, result);
 
         // Test 11: Non-string value in strategy config (e.g., Integer) - should convert to string
-        Map<String, Object> strategyConfigWithInt = Map.of("llm_result_path", 12345);
+        Map<String, Object> strategyConfigWithInt = Map.of(LLM_RESULT_PATH_FIELD, 12345);
         MemoryStrategy strategyWithInt = MemoryStrategy.builder().strategyConfig(strategyConfigWithInt).build();
 
         result = helper.getLlmResultPath(strategyWithInt, memoryConfig);
         assertEquals("12345", result);
 
         // Test 12: Non-string value in memory config parameters - should convert to string
-        MemoryConfiguration memoryConfigWithInt = MemoryConfiguration.builder().parameters(Map.of("llm_result_path", 67890)).build();
+        MemoryConfiguration memoryConfigWithInt = MemoryConfiguration.builder().parameters(Map.of(LLM_RESULT_PATH_FIELD, 67890)).build();
 
         result = helper.getLlmResultPath(strategyNoPath, memoryConfigWithInt);
         assertEquals("67890", result);

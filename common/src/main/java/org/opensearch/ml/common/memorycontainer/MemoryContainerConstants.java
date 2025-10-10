@@ -10,7 +10,7 @@ package org.opensearch.ml.common.memorycontainer;
  */
 public class MemoryContainerConstants {
 
-    public static final String DEFAULT_LLM_RESULT_PATH = "$.content[0].text";
+    public static final String DEFAULT_LLM_RESULT_PATH = "$.output.message.content[0].text";
     public static final String LLM_RESULT_PATH_FIELD = "llm_result_path";
 
     // Field names for MemoryContainer

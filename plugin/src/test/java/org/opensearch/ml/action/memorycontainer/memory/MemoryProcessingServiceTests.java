@@ -927,14 +927,18 @@ public class MemoryProcessingServiceTests {
             List<ModelTensors> mlModelOutputs = new ArrayList<>();
             List<ModelTensor> tensors = new ArrayList<>();
             Map<String, Object> contents = new HashMap<>();
-            contents.put("content", List.of(Map.of("text", "test summary")));
+            Map<String, Object> message = new HashMap<>();
+            message.put("content", List.of(Map.of("text", "test summary")));
+            Map<String, Object> output = new HashMap<>();
+            output.put("message", message);
+            contents.put("output", output);
             tensors.add(ModelTensor.builder().name("response").dataAsMap(contents).build());
             mlModelOutputs.add(ModelTensors.builder().mlModelTensors(tensors).build());
-            MLTaskResponse output = MLTaskResponse
+            MLTaskResponse mlTaskResponse = MLTaskResponse
                 .builder()
                 .output(ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build())
                 .build();
-            actionListener.onResponse(output);
+            actionListener.onResponse(mlTaskResponse);
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
         memoryProcessingService.summarizeMessages(memoryConfig, messages, stringListener);
