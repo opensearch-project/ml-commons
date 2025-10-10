@@ -903,7 +903,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         if (shouldSummarize && !traceTensors.isEmpty()) {
             generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
                 String summaryResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
-                AtomicReference<String> summaryThought = new AtomicReference<>(summaryResponse);
                 sendTraditionalMaxIterationsResponse(
                     sessionId,
                     listener,
@@ -915,12 +914,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     conversationIndexMemory,
                     traceNumber,
                     additionalInfo,
-                    summaryThought,
-                    0,
+                    summaryResponse,
                     tools
                 );
-            }, e -> { log.warn("Failed to generate LLM summary", e); }));
+            }, e -> {
+                log.error("Failed to generate LLM summary", e);
+                listener.onFailure(e);
+                cleanUpResource(tools);
+            }));
         } else {
+            String response = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+                ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+                : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
             sendTraditionalMaxIterationsResponse(
                 sessionId,
                 listener,
@@ -932,8 +937,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 conversationIndexMemory,
                 traceNumber,
                 additionalInfo,
-                lastThought,
-                maxIterations,
+                response,
                 tools
             );
         }
@@ -950,18 +954,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ConversationIndexMemory conversationIndexMemory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
-        AtomicReference<String> lastThought,
-        int maxIterations,
+        String response,
         Map<String, Tool> tools
     ) {
-        String incompleteResponse;
-        if (maxIterations == 0) {
-            incompleteResponse = lastThought.get();
-        } else {
-            incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
-                ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
-                : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
-        }
         sendFinalAnswer(
             sessionId,
             listener,
@@ -973,7 +968,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             conversationIndexMemory,
             traceNumber,
             additionalInfo,
-            incompleteResponse
+            response
         );
         cleanUpResource(tools);
     }
@@ -1036,8 +1031,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
             return null;
         } catch (Exception e) {
-            log.warn("Failed to extract summary from response", e);
-            return null;
+            log.error("Failed to extract summary from response", e);
+            throw new RuntimeException("Failed to extract summary from response", e);
         }
     }
 
