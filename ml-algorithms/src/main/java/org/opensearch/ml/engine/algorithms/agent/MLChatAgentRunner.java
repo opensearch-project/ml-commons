@@ -1065,7 +1065,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
             // Convert ModelTensors to strings before joining
             List<String> stepStrings = new ArrayList<>();
             for (ModelTensors tensor : stepsSummary) {
-                stepStrings.add(outputToOutputString(tensor));
+                if (tensor != null && tensor.getMlModelTensors() != null) {
+                    for (ModelTensor modelTensor : tensor.getMlModelTensors()) {
+                        if (modelTensor.getResult() != null) {
+                            stepStrings.add(modelTensor.getResult());
+                        } else if (modelTensor.getDataAsMap() != null && modelTensor.getDataAsMap().containsKey("response")) {
+                            stepStrings.add(String.valueOf(modelTensor.getDataAsMap().get("response")));
+                        }
+                    }
+                }
             }
             String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
             summaryParams.put("inputs", summaryPrompt);
@@ -1098,12 +1106,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
         try {
             String outputString = outputToOutputString(response.getOutput());
             if (outputString != null && !outputString.trim().isEmpty()) {
-                Map<String, Object> dataMap = gson.fromJson(outputString, Map.class);
-                if (dataMap.containsKey("response")) {
-                    String summary = String.valueOf(dataMap.get("response"));
-                    if (summary != null && !summary.trim().isEmpty() && !"null".equals(summary)) {
-                        return summary.trim();
+                try {
+                    Map<String, Object> dataMap = gson.fromJson(outputString, Map.class);
+                    if (dataMap.containsKey("response")) {
+                        String summary = String.valueOf(dataMap.get("response"));
+                        if (summary != null && !summary.trim().isEmpty() && !"null".equals(summary)) {
+                            return summary.trim();
+                        }
                     }
+                } catch (Exception jsonException) {
+                    return outputString.trim();
                 }
             }
             return null;
