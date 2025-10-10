@@ -143,14 +143,14 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
     }
 
-    public void testChatCompletionApiForBedrockClaudeV3() throws Exception {
+    public void testChatCompletionApiForBedrockContentFormat() throws Exception {
         MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         connector.setMlClient(mlClient);
 
-        // Claude V3-style response
-        Map<String, Object> textPart = Map.of("type", "text", "text", "Hello from Claude V3");
+        // Bedrock content/text response (newer format)
+        Map<String, Object> textPart = Map.of("type", "text", "text", "Hello from Bedrock");
         Map<String, Object> dataAsMap = Map.of("content", List.of(textPart));
 
         ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
@@ -180,13 +180,13 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         connector.doChatCompletion(input, new ActionListener<>() {
             @Override
             public void onResponse(ChatCompletionOutput output) {
-                // Verify that we parsed the Claude V3 response correctly
-                assertEquals("Hello from Claude V3", output.getAnswers().get(0));
+                // Verify that we parsed the Bedrock content response correctly
+                assertEquals("Hello from Bedrock", output.getAnswers().get(0));
             }
 
             @Override
             public void onFailure(Exception e) {
-                fail("Claude V3 test failed: " + e.getMessage());
+                fail("Bedrock test failed: " + e.getMessage());
             }
         });
 
@@ -629,7 +629,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         connector.setMlClient(mlClient);
 
-        String errorMessage = "Unsupported Claude response format";
+        String errorMessage = "Unsupported Bedrock response format";
         Map<String, String> messageMap = Map.of("message", errorMessage);
         Map<String, ?> dataAsMap = Map.of("error", messageMap);
         ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
