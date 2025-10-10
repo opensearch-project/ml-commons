@@ -1188,11 +1188,24 @@ public class MLChatAgentRunnerTest {
 
         // Reset and setup fresh mocks
         Mockito.reset(client);
+        Mockito.reset(firstTool);
+        when(firstTool.getName()).thenReturn(FIRST_TOOL);
+        when(firstTool.validate(Mockito.anyMap())).thenReturn(true);
+        Mockito.doAnswer(generateToolResponse("First tool response")).when(firstTool).run(Mockito.anyMap(), any());
+
         // First call: LLM response without final_answer to trigger max iterations
-        // Second call: Summary LLM response
+        // Second call: Summary LLM response with result field instead of dataAsMap
         Mockito
             .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "I need to analyze the data", "action", FIRST_TOOL)))
-            .doAnswer(getLLMAnswer(ImmutableMap.of("response", "Summary: Analysis step was attempted")))
+            .doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                ModelTensor modelTensor = ModelTensor.builder().result("Summary: Analysis step was attempted").build();
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                MLTaskResponse mlTaskResponse = MLTaskResponse.builder().output(mlModelTensorOutput).build();
+                listener.onResponse(mlTaskResponse);
+                return null;
+            })
             .when(client)
             .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
 
