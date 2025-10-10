@@ -969,7 +969,11 @@ public class MachineLearningPlugin extends Plugin
             clusterService
         );
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
-        RestMLExecuteStreamAction restMlExecuteStreamAction = new RestMLExecuteStreamAction(mlFeatureEnabledSetting, clusterService);
+        RestMLExecuteStreamAction restMlExecuteStreamAction = new RestMLExecuteStreamAction(
+            mlModelManager,
+            mlFeatureEnabledSetting,
+            clusterService
+        );
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction(mlFeatureEnabledSetting);
