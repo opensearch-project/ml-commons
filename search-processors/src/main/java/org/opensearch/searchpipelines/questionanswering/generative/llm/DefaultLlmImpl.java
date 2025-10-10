@@ -52,9 +52,9 @@ public class DefaultLlmImpl implements Llm {
     private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
     private static final String CONNECTOR_OUTPUT_MESSAGE_CONTENT = "content";
     private static final String CONNECTOR_OUTPUT_ERROR = "error";
-    private static final String CLAUDE_V2_COMPLETION_FIELD = "completion";
-    private static final String CLAUDE_V3_CONTENT_FIELD = "content";
-    private static final String CLAUDE_V3_TEXT_FIELD = "text";
+    private static final String BEDROCK_COMPLETION_FIELD = "completion";
+    private static final String BEDROCK_CONTENT_FIELD = "content";
+    private static final String BEDROCK_TEXT_FIELD = "text";
 
     private final String openSearchModelId;
 
@@ -194,39 +194,37 @@ public class DefaultLlmImpl implements Llm {
                 answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
             }
         } else if (provider == ModelProvider.BEDROCK) {
-            // Handle both Claude V2 and V3 response formats
-            if (dataAsMap.containsKey(CLAUDE_V2_COMPLETION_FIELD)) {
-                // Old Claude V2 format
-                answerField = CLAUDE_V2_COMPLETION_FIELD;
-                fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
-            } else if (dataAsMap.containsKey(CLAUDE_V3_CONTENT_FIELD)) {
-                // New Claude V3 format
-                Object contentObj = dataAsMap.get(CLAUDE_V3_CONTENT_FIELD);
-                if (contentObj instanceof List) {
-                    List<?> contentList = (List<?>) contentObj;
-                    if (!contentList.isEmpty()) {
-                        Object first = contentList.get(0);
-                        if (first instanceof Map) {
-                            Map<?, ?> firstMap = (Map<?, ?>) first;
-                            Object text = firstMap.get(CLAUDE_V3_TEXT_FIELD);
-                            if (text != null) {
-                                answers.add(text.toString());
-                            } else {
-                                errors.add("Claude V3 response missing '" + CLAUDE_V3_TEXT_FIELD + "' field.");
-                            }
-                        } else {
-                            errors.add("Unexpected content format in Claude V3 response.");
-                        }
-                    } else {
-                        errors.add("Empty content list in Claude V3 response.");
-                    }
+            // Handle Bedrock model responses (supports both legacy completion and newer content/text formats)
+
+            Object contentObj = dataAsMap.get(BEDROCK_CONTENT_FIELD);
+            if (contentObj == null) {
+                // Legacy completion-style format
+                Object completion = dataAsMap.get(BEDROCK_COMPLETION_FIELD);
+                if (completion != null) {
+                    answers.add(completion.toString());
                 } else {
-                    errors.add("Unexpected type for '" + CLAUDE_V3_CONTENT_FIELD + "' in Claude V3 response.");
+                    errors.add("Unsupported Bedrock response format: " + dataAsMap.keySet());
+                    log.error("Unknown Bedrock response format: {}", dataAsMap);
                 }
             } else {
-                // Fallback error handling
-                errors.add("Unsupported Claude response format: " + dataAsMap.keySet());
-                log.error("Unknown Bedrock/Claude response format: {}", dataAsMap);
+                // Fail-fast checks for new content/text format
+                if (!(contentObj instanceof List<?> contentList)) {
+                    errors.add("Unexpected type for '" + BEDROCK_CONTENT_FIELD + "' in Bedrock response.");
+                } else if (contentList.isEmpty()) {
+                    errors.add("Empty content list in Bedrock response.");
+                } else {
+                    Object first = contentList.get(0);
+                    if (!(first instanceof Map<?, ?> firstMap)) {
+                        errors.add("Unexpected content format in Bedrock response.");
+                    } else {
+                        Object text = firstMap.get(BEDROCK_TEXT_FIELD);
+                        if (text == null) {
+                            errors.add("Bedrock content response missing '" + BEDROCK_TEXT_FIELD + "' field.");
+                        } else {
+                            answers.add(text.toString());
+                        }
+                    }
+                }
             }
         } else if (provider == ModelProvider.COHERE) {
             answerField = "text";

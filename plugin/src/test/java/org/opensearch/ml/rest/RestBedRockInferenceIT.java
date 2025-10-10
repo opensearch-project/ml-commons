@@ -5,19 +5,40 @@
 
 package org.opensearch.ml.rest;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionInput;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionOutput;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.DefaultLlmImpl;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
@@ -82,17 +103,95 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         }
     }
 
-    public void testChatCompletionBedrockErrorResponseFormats() throws Exception {
-        // Simulate Bedrock inference endpoint behavior
-        // You can mock or create sample response maps for two formats
+    public void testChatCompletionBedrockContentFormat() throws Exception {
+        Map<String, Object> response = Map.of("content", List.of(Map.of("text", "Claude V3 response text")));
 
-        Map<String, Object> errorFormat1 = Map.of("error", Map.of("message", "Unsupported Claude response format"));
+        Map<String, Object> result = invokeBedrockInference(response);
 
-        Map<String, Object> errorFormat2 = Map.of("error", "InvalidRequest");
+        assertTrue(result.containsKey("answers"));
+        assertEquals("Claude V3 response text", ((List<?>) result.get("answers")).get(0));
+    }
 
-        // Use the same validation style but inverted for errors
-        validateErrorOutput("Should detect error format 1 correctly", errorFormat1, "Unsupported Claude response format");
-        validateErrorOutput("Should detect error format 2 correctly", errorFormat2, "InvalidRequest");
+    private static void injectMlClient(DefaultLlmImpl connector, Object mlClient) {
+        try {
+            Field field = null;
+            // Try common field names. Adjust if the actual field is named differently.
+            try {
+                field = DefaultLlmImpl.class.getDeclaredField("mlClient");
+            } catch (NoSuchFieldException e) {
+                // fallback if different field name
+                field = DefaultLlmImpl.class.getDeclaredField("client");
+            }
+            field.setAccessible(true);
+            field.set(connector, mlClient);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to inject mlClient into DefaultLlmImpl", e);
+        }
+    }
+
+    private Map<String, Object> invokeBedrockInference(Map<String, Object> mockResponse) throws Exception {
+        // Create DefaultLlmImpl and mock ML client
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", null); // Use getClient() from MLCommonsRestTestCase
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        injectMlClient(connector, mlClient);
+
+        // Wrap mockResponse inside a ModelTensor -> ModelTensors -> ModelTensorOutput -> MLOutput
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, mockResponse);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        // Do NOT depend on ActionFuture return path; instead drive the async listener directly.
+
+        // Make asynchronous predict(...) call invoke the ActionListener with our mlOutput
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            ActionListener<MLOutput> listener = (ActionListener<MLOutput>) invocation.getArguments()[2];
+            // Simulate successful ML response
+            listener.onResponse(mlOutput);
+            return null;
+        }).when(mlClient).predict(any(), any(), any());
+
+        // Prepare input (use BEDROCK provider so bedrock branch is taken)
+        ChatCompletionInput input = new ChatCompletionInput(
+            "bedrock/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK,
+            null,
+            null
+        );
+
+        // Synchronously wait for callback result
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Map<String, Object>> resultRef = new AtomicReference<>();
+
+        connector.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("answers", output.getAnswers());
+                map.put("errors", output.getErrors());
+                resultRef.set(map);
+                latch.countDown();
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("answers", Collections.emptyList());
+                map.put("errors", List.of(e.getMessage()));
+                resultRef.set(map);
+                latch.countDown();
+            }
+        });
+
+        boolean completed = latch.await(5, TimeUnit.SECONDS);
+        if (!completed) {
+            throw new RuntimeException("Timed out waiting for doChatCompletion callback");
+        }
+        return resultRef.get();
     }
 
     private void validateErrorOutput(String msg, Map<String, Object> output, String expectedError) {
