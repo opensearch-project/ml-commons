@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
 import java.util.Arrays;
@@ -34,6 +35,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceAdditionalTests {
@@ -50,6 +52,9 @@ public class MemoryProcessingServiceAdditionalTests {
     @Mock
     private ActionListener<List<MemoryDecision>> decisionsListener;
 
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
+
     private MemoryStrategy memoryStrategy;
 
     private MemoryProcessingService memoryProcessingService;
@@ -58,7 +63,9 @@ public class MemoryProcessingServiceAdditionalTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
+        // Mock the getLlmResultPath to return the default path
+        when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.content[0].text");
     }
 
     @Test
@@ -182,7 +189,7 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        strategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -219,7 +226,7 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        strategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -256,7 +263,7 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        strategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -299,7 +306,7 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        strategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -337,7 +344,7 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        strategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
@@ -374,7 +381,7 @@ public class MemoryProcessingServiceAdditionalTests {
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
         MemoryStrategy strategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        strategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        strategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
