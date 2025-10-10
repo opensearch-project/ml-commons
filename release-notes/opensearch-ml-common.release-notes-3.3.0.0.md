@@ -36,6 +36,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * [Agentic Search] Use same model for Agent and QPT ([#4262](https://github.com/opensearch-project/ml-commons/pull/4262))
 * Improve semantic fact extraction prompt and add JSON enforcement ([#4282](https://github.com/opensearch-project/ml-commons/pull/4282))
 * Improve user preference extraction prompt with XML-based structure ([#4288](https://github.com/opensearch-project/ml-commons/pull/4288))
+* Enable execute tool feature flag by default ([#4296](https://github.com/opensearch-project/ml-commons/pull/4296))
 
 ### Bug Fixes
 * Fix NPE when execute flow agent with mutli tenancy is off ([#4189](https://github.com/opensearch-project/ml-commons/pull/4189))
