@@ -94,7 +94,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         this.memoryContainerHelper = memoryContainerHelper;
 
         // Initialize services
-        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
         this.memorySearchService = new MemorySearchService(memoryContainerHelper);
         this.memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
         this.threadPool = threadPool;
@@ -222,9 +222,14 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 if (infer) {
                     threadPool.executor(AGENTIC_MEMORY_THREAD_POOL).execute(() -> {
                         try {
-                            extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
-                                log.error("Failed to extract longTermMemory id from memory container", e);
-                            }));
+                            extractLongTermMemory(
+                                input,
+                                container,
+                                user,
+                                ActionListener.wrap(res -> { log.debug("Long term memory results: {}", res.toString()); }, e -> {
+                                    log.error("Failed to extract longTermMemory id from memory container", e);
+                                })
+                            );
                         } catch (Exception e) {
                             memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, null, input, e);
                         }

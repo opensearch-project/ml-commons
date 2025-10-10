@@ -7,9 +7,11 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_LLM_RESULT_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_DECISION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_SUMMARY_PROMPT;
@@ -23,7 +25,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -50,6 +51,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.processor.MLProcessorType;
 import org.opensearch.ml.engine.processor.ProcessorChain;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
@@ -59,17 +61,18 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MemoryProcessingService {
 
-    public static final String DEFAULT_LLM_RESULT_PATH = "$.content[0].text";
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
     private final ProcessorChain extractJsonProcessorChain;
+    private final MemoryContainerHelper memoryContainerHelper;
 
-    public MemoryProcessingService(Client client, NamedXContentRegistry xContentRegistry) {
+    public MemoryProcessingService(Client client, NamedXContentRegistry xContentRegistry, MemoryContainerHelper memoryContainerHelper) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         List<Map<String, Object>> processorConfigs = new ArrayList<>();
         processorConfigs.add(Map.of("type", MLProcessorType.EXTRACT_JSON.getValue(), "extract_type", "object"));
         this.extractJsonProcessorChain = new ProcessorChain(processorConfigs);
+        this.memoryContainerHelper = memoryContainerHelper;
     }
 
     public void runMemoryStrategy(
@@ -169,7 +172,7 @@ public class MemoryProcessingService {
             try {
                 log.debug("Received LLM response, parsing facts...");
                 MLOutput mlOutput = response.getOutput();
-                List<String> facts = parseFactsFromLLMResponse(strategy, mlOutput);
+                List<String> facts = parseFactsFromLLMResponse(strategy, memoryConfig, mlOutput);
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
@@ -250,12 +253,7 @@ public class MemoryProcessingService {
 
             MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
 
-            String defaultLlmResultPath = memoryConfig.getParameters().getOrDefault("llm_result_path", DEFAULT_LLM_RESULT_PATH).toString();
-            String llmResultPath = (String) Optional
-                .ofNullable(strategy)
-                .map(MemoryStrategy::getStrategyConfig)
-                .map(config -> config.get("llm_result_path"))
-                .orElse(defaultLlmResultPath);
+            String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
 
             client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
                 try {
@@ -276,7 +274,7 @@ public class MemoryProcessingService {
         }
     }
 
-    private List<String> parseFactsFromLLMResponse(MemoryStrategy strategy, MLOutput mlOutput) {
+    private List<String> parseFactsFromLLMResponse(MemoryStrategy strategy, MemoryConfiguration memoryConfig, MLOutput mlOutput) {
         List<String> facts = new ArrayList<>();
 
         if (!(mlOutput instanceof ModelTensorOutput)) {
@@ -298,11 +296,7 @@ public class MemoryProcessingService {
 
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
-            String llmResultPath = Optional
-                .ofNullable(strategy.getStrategyConfig())
-                .map(config -> config.get("llm_result_path"))
-                .map(Object::toString)
-                .orElse(DEFAULT_LLM_RESULT_PATH);
+            String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
             Object filterdResult = JsonPath.read(dataMap, llmResultPath);
             String llmResult = null;
             if (filterdResult != null) {
@@ -388,7 +382,7 @@ public class MemoryProcessingService {
         } else {
             Map<String, String> stringParameters = new HashMap<>();
             Map<String, Object> memoryParams = configuration.getParameters();
-            String llmResultPath = (String) memoryParams.getOrDefault("llm_result_path", DEFAULT_LLM_RESULT_PATH);
+            String llmResultPath = (String) memoryParams.getOrDefault(LLM_RESULT_PATH_FIELD, DEFAULT_LLM_RESULT_PATH);
             Map<String, String> sessionParams = (Map<String, String>) memoryParams.getOrDefault("session", new HashMap<>());
             stringParameters.put("system_prompt", SESSION_SUMMARY_PROMPT);
             stringParameters.putAll(getParameterMap(sessionParams));
