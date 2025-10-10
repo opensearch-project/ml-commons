@@ -94,7 +94,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         this.memoryContainerHelper = memoryContainerHelper;
 
         // Initialize services
-        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
         this.memorySearchService = new MemorySearchService(memoryContainerHelper);
         this.memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
         this.threadPool = threadPool;

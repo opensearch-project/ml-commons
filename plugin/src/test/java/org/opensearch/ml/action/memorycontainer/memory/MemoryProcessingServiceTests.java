@@ -16,6 +16,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.JSON_ENFORCEMENT_MESSAGE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_RESULT_PATH_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_FACTS_EXTRACTION_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE;
 import static org.opensearch.ml.utils.TestHelper.createTestContent;
@@ -45,6 +46,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryProcessingServiceTests {
@@ -60,6 +62,10 @@ public class MemoryProcessingServiceTests {
 
     @Mock
     private ActionListener<List<MemoryDecision>> decisionsListener;
+
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
+
     private MemoryStrategy memoryStrategy;
 
     private MemoryProcessingService memoryProcessingService;
@@ -73,10 +79,12 @@ public class MemoryProcessingServiceTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         memoryStrategy = new MemoryStrategy("id", true, MemoryStrategyType.SEMANTIC, Arrays.asList("user_id"), new HashMap<>());
-        memoryStrategy.getStrategyConfig().put("llm_result_path", "$");
-        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        memoryStrategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$");
+        memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
         testContent = createTestContent("Hello");
         when(memoryConfig.getParameters()).thenReturn(new HashMap<>());
+        // Mock the getLlmResultPath to return the default path
+        when(memoryContainerHelper.getLlmResultPath(any(), any())).thenReturn("$.content[0].text");
     }
 
     @Test
@@ -291,7 +299,7 @@ public class MemoryProcessingServiceTests {
             Arrays.asList("user_id"),
             new HashMap<>()
         );
-        memoryStrategy.getStrategyConfig().put("llm_result_path", "$.content[0].text");
+        memoryStrategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
@@ -392,7 +400,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(Exception.class));
     }
 
     @Test
@@ -422,7 +430,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(Exception.class));
     }
 
     @Test
@@ -454,7 +462,7 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onResponse(any(List.class));
+        verify(factsListener).onFailure(any(Exception.class));
     }
 
     @Test

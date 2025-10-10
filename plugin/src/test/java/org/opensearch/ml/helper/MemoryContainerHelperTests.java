@@ -55,6 +55,7 @@ import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -565,6 +566,79 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
 
         assertEquals("alice", helper.getOwnerId(user));
         assertNull(helper.getOwnerId(null));
+    }
+
+    public void testGetLlmResultPath() {
+        // Test 1: Strategy config has llm_result_path - should use strategy config (highest priority)
+        Map<String, Object> strategyConfig = Map.of("llm_result_path", "$.custom.path");
+        MemoryStrategy strategy = MemoryStrategy.builder().strategyConfig(strategyConfig).build();
+
+        MemoryConfiguration memoryConfig = MemoryConfiguration.builder().parameters(Map.of("llm_result_path", "$.config.path")).build();
+
+        String result = helper.getLlmResultPath(strategy, memoryConfig);
+        assertEquals("$.custom.path", result);
+
+        // Test 2: Strategy config is null, use memory config parameters
+        MemoryStrategy strategyWithNullConfig = MemoryStrategy.builder().strategyConfig(null).build();
+
+        result = helper.getLlmResultPath(strategyWithNullConfig, memoryConfig);
+        assertEquals("$.config.path", result);
+
+        // Test 3: Strategy config exists but doesn't have llm_result_path, use memory config
+        MemoryStrategy strategyWithEmptyConfig = MemoryStrategy.builder().strategyConfig(Map.of("other_key", "other_value")).build();
+
+        result = helper.getLlmResultPath(strategyWithEmptyConfig, memoryConfig);
+        assertEquals("$.config.path", result);
+
+        // Test 4: Neither strategy nor memory config has llm_result_path, use default
+        MemoryStrategy strategyNoPath = MemoryStrategy.builder().strategyConfig(Map.of()).build();
+
+        MemoryConfiguration memoryConfigNoPath = MemoryConfiguration.builder().parameters(Map.of()).build();
+
+        result = helper.getLlmResultPath(strategyNoPath, memoryConfigNoPath);
+        assertEquals("$.content[0].text", result);
+
+        // Test 5: Memory config parameters is null, use default
+        MemoryConfiguration memoryConfigNullParams = MemoryConfiguration.builder().parameters(null).build();
+
+        result = helper.getLlmResultPath(strategyNoPath, memoryConfigNullParams);
+        assertEquals("$.content[0].text", result);
+
+        // Test 6: Strategy config has null value for llm_result_path, fallback to memory config
+        Map<String, Object> strategyConfigWithNull = Map.of("other_key", "value");
+        MemoryStrategy strategyWithNullValue = MemoryStrategy.builder().strategyConfig(strategyConfigWithNull).build();
+
+        result = helper.getLlmResultPath(strategyWithNullValue, memoryConfig);
+        assertEquals("$.config.path", result);
+
+        // Test 7: Both strategy and memory config are null - use default
+        result = helper.getLlmResultPath(null, null);
+        assertEquals("$.content[0].text", result);
+
+        // Test 8: Strategy is null, memory config is null - use default
+        result = helper.getLlmResultPath(null, memoryConfigNullParams);
+        assertEquals("$.content[0].text", result);
+
+        // Test 9: Strategy is null, memory config has path - use memory config
+        result = helper.getLlmResultPath(null, memoryConfig);
+        assertEquals("$.config.path", result);
+
+        // Test 10: Strategy is null, memory config is null - use default
+        result = helper.getLlmResultPath(null, null);
+        assertEquals("$.content[0].text", result);
+
+        // Test 11: Non-string value in strategy config (e.g., Integer) - should convert to string
+        Map<String, Object> strategyConfigWithInt = Map.of("llm_result_path", 12345);
+        MemoryStrategy strategyWithInt = MemoryStrategy.builder().strategyConfig(strategyConfigWithInt).build();
+
+        result = helper.getLlmResultPath(strategyWithInt, memoryConfig);
+        assertEquals("12345", result);
+
+        // Test 12: Non-string value in memory config parameters - should convert to string
+        MemoryConfiguration memoryConfigWithInt = MemoryConfiguration.builder().parameters(Map.of("llm_result_path", 67890)).build();
+
+        result = helper.getLlmResultPath(strategyNoPath, memoryConfigWithInt);
+        assertEquals("67890", result);
     }
 
     public void testCountContainersWithPrefix() {
