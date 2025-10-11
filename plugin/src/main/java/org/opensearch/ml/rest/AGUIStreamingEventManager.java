@@ -33,24 +33,20 @@ public class AGUIStreamingEventManager {
 
     public static String[] getRequiredStartEvents(String threadId, String runId) {
         String conversationKey = threadId + "_" + runId;
-        ConversationState state = conversations.computeIfAbsent(conversationKey,
-            k -> new ConversationState(threadId, runId));
+        ConversationState state = conversations.computeIfAbsent(conversationKey, k -> new ConversationState(threadId, runId));
 
         // Return events needed to start the conversation properly
         if (!state.runStarted.get()) {
             state.runStarted.set(true);
             if (!state.messageStarted.get()) {
                 state.messageStarted.set(true);
-                return new String[]{
-                    createRunStartedEvent(threadId, runId),
-                    createTextMessageStartEvent(state.messageId, "assistant")
-                };
+                return new String[] { createRunStartedEvent(threadId, runId), createTextMessageStartEvent(state.messageId, "assistant") };
             } else {
-                return new String[]{createRunStartedEvent(threadId, runId)};
+                return new String[] { createRunStartedEvent(threadId, runId) };
             }
         } else if (!state.messageStarted.get()) {
             state.messageStarted.set(true);
-            return new String[]{createTextMessageStartEvent(state.messageId, "assistant")};
+            return new String[] { createTextMessageStartEvent(state.messageId, "assistant") };
         }
 
         return new String[0]; // No startup events needed
@@ -64,68 +60,70 @@ public class AGUIStreamingEventManager {
             conversations.put(conversationKey, state);
         }
 
-        return String.format(
-            "{\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"%s\",\"delta\":\"%s\",\"timestamp\":%d}",
-            state.messageId,
-            escapeJsonString(delta),
-            System.currentTimeMillis()
-        );
+        return String
+            .format(
+                "{\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"%s\",\"delta\":\"%s\",\"timestamp\":%d}",
+                state.messageId,
+                escapeJsonString(delta),
+                System.currentTimeMillis()
+            );
     }
 
     public static String[] getRequiredEndEvents(String threadId, String runId) {
         String conversationKey = threadId + "_" + runId;
         ConversationState state = conversations.get(conversationKey);
         if (state == null) {
-            return new String[]{createRunFinishedEvent(threadId, runId)};
+            return new String[] { createRunFinishedEvent(threadId, runId) };
         }
 
         if (!state.runFinished.get()) {
             state.runFinished.set(true);
             conversations.remove(conversationKey); // Cleanup
 
-            return new String[]{
-                createTextMessageEndEvent(state.messageId),
-                createRunFinishedEvent(threadId, runId)
-            };
+            return new String[] { createTextMessageEndEvent(state.messageId), createRunFinishedEvent(threadId, runId) };
         }
 
         return new String[0];
     }
 
     private static String createRunStartedEvent(String threadId, String runId) {
-        return String.format(
-            "{\"type\":\"RUN_STARTED\",\"threadId\":\"%s\",\"runId\":\"%s\",\"timestamp\":%d}",
-            threadId, runId, System.currentTimeMillis()
-        );
+        return String
+            .format(
+                "{\"type\":\"RUN_STARTED\",\"threadId\":\"%s\",\"runId\":\"%s\",\"timestamp\":%d}",
+                threadId,
+                runId,
+                System.currentTimeMillis()
+            );
     }
 
     private static String createTextMessageStartEvent(String messageId, String role) {
-        return String.format(
-            "{\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"%s\",\"role\":\"%s\",\"timestamp\":%d}",
-            messageId, role, System.currentTimeMillis()
-        );
+        return String
+            .format(
+                "{\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"%s\",\"role\":\"%s\",\"timestamp\":%d}",
+                messageId,
+                role,
+                System.currentTimeMillis()
+            );
     }
 
     private static String createTextMessageEndEvent(String messageId) {
-        return String.format(
-            "{\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"%s\",\"timestamp\":%d}",
-            messageId, System.currentTimeMillis()
-        );
+        return String
+            .format("{\"type\":\"TEXT_MESSAGE_END\",\"messageId\":\"%s\",\"timestamp\":%d}", messageId, System.currentTimeMillis());
     }
 
     private static String createRunFinishedEvent(String threadId, String runId) {
-        return String.format(
-            "{\"type\":\"RUN_FINISHED\",\"threadId\":\"%s\",\"runId\":\"%s\",\"timestamp\":%d}",
-            threadId, runId, System.currentTimeMillis()
-        );
+        return String
+            .format(
+                "{\"type\":\"RUN_FINISHED\",\"threadId\":\"%s\",\"runId\":\"%s\",\"timestamp\":%d}",
+                threadId,
+                runId,
+                System.currentTimeMillis()
+            );
     }
 
     private static String escapeJsonString(String input) {
-        if (input == null) return "";
-        return input.replace("\\", "\\\\")
-                   .replace("\"", "\\\"")
-                   .replace("\n", "\\n")
-                   .replace("\r", "\\r")
-                   .replace("\t", "\\t");
+        if (input == null)
+            return "";
+        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }

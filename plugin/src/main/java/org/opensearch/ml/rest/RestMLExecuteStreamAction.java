@@ -354,8 +354,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
             // Check if this request came from AG-UI by looking for AG-UI specific parameters
-            return inputDataSet.getParameters().containsKey("agui_thread_id") ||
-                   inputDataSet.getParameters().containsKey("agui_run_id");
+            return inputDataSet.getParameters().containsKey("agui_thread_id") || inputDataSet.getParameters().containsKey("agui_run_id");
         }
         return false;
     }
@@ -506,12 +505,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     }
 
     private String escapeJsonString(String input) {
-        if (input == null) return "";
-        return input.replace("\\", "\\\\")
-                   .replace("\"", "\\\"")
-                   .replace("\n", "\\n")
-                   .replace("\r", "\\r")
-                   .replace("\t", "\\t");
+        if (input == null)
+            return "";
+        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
     }
 
