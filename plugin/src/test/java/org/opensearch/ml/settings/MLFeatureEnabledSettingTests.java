@@ -125,16 +125,16 @@ public class MLFeatureEnabledSettingTests {
     @Test
     public void testToolExecuteSettings() {
         // Test initial values
-        assertFalse(mlFeatureEnabledSetting.isToolExecuteEnabled());
+        assertTrue(mlFeatureEnabledSetting.isToolExecuteEnabled());
 
         // Simulate settings change
-        Settings newSettings = Settings.builder().put(ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey(), true).build();
+        Settings newSettings = Settings.builder().put(ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey(), false).build();
 
         // Update settings through cluster service
         when(clusterService.getSettings()).thenReturn(newSettings);
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, newSettings);
 
         // Verify updated values
-        assertTrue(mlFeatureEnabledSetting.isToolExecuteEnabled());
+        assertFalse(mlFeatureEnabledSetting.isToolExecuteEnabled());
     }
 }
