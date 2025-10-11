@@ -66,6 +66,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * Fix agent streaming with security enabled + error handling ([#4256](https://github.com/opensearch-project/ml-commons/pull/4256))
 * Fix llm result path; convert message to user prompt string ([#4283](https://github.com/opensearch-project/ml-commons/pull/4283))
 * Fix llm result path error ([#4292](https://github.com/opensearch-project/ml-commons/pull/4292))
+* Fix dimension update flow to allow embedding type update ([#4297](https://github.com/opensearch-project/ml-commons/pull/4297))
 
 ### Infrastructure
 * Update maintainer list ([#4139](https://github.com/opensearch-project/ml-commons/pull/4139))
