@@ -499,6 +499,7 @@ public class TransportAddMemoriesActionTests {
         when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
         when(config.getSessionIndexName()).thenReturn("session-index");
         when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123"); // Required for session creation
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
         when(container.getConfiguration()).thenReturn(config);
@@ -569,6 +570,7 @@ public class TransportAddMemoriesActionTests {
         when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
         when(config.getSessionIndexName()).thenReturn("session-index");
         when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123"); // Required for session creation
 
         MLMemoryContainer container = mock(MLMemoryContainer.class);
         when(container.getConfiguration()).thenReturn(config);
@@ -643,6 +645,58 @@ public class TransportAddMemoriesActionTests {
         transportAddMemoriesAction.doExecute(task, request, actionListener);
 
         // Verify session creation was skipped (no session index call) and went directly to working memory
+        verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+        verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
+    }
+
+    @Test
+    public void testDoExecute_NullLlmId_SkipsSessionCreation() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+        // No session_id - would normally trigger session creation, but getLlmId() is null
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn(null); // No LLM configured - session creation should be skipped
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(2);
+            IndexResponse indexResponse = mock(IndexResponse.class);
+            when(indexResponse.getId()).thenReturn("working-mem-123");
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Verify session creation was skipped (no summarize call) and went directly to working memory
         verify(memoryContainerHelper).indexData(any(MemoryConfiguration.class), any(IndexRequest.class), any());
         verify(actionListener).onResponse(any(MLAddMemoriesResponse.class));
     }
