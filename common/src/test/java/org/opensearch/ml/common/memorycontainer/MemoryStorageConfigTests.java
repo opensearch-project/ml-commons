@@ -43,6 +43,7 @@ public class MemoryStorageConfigTests {
             .llmId("llm-model")
             .dimension(768)
             .maxInferSize(8)
+            .disableSession(false)
             .build();
 
         // Sparse encoding configuration (semantic storage enabled)
