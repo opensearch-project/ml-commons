@@ -755,7 +755,7 @@ public class AgentUtils {
                     toolListener.onResponse(Collections.emptyList());
                     return;
                 }
-                connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
+                connector.decrypt("", (credential, tid, listener) -> encryptor.decrypt(credential, tenantId, listener), tenantId);
 
                 List<MLToolSpec> mcpToolSpecs;
                 if (connector instanceof McpConnector) {
