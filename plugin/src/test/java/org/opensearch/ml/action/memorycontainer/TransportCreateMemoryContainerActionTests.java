@@ -172,6 +172,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
                 .dimension(768)
                 .maxInferSize(5)
                 .strategies(strategies)
+                .disableSession(false) // Enable session creation for tests
                 .build()
         );
 
