@@ -78,7 +78,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     @Builder.Default
     private boolean disableHistory = false;
     @Builder.Default
-    private boolean disableSession = false;
+    private boolean disableSession = true;
     @Builder.Default
     private boolean useSystemIndex = true;
     private String tenantId;
@@ -250,7 +250,7 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         Map<String, Map<String, Object>> indexSettings = new HashMap<>();
         Map<String, Object> parameters = new HashMap<>();
         boolean disableHistory = false;
-        boolean disableSession = false;
+        boolean disableSession = true;
         boolean useSystemIndex = true;
         String tenantId = null;
 
