@@ -227,6 +227,7 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
             .embeddingModelId("embedding")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .dimension(4)
+            .disableSession(false)
             .build();
 
         MLMemoryContainer container = createContainerBuilder().configuration(configuration).build();
@@ -682,7 +683,7 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
     }
 
     private MLMemoryContainer.MLMemoryContainerBuilder createContainerBuilder() {
-        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
+        MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").disableSession(false).build();
         User owner = new User("owner", Collections.emptyList(), Collections.emptyList(), Map.of());
         return MLMemoryContainer
             .builder()
