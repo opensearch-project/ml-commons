@@ -211,7 +211,11 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (embeddingModelId != null) {
             builder.field(EMBEDDING_MODEL_ID_FIELD, embeddingModelId);
         }
-        if (dimension != null) {
+        // For SPARSE_ENCODING, explicitly output null to remove dimension from storage during merge
+        // OpenSearch Update API merges nested objects, so omitted fields keep old values
+        if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
+            builder.field(DIMENSION_FIELD, (Integer) null);
+        } else if (dimension != null) {
             builder.field(DIMENSION_FIELD, dimension);
         }
 
@@ -273,7 +277,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                     llmId = parser.text();
                     break;
                 case DIMENSION_FIELD:
-                    dimension = parser.intValue();
+                    // Handle explicit null: {"dimension": null}
+                    if (parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                        dimension = null;
+                    } else {
+                        dimension = parser.intValue();
+                    }
                     break;
                 case MAX_INFER_SIZE_FIELD:
                     maxInferSize = parser.intValue();
@@ -497,7 +506,13 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (updateContent.getEmbeddingModelType() != null) {
             this.embeddingModelType = updateContent.getEmbeddingModelType();
         }
-        if (updateContent.getDimension() != null) {
+        // Auto-clear dimension for SPARSE_ENCODING (doesn't use dimensions)
+        // When the config is serialized via toXContent(), null dimension will be explicitly
+        // output, and the UpdateRequest.doc() merge will remove the field from storage
+        if (this.embeddingModelType == FunctionName.SPARSE_ENCODING) {
+            this.dimension = null;
+        } else if (updateContent.getDimension() != null) {
+            // Only update dimension for TEXT_EMBEDDING if provided
             this.dimension = updateContent.getDimension();
         }
         // Note: indexPrefix and other structural fields are intentionally not updated
