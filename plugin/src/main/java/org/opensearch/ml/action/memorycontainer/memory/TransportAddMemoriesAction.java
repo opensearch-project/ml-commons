@@ -150,7 +150,10 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
             boolean userProvidedSessionId = input.getNamespace() != null && input.getNamespace().containsKey(SESSION_ID_FIELD);
 
-            if (!userProvidedSessionId && input.getPayloadType() == PayloadType.CONVERSATIONAL && !configuration.isDisableSession()) {
+            if (!userProvidedSessionId
+                && input.getPayloadType() == PayloadType.CONVERSATIONAL
+                && !configuration.isDisableSession()
+                && configuration.getLlmId() != null) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
                 ActionListener<String> summaryListener = ActionListener.wrap(summary -> {

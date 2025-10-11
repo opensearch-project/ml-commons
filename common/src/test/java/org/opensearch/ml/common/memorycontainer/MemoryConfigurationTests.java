@@ -258,6 +258,30 @@ public class MemoryConfigurationTests {
     }
 
     @Test
+    public void testUpdate_SparseEncodingAutoClearsDimension() {
+        // Start with TEXT_EMBEDDING model that has dimension
+        MemoryConfiguration config = MemoryConfiguration
+            .builder()
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("text-model-id")
+            .dimension(1536)
+            .build();
+
+        // Update to SPARSE_ENCODING - dimension should auto-clear
+        MemoryConfiguration updateContent = MemoryConfiguration
+            .builder()
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .embeddingModelId("sparse-model-id")
+            .build();
+
+        config.update(updateContent);
+
+        assertEquals(FunctionName.SPARSE_ENCODING, config.getEmbeddingModelType());
+        assertEquals("sparse-model-id", config.getEmbeddingModelId());
+        assertNull(config.getDimension()); // Dimension should be auto-cleared
+    }
+
+    @Test
     public void testUpdate_NullValuesNotUpdated() {
         MemoryConfiguration config = MemoryConfiguration.builder().llmId("original-llm-id").build();
 

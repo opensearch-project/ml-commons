@@ -106,7 +106,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             .builder()
             .name("test-container")
             .description("Test container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(false).disableSession(false).build())
             .build();
 
         // Setup mock user

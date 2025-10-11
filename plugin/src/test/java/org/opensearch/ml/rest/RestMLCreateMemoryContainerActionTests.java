@@ -118,7 +118,8 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
             + "    \"embedding_model_id\": \"test-embedding-model\",\n"
             + "    \"llm_id\": \"test-llm-model\",\n"
             + "    \"embedding_dimension\": 768,\n"
-            + "    \"max_infer_size\": 8\n"
+            + "    \"max_infer_size\": 8,\n"
+            + "    \"disable_session\": false\n"
             + "  }\n"
             + "}";
 
