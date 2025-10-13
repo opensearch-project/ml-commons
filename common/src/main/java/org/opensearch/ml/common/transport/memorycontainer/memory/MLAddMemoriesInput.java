@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BINARY_DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CHECKPOINT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
@@ -69,6 +70,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private Map<String, Object> parameters;
     private String ownerId;
 
+    // Checkpoint field
+    private String checkpointId;
+
     public MLAddMemoriesInput(
         String memoryContainerId,
         PayloadType payloadType,
@@ -81,7 +85,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> metadata,
         Map<String, String> tags,
         Map<String, Object> parameters,
-        String ownerId
+        String ownerId,
+        String checkpointId
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
@@ -100,6 +105,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             this.parameters.putAll(parameters);
         }
         this.ownerId = ownerId;
+        this.checkpointId = checkpointId;
         validate();
     }
 
@@ -144,6 +150,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             this.parameters = in.readMap();
         }
         this.ownerId = in.readOptionalString();
+        this.checkpointId = in.readOptionalString();
     }
 
     @Override
@@ -193,6 +200,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(ownerId);
+        out.writeOptionalString(checkpointId);
     }
 
     @Override
@@ -239,6 +247,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (ownerId != null) {
             builder.field(OWNER_ID_FIELD, ownerId);
         }
+        if (checkpointId != null) {
+            builder.field(CHECKPOINT_ID_FIELD, checkpointId);
+        }
         if (withTimeStamp) {
             Instant now = Instant.now();
             builder.field(CREATED_TIME_FIELD, now.toEpochMilli());
@@ -260,6 +271,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Map<String, String> tags = null;
         Map<String, Object> parameters = null;
         String ownerId = null;
+        String checkpointId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -307,6 +319,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                 case OWNER_ID_FIELD:
                     ownerId = parser.text();
                     break;
+                case CHECKPOINT_ID_FIELD:
+                    checkpointId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -327,6 +342,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             .tags(tags)
             .parameters(parameters)
             .ownerId(ownerId)
+            .checkpointId(checkpointId)
             .build();
     }
 

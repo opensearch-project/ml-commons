@@ -20,6 +20,7 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -127,6 +128,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 // Prepare the update
                 Map<String, Object> newDoc = constructNewDoc(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
                 IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(newDoc);
+                indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, actionListener);
 
             }, actionListener::onFailure);
