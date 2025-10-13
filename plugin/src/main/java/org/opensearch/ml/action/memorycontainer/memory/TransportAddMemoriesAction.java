@@ -30,6 +30,7 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -176,6 +177,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     now.getEpochSecond()
                                 )
                         );
+                    indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());
                         processAndIndexMemory(input, container, user, actionListener);
@@ -255,6 +257,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             mlAddMemoriesInput.toXContent(builder, ToXContent.EMPTY_PARAMS, true);
 
             indexRequest.source(builder);
+            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             return indexRequest;
         } catch (IOException e) {
             logger.error("Failed to build index request source", e);
