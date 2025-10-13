@@ -53,7 +53,6 @@ import org.opensearch.ml.common.agent.AgentInput;
 import org.opensearch.ml.common.agent.AgentInputProcessor;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agent.ModelProvider;
 import org.opensearch.ml.common.agent.ModelProviderFactory;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -116,6 +115,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
 
     public MLAgentExecutor(
         Client client,

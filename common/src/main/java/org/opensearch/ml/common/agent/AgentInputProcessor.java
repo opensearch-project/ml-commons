@@ -27,7 +27,7 @@ public class AgentInputProcessor {
      * Validates the standardized AgentInput.
      * The AgentInput is passed through after validation - ModelProviders will
      * handle the conversion to their specific request body parameters.
-     * 
+     *
      * @param agentInput the standardized agent input
      * @throws IllegalArgumentException if input is invalid
      */
@@ -59,7 +59,7 @@ public class AgentInputProcessor {
 
     /**
      * Validates simple text input.
-     * 
+     *
      * @param text the text input
      * @throws IllegalArgumentException if text is invalid
      */
@@ -71,7 +71,7 @@ public class AgentInputProcessor {
 
     /**
      * Validates multi-modal content blocks.
-     * 
+     *
      * @param blocks the list of content blocks
      * @throws IllegalArgumentException if content blocks are invalid
      */
@@ -114,7 +114,7 @@ public class AgentInputProcessor {
 
     /**
      * Validates message-based conversation input.
-     * 
+     *
      * @param messages the list of messages
      * @throws IllegalArgumentException if messages are invalid
      */

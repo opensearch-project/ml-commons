@@ -11,6 +11,7 @@ package org.opensearch.ml.common.agent;
 // ToDo: modify this to a map that is automatically created using the enum
 // Have the enum define the provider class
 public class ModelProviderFactory {
+
     /**
      * Get model provider instance based on provider type
      * @param providerType the provider type string

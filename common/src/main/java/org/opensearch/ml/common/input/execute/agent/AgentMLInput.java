@@ -72,12 +72,12 @@ public class AgentMLInput extends MLInput {
     // New constructor for standardized input
     @Builder(builderMethodName = "AgentMLInputBuilderWithStandardInput")
     public AgentMLInput(
-        String agentId,
-        String tenantId,
-        FunctionName functionName,
-        AgentInput agentInput,
-        MLInputDataset inputDataset,
-        Boolean isAsync
+            String agentId,
+            String tenantId,
+            FunctionName functionName,
+            AgentInput agentInput,
+            MLInputDataset inputDataset,
+            Boolean isAsync
     ) {
         this.agentId = agentId;
         this.tenantId = tenantId;

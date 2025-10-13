@@ -18,7 +18,7 @@ public class InputValidator {
 
     /**
      * Validates an AgentInput object based on its detected input type.
-     * 
+     *
      * @param input the AgentInput to validate
      * @throws MLValidationException if validation fails
      */
@@ -46,7 +46,7 @@ public class InputValidator {
 
     /**
      * Validates an array of content blocks.
-     * 
+     *
      * @param blocks the content blocks to validate
      * @throws MLValidationException if validation fails
      */
@@ -68,7 +68,7 @@ public class InputValidator {
 
     /**
      * Validates an array of messages.
-     * 
+     *
      * @param messages the messages to validate
      * @throws MLValidationException if validation fails
      */
@@ -102,7 +102,7 @@ public class InputValidator {
 
     /**
      * Validates a single content block.
-     * 
+     *
      * @param block the content block to validate
      * @throws MLValidationException if validation fails
      */
@@ -137,7 +137,7 @@ public class InputValidator {
 
     /**
      * Validates image content.
-     * 
+     *
      * @param imageContent the image content to validate
      * @throws MLValidationException if validation fails
      */
@@ -162,7 +162,7 @@ public class InputValidator {
         String format = imageContent.getFormat().toLowerCase();
         if (!format.matches("^(jpeg|jpg|png|gif|webp|bmp|tiff|svg)$")) {
             throw new MLValidationException(
-                "Unsupported image format: " + imageContent.getFormat() + ". Supported formats: jpeg, jpg, png, gif, webp, bmp, tiff, svg"
+                    "Unsupported image format: " + imageContent.getFormat() + ". Supported formats: jpeg, jpg, png, gif, webp, bmp, tiff, svg"
             );
         }
 
@@ -182,7 +182,7 @@ public class InputValidator {
 
     /**
      * Validates video content.
-     * 
+     *
      * @param videoContent the video content to validate
      * @throws MLValidationException if validation fails
      */
@@ -207,9 +207,9 @@ public class InputValidator {
         String format = videoContent.getFormat().toLowerCase();
         if (!format.matches("^(mp4|mov|avi|mkv|wmv|flv|webm|m4v|3gp)$")) {
             throw new MLValidationException(
-                "Unsupported video format: "
-                    + videoContent.getFormat()
-                    + ". Supported formats: mp4, mov, avi, mkv, wmv, flv, webm, m4v, 3gp"
+                    "Unsupported video format: "
+                            + videoContent.getFormat()
+                            + ". Supported formats: mp4, mov, avi, mkv, wmv, flv, webm, m4v, 3gp"
             );
         }
 
@@ -229,7 +229,7 @@ public class InputValidator {
 
     /**
      * Validates document content.
-     * 
+     *
      * @param documentContent the document content to validate
      * @throws MLValidationException if validation fails
      */
@@ -254,9 +254,9 @@ public class InputValidator {
         String format = documentContent.getFormat().toLowerCase();
         if (!format.matches("^(pdf|docx|doc|txt|rtf|odt|html|xml|csv|xlsx|xls|pptx|ppt)$")) {
             throw new MLValidationException(
-                "Unsupported document format: "
-                    + documentContent.getFormat()
-                    + ". Supported formats: pdf, docx, doc, txt, rtf, odt, html, xml, csv, xlsx, xls, pptx, ppt"
+                    "Unsupported document format: "
+                            + documentContent.getFormat()
+                            + ". Supported formats: pdf, docx, doc, txt, rtf, odt, html, xml, csv, xlsx, xls, pptx, ppt"
             );
         }
 
@@ -276,7 +276,7 @@ public class InputValidator {
 
     /**
      * Validates plain text input.
-     * 
+     *
      * @param text the text to validate
      * @throws MLValidationException if validation fails
      */
