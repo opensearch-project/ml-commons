@@ -15,6 +15,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -128,6 +129,7 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             session.toXContent(builder, ToXContent.EMPTY_PARAMS);
             indexRequest.source(builder);
+            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, ActionListener.wrap(r -> {
                 MLCreateSessionResponse response = MLCreateSessionResponse.builder().sessionId(r.getId()).status("created").build();
                 actionListener.onResponse(response);

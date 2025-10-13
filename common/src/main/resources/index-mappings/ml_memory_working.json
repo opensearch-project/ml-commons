@@ -26,6 +26,9 @@
     "message_id": {
       "type": "integer"
     },
+    "checkpoint_id": {
+      "type": "keyword"
+    },
     "binary_data": {
       "type": "binary"
     },
