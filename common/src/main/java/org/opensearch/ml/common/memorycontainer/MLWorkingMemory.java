@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BINARY_DATA_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CHECKPOINT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
@@ -68,6 +69,9 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
     private Instant lastUpdateTime;
     private String ownerId;
 
+    // Checkpoint field
+    private String checkpointId;
+
     @Builder
     public MLWorkingMemory(
         String memoryContainerId,
@@ -82,7 +86,8 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         Map<String, String> tags,
         Instant createdTime,
         Instant lastUpdateTime,
-        String ownerId
+        String ownerId,
+        String checkpointId
     ) {
         // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
@@ -100,6 +105,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
         this.ownerId = ownerId;
+        this.checkpointId = checkpointId;
     }
 
     public MLWorkingMemory(StreamInput in) throws IOException {
@@ -131,6 +137,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         this.createdTime = in.readOptionalInstant();
         this.lastUpdateTime = in.readOptionalInstant();
         this.ownerId = in.readOptionalString();
+        this.checkpointId = in.readOptionalString();
     }
 
     @Override
@@ -177,6 +184,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
         out.writeOptionalString(ownerId);
+        out.writeOptionalString(checkpointId);
     }
 
     @Override
@@ -225,6 +233,9 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         if (ownerId != null) {
             builder.field(OWNER_ID_FIELD, ownerId);
         }
+        if (checkpointId != null) {
+            builder.field(CHECKPOINT_ID_FIELD, checkpointId);
+        }
         builder.endObject();
         return builder;
     }
@@ -243,6 +254,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
         Instant createdTime = null;
         Instant lastUpdateTime = null;
         String ownerId = null;
+        String checkpointId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -293,6 +305,9 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
                 case OWNER_ID_FIELD:
                     ownerId = parser.text();
                     break;
+                case CHECKPOINT_ID_FIELD:
+                    checkpointId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -314,6 +329,7 @@ public class MLWorkingMemory implements ToXContentObject, Writeable {
             .createdTime(createdTime)
             .lastUpdateTime(lastUpdateTime)
             .ownerId(ownerId)
+            .checkpointId(checkpointId)
             .build();
     }
 

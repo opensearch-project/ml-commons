@@ -171,6 +171,7 @@ public class MemoryOperationsService {
             listener.onResponse(results);
             return;
         }
+        bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         ActionListener<BulkResponse> bulkResponseActionListener = ActionListener.wrap(bulkResponse -> {
             if (bulkResponse.hasFailures()) {
@@ -202,6 +203,7 @@ public class MemoryOperationsService {
                             .source(createMemoryHistory(memoryResult, namespace, input, input.getMemoryContainerId()))
                     );
             }
+            bulkHistoryRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             ActionListener<BulkResponse> bulkHistoryResponseListener = ActionListener.wrap(bulkHistoryResponse -> {
                 if (bulkHistoryResponse.hasFailures()) {
                     log.error("Bulk memory history operations had failures: {}", bulkHistoryResponse.buildFailureMessage());

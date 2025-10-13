@@ -86,6 +86,9 @@ public class MemoryContainerConstants {
     public static final String TEXT_FIELD = "text";
     public static final String UPDATE_CONTENT_FIELD = "update_content";
 
+    // Checkpoint field
+    public static final String CHECKPOINT_ID_FIELD = "checkpoint_id";
+
     // KNN index settings
     public static final String KNN_ENGINE = "lucene";
     public static final String KNN_SPACE_TYPE = "cosinesimil";

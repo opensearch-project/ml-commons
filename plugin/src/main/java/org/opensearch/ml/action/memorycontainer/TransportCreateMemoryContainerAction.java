@@ -15,6 +15,7 @@ import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -248,6 +249,7 @@ public class TransportCreateMemoryContainerAction extends
                         .tenantId(container.getTenantId())
                         .index(ML_MEMORY_CONTAINER_INDEX)
                         .dataObject(container)
+                        .refreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
                         .build()
                 )
                 .whenComplete((r, throwable) -> {
