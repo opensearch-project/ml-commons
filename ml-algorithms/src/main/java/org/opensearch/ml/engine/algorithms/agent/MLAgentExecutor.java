@@ -50,9 +50,16 @@ import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.agent.AgentInput;
+import org.opensearch.ml.common.agent.AgentInputProcessor;
+import org.opensearch.ml.common.agent.ContentBlock;
+import org.opensearch.ml.common.agent.ContentType;
+import org.opensearch.ml.common.agent.Message;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.ModelProvider;
+import org.opensearch.ml.common.agent.ModelProviderFactory;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -114,6 +121,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Encryptor encryptor;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+
     public MLAgentExecutor(
         Client client,
         SdkClient sdkClient,
@@ -152,8 +160,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String tenantId = agentMLInput.getTenantId();
         Boolean isAsync = agentMLInput.getIsAsync();
 
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        if (inputDataSet == null || inputDataSet.getParameters() == null) {
+        // Initial validation - check if we have either legacy or new input format
+        if (agentMLInput.getInputDataset() == null && !agentMLInput.hasStandardInput()) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
@@ -215,6 +223,16 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     )
                                                 );
                                         }
+                                        
+                                        // Process standardized input if present
+                                        processStandardInput(agentMLInput, mlAgent);
+                                        
+                                        // After processing, ensure we have a valid inputDataSet
+                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+                                        if (inputDataSet == null || inputDataSet.getParameters() == null) {
+                                            throw new IllegalArgumentException("Agent input data can not be empty after processing.");
+                                        }
+                                        
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
@@ -713,5 +731,232 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         )
                 );
         }
+    }
+
+    /**
+     * Processes standardized input if present in AgentMLInput.
+     * This method handles the conversion from AgentInput to parameters that can be used
+     * by the existing agent execution logic.
+     */
+    private void processStandardInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        if (!agentMLInput.hasStandardInput()) {
+            // No standardized input, continue with legacy processing
+            return;
+        }
+
+        try {
+            // Validate the standardized input
+            AgentInput agentInput = AgentInputProcessor.validateInput(agentMLInput.getAgentInput());
+            
+            // Extract the question text for prompt template and memory storage
+            String questionText = extractQuestionText(agentInput);
+            
+            // Get the model provider for this agent
+            ModelProvider modelProvider = getModelProviderForAgent(mlAgent);
+            
+            // Map the standardized input to provider-specific parameters
+            Map<String, Object> processedParams = modelProvider.mapAgentInput(agentInput);
+            
+            // Ensure we have an inputDataset to merge parameters into
+            if (agentMLInput.getInputDataset() == null) {
+                // Create a new RemoteInferenceInputDataSet for the new format
+                agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
+            }
+            
+            // Merge the processed parameters with existing inputDataset
+            mergeParameters(agentMLInput.getInputDataset(), processedParams);
+            
+            // Set the question parameter for prompt template and memory storage
+            if (questionText != null) {
+                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+                inputDataSet.getParameters().put(QUESTION, questionText);
+                log.debug("Set question parameter: {}", questionText);
+                
+                // TODO: Future Enhancement - Store complete structured input in memory
+                // Currently we only store the extracted text in the question field.
+                // Future enhancement should:
+                // 1. Extend ConversationIndexMessage to support structured input storage
+                // 2. Store complete AgentInput with images, documents, videos, etc.
+                // 3. Preserve message history and multi-modal content
+                // 4. Enable rich conversation replay and context understanding
+                // For now, we extract text for basic functionality
+            }
+            
+            log.debug("Successfully processed standardized input for agent {}", mlAgent.getName());
+            
+        } catch (Exception e) {
+            log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
+            throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Extracts question text from AgentInput for prompt template usage.
+     * This provides the text that will be used in prompt templates that reference $parameters.question.
+     */
+    private String extractQuestionText(AgentInput agentInput) {
+        if (agentInput == null || agentInput.getInput() == null) {
+            return null;
+        }
+        
+        switch (agentInput.getInputType()) {
+            case TEXT:
+                // For plain text input, return the text directly
+                return (String) agentInput.getInput();
+                
+            case CONTENT_BLOCKS:
+                // For content blocks, extract and combine text content
+                @SuppressWarnings("unchecked")
+                List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
+                return extractTextFromContentBlocks(blocks);
+                
+            case MESSAGES:
+                // For messages, extract the last user message text
+                @SuppressWarnings("unchecked")
+                List<Message> messages = (List<Message>) agentInput.getInput();
+                return extractTextFromMessages(messages);
+                
+            default:
+                log.warn("Unknown input type: {}, cannot extract question text", agentInput.getInputType());
+                return null;
+        }
+    }
+    
+    /**
+     * Extracts text content from content blocks for human-readable display.
+     * 
+     * TODO: Future Enhancement - Rich Content Memory Storage
+     * Currently this method only extracts text for basic prompt template usage.
+     * Future enhancements should preserve complete multi-modal content:
+     * - Images: Store image data/URLs with metadata
+     * - Documents: Store document content with format information  
+     * - Videos: Store video references with timestamps
+     * - Audio: Store audio data with transcription
+     * This would enable rich conversation history and context understanding.
+     */
+    private String extractTextFromContentBlocks(List<ContentBlock> blocks) {
+        if (blocks == null || blocks.isEmpty()) {
+            return "[Empty content blocks]";
+        }
+        
+        StringBuilder textBuilder = new StringBuilder();
+        int nonTextBlockCount = 0;
+        
+        for (ContentBlock block : blocks) {
+            if (block.getType() == ContentType.TEXT) {
+                String text = block.getText();
+                if (text != null && !text.trim().isEmpty()) {
+                    if (textBuilder.length() > 0) {
+                        textBuilder.append(" ");
+                    }
+                    textBuilder.append(text.trim());
+                }
+            } else {
+                // TODO: Future Enhancement - Handle non-text content types
+                // For now, we just count them. Future implementation should:
+                // - Extract image descriptions/alt text
+                // - Include document titles/summaries  
+                // - Add video/audio metadata
+                // - Preserve content for memory storage
+                nonTextBlockCount++;
+            }
+        }
+        
+        // If we have text content, return it with a note about non-text content
+        if (textBuilder.length() > 0) {
+            if (nonTextBlockCount > 0) {
+                textBuilder.append(" [").append(nonTextBlockCount).append(" non-text item(s)]");
+            }
+            return textBuilder.toString();
+        }
+        
+        // If no text content, provide a descriptive summary
+        return "[" + blocks.size() + " content block(s) - no text content]";
+    }
+    
+    /**
+     * Extracts text content from messages for human-readable display.
+     */
+    private String extractTextFromMessages(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return "[Empty conversation]";
+        }
+        
+        // Find the last user message
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message message = messages.get(i);
+            if ("user".equalsIgnoreCase(message.getRole())) {
+                String userText = extractTextFromContentBlocks(message.getContent());
+                return userText + " [from conversation with " + messages.size() + " message(s)]";
+            }
+        }
+        
+        // If no user message found, use the last message
+        Message lastMessage = messages.get(messages.size() - 1);
+        String lastText = extractTextFromContentBlocks(lastMessage.getContent());
+        return lastText + " [from conversation with " + messages.size() + " message(s)]";
+    }
+    
+
+
+    
+    /**
+     * Determines the appropriate ModelProvider for the given agent.
+     * Uses the agent's model configuration to select the correct provider.
+     */
+    private ModelProvider getModelProviderForAgent(MLAgent mlAgent) {
+        // Check if agent has model specification
+        if (mlAgent.getModel() != null && mlAgent.getModel().getModelProvider() != null) {
+            String modelProviderType = mlAgent.getModel().getModelProvider();
+            return ModelProviderFactory.getProvider(modelProviderType);
+        }
+        
+        // Fallback: check LLM spec for model provider information
+        if (mlAgent.getLlm() != null) {
+            // For now, we'll need to infer the provider from LLM spec
+            // This could be enhanced based on LLM spec structure
+            log.warn("Agent {} uses LLM spec without explicit model provider, using default", mlAgent.getName());
+            // Default to Bedrock Converse for now
+            return ModelProviderFactory.getProvider("bedrock/converse");
+        }
+        
+        throw new IllegalArgumentException("Agent " + mlAgent.getName() + " does not have model provider information");
+    }
+
+    /**
+     * Merges processed parameters from ModelProvider into the existing inputDataset.
+     * Handles parameter conflicts by giving precedence to processed parameters.
+     */
+    private void mergeParameters(org.opensearch.ml.common.dataset.MLInputDataset inputDataset, Map<String, Object> processedParams) {
+        if (inputDataset == null || !(inputDataset instanceof RemoteInferenceInputDataSet)) {
+            throw new IllegalArgumentException("InputDataset must be a RemoteInferenceInputDataSet for parameter merging");
+        }
+        
+        RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) inputDataset;
+        Map<String, String> existingParams = remoteDataSet.getParameters();
+        
+        if (existingParams == null) {
+            existingParams = new HashMap<>();
+        } else {
+            // Create a new map to avoid modifying the original
+            existingParams = new HashMap<>(existingParams);
+        }
+        
+        // Merge processed parameters (convert Object values to String as needed)
+        for (Map.Entry<String, Object> entry : processedParams.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            
+            // Convert value to string representation
+            String stringValue = (value != null) ? value.toString() : null;
+            
+            // Add to parameters, with processed params taking precedence
+            existingParams.put(key, stringValue);
+            
+            log.debug("Added processed parameter: {} = {}", key, stringValue);
+        }
+        
+        // Update the dataset with the merged parameters
+        remoteDataSet.setParameters(existingParams);
     }
 }

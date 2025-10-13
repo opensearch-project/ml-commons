@@ -34,4 +34,13 @@ public class ModelProviderFactory {
                 throw new IllegalArgumentException("Unsupported model provider type: " + providerType);
         }
     }
+
+    /**
+     * Get default model provider (Bedrock Converse).
+     * Used as fallback when agent doesn't specify a provider.
+     * @return default ModelProvider instance
+     */
+    public static ModelProvider getDefaultProvider() {
+        return new BedrockConverseModelProvider();
+    }
 }
