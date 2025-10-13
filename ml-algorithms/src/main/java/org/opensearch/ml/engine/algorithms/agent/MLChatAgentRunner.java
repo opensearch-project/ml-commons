@@ -1001,8 +1001,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             }
             String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
-            summaryParams.put("inputs", summaryPrompt);
             summaryParams.put(PROMPT, summaryPrompt);
+            summaryParams.putIfAbsent(SYSTEM_PROMPT_FIELD, "");
 
             ActionRequest request = new MLPredictionTaskRequest(
                 llmSpec.getModelId(),
