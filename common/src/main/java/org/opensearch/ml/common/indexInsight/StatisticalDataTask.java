@@ -101,7 +101,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         try {
             collectStatisticalData(tenantId, shouldStore, listener);
         } catch (Exception e) {
-            handleError("Failed to execute statistical data task for index {}", e, tenantId, listener, shouldStore);
+            handleError("Failed to execute statistical data task for index: {}", e, tenantId, listener, shouldStore);
         }
     }
 
@@ -364,7 +364,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                         } catch (Exception e) {
                             log
                                 .error(
-                                    "Failed to parse aggregation result from DSL in statistical index insight for index name: {}",
+                                    "Failed to parse aggregation result from DSL in statistical index insight for index: {}",
                                     sourceIndex,
                                     e
                                 );
