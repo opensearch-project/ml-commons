@@ -649,8 +649,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     encryptor
                 );
             default:
-                throw new IllegalArgumentException("Unsupported agent type. Please use one of " +
-                        Arrays.toString(MLAgentType.values()));
+                throw new IllegalArgumentException("Unsupported agent type. Please use one of " + Arrays.toString(MLAgentType.values()));
         }
     }
 

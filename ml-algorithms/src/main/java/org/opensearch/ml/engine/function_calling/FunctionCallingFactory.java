@@ -28,10 +28,14 @@ public class FunctionCallingFactory {
                 return new BedrockConverseDeepseekR1FunctionCalling();
             default:
                 throw new IllegalArgumentException(
-                        String.format("Invalid _llm_interface. Supported values are %s,%s,%s",
-                                LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE,
-                                LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS,
-                                LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1));
+                    String
+                        .format(
+                            "Invalid _llm_interface. Supported values are %s,%s,%s",
+                            LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE,
+                            LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS,
+                            LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1
+                        )
+                );
         }
     }
 }

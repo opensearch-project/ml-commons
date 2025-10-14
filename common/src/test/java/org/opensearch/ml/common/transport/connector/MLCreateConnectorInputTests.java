@@ -172,20 +172,23 @@ public class MLCreateConnectorInputTests {
     public void constructorMLCreateConnectorInput_InvalidProtocol() {
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
             MLCreateConnectorInput
-                    .builder()
-                    .name(TEST_CONNECTOR_NAME)
-                    .description(TEST_CONNECTOR_DESCRIPTION)
-                    .version(TEST_CONNECTOR_VERSION)
-                    .protocol("dummy")
-                    .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
-                    .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
-                    .actions(List.of())
-                    .access(AccessMode.PUBLIC)
-                    .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
-                    .addAllBackendRoles(false)
-                    .build();
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol("dummy")
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
         });
-        assertEquals( "Unsupported connector protocol. Please use one of " + Arrays.toString(VALID_PROTOCOLS.toArray(new String[0])), exception.getMessage());
+        assertEquals(
+            "Unsupported connector protocol. Please use one of " + Arrays.toString(VALID_PROTOCOLS.toArray(new String[0])),
+            exception.getMessage()
+        );
     }
 
     @Test

@@ -998,7 +998,7 @@ public class AgentUtils {
 
     public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> executeParams, MLToolSpec toolSpec) {
         if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool type not found" );
+            throw new IllegalArgumentException("Tool type not found");
         }
         Map<String, Object> toolParams = new HashMap<>();
         toolParams.putAll(executeParams);
