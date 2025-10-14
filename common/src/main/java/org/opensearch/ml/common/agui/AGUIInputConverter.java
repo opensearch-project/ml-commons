@@ -87,27 +87,6 @@ public class AGUIInputConverter {
         }
     }
 
-    private static void extractUserQuestion(JsonElement messages, Map<String, String> parameters) {
-        try {
-            if (messages.isJsonArray()) {
-                for (JsonElement messageElement : messages.getAsJsonArray()) {
-                    if (messageElement.isJsonObject()) {
-                        JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, "role");
-                        if ("user".equals(role)) {
-                            String content = getStringField(message, "content");
-                            if (content != null && !content.isEmpty()) {
-                                parameters.put("question", content);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Failed to extract user question from messages", e);
-        }
-    }
-
     private static String getStringField(JsonObject obj, String fieldName) {
         JsonElement element = obj.get(fieldName);
         return element != null && !element.isJsonNull() ? element.getAsString() : null;
@@ -145,5 +124,39 @@ public class AGUIInputConverter {
         }
 
         return aguiInput;
+    }
+
+    private static void extractUserQuestion(JsonElement messages, Map<String, String> parameters) {
+        if (messages == null || !messages.isJsonArray()) {
+            throw new IllegalArgumentException("Invalid AG-UI messages");
+        }
+
+        try {
+            // Find the last user message to use as the current question
+            String lastUserMessage = null;
+            for (JsonElement messageElement : messages.getAsJsonArray()) {
+                if (messageElement.isJsonObject()) {
+                    JsonObject message = messageElement.getAsJsonObject();
+                    JsonElement roleElement = message.get("role");
+                    JsonElement contentElement = message.get("content");
+
+                    if (roleElement != null
+                        && "user".equals(roleElement.getAsString())
+                        && contentElement != null
+                        && !contentElement.isJsonNull()) {
+                        lastUserMessage = contentElement.getAsString();
+                    }
+                }
+            }
+
+            if (lastUserMessage != null) {
+                parameters.put("question", lastUserMessage);
+                log.debug("Extracted user question from AG-UI messages: {}", lastUserMessage);
+            } else {
+                throw new IllegalArgumentException("No user message found in AG-UI messages");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid AG-UI message format", e);
+        }
     }
 }
