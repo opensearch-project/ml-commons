@@ -92,11 +92,15 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
                 getAgentIdToRun(
                     client,
                     tenantId,
-                    ActionListener.wrap(agentId -> performLogAnalysis(agentId, tenantId, listener), listener::onFailure)
+                    ActionListener
+                        .wrap(
+                            agentId -> performLogAnalysis(agentId, tenantId, listener),
+                            e -> handleError("Failed to get agent ID from ML config", e, tenantId, listener)
+                        )
                 );
             }, listener::onFailure));
         } catch (Exception e) {
-            handleError("Failed log related check for {}", e, tenantId, listener);
+            handleError("Failed log related check for index: {}", e, tenantId, listener);
         }
     }
 
@@ -138,9 +142,9 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
                 saveResult(MAPPER.writeValueAsString(parsed), tenantId, ActionListener.wrap(insight -> {
                     log.info("Log related check completed for index {}", sourceIndex);
                     listener.onResponse(insight);
-                }, e -> handleError("Failed to save log related check result for index {}", e, tenantId, listener)));
+                }, e -> handleError("Failed to save log related check result for index: {}", e, tenantId, listener)));
             } catch (Exception e) {
-                handleError("Error parsing response of log related check for {}", e, tenantId, listener);
+                handleError("Error parsing response of log related check for index: {}", e, tenantId, listener);
             }
         }, e -> handleError("Failed to call LLM for log related check: {}", e, tenantId, listener)));
     }

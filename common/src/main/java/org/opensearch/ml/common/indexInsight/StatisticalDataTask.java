@@ -101,7 +101,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         try {
             collectStatisticalData(tenantId, shouldStore, listener);
         } catch (Exception e) {
-            handleError("Failed to execute statistical data task for index {}", e, tenantId, listener, shouldStore);
+            handleError("Failed to execute statistical data task for index: {}", e, tenantId, listener, shouldStore);
         }
     }
 
