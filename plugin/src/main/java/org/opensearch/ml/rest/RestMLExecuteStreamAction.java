@@ -359,7 +359,6 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return false;
     }
 
-
     private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
         String memoryId = "";
         String parentInteractionId = "";
@@ -504,11 +503,17 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return createHttpChunk(sseResponse.toString(), isLast);
     }
 
-    private String escapeJsonString(String input) {
-        if (input == null)
-            return "";
-        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
-    }
+    private BytesReference combineChunks(List<HttpChunk> chunks) {
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            for (HttpChunk chunk : chunks) {
+                chunk.content().writeTo(buffer);
+            }
+            return BytesReference.fromByteBuffer(ByteBuffer.wrap(buffer.toByteArray()));
+        } catch (IOException e) {
+            log.error("Failed to combine chunks", e);
+            throw new RuntimeException("Failed to combine request chunks", e);
+        }
     }
 
     private HttpChunk createHttpChunk(String sseData, boolean isLast) {
