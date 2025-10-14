@@ -14,9 +14,6 @@ plugins {
 }
 
 dependencies {
-    implementation group: 'org.bsc.langgraph4j', name: 'langgraph4j-core', version: '1.7.0-beta2'
-    implementation group: 'org.bsc.langgraph4j', name: 'langgraph4j-langchain4j', version: '1.7.0-beta2'
-    implementation group: 'org.bsc.langgraph4j', name: 'langgraph4j-agent-executor', version: '1.7.0-beta2'
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     compileOnly group: 'org.reflections', name: 'reflections', version: '0.9.12'
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
