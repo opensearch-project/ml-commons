@@ -31,11 +31,11 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 
 import lombok.Builder;
 import lombok.Data;
 import lombok.Setter;
-import org.opensearch.ml.common.connector.ConnectorProtocols;
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
