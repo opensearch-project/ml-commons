@@ -9,6 +9,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +115,7 @@ public class MLAgentTest {
     @Test
     public void constructor_DuplicateTool() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate tool defined: test");
+        exceptionRule.expectMessage("Duplicate tool defined in agent configuration");
 
         MLAgent agent = new MLAgent(
             "test_name",
@@ -353,7 +354,7 @@ public class MLAgentTest {
     @Test
     public void constructor_InvalidAgentType() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage(" is not a valid Agent Type");
+        exceptionRule.expectMessage("Invalid Agent Type, Please use one of "+ Arrays.toString(MLAgentType.values()));
 
         new MLAgent(
             "test_name",
