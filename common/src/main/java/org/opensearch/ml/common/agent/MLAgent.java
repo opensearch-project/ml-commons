@@ -12,13 +12,7 @@ import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -122,7 +116,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             for (MLToolSpec toolSpec : tools) {
                 String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
                 if (toolNames.contains(toolName)) {
-                    throw new IllegalArgumentException("Duplicate tool defined: " + toolName);
+                    throw new IllegalArgumentException("Duplicate tool defined in agent configuration");
                 } else {
                     toolNames.add(toolName);
                 }
@@ -138,7 +132,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 MLAgentType.valueOf(agentType.toUpperCase(Locale.ROOT)); // Use toUpperCase() to allow case-insensitive matching
             } catch (IllegalArgumentException e) {
                 // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
-                throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
+                throw new IllegalArgumentException("Invalid Agent Type, Please use one of " + Arrays.toString(MLAgentType.values()));
             }
         }
     }

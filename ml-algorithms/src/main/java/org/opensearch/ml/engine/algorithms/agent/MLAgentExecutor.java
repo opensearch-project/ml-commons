@@ -21,12 +21,7 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
@@ -654,7 +649,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     encryptor
                 );
             default:
-                throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
+                throw new IllegalArgumentException("Unsupported agent type. Please use one of " +
+                        Arrays.toString(MLAgentType.values()));
         }
     }
 

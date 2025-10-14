@@ -32,7 +32,9 @@ import javax.naming.Context;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -139,6 +141,9 @@ public class MLAgentExecutorTest {
 
     @Captor
     private ArgumentCaptor<Exception> exceptionCaptor;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private DiscoveryNode localNode = new DiscoveryNode(
         "mockClusterManagerNodeId",
