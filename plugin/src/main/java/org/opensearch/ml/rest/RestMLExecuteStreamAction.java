@@ -389,16 +389,6 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         String finalContent = content;
         boolean finalIsLast = isLast;
 
-        log
-            .info(
-                "Converting to HttpChunk - memoryId: '{}', parentId: '{}', content: '{}', isLast: {}, isAGUIAgent: {}",
-                memoryId,
-                parentInteractionId,
-                content,
-                isLast,
-                isAGUIAgent
-            );
-
         // If this is an AG-UI agent, convert to AG-UI event format
         if (isAGUIAgent) {
             return convertToAGUIEvent(content, memoryId, parentInteractionId, isLast);

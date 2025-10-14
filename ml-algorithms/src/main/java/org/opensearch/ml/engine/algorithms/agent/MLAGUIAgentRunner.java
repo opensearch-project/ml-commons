@@ -5,10 +5,20 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_MESSAGE_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_QUESTION_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_RESPONSE_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.NEW_CHAT_HISTORY;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -19,9 +29,15 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -61,12 +77,22 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
         log.info("Starting AG-UI agent execution for conversational agent: {}", mlAgent.getName());
 
-        // Create event collector to accumulate AG-UI events
         AGUIEventCollector eventCollector = new AGUIEventCollector();
         eventCollector.startRun();
 
         try {
-            // Only support conversational agents
+            String llmInterface = params.get(LLM_INTERFACE);
+            if (llmInterface == null && mlAgent.getParameters() != null) {
+                llmInterface = mlAgent.getParameters().get(LLM_INTERFACE);
+            }
+
+            FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+            if (functionCalling != null) {
+                functionCalling.configure(params);
+            }
+
+            processAGUIMessages(mlAgent, params);
+
             MLAgentRunner conversationalRunner = new MLChatAgentRunner(
                 client,
                 settings,
@@ -175,4 +201,93 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             }
         }
     }
+
+    private void processAGUIMessages(MLAgent mlAgent, Map<String, String> params) {
+        String aguiMessagesJson = params.get("agui_messages");
+        if (aguiMessagesJson == null || aguiMessagesJson.isEmpty()) {
+            return;
+        }
+
+        try {
+            JsonElement messagesElement = gson.fromJson(aguiMessagesJson, JsonElement.class);
+
+            if (!messagesElement.isJsonArray()) {
+                log.warn("AG-UI messages is not a JSON array");
+                return;
+            }
+
+            JsonArray messageArray = messagesElement.getAsJsonArray();
+
+            if (messageArray.size() <= 1) {
+                return;
+            }
+
+            String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
+            String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
+
+            if (chatHistoryQuestionTemplate == null || chatHistoryResponseTemplate == null) {
+
+                StringBuilder chatHistoryBuilder = new StringBuilder();
+                for (int i = 0; i < messageArray.size() - 1; i++) {
+                    JsonElement messageElement = messageArray.get(i);
+                    if (messageElement.isJsonObject()) {
+                        JsonObject message = messageElement.getAsJsonObject();
+                        String role = getStringField(message, "role");
+                        String content = getStringField(message, "content");
+
+                        if (("user".equals(role) || "assistant".equals(role)) && content != null && !content.isEmpty()) {
+                            if (chatHistoryBuilder.length() > 0) {
+                                chatHistoryBuilder.append("\n");
+                            }
+                            chatHistoryBuilder.append(role.equals("user") ? "Human: " : "Assistant: ").append(content);
+                        }
+                    }
+                }
+
+                if (chatHistoryBuilder.length() > 0) {
+                    params.put(NEW_CHAT_HISTORY, chatHistoryBuilder.toString());
+                    log.debug("Processed AG-UI messages to fallback string format: {} characters", chatHistoryBuilder.length());
+                }
+            } else {
+                List<String> chatHistory = new ArrayList<>();
+                for (int i = 0; i < messageArray.size() - 1; i++) {
+                    JsonElement messageElement = messageArray.get(i);
+                    if (messageElement.isJsonObject()) {
+                        JsonObject message = messageElement.getAsJsonObject();
+                        String role = getStringField(message, "role");
+                        String content = getStringField(message, "content");
+
+                        if (content != null && !content.isEmpty()) {
+                            Map<String, String> messageParams = new HashMap<>();
+
+                            if ("user".equals(role)) {
+                                messageParams.put("question", processTextDoc(content));
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                                chatHistory.add(chatMessage);
+                            } else if ("assistant".equals(role)) {
+                                messageParams.put("response", processTextDoc(content));
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatMessage);
+                            }
+                        }
+                    }
+                }
+
+                if (!chatHistory.isEmpty()) {
+                    params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                    log.debug("Processed AG-UI messages using chat history templates: {} messages", chatHistory.size());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to process AG-UI messages to chat history", e);
+        }
+    }
+
+    private String getStringField(JsonObject obj, String fieldName) {
+        JsonElement element = obj.get(fieldName);
+        return element != null && !element.isJsonNull() ? element.getAsString() : null;
+    }
+
 }
