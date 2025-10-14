@@ -17,6 +17,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -48,7 +49,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -164,11 +164,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 );
             channel.prepareResponse(RestStatus.OK, headers);
 
-            Flux.from(channel).ofType(HttpChunk.class).concatMap(chunk -> {
-                final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
+            Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
                 try {
-                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, chunk.content());
+                    BytesReference completeContent = combineChunks(chunks);
+                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
+
+                    final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
                         @Override
                         public void handleStreamResponse(StreamTransportResponse<MLTaskResponse> streamResponse) {
@@ -221,11 +223,10 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                             handler
                         );
 
+                    return Mono.fromCompletionStage(future);
                 } catch (IOException e) {
-                    throw new MLException("Got an exception in flux.", e);
+                    return Mono.error(new RuntimeException("Failed to parse request", e));
                 }
-
-                return Mono.fromCompletionStage(future);
             }).doOnNext(channel::sendChunk).onErrorComplete(ex -> {
                 // Error handling
                 try {
@@ -353,7 +354,6 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
         return false;
     }
-
 
     private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
         String memoryId = "";
@@ -485,10 +485,17 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return createHttpChunk(sseResponse.toString(), isLast);
     }
 
-    private String escapeJsonString(String input) {
-        if (input == null)
-            return "";
-        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    private BytesReference combineChunks(List<HttpChunk> chunks) {
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            for (HttpChunk chunk : chunks) {
+                chunk.content().writeTo(buffer);
+            }
+            return BytesReference.fromByteBuffer(ByteBuffer.wrap(buffer.toByteArray()));
+        } catch (IOException e) {
+            log.error("Failed to combine chunks", e);
+            throw new RuntimeException("Failed to combine request chunks", e);
+        }
     }
 
     private HttpChunk createHttpChunk(String sseData, boolean isLast) {
