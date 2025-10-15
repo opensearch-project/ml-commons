@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_MESSAGE_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_QUESTION_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_RESPONSE_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.NEW_CHAT_HISTORY;
 
@@ -92,6 +93,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             }
 
             processAGUIMessages(mlAgent, params);
+            processAGUIContext(mlAgent, params);
 
             MLAgentRunner conversationalRunner = new MLChatAgentRunner(
                 client,
@@ -282,6 +284,49 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             }
         } catch (Exception e) {
             log.error("Failed to process AG-UI messages to chat history", e);
+        }
+    }
+
+    private void processAGUIContext(MLAgent mlAgent, Map<String, String> params) {
+        String aguiContextJson = params.get("agui_context");
+
+        if (aguiContextJson == null || aguiContextJson.isEmpty()) {
+            return;
+        }
+
+        try {
+            JsonElement contextElement = gson.fromJson(aguiContextJson, JsonElement.class);
+
+            if (!contextElement.isJsonArray()) {
+                log.warn("AG-UI context is not a JSON array");
+                return;
+            }
+
+            JsonArray contextArray = contextElement.getAsJsonArray();
+            if (contextArray.size() == 0) {
+                return;
+            }
+
+            StringBuilder contextBuilder = new StringBuilder();
+
+            for (JsonElement contextItemElement : contextArray) {
+                if (contextItemElement.isJsonObject()) {
+                    JsonObject contextItem = contextItemElement.getAsJsonObject();
+                    String description = getStringField(contextItem, "description");
+                    String value = getStringField(contextItem, "value");
+
+                    if (description != null && value != null) {
+                        contextBuilder.append("- ").append(description).append(": ").append(value).append("\n");
+                    }
+                }
+            }
+
+            if (contextBuilder.length() > 0) {
+                params.put(CONTEXT, contextBuilder.toString());
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to process AG-UI context", e);
         }
     }
 

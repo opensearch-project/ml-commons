@@ -68,8 +68,9 @@ public class AGUIInputConverterTest {
         assertTrue("Should contain AG-UI run ID", inputDataSet.getParameters().containsKey("agui_run_id"));
         assertEquals("Run ID should match", "run_456", inputDataSet.getParameters().get("agui_run_id"));
 
-        // User question extraction is now handled by MLAGUIAgentRunner
-        assertFalse("Should not extract user question", inputDataSet.getParameters().containsKey("question"));
+        // User question extraction is done by AGUIInputConverter
+        assertTrue("Should extract user question", inputDataSet.getParameters().containsKey("question"));
+        assertEquals("Question should match", "Hello world", inputDataSet.getParameters().get("question"));
     }
 
     @Test
@@ -78,7 +79,7 @@ public class AGUIInputConverterTest {
             + "  \"threadId\": \"thread_minimal\",\n"
             + "  \"runId\": \"run_minimal\",\n"
             + "  \"state\": null,\n"
-            + "  \"messages\": [],\n"
+            + "  \"messages\": [{\"role\": \"user\", \"content\": \"minimal question\"}],\n"
             + "  \"tools\": [],\n"
             + "  \"context\": [],\n"
             + "  \"forwardedProps\": null\n"
@@ -93,6 +94,8 @@ public class AGUIInputConverterTest {
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
         assertTrue("Should contain thread ID", inputDataSet.getParameters().containsKey("agui_thread_id"));
         assertEquals("Thread ID should match", "thread_minimal", inputDataSet.getParameters().get("agui_thread_id"));
+        assertTrue("Should contain question", inputDataSet.getParameters().containsKey("question"));
+        assertEquals("Question should match", "minimal question", inputDataSet.getParameters().get("question"));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -120,8 +123,9 @@ public class AGUIInputConverterTest {
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
 
-        // User question extraction is now handled by MLAGUIAgentRunner
-        assertFalse("Should not extract user question", inputDataSet.getParameters().containsKey("question"));
+        // User question extraction is done by AGUIInputConverter (should be the last user message)
+        assertTrue("Should extract user question", inputDataSet.getParameters().containsKey("question"));
+        assertEquals("Question should match", "Now tell me about 5+5", inputDataSet.getParameters().get("question"));
 
         // Chat history processing is now handled in MLAGUIAgentRunner, so AGUIInputConverter won't create _chat_history
         assertFalse("Should not contain chat history parameter", inputDataSet.getParameters().containsKey("_chat_history"));
@@ -152,8 +156,9 @@ public class AGUIInputConverterTest {
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
 
-        // User question extraction is now handled by MLAGUIAgentRunner
-        assertFalse("Should not extract user question", inputDataSet.getParameters().containsKey("question"));
+        // User question extraction is done by AGUIInputConverter (should be the last user message)
+        assertTrue("Should extract user question", inputDataSet.getParameters().containsKey("question"));
+        assertEquals("Question should match", "What's the weather?", inputDataSet.getParameters().get("question"));
 
         // Chat history processing is now handled in MLAGUIAgentRunner, so AGUIInputConverter won't create _chat_history
         assertFalse("Should not contain chat history parameter", inputDataSet.getParameters().containsKey("_chat_history"));
@@ -165,7 +170,7 @@ public class AGUIInputConverterTest {
         );
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testConvertFromAGUIInput_EmptyMessages() {
         String aguiInput = "{\n"
             + "  \"threadId\": \"thread_empty\",\n"
@@ -174,13 +179,8 @@ public class AGUIInputConverterTest {
             + "  \"tools\": []\n"
             + "}";
 
-        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "empty_agent", "empty_tenant", false);
-
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
-
-        // Should not have question or chat history for empty messages
-        assertFalse("Should not contain question for empty messages", inputDataSet.getParameters().containsKey("question"));
-        assertFalse("Should not contain chat history for empty messages", inputDataSet.getParameters().containsKey("_chat_history"));
+        // Should throw exception because there are no user messages to extract question from
+        AGUIInputConverter.convertFromAGUIInput(aguiInput, "empty_agent", "empty_tenant", false);
     }
 
     @Test
@@ -230,8 +230,9 @@ public class AGUIInputConverterTest {
         AgentMLInput templateResult = AGUIInputConverter.convertFromAGUIInput(templatedInput, "template_agent", "template_tenant", false);
         RemoteInferenceInputDataSet templateDataSet = (RemoteInferenceInputDataSet) templateResult.getInputDataset();
 
-        // User question extraction is now handled by MLAGUIAgentRunner
-        assertFalse("Should not extract user question", templateDataSet.getParameters().containsKey("question"));
+        // User question extraction is done by AGUIInputConverter (should be the last user message)
+        assertTrue("Should extract user question", templateDataSet.getParameters().containsKey("question"));
+        assertEquals("Question should match", "What's 5+5?", templateDataSet.getParameters().get("question"));
 
         // Chat history processing is now handled in MLAGUIAgentRunner, so AGUIInputConverter won't create _chat_history
         assertFalse("Should not contain chat history parameter", templateDataSet.getParameters().containsKey("_chat_history"));
@@ -260,5 +261,142 @@ public class AGUIInputConverterTest {
         assertEquals("Thread ID should match", "reconstruct_thread", result.get("threadId").getAsString());
         assertTrue("Should contain runId", result.has("runId"));
         assertEquals("Run ID should match", "reconstruct_run", result.get("runId").getAsString());
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_WithContext() {
+        String aguiInput = "{\n"
+            + "  \"threadId\": \"thread_context\",\n"
+            + "  \"runId\": \"run_context\",\n"
+            + "  \"messages\": [\n"
+            + "    {\"role\": \"user\", \"content\": \"what did i ask you previously\"}\n"
+            + "  ],\n"
+            + "  \"tools\": [],\n"
+            + "  \"context\": [\n"
+            + "    {\n"
+            + "      \"description\": \"Explore application page context\",\n"
+            + "      \"value\": \"{\\\"appId\\\":\\\"explore\\\",\\\"timeRange\\\":{\\\"from\\\":\\\"now-15m\\\",\\\"to\\\":\\\"now\\\"},\\\"query\\\":{\\\"query\\\":\\\"\\\",\\\"language\\\":\\\"PPL\\\"}}\"\n"
+            + "    },\n"
+            + "    {\n"
+            + "      \"description\": \"User preferences\",\n"
+            + "      \"value\": \"{\\\"theme\\\":\\\"dark\\\",\\\"language\\\":\\\"en\\\"}\"\n"
+            + "    }\n"
+            + "  ],\n"
+            + "  \"state\": {},\n"
+            + "  \"forwardedProps\": {}\n"
+            + "}";
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "context_agent", "context_tenant", false);
+
+        assertNotNull("Converted result should not be null", result);
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
+
+        // Check that context is properly extracted and stored
+        assertTrue("Should contain agui_context parameter", inputDataSet.getParameters().containsKey("agui_context"));
+
+        String contextJson = inputDataSet.getParameters().get("agui_context");
+        assertNotNull("Context JSON should not be null", contextJson);
+        assertTrue("Context should contain explore application description", contextJson.contains("Explore application page context"));
+        assertTrue("Context should contain user preferences description", contextJson.contains("User preferences"));
+        assertTrue("Context should contain explore app data", contextJson.contains("appId"));
+        assertTrue("Context should contain user preference data", contextJson.contains("theme"));
+
+        // Verify other AG-UI parameters are still present
+        assertTrue("Should contain thread ID", inputDataSet.getParameters().containsKey("agui_thread_id"));
+        assertEquals("Thread ID should match", "thread_context", inputDataSet.getParameters().get("agui_thread_id"));
+        assertTrue("Should contain run ID", inputDataSet.getParameters().containsKey("agui_run_id"));
+        assertEquals("Run ID should match", "run_context", inputDataSet.getParameters().get("agui_run_id"));
+        assertTrue("Should contain messages", inputDataSet.getParameters().containsKey("agui_messages"));
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_EmptyContext() {
+        String aguiInput = "{\n"
+            + "  \"threadId\": \"thread_empty_context\",\n"
+            + "  \"runId\": \"run_empty_context\",\n"
+            + "  \"messages\": [{\"role\": \"user\", \"content\": \"hello\"}],\n"
+            + "  \"tools\": [],\n"
+            + "  \"context\": [],\n"
+            + "  \"state\": {}\n"
+            + "}";
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "empty_context_agent", "empty_context_tenant", false);
+
+        assertNotNull("Converted result should not be null", result);
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
+
+        // Should still contain context parameter even if empty
+        assertTrue("Should contain agui_context parameter even when empty", inputDataSet.getParameters().containsKey("agui_context"));
+
+        String contextJson = inputDataSet.getParameters().get("agui_context");
+        assertEquals("Empty context should be empty JSON array", "[]", contextJson);
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_NoContextField() {
+        String aguiInput = "{\n"
+            + "  \"threadId\": \"thread_no_context\",\n"
+            + "  \"runId\": \"run_no_context\",\n"
+            + "  \"messages\": [{\"role\": \"user\", \"content\": \"hello\"}],\n"
+            + "  \"tools\": []\n"
+            + "}";
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "no_context_agent", "no_context_tenant", false);
+
+        assertNotNull("Converted result should not be null", result);
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
+
+        // Should not contain context parameter when field is absent
+        assertFalse(
+            "Should not contain agui_context parameter when field is absent",
+            inputDataSet.getParameters().containsKey("agui_context")
+        );
+
+        // Other parameters should still be present
+        assertTrue("Should contain thread ID", inputDataSet.getParameters().containsKey("agui_thread_id"));
+        assertEquals("Thread ID should match", "thread_no_context", inputDataSet.getParameters().get("agui_thread_id"));
+    }
+
+    @Test
+    public void testConvertFromAGUIInput_RealWorldSample() {
+        // Test with the actual conversation sample that's not working
+        String aguiInput = "{\n"
+            + "  \"threadId\": \"thread-1760518226699-pwu43lt8j\",\n"
+            + "  \"runId\": \"run-1760518330417-21o56bzvs\",\n"
+            + "  \"messages\": [\n"
+            + "    {\"id\": \"msg-1760518330417-rulu61tvt\", \"role\": \"user\", \"content\": \"are you sure\"}\n"
+            + "  ],\n"
+            + "  \"tools\": [],\n"
+            + "  \"context\": [\n"
+            + "    {\n"
+            + "      \"description\": \"Explore application page context\",\n"
+            + "      \"value\": \"{\\\"appId\\\":\\\"explore\\\",\\\"timeRange\\\":{\\\"from\\\":\\\"now-15m\\\",\\\"to\\\":\\\"now\\\"},\\\"query\\\":{\\\"query\\\":\\\"\\\",\\\"language\\\":\\\"PPL\\\"}}\"\n"
+            + "    },\n"
+            + "    {\n"
+            + "      \"description\": \"Selected text: \\\"hello\\\\n\\\\n\\\\nHello! How can I assist you today?\\\\n\\\\nwhat d...\\\"\",\n"
+            + "      \"value\": \"hello\\\\n\\\\n\\\\nHello! How can I assist you today?\\\\n\\\\nwhat did i ask you previously\"\n"
+            + "    }\n"
+            + "  ],\n"
+            + "  \"state\": {},\n"
+            + "  \"forwardedProps\": {}\n"
+            + "}";
+
+        AgentMLInput result = AGUIInputConverter.convertFromAGUIInput(aguiInput, "real_world_agent", "real_world_tenant", false);
+
+        assertNotNull("Converted result should not be null", result);
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) result.getInputDataset();
+
+        // Check that context is properly extracted
+        assertTrue("Should contain agui_context parameter", inputDataSet.getParameters().containsKey("agui_context"));
+
+        String contextJson = inputDataSet.getParameters().get("agui_context");
+        assertNotNull("Context JSON should not be null", contextJson);
+        assertTrue("Context should contain explore application description", contextJson.contains("Explore application page context"));
+        assertTrue("Context should contain selected text description", contextJson.contains("Selected text"));
+        assertTrue("Context should contain explore app data", contextJson.contains("appId"));
+
+        // Check user question extraction
+        assertTrue("Should extract user question", inputDataSet.getParameters().containsKey("question"));
+        assertEquals("Question should match", "are you sure", inputDataSet.getParameters().get("question"));
     }
 }
