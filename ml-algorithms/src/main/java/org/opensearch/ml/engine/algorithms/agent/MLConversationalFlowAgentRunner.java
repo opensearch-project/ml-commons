@@ -5,36 +5,34 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.convertOutputToModelTensor;
+import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
+import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
-import java.io.IOException;
-import java.security.AccessController;
 import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -45,16 +43,17 @@ import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -98,7 +97,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     }
 
     @Override
-    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+    public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
         String appType = mlAgent.getAppType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
@@ -161,38 +160,67 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String parentInteractionId
     ) {
 
-        StepListener<Object> firstStepListener = null;
-        Tool firstTool = null;
-        List<ModelTensor> flowAgentOutput = new ArrayList<>();
-        Map<String, String> firstToolExecuteParams = null;
-        StepListener<Object> previousStepListener = null;
-        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
-        if (toolSpecs == null || toolSpecs.isEmpty()) {
-            listener.onFailure(new IllegalArgumentException("no tool configured"));
-            return;
-        }
-        AtomicInteger traceNumber = new AtomicInteger(0);
-        if (memory != null) {
-            flowAgentOutput.add(ModelTensor.builder().name(MEMORY_ID).result(memoryId).build());
-            flowAgentOutput.add(ModelTensor.builder().name(PARENT_INTERACTION_ID_FIELD).result(parentInteractionId).build());
-        }
+        // Create a common method to handle both success and failure cases
+        Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
+            StepListener<Object> firstStepListener = null;
+            Tool firstTool = null;
+            List<ModelTensor> flowAgentOutput = new ArrayList<>();
+            Map<String, String> firstToolExecuteParams = null;
+            StepListener<Object> previousStepListener = null;
+            Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+            if (toolSpecs == null || toolSpecs.isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("no tool configured"));
+                return;
+            }
+            AtomicInteger traceNumber = new AtomicInteger(0);
+            if (memory != null) {
+                flowAgentOutput.add(ModelTensor.builder().name(MEMORY_ID).result(memoryId).build());
+                flowAgentOutput.add(ModelTensor.builder().name(PARENT_INTERACTION_ID_FIELD).result(parentInteractionId).build());
+            }
 
-        MLMemorySpec memorySpec = mlAgent.getMemory();
-        for (int i = 0; i <= toolSpecs.size(); i++) {
-            if (i == 0) {
-                MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
-                firstStepListener = new StepListener<>();
-                previousStepListener = firstStepListener;
-                firstTool = tool;
-                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
-            } else {
-                MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
-                StepListener<Object> nextStepListener = new StepListener<>();
-                int finalI = i;
-                previousStepListener.whenComplete(output -> {
+            MLMemorySpec memorySpec = mlAgent.getMemory();
+            for (int i = 0; i <= toolSpecs.size(); i++) {
+                if (i == 0) {
+                    MLToolSpec toolSpec = toolSpecs.get(i);
+                    firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                    Tool tool = createTool(toolFactories, firstToolExecuteParams, toolSpec);
+                    firstStepListener = new StepListener<>();
+                    previousStepListener = firstStepListener;
+                    firstTool = tool;
+                } else {
+                    MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
+                    StepListener<Object> nextStepListener = new StepListener<>();
+                    int finalI = i;
+                    previousStepListener.whenComplete(output -> {
+                        processOutput(
+                            params,
+                            listener,
+                            memory,
+                            memoryId,
+                            parentInteractionId,
+                            toolSpecs,
+                            flowAgentOutput,
+                            additionalInfo,
+                            traceNumber,
+                            memorySpec,
+                            previousToolSpec,
+                            finalI,
+                            output,
+                            mlAgent.getTenantId(),
+                            nextStepListener
+                        );
+                    }, e -> {
+                        log.error("Failed to run flow agent", e);
+                        listener.onFailure(e);
+                    });
+                    previousStepListener = nextStepListener;
+                }
+            }
+            if (toolSpecs.size() == 1) {
+                firstTool.run(firstToolExecuteParams, ActionListener.wrap(output -> {
+                    MLToolSpec toolSpec = toolSpecs.get(0);
                     processOutput(
                         params,
                         listener,
@@ -204,43 +232,27 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         additionalInfo,
                         traceNumber,
                         memorySpec,
-                        previousToolSpec,
-                        finalI,
+                        toolSpec,
+                        1,
                         output,
                         mlAgent.getTenantId(),
-                        nextStepListener
+                        null
                     );
-                }, e -> {
-                    log.error("Failed to run flow agent", e);
-                    listener.onFailure(e);
-                });
-                previousStepListener = nextStepListener;
+                }, e -> { listener.onFailure(e); }));
+            } else {
+                firstTool.run(firstToolExecuteParams, firstStepListener);
             }
-        }
-        if (toolSpecs.size() == 1) {
-            firstTool.run(firstToolExecuteParams, ActionListener.wrap(output -> {
-                MLToolSpec toolSpec = toolSpecs.get(0);
-                processOutput(
-                    params,
-                    listener,
-                    memory,
-                    memoryId,
-                    parentInteractionId,
-                    toolSpecs,
-                    flowAgentOutput,
-                    additionalInfo,
-                    traceNumber,
-                    memorySpec,
-                    toolSpec,
-                    1,
-                    output,
-                    mlAgent.getTenantId(),
-                    null
-                );
-            }, e -> { listener.onFailure(e); }));
-        } else {
-            firstTool.run(firstToolExecuteParams, firstStepListener);
-        }
+        };
+
+        // Fetch MCP tools and handle both success and failure cases
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+            toolSpecs.addAll(mcpTools);
+            processTools.accept(toolSpecs);
+        }, e -> {
+            log.warn("Failed to get MCP tools, continuing with base tools only", e);
+            processTools.accept(toolSpecs);
+        }));
+
     }
 
     @SuppressWarnings("removal")
@@ -260,27 +272,27 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Object output,
         String tenantId,
         StepListener<Object> nextStepListener
-    ) throws IOException,
-        PrivilegedActionException {
+    ) throws PrivilegedActionException {
         String toolName = getToolName(previousToolSpec);
         String outputKey = toolName + ".output";
-        String outputResponse = parseResponse(output);
-        params.put(outputKey, escapeJson(outputResponse));
+        Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, tenantId);
+        String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
+        params.put(outputKey, StringUtils.prepareJsonValue(filteredOutput));
         boolean traceDisabled = params.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(params.get(DISABLE_TRACE));
 
         if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
-            if (output instanceof ModelTensorOutput) {
+            if (toolParameters.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
+                flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
+            } else if (output instanceof ModelTensorOutput) {
                 flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+            } else if (toolParameters.getOrDefault("return_data_as_map", "false").equalsIgnoreCase("true")) {
+                flowAgentOutput.add(convertOutputToModelTensor(output, outputKey));
             } else {
-                String result = output instanceof String
-                    ? (String) output
-                    : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
-
-                ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(result).build();
+                ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(StringUtils.toJson(output)).build();
                 flowAgentOutput.add(stepOutput);
             }
             if (memory == null) {
-                additionalInfo.put(outputKey, outputResponse);
+                additionalInfo.put(outputKey, filteredOutput);
             }
         }
 
@@ -302,7 +314,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 saveMessage(
                     params,
                     memory,
-                    outputResponse,
+                    filteredOutput,
                     memoryId,
                     parentInteractionId,
                     toolName,
@@ -311,7 +323,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     ActionListener.wrap(r -> {
                         log.info("saved last trace for interaction " + parentInteractionId + " of flow agent");
                         Map<String, Object> updateContent = Map
-                            .of(AI_RESPONSE_FIELD, outputResponse, ADDITIONAL_INFO_FIELD, additionalInfo);
+                            .of(AI_RESPONSE_FIELD, filteredOutput, ADDITIONAL_INFO_FIELD, additionalInfo);
                         memory.update(parentInteractionId, updateContent, updateListener);
                     }, e -> {
                         log.error("Failed to update root interaction ", e);
@@ -326,7 +338,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 saveMessage(
                     params,
                     memory,
-                    outputResponse,
+                    filteredOutput,
                     memoryId,
                     parentInteractionId,
                     toolName,
@@ -351,9 +363,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         StepListener<Object> nextStepListener
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
-        Tool tool = createTool(toolFactories, params, toolSpec, tenantId);
+        Map<String, String> toolExecutionParameters = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
+        Tool tool = createTool(toolFactories, toolExecutionParameters, toolSpec);
         if (finalI < toolSpecs.size()) {
-            tool.run(getToolExecuteParams(toolSpec, params, tenantId), nextStepListener);
+            tool.run(toolExecutionParameters, nextStepListener);
         }
     }
 
@@ -407,58 +420,4 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             );
     }
 
-    @VisibleForTesting
-    String parseResponse(Object output) throws IOException {
-        if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
-            ModelTensors tensors = (ModelTensors) ((List) output).get(0);
-            return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensor) {
-            return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensorOutput) {
-            return ((ModelTensorOutput) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else {
-            if (output instanceof String) {
-                return (String) output;
-            } else {
-                return StringUtils.toJson(output);
-            }
-        }
-    }
-
-    @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params, String tenantId) {
-        Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-        executeParams.put(TENANT_ID_FIELD, tenantId);
-        for (String key : params.keySet()) {
-            String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getType() + ".")) {
-                toBeReplaced = toolSpec.getType() + ".";
-            }
-            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName() + ".";
-            }
-            if (toBeReplaced != null) {
-                executeParams.put(key.replace(toBeReplaced, ""), params.get(key));
-            } else {
-                executeParams.put(key, params.get(key));
-            }
-        }
-
-        // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
-        if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
-            executeParams.putAll(toolSpec.getConfigMap());
-        }
-
-        if (executeParams.containsKey("input")) {
-            String input = executeParams.get("input");
-            StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
-            input = substitutor.replace(input);
-            executeParams.put("input", input);
-        }
-
-        return executeParams;
-    }
 }
