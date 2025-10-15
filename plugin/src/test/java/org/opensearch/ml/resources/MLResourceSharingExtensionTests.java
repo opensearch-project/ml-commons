@@ -11,7 +11,6 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.mock;
-import static org.opensearch.ml.helper.ModelAccessControlHelper.getResourceSharingClient;
 
 import java.util.Iterator;
 import java.util.Set;
@@ -36,6 +35,10 @@ public class MLResourceSharingExtensionTests {
     public void tearDown() {
         // Reset the accessor to avoid cross-test leakage
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+    }
+
+    private static Object getResourceSharingClient() {
+        return ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     @Test
