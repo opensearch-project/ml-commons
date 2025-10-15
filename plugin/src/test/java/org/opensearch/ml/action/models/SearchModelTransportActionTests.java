@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.isA;
@@ -18,6 +19,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -39,12 +41,16 @@ import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
@@ -58,6 +64,7 @@ import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -340,6 +347,114 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, "123456", actionListener);
         verify(client, times(2)).search(any(), any());
+    }
+
+    @Test
+    public void test_RSC_featureEnabled_typeEnabled_callsGetAccessibleIds() throws Exception {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        // Feature enabled for this type => apply resource sharing
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        var user = new User();
+
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, user.toString());
+        // model access control enabled & index exists
+        when(modelAccessControlHelper.modelAccessControlEnabled()).thenReturn(true);
+
+        // When RSC asks for accessible IDs, capture listener and respond
+        ArgumentCaptor<ActionListener<Set<String>>> rscListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doAnswer(inv -> {
+            ActionListener<Set<String>> l = inv.getArgument(1);
+            // Simulate async success with some accessible IDs
+            l.onResponse(Set.of("model_group_IT"));
+            return null;
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+
+        // The final remote search goes through client.search(...); return a normal response
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        SearchRequest req = new SearchRequest(new String[] { "ml_model" }, new SearchSourceBuilder());
+        mlSearchActionRequest = new MLSearchActionRequest(req, "tenant-1");
+
+        searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+
+        // Verify RSC path was taken
+        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), any());
+
+        // Verify we executed the final search and returned
+        verify(client, times(1)).search(any(), any());
+        verify(actionListener, times(1)).onResponse(any(SearchResponse.class));
+
+    }
+
+    @Test
+    public void test_RSC_featureEnabled_typeDisabled_skipsRSC() throws Exception {
+        // Feature enabled globally but TYPE disabled → shouldUseResourceAuthz = false
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
+
+        // Legacy path will query model-group index then models → 2 searches
+        when(modelAccessControlHelper.modelAccessControlEnabled()).thenReturn(true);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
+
+        // First search (model-groups) returns one group to force the legacy gate path
+        SearchResponse mgResponse = createModelGroupSearchResponse();
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(mgResponse);
+            return null;
+        }).doAnswer(inv -> { // second call: final models search
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+
+        // RSC should not be called at all
+        verify(rsc, times(0)).getAccessibleResourceIds(any(), any());
+
+        // Legacy path did two searches
+        verify(client, times(2)).search(any(), any());
+        verify(actionListener, times(1)).onResponse(any(SearchResponse.class));
+    }
+
+    @Test
+    public void test_RSC_featureDisabled_skipsRSC_entirely() throws Exception {
+        // Entire feature disabled → skip resource sharing
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        // With feature disabled, we go to legacy path. Make it return zero model-groups, then proceed.
+        when(modelAccessControlHelper.modelAccessControlEnabled()).thenReturn(true);
+        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
+
+        // First search returns 0 hits; second search still executes with rewritten "missing only"
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(searchResponse /* 0 hits already configured in setup() */);
+            return null;
+        }).doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
+
+        // Verify RSC is never invoked
+        verify(rsc, times(0)).getAccessibleResourceIds(any(), any());
+
+        // Legacy path still performed searches
+        verify(client, times(2)).search(any(), any());
+        verify(actionListener, times(1)).onResponse(any(SearchResponse.class));
     }
 
     private SearchResponse createModelGroupSearchResponse() throws IOException {
