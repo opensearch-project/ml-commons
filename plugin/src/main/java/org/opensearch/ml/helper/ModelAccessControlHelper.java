@@ -58,7 +58,6 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
@@ -100,7 +99,7 @@ public class ModelAccessControlHelper {
             return;
         }
         if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
-            ResourceSharingClient resourceSharingClient = getResourceSharingClient();
+            var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -175,7 +174,7 @@ public class ModelAccessControlHelper {
             return;
         }
         if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
-            ResourceSharingClient resourceSharingClient = getResourceSharingClient();
+            var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
             resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
@@ -295,12 +294,8 @@ public class ModelAccessControlHelper {
      * @return true if the resource-sharing feature is enabled, false otherwise.
      */
     public static boolean shouldUseResourceAuthz(String resourceType) {
-        var client = getResourceSharingClient();
+        var client = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
         return client != null && client.isFeatureEnabledForType(resourceType);
-    }
-
-    public static ResourceSharingClient getResourceSharingClient() {
-        return ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
     }
 
     public boolean skipModelAccessControl(User user) {
