@@ -6,7 +6,6 @@
 repositories {
     mavenLocal()
     maven { url "https://ci.opensearch.org/ci/dbc/snapshots/maven/" }
-    maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
     mavenCentral()
     maven {url 'https://oss.sonatype.org/content/repositories/snapshots/'}
     maven { url "https://ci.opensearch.org/ci/dbc/snapshots/lucene/" }

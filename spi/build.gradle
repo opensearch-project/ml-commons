@@ -19,7 +19,6 @@ repositories {
     mavenLocal()
     mavenCentral()
     maven { url "https://ci.opensearch.org/ci/dbc/snapshots/maven/" }
-    maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
 }
 
 ext {
