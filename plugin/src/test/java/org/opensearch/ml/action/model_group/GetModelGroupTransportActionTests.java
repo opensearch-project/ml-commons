@@ -6,8 +6,12 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
@@ -37,12 +41,14 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -215,6 +221,106 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_Get_RSC_FeatureEnabled_TypeEnabled_SkipsLegacyValidation() throws IOException {
+        // Force RSC fast-path (feature + type enabled)
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        // Tenant on request and document must match for TenantAwareHelper.validateTenantResource
+        String tenantId = "t-1";
+        MLModelGroupGetRequest req = MLModelGroupGetRequest.builder().modelGroupId("mg-123").tenantId(tenantId).build();
+
+        // SDK returns the model-group doc
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        // Execute
+        getModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        // Legacy validation MUST be skipped
+        verify(modelAccessControlHelper, times(0)).validateModelGroupAccess(any(), any(), any(), any(), any());
+
+        ArgumentCaptor<MLModelGroupGetResponse> captor = ArgumentCaptor.forClass(MLModelGroupGetResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        MLModelGroupGetResponse resp = captor.getValue();
+        assertNotNull(resp);
+        assertNotNull(resp.getMlModelGroup());
+        assertEquals("modelGroup", resp.getMlModelGroup().getName());
+    }
+
+    public void test_Get_RSC_FeatureEnabled_TypeDisabled_UsesLegacyValidation() throws IOException {
+        // Feature enabled globally but TYPE disabled → legacy path
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
+
+        // Allow legacy access validation to pass
+        doAnswer(inv -> {
+            ActionListener<Boolean> l = inv.getArgument(4);
+            l.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), anyString(), anyString(), any(), any());
+
+        String tenantId = "t-2";
+        MLModelGroupGetRequest req = MLModelGroupGetRequest.builder().modelGroupId("mg-456").tenantId(tenantId).build();
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        // Legacy validation MUST run
+        verify(modelAccessControlHelper, times(1)).validateModelGroupAccess(any(), eq("mg-456"), anyString(), eq(client), any());
+
+        // Successful response
+        ArgumentCaptor<MLModelGroupGetResponse> captor = ArgumentCaptor.forClass(MLModelGroupGetResponse.class);
+        verify(actionListener, times(1)).onResponse(captor.capture());
+        assertEquals("modelGroup", captor.getValue().getMlModelGroup().getName());
+    }
+
+    public void test_Get_RSC_FeatureDisabled_UsesLegacyValidation() throws IOException {
+        // Entire feature disabled → legacy path
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+
+        // Allow legacy access validation to pass
+        doAnswer(inv -> {
+            ActionListener<Boolean> l = inv.getArgument(4);
+            l.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), anyString(), anyString(), any(), any());
+
+        String tenantId = "t-3";
+        MLModelGroupGetRequest req = MLModelGroupGetRequest.builder().modelGroupId("mg-789").tenantId(tenantId).build();
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getModelGroupTransportAction.doExecute(null, req, actionListener);
+
+        // Legacy validation MUST run
+        verify(modelAccessControlHelper, times(1)).validateModelGroupAccess(any(), eq("mg-789"), anyString(), eq(client), any());
+
+        // Successful response
+        ArgumentCaptor<MLModelGroupGetResponse> captor = ArgumentCaptor.forClass(MLModelGroupGetResponse.class);
+        verify(actionListener, times(1)).onResponse(captor.capture());
+        assertEquals("modelGroup", captor.getValue().getMlModelGroup().getName());
     }
 
     public GetResponse prepareMLModelGroup() throws IOException {
