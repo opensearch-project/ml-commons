@@ -9,7 +9,10 @@ import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
@@ -39,6 +42,7 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -48,6 +52,7 @@ import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -289,6 +294,110 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to delete data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void test_RSC_FeatureEnabled_TypeEnabled_SkipsLegacyValidation() throws Exception {
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        // Feature enabled for this type => apply resource sharing
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        // Associated models search -> empty => proceed to delete
+        SearchResponse empty = getEmptySearchResponse();
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(empty);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        // Delete succeeds
+        doAnswer(inv -> {
+            ActionListener<DeleteResponse> l = inv.getArgument(1);
+            l.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+
+        // Legacy validation must be skipped
+        verify(modelAccessControlHelper, never()).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        // RSC path still does search (for associated models) then delete
+        verify(client, times(1)).search(any(), any());
+        verify(client, times(1)).delete(any(), any());
+
+        verify(actionListener, times(1)).onResponse(any(DeleteResponse.class));
+    }
+
+    @Test
+    public void test_RSC_FeatureEnabled_TypeDisabled_UsesLegacyValidation() throws Exception {
+        // Feature enabled globally but TYPE disabled → legacy path
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
+
+        // Associated models search -> empty => proceed to delete
+        SearchResponse empty = getEmptySearchResponse();
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(empty);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        // Delete succeeds
+        doAnswer(inv -> {
+            ActionListener<DeleteResponse> l = inv.getArgument(1);
+            l.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+
+        // Legacy validation must run
+        verify(modelAccessControlHelper, times(1)).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        // Search (models) + delete executed
+        verify(client, times(1)).search(any(), any());
+        verify(client, times(1)).delete(any(), any());
+
+        verify(actionListener, times(1)).onResponse(any(DeleteResponse.class));
+    }
+
+    @Test
+    public void test_RSC_FeatureDisabled_UsesLegacyValidation() throws Exception {
+        // Feature disabled by forcing the gate to false
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+
+        // (setup() already stubs validateModelGroupAccess(...)->onResponse(true))
+
+        // Associated models search -> empty => proceed to delete
+        SearchResponse empty = getEmptySearchResponse();
+        doAnswer(inv -> {
+            ActionListener<SearchResponse> l = inv.getArgument(1);
+            l.onResponse(empty);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        // Delete succeeds
+        doAnswer(inv -> {
+            ActionListener<DeleteResponse> l = inv.getArgument(1);
+            l.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+
+        // Legacy validation must run
+        verify(modelAccessControlHelper, times(1)).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+
+        // Search (models) + delete executed
+        verify(client, times(1)).search(any(), any());
+        verify(client, times(1)).delete(any(), any());
+
+        verify(actionListener, times(1)).onResponse(any(DeleteResponse.class));
     }
 
     private SearchResponse getEmptySearchResponse() {
