@@ -38,6 +38,8 @@ import org.opensearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -52,6 +54,7 @@ import org.opensearch.search.aggregations.bucket.filter.InternalFilters;
 import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
 import org.opensearch.search.aggregations.metrics.InternalTopHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.IndicesAdminClient;
@@ -68,9 +71,14 @@ public class StatisticalDataTaskTests {
         Client client = mock(Client.class);
         AdminClient adminClient = mock(AdminClient.class);
         IndicesAdminClient indicesAdminClient = mock(IndicesAdminClient.class);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        Settings settings = Settings.builder().build();
+        ThreadContext threadContext = new ThreadContext(settings);
 
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.indices()).thenReturn(indicesAdminClient);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         return client;
     }
@@ -184,6 +192,8 @@ public class StatisticalDataTaskTests {
 
         when(getMappingsResponse.getMappings()).thenReturn(new HashMap<>());
         setupGetMappingsCall(client, getMappingsResponse);
+        sdkClient = mock(SdkClient.class);
+        mockUpdateSuccess(sdkClient);
 
         StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
         task.runTask("tenant-id", listener);
