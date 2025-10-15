@@ -105,7 +105,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                     .whenComplete((r, throwable) -> {
                         if (throwable != null) {
                             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            listener.onFailure(cause);
+                            handleError("Failed to search pattern matched documents for index: {}", cause, tenantId, listener, false);
                         } else {
                             SearchResponse searchResponse = r.searchResponse();
                             SearchHit[] hits = searchResponse.getHits().getHits();
@@ -203,9 +203,11 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .lastUpdatedTime(Instant.now())
             .build();
 
-        writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, e -> {
-            saveFailedStatus(tenantId, e, listener);
-        }));
+        writeIndexInsight(
+            indexInsight,
+            tenantId,
+            ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, listener::onFailure)
+        );
     }
 
     protected void runWithPrerequisites(String tenantId, ActionListener<IndexInsight> listener) {
@@ -239,7 +241,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .build();
 
         writeIndexInsight(insight, tenantId, ActionListener.wrap(r -> { listener.onResponse(insight); }, e -> {
-            saveFailedStatus(tenantId, e, listener);
+            handleError("Failed to save completed result for index: {}", e, tenantId, listener);
         }));
     }
 

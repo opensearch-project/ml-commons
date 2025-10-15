@@ -128,17 +128,12 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                     listener.onResponse(insight);
 
                 } catch (Exception e) {
-                    log.error("Failed to process current index mapping for index {}", sourceIndex, e);
-                    listener.onFailure(e);
+                    handleError("Failed to process current index mapping for index: {}", e, tenantId, listener, false);
                 }
-            }, e -> {
-                log.error("Failed to get current index mapping for index {}", sourceIndex, e);
-                listener.onFailure(e);
-            }));
+            }, e -> { handleError("Failed to get current index mapping for index: {}", e, tenantId, listener, false); }));
 
         } catch (Exception e) {
-            log.error("Failed to filter field descriptions for index {}", sourceIndex, e);
-            listener.onFailure(e);
+            handleError("Failed to filter field descriptions for index: {}", e, tenantId, listener, false);
         }
     }
 
@@ -233,7 +228,10 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                 log.error("Error parsing response for batch in index {}: {}", sourceIndex, e.getMessage());
                 listener.onFailure(e);
             }
-        }, e -> { listener.onFailure(e); }));
+        }, e -> {
+            log.error("Failed to call LLM for batch processing in index {}: {}", sourceIndex, e.getMessage());
+            listener.onFailure(e);
+        }));
     }
 
     private String generateBatchPrompt(List<String> batchFields, Map<String, Object> statisticalContentMap) {

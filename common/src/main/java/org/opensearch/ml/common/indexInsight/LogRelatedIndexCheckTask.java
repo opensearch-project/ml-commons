@@ -98,7 +98,7 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
                             e -> handleError("Failed to get agent ID from ML config", e, tenantId, listener)
                         )
                 );
-            }, listener::onFailure));
+            }, e -> handleError("Failed to collect sample documents for index: {}", e, tenantId, listener)));
         } catch (Exception e) {
             handleError("Failed log related check for index: {}", e, tenantId, listener);
         }
