@@ -67,44 +67,6 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
     }
 
     /**
-     * Check if the response contains frontend tool calls by examining the ModelTensorOutput structure
-     * Frontend tool calls are identified by having tool_calls in the response data
-     */
-    private boolean containsFrontendToolCalls(Response response) {
-        try {
-            if (!(response instanceof MLTaskResponse)) {
-                return false;
-            }
-
-            MLTaskResponse taskResponse = (MLTaskResponse) response;
-            if (!(taskResponse.getOutput() instanceof ModelTensorOutput)) {
-                return false;
-            }
-
-            ModelTensorOutput tensorOutput = (ModelTensorOutput) taskResponse.getOutput();
-            if (tensorOutput.getMlModelOutputs() == null) {
-                return false;
-            }
-
-            // Look for tool_calls in any tensor data
-            for (ModelTensors modelTensors : tensorOutput.getMlModelOutputs()) {
-                if (modelTensors.getMlModelTensors() != null) {
-                    for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-                        if (tensor.getDataAsMap() != null && tensor.getDataAsMap().containsKey("tool_calls")) {
-                            log.info("AG-UI: Found tool_calls in tensor: {}", tensor.getName());
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            log.warn("AG-UI: Error checking for frontend tool calls: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
      * Reuse ActionListener method to send the last stream response
      * This maintains compatibility on data node side
      *
@@ -112,30 +74,10 @@ public class StreamPredictActionListener<Response extends TransportResponse, Req
      */
     @Override
     public final void onResponse(Response response) {
-        log
-            .info(
-                "AG-UI: StreamPredictActionListener.onResponse called - agentListener: {}, response type: {}",
-                agentListener != null ? agentListener.getClass().getSimpleName() : "null",
-                response != null ? response.getClass().getSimpleName() : "null"
-            );
-
-        // Check if this response contains frontend tool calls
-        boolean hasFrontendToolCalls = containsFrontendToolCalls(response);
-        log.info("AG-UI: Response contains frontend tool calls: {}", hasFrontendToolCalls);
-
-        // For frontend tool calls, skip raw streaming and let AG-UI handle the events
-        if (!hasFrontendToolCalls) {
-            log.info("AG-UI: Sending raw streaming response");
-            onStreamResponse(response, false);
-        } else {
-            log.info("AG-UI: Skipping raw streaming for frontend tool calls - AG-UI will handle events");
-        }
+        onStreamResponse(response, false);
 
         if (agentListener != null) {
-            log.info("AG-UI: Calling agentListener.onResponse()");
             agentListener.onResponse(response);
-        } else {
-            log.info("AG-UI: agentListener is null, skipping agent processing");
         }
     }
 
