@@ -17,6 +17,7 @@ import org.opensearch.ml.common.agui.RunStartedEvent;
 import org.opensearch.ml.common.agui.TextMessageContentEvent;
 import org.opensearch.ml.common.agui.TextMessageEndEvent;
 import org.opensearch.ml.common.agui.TextMessageStartEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
 import org.opensearch.ml.common.agui.ToolCallEndEvent;
 import org.opensearch.ml.common.agui.ToolCallResultEvent;
 import org.opensearch.ml.common.agui.ToolCallStartEvent;
@@ -77,6 +78,11 @@ public class AGUIEventCollector {
         events.add(new ToolCallStartEvent(toolCallId, toolName, parentMessageId));
         log.debug("AG-UI: Tool call started with tool_call_id={}, tool_name={}", toolCallId, toolName);
         return toolCallId;
+    }
+
+    public void addToolCallArgs(String toolCallId, String delta) {
+        events.add(new ToolCallArgsEvent(toolCallId, delta));
+        log.debug("AG-UI: Tool call args added with tool_call_id={}, delta_length={}", toolCallId, delta != null ? delta.length() : 0);
     }
 
     public void endToolCall(String toolCallId) {
