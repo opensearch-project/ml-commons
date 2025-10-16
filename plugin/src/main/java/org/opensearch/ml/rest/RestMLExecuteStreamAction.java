@@ -464,11 +464,36 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     }
 
     private HttpChunk convertToAGUIEvent(String content, String memoryId, String parentInteractionId, boolean isLast) throws IOException {
-        // Extract threadId and runId from memoryId/parentInteractionId or generate new ones
+        StringBuilder sseResponse = new StringBuilder();
+
+        // Check if content already contains AG-UI events (JSON array format)
+        if (content != null && !content.isEmpty()) {
+            try {
+                // Try to parse as AG-UI events JSON array
+                com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(content);
+                if (element.isJsonArray()) {
+                    // Content is already AG-UI events - stream them directly
+                    com.google.gson.JsonArray events = element.getAsJsonArray();
+                    for (com.google.gson.JsonElement eventElement : events) {
+                        if (eventElement.isJsonObject()) {
+                            com.google.gson.JsonObject event = eventElement.getAsJsonObject();
+                            String eventType = event.has("type") ? event.get("type").getAsString() : "unknown";
+
+                            // Add proper SSE formatting for each event
+                            sseResponse.append("data: ").append(eventElement.toString()).append("\n\n");
+                            log.debug("AG-UI: Streaming event type: {}", eventType);
+                        }
+                    }
+                    return createHttpChunk(sseResponse.toString(), isLast);
+                }
+            } catch (Exception e) {
+                log.debug("Content is not AG-UI events JSON, treating as regular content: {}", e.getMessage());
+            }
+        }
+
+        // Fallback: Create basic AG-UI events for regular content
         String threadId = memoryId != null ? memoryId : "thread_" + System.currentTimeMillis();
         String runId = parentInteractionId != null ? parentInteractionId : "run_" + System.currentTimeMillis();
-
-        StringBuilder sseResponse = new StringBuilder();
 
         // Get required startup events (RUN_STARTED, TEXT_MESSAGE_START if needed)
         String[] startupEvents = AGUIStreamingEventManager.getRequiredStartEvents(threadId, runId);

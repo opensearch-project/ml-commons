@@ -76,7 +76,13 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
-        log.info("Starting AG-UI agent execution for conversational agent: {}", mlAgent.getName());
+        log.info("AG-UI Debug: Starting AG-UI agent execution for conversational agent: {}", mlAgent.getName());
+        log.debug("AG-UI Debug: MLAGUIAgentRunner received params keys: {}", params.keySet());
+
+        // Log specific AG-UI parameters
+        log.debug("AG-UI Debug: agui_tools in params = {}", params.get("agui_tools") != null ? "present" : "null");
+        log.debug("AG-UI Debug: agui_messages in params = {}", params.get("agui_messages") != null ? "present" : "null");
+        log.debug("AG-UI Debug: question in params = {}", params.get("question") != null ? "present" : "null");
 
         AGUIEventCollector eventCollector = new AGUIEventCollector();
         eventCollector.startRun();
@@ -127,6 +133,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 listener.onFailure(error);
             });
 
+            log.debug("AG-UI Debug: Calling conversationalRunner.run with params keys: {}", params.keySet());
             conversationalRunner.run(mlAgent, params, aguiListener, channel);
 
         } catch (Exception e) {
@@ -137,12 +144,28 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     }
 
     private void processAgentResult(Object result, AGUIEventCollector eventCollector, String messageId) {
+        log
+            .info(
+                "AG-UI: processAgentResult called with result type: {}, result: {}",
+                result != null ? result.getClass().getSimpleName() : "null",
+                result
+            );
+
         if (result instanceof ModelTensorOutput) {
             ModelTensorOutput tensorOutput = (ModelTensorOutput) result;
             // Extract tool calls and text responses from the tensor output
             processTensorOutput(tensorOutput, eventCollector);
         } else if (result instanceof String) {
-            log.debug("AG-UI: Processing string result: {}", result);
+            String resultString = (String) result;
+            log.info("AG-UI: Processing string result: {}", result);
+
+            // Check if this is a frontend tool call response
+            if (resultString.startsWith("FRONTEND_TOOL_CALL: ")) {
+                log.info("AG-UI: Detected frontend tool call response, processing...");
+                processFrontendToolCall(resultString, eventCollector);
+            } else {
+                log.info("AG-UI: String result is not a frontend tool call");
+            }
         } else {
             log.debug("AG-UI: Processing generic result of type: {}", result != null ? result.getClass() : "null");
         }
@@ -180,6 +203,12 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     }
 
     private void processTensorOutput(ModelTensorOutput tensorOutput, AGUIEventCollector eventCollector) {
+        log
+            .info(
+                "AG-UI: processTensorOutput called with {} model outputs",
+                tensorOutput.getMlModelOutputs() != null ? tensorOutput.getMlModelOutputs().size() : 0
+            );
+
         if (tensorOutput.getMlModelOutputs() != null) {
             tensorOutput.getMlModelOutputs().forEach(modelTensors -> {
                 if (modelTensors.getMlModelTensors() != null) {
@@ -191,16 +220,157 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
     private void processModelTensor(ModelTensor tensor, AGUIEventCollector eventCollector) {
         String tensorName = tensor.getName();
+        log.info("AG-UI: processModelTensor called with tensor name: {}", tensorName);
 
-        if ("response".equals(tensorName) && tensor.getResult() != null) {
-            String result = tensor.getResult();
-            log.debug("AG-UI: Processing tensor result: {}", result);
-
-            if (result.contains("tool_call") || result.contains("function_call")) {
-                String toolCallId = eventCollector.startToolCall("mock_tool", null);
-                eventCollector.endToolCall(toolCallId);
-                eventCollector.addToolCallResult(toolCallId, "Mock tool result");
+        if ("response".equals(tensorName)) {
+            // Check if tensor has dataAsMap (structured response with tool calls)
+            Map<String, ?> dataMap = tensor.getDataAsMap();
+            if (dataMap != null) {
+                processToolCallsFromDataMap(dataMap, eventCollector);
+            } else if (tensor.getResult() != null) {
+                // Handle text result that might contain tool call information
+                String result = tensor.getResult();
+                log.debug("AG-UI: Processing tensor result: {}", result);
+                processTextResponseForToolCalls(result, eventCollector);
             }
+        }
+    }
+
+    private void processToolCallsFromDataMap(Map<String, ?> dataMap, AGUIEventCollector eventCollector) {
+        log.info("AG-UI: processToolCallsFromDataMap called with dataMap keys: {}", dataMap.keySet());
+
+        // Look for tool_calls in the structured response
+        Object toolCallsObj = dataMap.get("tool_calls");
+        log
+            .info(
+                "AG-UI: toolCallsObj type: {}, value: {}",
+                toolCallsObj != null ? toolCallsObj.getClass().getSimpleName() : "null",
+                toolCallsObj
+            );
+        if (toolCallsObj instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) toolCallsObj;
+
+            for (Map<String, Object> toolCall : toolCalls) {
+                String toolCallId = (String) toolCall.get("id");
+                String toolName = null;
+                String arguments = null;
+
+                // Extract tool name and arguments from function object
+                Object functionObj = toolCall.get("function");
+                if (functionObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> function = (Map<String, Object>) functionObj;
+                    toolName = (String) function.get("name");
+                    arguments = (String) function.get("arguments");
+                }
+
+                if (toolCallId != null && toolName != null) {
+                    log.info("AG-UI: Processing tool call - toolName: {}, toolCallId: {}, arguments: {}", toolName, toolCallId, arguments);
+
+                    // Generate AG-UI tool call events
+                    String generatedToolCallId = eventCollector.startToolCall(toolName, null);
+                    log.info("AG-UI: Started tool call, generated ID: {}", generatedToolCallId);
+
+                    if (arguments != null && !arguments.isEmpty()) {
+                        eventCollector.addToolCallArgs(generatedToolCallId, arguments);
+                        log.info("AG-UI: Added tool call args for ID: {}", generatedToolCallId);
+                    }
+
+                    eventCollector.endToolCall(generatedToolCallId);
+                    log.info("AG-UI: Ended tool call for ID: {}", generatedToolCallId);
+
+                    log
+                        .info(
+                            "AG-UI: Successfully generated tool call events for tool={}, originalId={}, generatedId={}",
+                            toolName,
+                            toolCallId,
+                            generatedToolCallId
+                        );
+                }
+            }
+        }
+    }
+
+    private void processFrontendToolCall(String frontendToolCallResponse, AGUIEventCollector eventCollector) {
+        log.info("AG-UI: Processing frontend tool call response: {}", frontendToolCallResponse);
+        try {
+            // Extract the JSON part after "FRONTEND_TOOL_CALL: "
+            String jsonPart = frontendToolCallResponse.substring("FRONTEND_TOOL_CALL: ".length());
+            log.info("AG-UI: Extracted JSON part: {}", jsonPart);
+
+            JsonElement element = gson.fromJson(jsonPart, JsonElement.class);
+
+            if (element.isJsonObject()) {
+                JsonObject toolCallObj = element.getAsJsonObject();
+                String toolName = toolCallObj.get("tool").getAsString();
+                String toolInput = toolCallObj.get("input").getAsString();
+
+                log.info("AG-UI: Processing frontend tool call - tool: {}, input: {}", toolName, toolInput);
+
+                // Generate AG-UI events for the frontend tool call
+                String toolCallId = eventCollector.startToolCall(toolName, null);
+                log.info("AG-UI: Started tool call with ID: {}", toolCallId);
+
+                eventCollector.addToolCallArgs(toolCallId, toolInput);
+                log.info("AG-UI: Added tool call args for ID: {}", toolCallId);
+
+                eventCollector.endToolCall(toolCallId);
+                log.info("AG-UI: Ended tool call for ID: {}", toolCallId);
+
+                log.info("AG-UI: Successfully generated frontend tool call events for tool: {} with id: {}", toolName, toolCallId);
+            } else {
+                log.warn("AG-UI: JSON element is not an object: {}", element);
+            }
+        } catch (Exception e) {
+            log.error("Failed to process frontend tool call response: {}", frontendToolCallResponse, e);
+        }
+    }
+
+    private void processTextResponseForToolCalls(String result, AGUIEventCollector eventCollector) {
+        // Try to parse JSON response that might contain tool calls
+        try {
+            JsonElement element = gson.fromJson(result, JsonElement.class);
+            if (element.isJsonObject()) {
+                JsonObject obj = element.getAsJsonObject();
+                if (obj.has("tool_calls")) {
+                    JsonElement toolCallsElement = obj.get("tool_calls");
+                    if (toolCallsElement.isJsonArray()) {
+                        for (JsonElement toolCallElement : toolCallsElement.getAsJsonArray()) {
+                            if (toolCallElement.isJsonObject()) {
+                                JsonObject toolCall = toolCallElement.getAsJsonObject();
+                                String toolCallId = getStringField(toolCall, "id");
+                                JsonElement functionElement = toolCall.get("function");
+
+                                if (functionElement != null && functionElement.isJsonObject()) {
+                                    JsonObject function = functionElement.getAsJsonObject();
+                                    String toolName = getStringField(function, "name");
+                                    String arguments = getStringField(function, "arguments");
+
+                                    if (toolCallId != null && toolName != null) {
+                                        eventCollector.startToolCall(toolName, null);
+
+                                        if (arguments != null && !arguments.isEmpty()) {
+                                            eventCollector.addToolCallArgs(toolCallId, arguments);
+                                        }
+
+                                        eventCollector.endToolCall(toolCallId);
+                                        log
+                                            .debug(
+                                                "AG-UI: Generated tool call events from text response for tool={}, id={}",
+                                                toolName,
+                                                toolCallId
+                                            );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("AG-UI: Response is not JSON with tool calls, treating as regular text: {}", e.getMessage());
+            // Not a tool call response, just regular text - no special processing needed
         }
     }
 
