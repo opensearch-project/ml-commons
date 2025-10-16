@@ -69,6 +69,16 @@ public class AGUIStreamingEventManager {
             );
     }
 
+    public static String createToolCallArgsEvent(String toolCallId, String delta) {
+        return String
+            .format(
+                "{\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"%s\",\"delta\":\"%s\",\"timestamp\":%d}",
+                toolCallId,
+                escapeJsonString(delta),
+                System.currentTimeMillis()
+            );
+    }
+
     public static String[] getRequiredEndEvents(String threadId, String runId) {
         String conversationKey = threadId + "_" + runId;
         ConversationState state = conversations.get(conversationKey);
