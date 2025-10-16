@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -15,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AGUIStreamingEventManager {
 
     private static final ConcurrentHashMap<String, ConversationState> conversations = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<String, Boolean> finishedConversations = new ConcurrentHashMap<>();
 
     private static class ConversationState {
         final String threadId;
@@ -33,6 +35,12 @@ public class AGUIStreamingEventManager {
 
     public static String[] getRequiredStartEvents(String threadId, String runId) {
         String conversationKey = threadId + "_" + runId;
+
+        // Check if this conversation has already finished
+        if (finishedConversations.containsKey(conversationKey)) {
+            return new String[0]; // Don't create new events for finished conversations
+        }
+
         ConversationState state = conversations.computeIfAbsent(conversationKey, k -> new ConversationState(threadId, runId));
 
         // Return events needed to start the conversation properly
@@ -89,6 +97,7 @@ public class AGUIStreamingEventManager {
         if (!state.runFinished.get()) {
             state.runFinished.set(true);
             conversations.remove(conversationKey); // Cleanup
+            finishedConversations.put(conversationKey, true); // Mark as finished to prevent restart
 
             return new String[] { createTextMessageEndEvent(state.messageId), createRunFinishedEvent(threadId, runId) };
         }
