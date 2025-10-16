@@ -20,6 +20,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -58,6 +59,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.OpenaiV1ChatCompletionsFunctionCalling;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
@@ -391,6 +394,12 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         // If this is an AG-UI agent, convert to AG-UI event format
         if (isAGUIAgent) {
+            // Check if this is a raw OpenAI function call chunk that should be filtered out
+            if (isRawOpenAIFunctionCallChunk(content)) {
+                log.debug("AG-UI: Filtering out raw OpenAI function call chunk: {}", content);
+                // Return an empty chunk that won't be sent to client
+                return createHttpChunk("", false);
+            }
             return convertToAGUIEvent(content, memoryId, parentInteractionId, isLast);
         }
 
@@ -489,6 +498,12 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             } catch (Exception e) {
                 log.debug("Content is not AG-UI events JSON, treating as regular content: {}", e.getMessage());
             }
+
+            // Try to parse as OpenAI function call format using existing FunctionCalling logic
+            if (tryParseAsOpenAIFunctionCall(content, sseResponse, memoryId, parentInteractionId, isLast)) {
+                // When we successfully parse function calls and generate RUN_FINISHED, this should be the last chunk
+                return createHttpChunk(sseResponse.toString(), true);
+            }
         }
 
         // Fallback: Create basic AG-UI events for regular content
@@ -550,5 +565,241 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 return bytesRef;
             }
         };
+    }
+
+    /**
+     * Try to parse content as OpenAI function call format and convert to AG-UI tool events.
+     * Uses the existing FunctionCalling infrastructure to parse OpenAI responses.
+     *
+     * @param content Raw content from LLM response
+     * @param sseResponse StringBuilder to append AG-UI events
+     * @param memoryId Memory ID for thread identification
+     * @param parentInteractionId Parent interaction ID for run identification
+     * @param isLast Whether this is the last chunk in the stream
+     * @return true if content was successfully parsed as OpenAI function call, false otherwise
+     */
+    private boolean tryParseAsOpenAIFunctionCall(
+        String content,
+        StringBuilder sseResponse,
+        String memoryId,
+        String parentInteractionId,
+        boolean isLast
+    ) {
+        try {
+            // Check if content looks like OpenAI function call format (streaming chunks OR complete response)
+            // OpenAI streaming chunks: {"index":0.0,"id":"call_xxx","type":"function",...}
+            // OpenAI complete response: {"choices":[{"message":{"tool_calls":[...]}}]}
+            boolean isStreamingChunk = content.contains("\"index\":")
+                && (content.contains("\"type\":\"function\"") || content.contains("\"function\":"));
+            boolean isCompleteResponse = content.contains("\"choices\":") && content.contains("\"tool_calls\":");
+
+            if (!isStreamingChunk && !isCompleteResponse) {
+                return false;
+            }
+
+            log.debug("AG-UI: Attempting to parse as OpenAI function call: {}", content);
+
+            // Create a ModelTensorOutput that wraps the raw OpenAI content
+            // This simulates the structure that FunctionCalling.handle() expects
+            Map<String, Object> llmResponseData = new LinkedHashMap<>();
+
+            // Try to parse the content as JSON
+            com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(content);
+            if (element.isJsonObject()) {
+                com.google.gson.JsonObject responseObj = element.getAsJsonObject();
+
+                if (isCompleteResponse) {
+                    // Content is already in the complete OpenAI response format
+                    // {"choices":[{"message":{"tool_calls":[...]}}]}
+                    // We can use it directly with FunctionCalling
+                    llmResponseData = jsonObjectToMap(responseObj);
+                } else if (isStreamingChunk) {
+                    // Handle individual streaming chunk format
+                    // {"index":0.0,"id":"call_xxx","type":"function",...}
+                    if (responseObj.has("type")
+                        && "function".equals(responseObj.get("type").getAsString())
+                        && responseObj.has("id")
+                        && responseObj.has("function")) {
+
+                        // Convert streaming chunk to complete response format
+                        Map<String, Object> functionCallMap = jsonObjectToMap(responseObj);
+                        Map<String, Object> choice = new LinkedHashMap<>();
+                        Map<String, Object> message = new LinkedHashMap<>();
+                        message.put("tool_calls", List.of(functionCallMap));
+                        choice.put("message", message);
+                        choice.put("finish_reason", "tool_calls");
+                        llmResponseData.put("choices", List.of(choice));
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+
+                // Create ModelTensorOutput with the wrapped data
+                ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(llmResponseData).build();
+
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor)).build();
+
+                ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+
+                // Use existing OpenAI function calling logic to parse
+                FunctionCalling functionCalling = new OpenaiV1ChatCompletionsFunctionCalling();
+                Map<String, String> params = new LinkedHashMap<>();
+                functionCalling.configure(params);
+
+                List<Map<String, String>> toolCalls = functionCalling.handle(tensorOutput, params);
+
+                if (!toolCalls.isEmpty()) {
+                    log.debug("AG-UI: Successfully parsed {} tool calls", toolCalls.size());
+
+                    // Generate AG-UI events for the tool calls
+                    String threadId = memoryId != null ? memoryId : "thread_" + System.currentTimeMillis();
+                    String runId = parentInteractionId != null ? parentInteractionId : "run_" + System.currentTimeMillis();
+
+                    // Get required startup events
+                    String[] startupEvents = AGUIStreamingEventManager.getRequiredStartEvents(threadId, runId);
+                    for (String event : startupEvents) {
+                        sseResponse.append("data: ").append(event).append("\n\n");
+                    }
+
+                    // Generate tool call events for each tool call
+                    for (Map<String, String> toolCall : toolCalls) {
+                        String toolName = toolCall.get("tool_name");
+                        String toolInput = toolCall.get("tool_input");
+                        String toolCallId = toolCall.get("tool_call_id");
+
+                        // Generate TOOL_CALL_START event
+                        String toolCallStartEvent = String
+                            .format(
+                                "{\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"%s\",\"toolCallName\":\"%s\",\"timestamp\":%d}",
+                                toolCallId,
+                                toolName,
+                                System.currentTimeMillis()
+                            );
+                        sseResponse.append("data: ").append(toolCallStartEvent).append("\n\n");
+                        log.debug("AG-UI: Generated TOOL_CALL_START event for tool: {}", toolName);
+
+                        // Generate TOOL_CALL_ARGS event
+                        if (toolInput != null && !toolInput.isEmpty()) {
+                            String toolCallArgsEvent = String
+                                .format(
+                                    "{\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"%s\",\"delta\":\"%s\",\"timestamp\":%d}",
+                                    toolCallId,
+                                    escapeJsonString(toolInput),
+                                    System.currentTimeMillis()
+                                );
+                            sseResponse.append("data: ").append(toolCallArgsEvent).append("\n\n");
+                            log.debug("AG-UI: Generated TOOL_CALL_ARGS event for tool: {}", toolName);
+                        }
+
+                        // Generate TOOL_CALL_END event
+                        String toolCallEndEvent = String
+                            .format(
+                                "{\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"%s\",\"timestamp\":%d}",
+                                toolCallId,
+                                System.currentTimeMillis()
+                            );
+                        sseResponse.append("data: ").append(toolCallEndEvent).append("\n\n");
+                        log.debug("AG-UI: Generated TOOL_CALL_END event for tool: {}", toolName);
+                    }
+
+                    log.info("AG-UI: Successfully converted OpenAI function call to {} AG-UI tool events", toolCalls.size());
+
+                    // For function calls, always add ending events since the frontend takes over tool execution
+                    // The conversation should end here to allow the frontend to execute the tools
+                    String[] endEvents = AGUIStreamingEventManager.getRequiredEndEvents(threadId, runId);
+                    for (String event : endEvents) {
+                        sseResponse.append("data: ").append(event).append("\n\n");
+                    }
+
+                    log.debug("AG-UI: Added ending events for function call - stream should close");
+                    return true;
+                }
+            }
+
+            return false;
+
+        } catch (Exception e) {
+            log.debug("AG-UI: Failed to parse content as OpenAI function call: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Convert JsonObject to Map<String, Object> recursively
+     */
+    private Map<String, Object> jsonObjectToMap(com.google.gson.JsonObject jsonObject) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : jsonObject.entrySet()) {
+            map.put(entry.getKey(), jsonElementToObject(entry.getValue()));
+        }
+        return map;
+    }
+
+    /**
+     * Convert JsonElement to Java Object recursively
+     */
+    private Object jsonElementToObject(com.google.gson.JsonElement element) {
+        if (element.isJsonNull()) {
+            return null;
+        } else if (element.isJsonPrimitive()) {
+            com.google.gson.JsonPrimitive primitive = element.getAsJsonPrimitive();
+            if (primitive.isString()) {
+                return primitive.getAsString();
+            } else if (primitive.isNumber()) {
+                return primitive.getAsNumber();
+            } else if (primitive.isBoolean()) {
+                return primitive.getAsBoolean();
+            }
+        } else if (element.isJsonObject()) {
+            return jsonObjectToMap(element.getAsJsonObject());
+        } else if (element.isJsonArray()) {
+            List<Object> list = new ArrayList<>();
+            for (com.google.gson.JsonElement arrayElement : element.getAsJsonArray()) {
+                list.add(jsonElementToObject(arrayElement));
+            }
+            return list;
+        }
+        return null;
+    }
+
+    /**
+     * Check if content is a raw OpenAI function call chunk that should be filtered out
+     */
+    private boolean isRawOpenAIFunctionCallChunk(String content) {
+        if (content == null || content.isEmpty()) {
+            return false;
+        }
+
+        try {
+            // Check if content looks like OpenAI function call format (streaming chunks)
+            // OpenAI streaming chunks: {"index":0.0,"id":"call_xxx","type":"function",...}
+            boolean isStreamingChunk = content.contains("\"index\":")
+                && (content.contains("\"type\":\"function\"") || content.contains("\"function\":"));
+
+            if (isStreamingChunk) {
+                // Parse as JSON to verify it's a valid OpenAI function call chunk
+                com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(content);
+                if (element.isJsonObject()) {
+                    com.google.gson.JsonObject obj = element.getAsJsonObject();
+                    return obj.has("index") && (obj.has("type") || obj.has("function"));
+                }
+            }
+        } catch (Exception e) {
+            // If parsing fails, it's not a valid JSON chunk
+            log.debug("AG-UI: Content is not valid JSON, not filtering: {}", e.getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Escape special characters in JSON strings
+     */
+    private String escapeJsonString(String input) {
+        if (input == null)
+            return "";
+        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }
