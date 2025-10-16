@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.agui;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -134,22 +135,47 @@ public class AGUIInputConverter {
         try {
             // Find the last user message to use as the current question
             String lastUserMessage = null;
+            String toolCallResults = null;
+
             for (JsonElement messageElement : messages.getAsJsonArray()) {
                 if (messageElement.isJsonObject()) {
                     JsonObject message = messageElement.getAsJsonObject();
                     JsonElement roleElement = message.get("role");
                     JsonElement contentElement = message.get("content");
+                    JsonElement toolCallIdElement = message.get("toolCallId");
 
                     if (roleElement != null
                         && "user".equals(roleElement.getAsString())
                         && contentElement != null
                         && !contentElement.isJsonNull()) {
-                        lastUserMessage = contentElement.getAsString();
+
+                        String content = contentElement.getAsString();
+
+                        // Check if this is a tool call result (has toolCallId field)
+                        if (toolCallIdElement != null && !toolCallIdElement.isJsonNull()) {
+                            // This is a tool call result from frontend
+                            String toolCallId = toolCallIdElement.getAsString();
+
+                            // Create tool result structure
+                            JsonObject toolResult = new JsonObject();
+                            toolResult.addProperty("tool_call_id", toolCallId);
+                            toolResult.addProperty("content", content);
+
+                            toolCallResults = gson.toJson(List.of(toolResult));
+                            log.debug("Extracted tool call result from AG-UI messages: toolCallId={}, content={}", toolCallId, content);
+                        } else {
+                            // Regular user message
+                            lastUserMessage = content;
+                        }
                     }
                 }
             }
 
-            if (lastUserMessage != null) {
+            // Set appropriate parameters based on what was found
+            if (toolCallResults != null) {
+                parameters.put("agui_tool_call_results", toolCallResults);
+                log.debug("Detected AG-UI tool call results: {}", toolCallResults);
+            } else if (lastUserMessage != null) {
                 parameters.put("question", lastUserMessage);
                 log.debug("Extracted user question from AG-UI messages: {}", lastUserMessage);
             } else {
