@@ -172,6 +172,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             mock(SearchResponse.Clusters.class),
             null
         );
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     public void test_DoExecute_admin() {

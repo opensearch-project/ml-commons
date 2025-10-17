@@ -64,6 +64,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
+//@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -167,6 +168,8 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     public void test_NonOwnerChangingAccessContentException() {

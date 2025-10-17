@@ -128,6 +128,8 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     @Test

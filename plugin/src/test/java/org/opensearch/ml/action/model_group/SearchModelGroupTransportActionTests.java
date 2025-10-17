@@ -123,6 +123,8 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         // Simplify the merged query for tests
         when(modelAccessControlHelper.mergeWithAccessFilter(any(QueryBuilder.class), any(Set.class)))
             .thenAnswer(inv -> QueryBuilders.termQuery("dummy", "value"));
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     @Override

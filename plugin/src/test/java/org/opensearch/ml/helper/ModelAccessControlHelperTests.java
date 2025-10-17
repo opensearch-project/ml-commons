@@ -44,6 +44,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -101,6 +102,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     public void setupModelGroup(String owner, String access, List<String> backendRoles) throws IOException {

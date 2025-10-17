@@ -120,10 +120,10 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     public void test_Success() throws IOException {
-
         GetResponse getResponse = prepareMLModelGroup();
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
