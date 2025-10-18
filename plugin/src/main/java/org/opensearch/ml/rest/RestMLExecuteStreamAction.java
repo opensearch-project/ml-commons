@@ -172,6 +172,25 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
 
+                    // Extract backend tool names from agent configuration and add to request for AG-UI filtering
+                    List<String> backendToolNames = extractBackendToolNamesFromAgent(agent);
+                    if (isAGUI && !backendToolNames.isEmpty()) {
+                        // Add backend tool names to request parameters so they're available during streaming
+                        RemoteInferenceInputDataSet inputDataSet =
+                            (RemoteInferenceInputDataSet) ((org.opensearch.ml.common.input.execute.agent.AgentMLInput) mlExecuteTaskRequest
+                                .getInput()).getInputDataset();
+                        inputDataSet.getParameters().put("backend_tool_names", new com.google.gson.Gson().toJson(backendToolNames));
+                        log
+                            .info(
+                                "AG-UI: Added {} backend tool names to request for streaming filter: {}",
+                                backendToolNames.size(),
+                                backendToolNames
+                            );
+                    }
+
+                    // Extract backend tool names from request parameters for AG-UI filtering
+                    List<String> backendToolNamesFromRequest = extractBackendToolNames(mlExecuteTaskRequest);
+
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
                         @Override
@@ -180,7 +199,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 MLTaskResponse response = streamResponse.nextResponse();
 
                                 if (response != null) {
-                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
+                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI, backendToolNamesFromRequest);
                                     channel.sendChunk(responseChunk);
 
                                     // Recursively handle the next response
@@ -362,7 +381,46 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return false;
     }
 
-    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
+    private List<String> extractBackendToolNamesFromAgent(MLAgent agent) {
+        List<String> backendToolNames = new ArrayList<>();
+        if (agent != null && agent.getTools() != null) {
+            for (org.opensearch.ml.common.agent.MLToolSpec toolSpec : agent.getTools()) {
+                if (toolSpec.getName() != null) {
+                    backendToolNames.add(toolSpec.getName());
+                }
+            }
+        }
+        return backendToolNames;
+    }
+
+    private List<String> extractBackendToolNames(MLExecuteTaskRequest request) {
+        if (request.getInput() instanceof org.opensearch.ml.common.input.execute.agent.AgentMLInput) {
+            org.opensearch.ml.common.input.execute.agent.AgentMLInput agentInput =
+                (org.opensearch.ml.common.input.execute.agent.AgentMLInput) request.getInput();
+            org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet inputDataSet =
+                (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+            String backendToolNamesJson = inputDataSet.getParameters().get("backend_tool_names");
+            if (backendToolNamesJson != null && !backendToolNamesJson.isEmpty()) {
+                try {
+                    com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(backendToolNamesJson);
+                    if (element.isJsonArray()) {
+                        List<String> toolNames = new ArrayList<>();
+                        for (com.google.gson.JsonElement toolElement : element.getAsJsonArray()) {
+                            toolNames.add(toolElement.getAsString());
+                        }
+                        log.info("AG-UI: Extracted {} backend tool names for filtering: {}", toolNames.size(), toolNames);
+                        return toolNames;
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse backend_tool_names from request: {}", e.getMessage());
+                }
+            }
+        }
+        return List.of();
+    }
+
+    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent, List<String> backendToolNames) throws IOException {
         String memoryId = "";
         String parentInteractionId = "";
         String content = "";
@@ -400,7 +458,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 // Return an empty chunk that won't be sent to client
                 return createHttpChunk("", false);
             }
-            return convertToAGUIEvent(content, memoryId, parentInteractionId, isLast);
+            return convertToAGUIEvent(content, memoryId, parentInteractionId, isLast, backendToolNames);
         }
 
         // Create ordered tensors
@@ -458,21 +516,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return Map.of();
     }
 
-    @VisibleForTesting
-    BytesReference combineChunks(List<HttpChunk> chunks) {
-        try {
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            for (HttpChunk chunk : chunks) {
-                chunk.content().writeTo(buffer);
-            }
-            return BytesReference.fromByteBuffer(ByteBuffer.wrap(buffer.toByteArray()));
-        } catch (IOException e) {
-            log.error("Failed to combine chunks", e);
-            throw new OpenSearchStatusException("Failed to combine request chunks", RestStatus.INTERNAL_SERVER_ERROR, e);
-        }
-    }
-
-    private HttpChunk convertToAGUIEvent(String content, String memoryId, String parentInteractionId, boolean isLast) throws IOException {
+    private HttpChunk convertToAGUIEvent(
+        String content,
+        String memoryId,
+        String parentInteractionId,
+        boolean isLast,
+        List<String> backendToolNames
+    ) throws IOException {
         StringBuilder sseResponse = new StringBuilder();
 
         // Check if content already contains AG-UI events (JSON array format)
@@ -500,7 +550,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
 
             // Try to parse as OpenAI function call format using existing FunctionCalling logic
-            if (tryParseAsOpenAIFunctionCall(content, sseResponse, memoryId, parentInteractionId, isLast)) {
+            if (tryParseAsOpenAIFunctionCall(content, sseResponse, memoryId, parentInteractionId, isLast, backendToolNames)) {
                 // When we successfully parse function calls and generate RUN_FINISHED, this should be the last chunk
                 return createHttpChunk(sseResponse.toString(), true);
             }
@@ -570,12 +620,14 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Try to parse content as OpenAI function call format and convert to AG-UI tool events.
      * Uses the existing FunctionCalling infrastructure to parse OpenAI responses.
+     * Filters out backend tools from being converted to AG-UI events.
      *
      * @param content Raw content from LLM response
      * @param sseResponse StringBuilder to append AG-UI events
      * @param memoryId Memory ID for thread identification
      * @param parentInteractionId Parent interaction ID for run identification
      * @param isLast Whether this is the last chunk in the stream
+     * @param backendToolNames List of backend tool names to filter out
      * @return true if content was successfully parsed as OpenAI function call, false otherwise
      */
     private boolean tryParseAsOpenAIFunctionCall(
@@ -583,7 +635,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         StringBuilder sseResponse,
         String memoryId,
         String parentInteractionId,
-        boolean isLast
+        boolean isLast,
+        List<String> backendToolNames
     ) {
         try {
             // Check if content looks like OpenAI function call format (streaming chunks OR complete response)
@@ -663,11 +716,20 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         sseResponse.append("data: ").append(event).append("\n\n");
                     }
 
-                    // Generate tool call events for each tool call
+                    // Generate tool call events for each tool call, filtering out backend tools
+                    int frontendToolCallCount = 0;
                     for (Map<String, String> toolCall : toolCalls) {
                         String toolName = toolCall.get("tool_name");
                         String toolInput = toolCall.get("tool_input");
                         String toolCallId = toolCall.get("tool_call_id");
+
+                        // Skip backend tools - they will be executed in the ReAct loop
+                        if (backendToolNames != null && backendToolNames.contains(toolName)) {
+                            log.info("AG-UI: Skipping backend tool '{}' from AG-UI events - will be executed in ReAct loop", toolName);
+                            continue;
+                        }
+
+                        frontendToolCallCount++;
 
                         // Generate TOOL_CALL_START event
                         String toolCallStartEvent = String
@@ -678,7 +740,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 System.currentTimeMillis()
                             );
                         sseResponse.append("data: ").append(toolCallStartEvent).append("\n\n");
-                        log.debug("AG-UI: Generated TOOL_CALL_START event for tool: {}", toolName);
+                        log.debug("AG-UI: Generated TOOL_CALL_START event for frontend tool: {}", toolName);
 
                         // Generate TOOL_CALL_ARGS event
                         if (toolInput != null && !toolInput.isEmpty()) {
@@ -690,7 +752,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                     System.currentTimeMillis()
                                 );
                             sseResponse.append("data: ").append(toolCallArgsEvent).append("\n\n");
-                            log.debug("AG-UI: Generated TOOL_CALL_ARGS event for tool: {}", toolName);
+                            log.debug("AG-UI: Generated TOOL_CALL_ARGS event for frontend tool: {}", toolName);
                         }
 
                         // Generate TOOL_CALL_END event
@@ -701,10 +763,21 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 System.currentTimeMillis()
                             );
                         sseResponse.append("data: ").append(toolCallEndEvent).append("\n\n");
-                        log.debug("AG-UI: Generated TOOL_CALL_END event for tool: {}", toolName);
+                        log.debug("AG-UI: Generated TOOL_CALL_END event for frontend tool: {}", toolName);
                     }
 
-                    log.info("AG-UI: Successfully converted OpenAI function call to {} AG-UI tool events", toolCalls.size());
+                    // Only return true if we generated events for frontend tools
+                    if (frontendToolCallCount == 0) {
+                        log.info("AG-UI: All tool calls were backend tools - not generating AG-UI events");
+                        return false;
+                    }
+
+                    log
+                        .info(
+                            "AG-UI: Successfully converted OpenAI function call to {} AG-UI tool events (filtered {} backend tools)",
+                            frontendToolCallCount,
+                            toolCalls.size() - frontendToolCallCount
+                        );
 
                     // For function calls, always add ending events since the frontend takes over tool execution
                     // The conversation should end here to allow the frontend to execute the tools
