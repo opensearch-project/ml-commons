@@ -305,7 +305,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         String tenantId,
         ActionListener<Object> listener,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Map<String, Tool> backendTools
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -435,19 +436,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     if (tools.containsKey(action)) {
-                        // Check if this is a frontend tool
-                        Tool tool = tools.get(action);
-                        boolean isFrontendTool = false;
-                        if (tool.getAttributes() != null && "frontend".equals(tool.getAttributes().get("source"))) {
-                            isFrontendTool = true;
-                        }
+                        // Check if this is a backend tool - if it is, execute it normally in the ReAct loop
+                        // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
+                        boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
+                        boolean isFrontendTool = !isBackendTool;
 
                         log
                             .info(
-                                "AG-UI: Tool execution request - action: {}, isFrontendTool: {}, toolAttributes: {}",
+                                "AG-UI: Tool execution request - action: {}, isBackendTool: {}, isFrontendTool: {}",
                                 action,
-                                isFrontendTool,
-                                tool.getAttributes()
+                                isBackendTool,
+                                isFrontendTool
                             );
 
                         if (isFrontendTool) {
@@ -1192,6 +1191,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params.put("frontend_tools_json", gson.toJson(frontendTools));
         }
 
+        // Store backend tool names so streaming handler can filter them out from AG-UI events
+        if (!backendToolsMap.isEmpty()) {
+            List<String> backendToolNames = new ArrayList<>(backendToolsMap.keySet());
+            params.put("backend_tool_names", gson.toJson(backendToolNames));
+            log.info("AG-UI Debug: Stored {} backend tool names for streaming filter: {}", backendToolNames.size(), backendToolNames);
+        }
+
         log
             .info(
                 "AG-UI Debug: Created unified tool map with {} total tools ({} frontend + {} backend)",
@@ -1201,6 +1207,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             );
 
         // Call runReAct with unified tools - both frontend and backend tools will be visible to LLM
+        // Pass backendToolsMap so runReAct can distinguish between frontend and backend tools
         runReAct(
             mlAgent.getLlm(),
             unifiedToolsMap,
@@ -1210,7 +1217,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
             sessionId,
             mlAgent.getTenantId(),
             listener,
-            functionCalling
+            functionCalling,
+            backendToolsMap
         );
     }
 
@@ -1252,14 +1260,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                 // Call LLM with tool results to generate final response
                 if (!llmMessages.isEmpty()) {
+                    // Add tool result messages to interactions so they're included in the LLM context
+                    List<String> interactions = new ArrayList<>();
+                    for (LLMMessage llmMessage : llmMessages) {
+                        interactions.add(llmMessage.getResponse());
+                    }
+                    
+                    // Update parameters with the tool result interactions
+                    Map<String, String> updatedParams = new HashMap<>(params);
+                    if (!interactions.isEmpty()) {
+                        updatedParams.put(INTERACTIONS, ", " + String.join(", ", interactions));
+                        log.info("AG-UI: Added {} tool result interactions to LLM context", interactions.size());
+                    }
+
                     // Use the existing runReAct pattern for LLM execution
                     Map<String, Tool> emptyTools = new HashMap<>();
                     Map<String, MLToolSpec> emptyToolSpecs = new HashMap<>();
-
-                    // Update parameters with the processed tool results
-                    Map<String, String> updatedParams = new HashMap<>(params);
-                    // The tool results have already been processed by functionCalling.supply()
-                    // Now we can proceed with standard LLM execution
 
                     runReAct(
                         mlAgent.getLlm(),
@@ -1270,7 +1286,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         sessionId,
                         mlAgent.getTenantId(),
                         listener,
-                        functionCalling
+                        functionCalling,
+                        emptyTools  // No backend tools when processing tool results
                     );
                 } else {
                     listener.onFailure(new RuntimeException("No LLM messages generated from tool results"));
@@ -1388,7 +1405,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         sessionId,
                         mlAgent.getTenantId(),
                         listener,
-                        functionCalling
+                        functionCalling,
+                        emptyTools  // No backend tools in this context
                     );
                 } else {
                     listener.onFailure(new RuntimeException("No question found for AG-UI tool call generation"));

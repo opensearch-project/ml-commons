@@ -394,18 +394,73 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 return;
             }
 
+            // Check for tool result messages and extract them
+            // Also track which messages have tool calls so we can include them in chat history
+            List<Map<String, String>> toolResults = new ArrayList<>();
+            List<Integer> toolCallMessageIndices = new ArrayList<>();
+            
+            for (int i = 0; i < messageArray.size(); i++) {
+                JsonElement messageElement = messageArray.get(i);
+                if (messageElement.isJsonObject()) {
+                    JsonObject message = messageElement.getAsJsonObject();
+                    String role = getStringField(message, "role");
+                    
+                    // Track assistant messages with tool calls
+                    if ("assistant".equals(role) && message.has("toolCalls")) {
+                        toolCallMessageIndices.add(i);
+                        log.debug("AG-UI: Found assistant message with tool calls at index {}", i);
+                    }
+                    
+                    if ("tool".equals(role)) {
+                        String content = getStringField(message, "content");
+                        String toolCallId = getStringField(message, "toolCallId");
+                        
+                        if (content != null && toolCallId != null) {
+                            Map<String, String> toolResult = new HashMap<>();
+                            toolResult.put("tool_call_id", toolCallId);
+                            toolResult.put("content", content);
+                            toolResults.add(toolResult);
+                            log.info("AG-UI: Extracted tool result for toolCallId: {}", toolCallId);
+                        }
+                    }
+                }
+            }
+            
+            // If we found tool results, add them to params so they can be processed
+            if (!toolResults.isEmpty()) {
+                params.put("agui_tool_call_results", gson.toJson(toolResults));
+                params.put("agui_tool_call_message_indices", gson.toJson(toolCallMessageIndices));
+                log.info("AG-UI: Found {} tool results in messages, added to params", toolResults.size());
+            }
+
             String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
             String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
 
             if (chatHistoryQuestionTemplate == null || chatHistoryResponseTemplate == null) {
 
                 StringBuilder chatHistoryBuilder = new StringBuilder();
+                
+                // Find the first tool call message index to know where to stop building chat history
+                int firstToolCallIndex = toolCallMessageIndices.isEmpty() ? messageArray.size() : toolCallMessageIndices.get(0);
+                
                 for (int i = 0; i < messageArray.size() - 1; i++) {
                     JsonElement messageElement = messageArray.get(i);
                     if (messageElement.isJsonObject()) {
                         JsonObject message = messageElement.getAsJsonObject();
                         String role = getStringField(message, "role");
                         String content = getStringField(message, "content");
+
+                        // Skip tool messages - they're handled separately via interactions
+                        if ("tool".equals(role)) {
+                            continue;
+                        }
+
+                        // Skip assistant messages with tool calls and any messages after them
+                        // They'll be handled by the function calling interface
+                        if (i >= firstToolCallIndex) {
+                            log.debug("AG-UI: Skipping message at index {} (after tool call sequence)", i);
+                            continue;
+                        }
 
                         if (("user".equals(role) || "assistant".equals(role)) && content != null && !content.isEmpty()) {
                             if (chatHistoryBuilder.length() > 0) {
@@ -422,12 +477,28 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 }
             } else {
                 List<String> chatHistory = new ArrayList<>();
+                
+                // Find the first tool call message index to know where to stop building chat history
+                int firstToolCallIndex = toolCallMessageIndices.isEmpty() ? messageArray.size() : toolCallMessageIndices.get(0);
+                
                 for (int i = 0; i < messageArray.size() - 1; i++) {
                     JsonElement messageElement = messageArray.get(i);
                     if (messageElement.isJsonObject()) {
                         JsonObject message = messageElement.getAsJsonObject();
                         String role = getStringField(message, "role");
                         String content = getStringField(message, "content");
+
+                        // Skip tool messages - they're handled separately via interactions
+                        if ("tool".equals(role)) {
+                            continue;
+                        }
+
+                        // Skip assistant messages with tool calls and any messages after them
+                        // They'll be handled by the function calling interface
+                        if (i >= firstToolCallIndex) {
+                            log.debug("AG-UI: Skipping message at index {} (after tool call sequence)", i);
+                            continue;
+                        }
 
                         if (content != null && !content.isEmpty()) {
                             Map<String, String> messageParams = new HashMap<>();
