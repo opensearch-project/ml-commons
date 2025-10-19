@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +58,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -76,8 +78,6 @@ import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -177,78 +177,60 @@ public class MLChatAgentRunner implements MLAgentRunner {
             functionCalling.configure(params);
         }
 
-        String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
-        String appType = mlAgent.getAppType();
-        String title = params.get(MLAgentExecutor.QUESTION);
         String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
         String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
-                List<Message> messageList = new ArrayList<>();
-                for (Interaction next : r) {
-                    String question = next.getInput();
-                    String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when have final answer,
-                    // filter out those in-flight requests when run in parallel
-                    if (Strings.isNullOrEmpty(response)) {
-                        continue;
-                    }
-                    messageList
-                        .add(
-                            ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
-                                .question(question)
-                                .response(response)
-                                .build()
-                        );
-                }
-                if (!messageList.isEmpty()) {
-                    if (chatHistoryQuestionTemplate == null) {
-                        StringBuilder chatHistoryBuilder = new StringBuilder();
-                        chatHistoryBuilder.append(chatHistoryPrefix);
-                        for (Message message : messageList) {
-                            chatHistoryBuilder.append(message.toString()).append("\n");
-                        }
-                        params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+        createMemoryAdapter(mlAgent, params, ActionListener.wrap(memoryOrAdapter -> {
+            log.debug("createMemoryAdapter callback: memoryOrAdapter type = {}", memoryOrAdapter.getClass().getSimpleName());
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-                    } else {
-                        List<String> chatHistory = new ArrayList<>();
-                        for (Message message : messageList) {
-                            Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+            if (memoryOrAdapter instanceof ConversationIndexMemory) {
+                // Existing ConversationIndex flow - zero changes
+                ConversationIndexMemory memory = (ConversationIndexMemory) memoryOrAdapter;
+                memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+                    processLegacyInteractions(
+                        r,
+                        memory.getConversationId(),
+                        memory,
+                        mlAgent,
+                        params,
+                        inputParams,
+                        chatHistoryPrefix,
+                        chatHistoryQuestionTemplate,
+                        chatHistoryResponseTemplate,
+                        functionCalling,
+                        listener
+                    );
+                }, e -> {
+                    log.error("Failed to get chat history", e);
+                    listener.onFailure(e);
+                }), messageHistoryLimit);
 
-                            StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
-                            chatHistory.add(chatQuestionMessage);
+            } else if (memoryOrAdapter instanceof ChatMemoryAdapter) {
+                // Modern Pipeline - NEW ChatMessage processing
+                log.debug("Routing to modern ChatMemoryAdapter pipeline");
+                ChatMemoryAdapter adapter = (ChatMemoryAdapter) memoryOrAdapter;
+                adapter.getMessages(ActionListener.wrap(chatMessages -> {
+                    // Use NEW ChatMessage-based processing (no conversion to Interaction)
+                    processModernChatMessages(
+                        chatMessages,
+                        adapter.getConversationId(),
+                        adapter,  // Add ChatMemoryAdapter parameter
+                        mlAgent,
+                        params,
+                        inputParams,
+                        functionCalling,
+                        listener
+                    );
+                }, e -> {
+                    log.error("Failed to get chat history from modern memory adapter", e);
+                    listener.onFailure(e);
+                }));
 
-                            messageParams.clear();
-                            messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
-                            substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
-                            chatHistory.add(chatResponseMessage);
-                        }
-                        params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                        params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                    }
-                }
-
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
-            }, e -> {
-                log.error("Failed to get chat history", e);
-                listener.onFailure(e);
-            }), messageHistoryLimit);
+            } else {
+                listener.onFailure(new IllegalArgumentException("Unsupported memory type: " + memoryOrAdapter.getClass()));
+            }
         }, listener::onFailure));
     }
 
@@ -256,7 +238,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         MLAgent mlAgent,
         Map<String, String> params,
         ActionListener<Object> listener,
-        Memory memory,
+        Object memoryOrSessionId, // Can be Memory object or String sessionId
         String sessionId,
         FunctionCalling functionCalling
     ) {
@@ -267,7 +249,71 @@ public class MLChatAgentRunner implements MLAgentRunner {
             Map<String, Tool> tools = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
             createTools(toolFactories, params, allToolSpecs, tools, toolSpecMap, mlAgent);
-            runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener, functionCalling);
+
+            // Route to correct runReAct method based on memory type
+            if (memoryOrSessionId instanceof Memory) {
+                // Legacy ConversationIndex path
+                Memory actualMemory = (Memory) memoryOrSessionId;
+                runReAct(
+                    mlAgent.getLlm(),
+                    tools,
+                    toolSpecMap,
+                    params,
+                    actualMemory,
+                    sessionId,
+                    mlAgent.getTenantId(),
+                    listener,
+                    functionCalling
+                );
+            } else {
+                // Modern agentic memory path - create ChatMemoryAdapter
+                String memoryContainerId = params.get("memory_container_id");
+                String ownerId = params.get("owner_id");
+
+                log
+                    .debug(
+                        "Agentic memory path: memoryContainerId={}, ownerId={}, sessionId={}, allParams={}",
+                        memoryContainerId,
+                        ownerId,
+                        sessionId,
+                        params.keySet()
+                    );
+
+                if (memoryContainerId != null && ownerId != null) {
+                    AgenticMemoryAdapter chatMemoryAdapter = new AgenticMemoryAdapter(client, memoryContainerId, sessionId, ownerId);
+                    runReAct(
+                        mlAgent.getLlm(),
+                        tools,
+                        toolSpecMap,
+                        params,
+                        chatMemoryAdapter,
+                        sessionId,
+                        mlAgent.getTenantId(),
+                        listener,
+                        functionCalling
+                    );
+                } else {
+                    // Missing required parameters for agentic memory
+                    log
+                        .error(
+                            "Agentic memory requested but missing required parameters. "
+                                + "memory_container_id: {}, owner_id: {}, available params: {}",
+                            memoryContainerId,
+                            ownerId,
+                            params.keySet()
+                        );
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Agentic memory requires 'memory_container_id' and 'owner_id' parameters. "
+                                    + "Provided: memory_container_id="
+                                    + memoryContainerId
+                                    + ", owner_id="
+                                    + ownerId
+                            )
+                        );
+                }
+            }
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -387,17 +433,32 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .build()
                         );
 
-                    saveTraceData(
-                        conversationIndexMemory,
-                        memory.getType(),
-                        question,
-                        thoughtResponse,
-                        sessionId,
-                        traceDisabled,
-                        parentInteractionId,
-                        traceNumber,
-                        "LLM"
-                    );
+                    // Save trace data using appropriate memory adapter
+                    if (memory instanceof ConversationIndexMemory) {
+                        saveTraceData(
+                            (ConversationIndexMemory) memory,
+                            memory.getType(),
+                            question,
+                            thoughtResponse,
+                            sessionId,
+                            traceDisabled,
+                            parentInteractionId,
+                            traceNumber,
+                            "LLM"
+                        );
+                    } else if (memory instanceof ChatMemoryAdapter) {
+                        saveTraceData(
+                            (ChatMemoryAdapter) memory,
+                            memory.getType(),
+                            question,
+                            thoughtResponse,
+                            sessionId,
+                            traceDisabled,
+                            parentInteractionId,
+                            traceNumber,
+                            "LLM"
+                        );
+                    }
 
                     if (nextStepListener == null) {
                         handleMaxIterationsReached(
@@ -466,17 +527,32 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
-                    saveTraceData(
-                        conversationIndexMemory,
-                        "ReAct",
-                        lastActionInput.get(),
-                        outputToOutputString(filteredOutput),
-                        sessionId,
-                        traceDisabled,
-                        parentInteractionId,
-                        traceNumber,
-                        lastAction.get()
-                    );
+                    // Save trace data using appropriate memory adapter
+                    if (memory instanceof ConversationIndexMemory) {
+                        saveTraceData(
+                            (ConversationIndexMemory) memory,
+                            "ReAct",
+                            lastActionInput.get(),
+                            outputToOutputString(filteredOutput),
+                            sessionId,
+                            traceDisabled,
+                            parentInteractionId,
+                            traceNumber,
+                            lastAction.get()
+                        );
+                    } else if (memory instanceof ChatMemoryAdapter) {
+                        saveTraceData(
+                            (ChatMemoryAdapter) memory,
+                            "ReAct",
+                            lastActionInput.get(),
+                            outputToOutputString(filteredOutput),
+                            sessionId,
+                            traceDisabled,
+                            parentInteractionId,
+                            traceNumber,
+                            lastAction.get()
+                        );
+                    }
 
                     StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
                     newPrompt.set(substitutor.replace(finalPrompt));
@@ -581,7 +657,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
                 list.add(outputString);
             } else {
-                additionalInfo.put(toolOutputKey, Lists.newArrayList(outputString));
+                additionalInfo.put(toolOutputKey, new ArrayList<>(Collections.singletonList(outputString)));
             }
         }
     }
@@ -705,6 +781,45 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
+    /**
+     * Overloaded saveTraceData method for ChatMemoryAdapter
+     */
+    public static void saveTraceData(
+        ChatMemoryAdapter chatMemoryAdapter,
+        String memoryType,
+        String question,
+        String thoughtResponse,
+        String sessionId,
+        boolean traceDisabled,
+        String parentInteractionId,
+        AtomicInteger traceNumber,
+        String origin
+    ) {
+        if (chatMemoryAdapter != null && !traceDisabled) {
+            // Save trace data as tool invocation data in working memory
+            chatMemoryAdapter
+                .saveTraceData(
+                    origin,                    // toolName (LLM, ReAct, etc.)
+                    question,                  // toolInput
+                    thoughtResponse,           // toolOutput
+                    parentInteractionId,       // parentMemoryId
+                    traceNumber.addAndGet(1),  // traceNum
+                    origin,                    // action
+                    ActionListener
+                        .wrap(
+                            r -> log
+                                .debug(
+                                    "Successfully saved trace data via ChatMemoryAdapter for session: {}, origin: {}",
+                                    sessionId,
+                                    origin
+                                ),
+                            e -> log
+                                .warn("Failed to save trace data via ChatMemoryAdapter for session: {}, origin: {}", sessionId, origin, e)
+                        )
+                );
+        }
+    }
+
     private void sendFinalAnswer(
         String sessionId,
         ActionListener<Object> listener,
@@ -753,6 +868,51 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 traceDisabled,
                 saveTraceListener
             );
+        } else {
+            streamingWrapper
+                .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
+        }
+    }
+
+    /**
+     * Overloaded sendFinalAnswer method for modern ChatMemoryAdapter pipeline
+     */
+    private void sendFinalAnswer(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> cotModelTensors,
+        ChatMemoryAdapter chatMemoryAdapter,  // Modern parameter
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        String finalAnswer
+    ) {
+        // Send completion chunk for streaming
+        streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
+
+        if (chatMemoryAdapter != null) {
+            String copyOfFinalAnswer = finalAnswer;
+            ActionListener saveTraceListener = ActionListener.wrap(r -> {
+                // For ChatMemoryAdapter, we don't have separate updateInteraction
+                // The saveInteraction method handles the complete saving
+                streamingWrapper
+                    .sendFinalResponse(
+                        sessionId,
+                        listener,
+                        parentInteractionId,
+                        verbose,
+                        cotModelTensors,
+                        additionalInfo,
+                        copyOfFinalAnswer
+                    );
+            }, listener::onFailure);
+
+            // Use ChatMemoryAdapter's saveInteraction method
+            chatMemoryAdapter
+                .saveInteraction(question, finalAnswer, parentInteractionId, traceNumber.addAndGet(1), "LLM", saveTraceListener);
         } else {
             streamingWrapper
                 .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
@@ -863,7 +1023,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     ModelTensor
                         .builder()
                         .name("response")
-                        .dataAsMap(ImmutableMap.of("response", finalAnswer2, ADDITIONAL_INFO_FIELD, additionalInfo))
+                        .dataAsMap(Map.of("response", finalAnswer2, ADDITIONAL_INFO_FIELD, additionalInfo))
                         .build()
                 )
         );
@@ -908,6 +1068,305 @@ public class MLChatAgentRunner implements MLAgentRunner {
         cleanUpResource(tools);
     }
 
+    /**
+     * Overloaded handleMaxIterationsReached method for ChatMemoryAdapter
+     */
+    private void handleMaxIterationsReached(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> traceTensors,
+        ChatMemoryAdapter chatMemoryAdapter,  // Modern parameter
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        AtomicReference<String> lastThought,
+        int maxIterations,
+        Map<String, Tool> tools
+    ) {
+        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        sendFinalAnswer(
+            sessionId,
+            listener,
+            question,
+            parentInteractionId,
+            verbose,
+            traceDisabled,
+            traceTensors,
+            chatMemoryAdapter,  // Use ChatMemoryAdapter instead of ConversationIndexMemory
+            traceNumber,
+            additionalInfo,
+            incompleteResponse
+        );
+        cleanUpResource(tools);
+    }
+
+    /**
+     * Complete runReAct method for modern ChatMemoryAdapter pipeline
+     * This method handles the new memory types (agentic, remote, bedrock, etc.)
+     * 
+     * Full implementation with complete ReAct loop, tool execution, trace saving, and streaming.
+     */
+    private void runReAct(
+        LLMSpec llm,
+        Map<String, Tool> tools,
+        Map<String, MLToolSpec> toolSpecMap,
+        Map<String, String> parameters,
+        ChatMemoryAdapter chatMemoryAdapter,  // Modern parameter
+        String sessionId,
+        String tenantId,
+        ActionListener<Object> listener,
+        FunctionCalling functionCalling
+    ) {
+        Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
+        String prompt = constructLLMPrompt(tools, tmpParameters);
+        tmpParameters.put(PROMPT, prompt);
+        final String finalPrompt = prompt;
+
+        String question = tmpParameters.get(MLAgentExecutor.QUESTION);
+        String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+        boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
+        boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
+
+        // Trace number
+        AtomicInteger traceNumber = new AtomicInteger(0);
+
+        AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
+        AtomicReference<String> lastThought = new AtomicReference<>();
+        AtomicReference<String> lastAction = new AtomicReference<>();
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
+        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+        Map<String, String> lastToolParams = new ConcurrentHashMap<>();
+
+        StepListener firstListener = new StepListener<MLTaskResponse>();
+        lastLlmListener.set(firstListener);
+        StepListener<?> lastStepListener = firstListener;
+
+        StringBuilder scratchpadBuilder = new StringBuilder();
+        List<String> interactions = new CopyOnWriteArrayList<>();
+
+        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
+        AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
+        tmpParameters.put(PROMPT, newPrompt.get());
+        List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
+        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
+
+        for (int i = 0; i < maxIterations; i++) {
+            int finalI = i;
+            StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
+
+            lastStepListener.whenComplete(output -> {
+                StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
+                if (finalI % 2 == 0) {
+                    MLTaskResponse llmResponse = (MLTaskResponse) output;
+                    ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
+                    List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
+                    Map<String, String> modelOutput = parseLLMOutput(
+                        parameters,
+                        tmpModelTensorOutput,
+                        llmResponsePatterns,
+                        tools.keySet(),
+                        interactions,
+                        functionCalling
+                    );
+
+                    streamingWrapper.fixInteractionRole(interactions);
+                    String thought = String.valueOf(modelOutput.get(THOUGHT));
+                    String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
+                    String action = String.valueOf(modelOutput.get(ACTION));
+                    String actionInput = String.valueOf(modelOutput.get(ACTION_INPUT));
+                    String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
+                    String finalAnswer = modelOutput.get(FINAL_ANSWER);
+
+                    if (finalAnswer != null) {
+                        finalAnswer = finalAnswer.trim();
+                        sendFinalAnswer(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            chatMemoryAdapter,  // Use ChatMemoryAdapter instead of ConversationIndexMemory
+                            traceNumber,
+                            additionalInfo,
+                            finalAnswer
+                        );
+                        cleanUpResource(tools);
+                        return;
+                    }
+
+                    sessionMsgAnswerBuilder.append(thought);
+                    lastThought.set(thought);
+                    lastAction.set(action);
+                    lastActionInput.set(actionInput);
+                    lastToolSelectionResponse.set(thoughtResponse);
+
+                    traceTensors
+                        .add(
+                            ModelTensors
+                                .builder()
+                                .mlModelTensors(List.of(ModelTensor.builder().name("response").result(thoughtResponse).build()))
+                                .build()
+                        );
+
+                    // Save trace data using ChatMemoryAdapter
+                    saveTraceData(
+                        chatMemoryAdapter,
+                        "ChatMemoryAdapter",  // Memory type for modern pipeline
+                        question,
+                        thoughtResponse,
+                        sessionId,
+                        traceDisabled,
+                        parentInteractionId,
+                        traceNumber,
+                        "LLM"
+                    );
+
+                    if (nextStepListener == null) {
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            chatMemoryAdapter,  // Use ChatMemoryAdapter
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
+                        );
+                        return;
+                    }
+
+                    if (tools.containsKey(action)) {
+                        Map<String, String> toolParams = constructToolParams(
+                            tools,
+                            toolSpecMap,
+                            question,
+                            lastActionInput,
+                            action,
+                            actionInput
+                        );
+                        lastToolParams.clear();
+                        lastToolParams.putAll(toolParams);
+                        runTool(
+                            tools,
+                            toolSpecMap,
+                            tmpParameters,
+                            (ActionListener<Object>) nextStepListener,
+                            action,
+                            actionInput,
+                            toolParams,
+                            interactions,
+                            toolCallId,
+                            functionCalling
+                        );
+
+                    } else {
+                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        StringSubstitutor substitutor = new StringSubstitutor(
+                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                            "${parameters.",
+                            "}"
+                        );
+                        newPrompt.set(substitutor.replace(finalPrompt));
+                        tmpParameters.put(PROMPT, newPrompt.get());
+                        ((ActionListener<Object>) nextStepListener).onResponse(res);
+                    }
+                } else {
+                    Object filteredOutput = filterToolOutput(lastToolParams, output);
+                    addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
+
+                    String toolResponse = constructToolResponse(
+                        tmpParameters,
+                        lastAction,
+                        lastActionInput,
+                        lastToolSelectionResponse,
+                        filteredOutput
+                    );
+                    scratchpadBuilder.append(toolResponse).append("\n\n");
+
+                    // Save trace data for tool response using ChatMemoryAdapter
+                    saveTraceData(
+                        chatMemoryAdapter,
+                        "ReAct",
+                        lastActionInput.get(),
+                        outputToOutputString(filteredOutput),
+                        sessionId,
+                        traceDisabled,
+                        parentInteractionId,
+                        traceNumber,
+                        lastAction.get()
+                    );
+
+                    StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
+                    newPrompt.set(substitutor.replace(finalPrompt));
+                    tmpParameters.put(PROMPT, newPrompt.get());
+                    if (!interactions.isEmpty()) {
+                        tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
+                    }
+
+                    sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
+                    streamingWrapper.sendToolResponse(outputToOutputString(output), sessionId, parentInteractionId);
+                    traceTensors
+                        .add(
+                            ModelTensors
+                                .builder()
+                                .mlModelTensors(
+                                    Collections
+                                        .singletonList(
+                                            ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build()
+                                        )
+                                )
+                                .build()
+                        );
+
+                    if (finalI == maxIterations - 1) {
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            chatMemoryAdapter,  // Use ChatMemoryAdapter
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
+                        );
+                        return;
+                    }
+
+                    if (nextStepListener != null) {
+                        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+                        streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
+                    }
+                }
+            }, listener::onFailure);
+
+            if (i == 0) {
+                ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+                streamingWrapper.executeRequest(request, firstListener);
+            }
+            if (nextStepListener != null) {
+                lastStepListener = nextStepListener;
+            }
+        }
+    }
+
     private void saveMessage(
         ConversationIndexMemory memory,
         String question,
@@ -931,6 +1390,173 @@ public class MLChatAgentRunner implements MLAgentRunner {
             listener.onResponse(true);
         } else {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+        }
+    }
+
+    /**
+     * Process modern ChatMessage format and build chat history using enhanced templates
+     */
+    private void processModernChatMessages(
+        List<ChatMessage> chatMessages,
+        String sessionId,
+        ChatMemoryAdapter chatMemoryAdapter,  // Add ChatMemoryAdapter parameter
+        MLAgent mlAgent,
+        Map<String, String> params,
+        Map<String, String> inputParams,
+        FunctionCalling functionCalling,
+        ActionListener<Object> listener
+    ) {
+        // Use new enhanced template system for ChatMessage
+        SimpleChatHistoryTemplateEngine templateEngine = new SimpleChatHistoryTemplateEngine();
+
+        // Filter out empty content messages (in-flight requests)
+        List<ChatMessage> validMessages = chatMessages
+            .stream()
+            .filter(msg -> msg.getContent() != null && !msg.getContent().trim().isEmpty())
+            .toList();
+
+        if (!validMessages.isEmpty()) {
+            // Build chat history using enhanced template system
+            String chatHistory = templateEngine.buildSimpleChatHistory(validMessages);
+            params.put(CHAT_HISTORY, chatHistory);
+            inputParams.put(CHAT_HISTORY, chatHistory);
+        }
+
+        // Run agent with modern processing (no Memory object needed)
+        runAgent(mlAgent, params, listener, sessionId, sessionId, functionCalling);
+    }
+
+    /**
+     * Process legacy interactions (ConversationIndex) and build chat history, then run the agent
+     */
+    private void processLegacyInteractions(
+        List<Interaction> interactions,
+        String sessionId,
+        ConversationIndexMemory memory,
+        MLAgent mlAgent,
+        Map<String, String> params,
+        Map<String, String> inputParams,
+        String chatHistoryPrefix,
+        String chatHistoryQuestionTemplate,
+        String chatHistoryResponseTemplate,
+        FunctionCalling functionCalling,
+        ActionListener<Object> listener
+    ) {
+        List<Message> messageList = new ArrayList<>();
+        for (Interaction next : interactions) {
+            String question = next.getInput();
+            String response = next.getResponse();
+            // As we store the conversation with empty response first and then update when have final answer,
+            // filter out those in-flight requests when run in parallel
+            if (Strings.isNullOrEmpty(response)) {
+                continue;
+            }
+            messageList
+                .add(
+                    ConversationIndexMessage
+                        .conversationIndexMessageBuilder()
+                        .sessionId(sessionId)
+                        .question(question)
+                        .response(response)
+                        .build()
+                );
+        }
+
+        if (!messageList.isEmpty()) {
+            if (chatHistoryQuestionTemplate == null) {
+                StringBuilder chatHistoryBuilder = new StringBuilder();
+                chatHistoryBuilder.append(chatHistoryPrefix);
+                for (Message message : messageList) {
+                    chatHistoryBuilder.append(message.toString()).append("\n");
+                }
+                params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+
+                // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+            } else {
+                List<String> chatHistory = new ArrayList<>();
+                for (Message message : messageList) {
+                    Map<String, String> messageParams = new HashMap<>();
+                    messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+
+                    StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                    String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                    chatHistory.add(chatQuestionMessage);
+
+                    messageParams.clear();
+                    messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
+                    substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                    String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
+                    chatHistory.add(chatResponseMessage);
+                }
+                params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+
+                // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+            }
+        }
+
+        runAgent(mlAgent, params, listener, memory != null ? memory : sessionId, sessionId, functionCalling);
+    }
+
+    /**
+     * Create appropriate memory adapter based on memory type
+     */
+    private void createMemoryAdapter(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
+        String memoryType = mlAgent.getMemory().getType();
+        MLMemoryType type = MLMemoryType.from(memoryType);
+
+        log.debug("MLChatAgentRunner.createMemoryAdapter: memoryType={}, params={}", memoryType, params.keySet());
+
+        switch (type) {
+            case CONVERSATION_INDEX:
+                // Keep existing flow - no adapter needed (zero risk approach)
+                ConversationIndexMemory.Factory factory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
+                String title = params.get(MLAgentExecutor.QUESTION);
+                String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+                String appType = mlAgent.getAppType();
+
+                factory.create(title, memoryId, appType, ActionListener.wrap(conversationMemory -> {
+                    // Return ConversationIndexMemory directly - no conversion needed
+                    listener.onResponse(conversationMemory);
+                }, listener::onFailure));
+                break;
+
+            case AGENTIC_MEMORY:
+                // New agentic memory path
+                String memoryContainerId = params.get("memory_container_id");
+                String sessionId = params.get("session_id");
+                String ownerId = params.get("owner_id"); // From user context
+
+                log.debug("AGENTIC_MEMORY path: memoryContainerId={}, sessionId={}, ownerId={}", memoryContainerId, sessionId, ownerId);
+
+                // Validate required parameters
+                if (memoryContainerId == null) {
+                    log.error("AGENTIC_MEMORY validation failed: memory_container_id is null. Available params: {}", params.keySet());
+                    listener.onFailure(new IllegalArgumentException("memory_container_id is required for agentic memory"));
+                    return;
+                }
+
+                // Session management: same pattern as ConversationIndex
+                if (Strings.isEmpty(sessionId)) {
+                    // CREATE NEW: Generate new session ID if not provided
+                    sessionId = UUID.randomUUID().toString();
+                    log.debug("Created new agentic memory session: {}", sessionId);
+                }
+                // USE EXISTING: If sessionId provided, use it directly
+
+                AgenticMemoryAdapter adapter = new AgenticMemoryAdapter(client, memoryContainerId, sessionId, ownerId);
+                log.debug("Created AgenticMemoryAdapter successfully: memoryContainerId={}, sessionId={}", memoryContainerId, sessionId);
+                listener.onResponse(adapter);
+                break;
+
+            default:
+                // Future memory types will be added here:
+                // - REMOTE_AGENTIC_MEMORY: RemoteAgenticMemoryAdapter (similar format, different location)
+                // - BEDROCK_AGENTCORE: BedrockAgentCoreMemoryAdapter (format adapted in adapter)
+                // All future types will use modern ChatMessage pipeline
+                listener.onFailure(new IllegalArgumentException("Unsupported memory type: " + memoryType));
         }
     }
 }
