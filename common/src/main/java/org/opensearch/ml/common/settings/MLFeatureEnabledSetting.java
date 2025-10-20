@@ -88,6 +88,12 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
+            isStaticMetricCollectionEnabled = it;
+            for (SettingsChangeListener listener : listeners) {
+                listener.onStaticMetricCollectionEnabledChanged(it);
+            }
+        });
     }
 
     /**
