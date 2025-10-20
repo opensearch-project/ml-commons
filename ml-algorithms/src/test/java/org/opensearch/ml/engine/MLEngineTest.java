@@ -297,7 +297,7 @@ public class MLEngineTest extends MLStaticMockBase {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             assertEquals(3.0, output.getResult(), 1e-5);
         }, e -> { fail("Test failed"); });
-        mlEngine.execute(input, listener);
+        mlEngine.execute(input, listener, null);
     }
 
     @Test
@@ -309,7 +309,7 @@ public class MLEngineTest extends MLStaticMockBase {
         inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
         inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
         Input input = MetricsCorrelationInput.builder().inputData(inputData).build();
-        mlEngine.execute(input, null);
+        mlEngine.execute(input, null, null);
     }
 
     @Test
@@ -336,7 +336,7 @@ public class MLEngineTest extends MLStaticMockBase {
             LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
             assertEquals(3.0, output.getResult(), 1e-5);
         }, e -> { fail("Test failed"); });
-        mlEngine.execute(input, listener);
+        mlEngine.execute(input, listener, null);
     }
 
     private MLModel trainKMeansModel() {

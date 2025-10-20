@@ -19,6 +19,7 @@ import java.util.Map;
 
 import org.junit.Test;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class ToolUtilsTest {
 
@@ -342,5 +343,166 @@ public class ToolUtilsTest {
         assertEquals(2, result.size());
         assertEquals("value1", result.get("param1"));
         assertEquals("value2", result.get("param2"));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithMap() {
+        Map<String, Object> mapOutput = Map.of("key1", "value1", "key2", "value2");
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(mapOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        // Map should now be wrapped with "output" key
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, mapOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertEquals(mapOutput, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithList() {
+        List<String> listOutput = List.of("item1", "item2", "item3");
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(listOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, listOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertEquals(listOutput, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithJsonObjectString() {
+        String jsonOutput = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(jsonOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        // JSON object should be wrapped with "output" key using fromJsonWithWrappingKey
+        assertTrue(result.getDataAsMap().containsKey(ToolUtils.TOOL_OUTPUT_KEY));
+        Map<String, Object> wrappedOutput = (Map<String, Object>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY);
+        assertEquals("value1", wrappedOutput.get("key1"));
+        assertEquals("value2", wrappedOutput.get("key2"));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithJsonArrayString() {
+        String jsonOutput = "[\"item1\", \"item2\", \"item3\"]";
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(jsonOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        // JSON array should be wrapped with "output" key using fromJsonWithWrappingKey
+        assertTrue(result.getDataAsMap().containsKey(ToolUtils.TOOL_OUTPUT_KEY));
+        List<String> wrappedOutput = (List<String>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY);
+        assertEquals(3, wrappedOutput.size());
+        assertEquals("item1", wrappedOutput.get(0));
+        assertEquals("item2", wrappedOutput.get(1));
+        assertEquals("item3", wrappedOutput.get(2));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithNonJsonString() {
+        String stringOutput = "simple string output";
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(stringOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, stringOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertEquals(stringOutput, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithEmptyMap() {
+        Map<String, Object> emptyMap = new HashMap<>();
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(emptyMap, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, emptyMap);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertTrue(((Map<?, ?>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY)).isEmpty());
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithEmptyList() {
+        List<String> emptyList = new ArrayList<>();
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(emptyList, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, emptyList);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertTrue(((List<?>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY)).isEmpty());
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithNestedJsonObject() {
+        String nestedJsonOutput = "{\"user\":{\"name\":\"John\",\"age\":30},\"items\":[\"a\",\"b\"]}";
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(nestedJsonOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        assertTrue(result.getDataAsMap().containsKey(ToolUtils.TOOL_OUTPUT_KEY));
+        Map<String, Object> wrappedOutput = (Map<String, Object>) result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY);
+        assertTrue(wrappedOutput.containsKey("user"));
+        assertTrue(wrappedOutput.containsKey("items"));
+
+        Map<String, Object> user = (Map<String, Object>) wrappedOutput.get("user");
+        assertEquals("John", user.get("name"));
+        assertEquals(30.0, user.get("age")); // Gson parses numbers as Double
+
+        List<String> items = (List<String>) wrappedOutput.get("items");
+        assertEquals(2, items.size());
+        assertEquals("a", items.get(0));
+        assertEquals("b", items.get(1));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithNumber() {
+        Integer numberOutput = 42;
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(numberOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, numberOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertEquals(numberOutput, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithBoolean() {
+        Boolean booleanOutput = true;
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(booleanOutput, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        Map<String, Object> expectedMap = Map.of(ToolUtils.TOOL_OUTPUT_KEY, booleanOutput);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertEquals(booleanOutput, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testConvertOutputToModelTensor_WithNull() {
+        String outputKey = "test_output";
+
+        ModelTensor result = ToolUtils.convertOutputToModelTensor(null, outputKey);
+
+        assertEquals(outputKey, result.getName());
+        // Map.of() doesn't accept null values, so we need to create a HashMap
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put(ToolUtils.TOOL_OUTPUT_KEY, null);
+        assertEquals(expectedMap, result.getDataAsMap());
+        assertEquals(null, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
     }
 }

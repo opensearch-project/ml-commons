@@ -105,7 +105,6 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
                 actionFilters,
                 client,
                 sdkClient,
-                settings,
                 xContentRegistry,
                 clusterService,
                 modelAccessControlHelper,
@@ -114,10 +113,10 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         );
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -134,10 +133,10 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
 
@@ -196,10 +195,10 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
 
     public void testGetModel_ValidateAccessFailed() throws IOException, InterruptedException {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(false);
         doAnswer(invocation -> {

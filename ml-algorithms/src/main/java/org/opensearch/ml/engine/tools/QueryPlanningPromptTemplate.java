@@ -275,7 +275,7 @@ public class QueryPlanningPromptTemplate {
         + "]\n"
         + "Example output : 'product-search-template'";
 
-    public static final String TEMPLATE_SELECTION_SYSTEM_PROMPT = TEMPLATE_SELECTION_PURPOSE
+    public static final String DEFAULT_TEMPLATE_SELECTION_SYSTEM_PROMPT = TEMPLATE_SELECTION_PURPOSE
         + "==== GOAL ====\n"
         + TEMPLATE_SELECTION_GOAL
         + "\n"
@@ -291,7 +291,7 @@ public class QueryPlanningPromptTemplate {
         + "==== EXAMPLES ====\n"
         + TEMPLATE_SELECTION_EXAMPLES;
 
-    public static final String TEMPLATE_SELECTION_USER_PROMPT = "==== INPUTS ====\n" + TEMPLATE_SELECTION_INPUTS;
+    public static final String DEFAULT_TEMPLATE_SELECTION_USER_PROMPT = "==== INPUTS ====\n" + TEMPLATE_SELECTION_INPUTS;
 
     public static final String DEFAULT_SEARCH_TEMPLATE = "{"
         + "\"from\": {{from}}{{^from}}0{{/from}},"

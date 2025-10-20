@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
@@ -17,6 +19,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.DocRequest;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -32,7 +35,7 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLUpdateModelGroupRequest extends ActionRequest {
+public class MLUpdateModelGroupRequest extends ActionRequest implements DocRequest {
 
     MLUpdateModelGroupInput updateModelGroupInput;
 
@@ -79,5 +82,30 @@ public class MLUpdateModelGroupRequest extends ActionRequest {
             throw new UncheckedIOException("Failed to parse ActionRequest into MLUpdateModelGroupRequest", e);
         }
 
+    }
+
+    @Override
+    public String type() {
+        return ML_MODEL_GROUP_RESOURCE_TYPE;
+    }
+
+    /**
+     * Get the index that this request operates on
+     *
+     * @return the index
+     */
+    @Override
+    public String index() {
+        return ML_MODEL_GROUP_INDEX;
+    }
+
+    /**
+     * Get the id of the document for this request
+     *
+     * @return the id
+     */
+    @Override
+    public String id() {
+        return updateModelGroupInput.getModelGroupID();
     }
 }

@@ -12,7 +12,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -64,6 +63,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.script.ScriptService;
@@ -267,7 +267,7 @@ public class AwsConnectorExecutorTest {
             );
 
         verify(actionListener, times(0)).onFailure(any());
-        verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any(), any());
+        verify(executor, times(3)).preparePayloadAndInvoke(anyString(), any(), any(), any());
     }
 
     @Test
@@ -944,24 +944,6 @@ public class AwsConnectorExecutorTest {
         assertEquals("test failure", exceptionArgumentCaptor.getValue().getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[0].getMessage());
         assertEquals("test failure retryable", exceptionArgumentCaptor.getValue().getSuppressed()[1].getMessage());
-    }
-
-    @Test
-    public void testInvokeRemoteServiceStream_ValidInterface() {
-        AwsConnector mockConnector = mock(AwsConnector.class);
-        when(mockConnector.getAccessKey()).thenReturn("test-access-key");
-        when(mockConnector.getSecretKey()).thenReturn("test-secret-key");
-        when(mockConnector.getRegion()).thenReturn("us-east-1");
-
-        AwsConnectorExecutor executor = new AwsConnectorExecutor(mockConnector);
-        MLInput mlInput = mock(MLInput.class);
-        Map<String, String> parameters = Map.of("_llm_interface", "bedrock/converse/claude", "model", "claude-v2", "inputs", "test input");
-        String payload = "test payload";
-        ExecutionContext executionContext = new ExecutionContext(123);
-        StreamPredictActionListener<MLTaskResponse, ?> actionListener = mock(StreamPredictActionListener.class);
-
-        executor.invokeRemoteServiceStream("predict", mlInput, parameters, payload, executionContext, actionListener);
-        verify(actionListener, never()).onFailure(any());
     }
 
     @Test

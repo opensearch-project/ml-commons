@@ -18,6 +18,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -31,17 +32,20 @@ import lombok.experimental.FieldDefaults;
 public class MLGetMemoryRequest extends ActionRequest {
 
     String memoryContainerId;
+    MemoryType memoryType;
     String memoryId;
 
     @Builder
-    public MLGetMemoryRequest(String memoryContainerId, String memoryId) {
+    public MLGetMemoryRequest(String memoryContainerId, MemoryType memoryType, String memoryId) {
         this.memoryContainerId = memoryContainerId;
+        this.memoryType = memoryType;
         this.memoryId = memoryId;
     }
 
     public MLGetMemoryRequest(StreamInput in) throws IOException {
         super(in);
         this.memoryContainerId = in.readString();
+        this.memoryType = in.readEnum(MemoryType.class);
         this.memoryId = in.readString();
     }
 
@@ -49,6 +53,7 @@ public class MLGetMemoryRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.memoryContainerId);
+        out.writeEnum(this.memoryType);
         out.writeString(this.memoryId);
     }
 
@@ -58,6 +63,9 @@ public class MLGetMemoryRequest extends ActionRequest {
 
         if (this.memoryContainerId == null || this.memoryId == null) {
             exception = addValidationError("memoryContainerId and memoryId id can not be null", exception);
+        }
+        if (this.memoryType == null) {
+            exception = addValidationError("Memory type can not be null", exception);
         }
 
         return exception;

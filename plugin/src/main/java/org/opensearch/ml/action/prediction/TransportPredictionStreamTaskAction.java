@@ -29,7 +29,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.engine.algorithms.remote.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -133,8 +133,12 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
-        // This should never be called for streaming action
-        listener.onFailure(new UnsupportedOperationException("Use doExecute with TransportChannel for streaming requests"));
+        TransportChannel channel = ((MLPredictionTaskRequest) request).getStreamingChannel();
+        if (channel != null) {
+            doExecute(task, request, listener, channel);
+        } else {
+            listener.onFailure(new UnsupportedOperationException("Use doExecute with TransportChannel for streaming requests"));
+        }
     }
 
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener, TransportChannel channel) {
@@ -173,6 +177,7 @@ public class TransportPredictionStreamTaskAction extends HandledTransportAction<
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
+                            MLPredictionStreamTaskAction.NAME,
                             client,
                             sdkClient,
                             ActionListener.wrap(access -> {

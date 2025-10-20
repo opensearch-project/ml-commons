@@ -20,6 +20,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 public class MLGetMemoryRequestTest {
 
@@ -28,15 +29,21 @@ public class MLGetMemoryRequestTest {
 
     @Before
     public void setUp() {
-        requestNormal = MLGetMemoryRequest.builder().memoryContainerId("container-123").memoryId("memory-456").build();
+        requestNormal = MLGetMemoryRequest
+            .builder()
+            .memoryContainerId("container-123")
+            .memoryType(MemoryType.LONG_TERM)
+            .memoryId("memory-456")
+            .build();
 
-        requestWithNulls = MLGetMemoryRequest.builder().memoryContainerId(null).memoryId(null).build();
+        requestWithNulls = MLGetMemoryRequest.builder().memoryContainerId(null).memoryType(null).memoryId(null).build();
     }
 
     @Test
     public void testBuilderNormal() {
         assertNotNull(requestNormal);
         assertEquals("container-123", requestNormal.getMemoryContainerId());
+        assertEquals(MemoryType.LONG_TERM, requestNormal.getMemoryType());
         assertEquals("memory-456", requestNormal.getMemoryId());
     }
 
@@ -48,6 +55,7 @@ public class MLGetMemoryRequestTest {
         MLGetMemoryRequest deserialized = new MLGetMemoryRequest(in);
 
         assertEquals(requestNormal.getMemoryContainerId(), deserialized.getMemoryContainerId());
+        assertEquals(requestNormal.getMemoryType(), deserialized.getMemoryType());
         assertEquals(requestNormal.getMemoryId(), deserialized.getMemoryId());
     }
 
@@ -61,8 +69,9 @@ public class MLGetMemoryRequestTest {
     public void testValidateWithNullValues() {
         ActionRequestValidationException exception = requestWithNulls.validate();
         assertNotNull(exception);
-        assertEquals(1, exception.validationErrors().size());
+        assertEquals(2, exception.validationErrors().size());
         assertTrue(exception.validationErrors().get(0).contains("memoryContainerId and memoryId id can not be null"));
+        assertTrue(exception.validationErrors().get(1).contains("Memory type can not be null"));
     }
 
     @Test
@@ -84,6 +93,7 @@ public class MLGetMemoryRequestTest {
             public void writeTo(StreamOutput out) throws IOException {
                 super.writeTo(out);
                 out.writeString("test-container");
+                out.writeEnum(MemoryType.SESSIONS);
                 out.writeString("test-memory");
             }
         };
@@ -91,6 +101,7 @@ public class MLGetMemoryRequestTest {
         MLGetMemoryRequest result = MLGetMemoryRequest.fromActionRequest(mockRequest);
         assertNotNull(result);
         assertEquals("test-container", result.getMemoryContainerId());
+        assertEquals(MemoryType.SESSIONS, result.getMemoryType());
         assertEquals("test-memory", result.getMemoryId());
     }
 

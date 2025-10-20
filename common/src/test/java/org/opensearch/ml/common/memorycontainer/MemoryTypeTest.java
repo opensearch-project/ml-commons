@@ -6,9 +6,12 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
+import java.util.List;
 
 import org.junit.Test;
 
@@ -17,33 +20,60 @@ public class MemoryTypeTest {
     @Test
     public void testEnumValues() {
         // Test all enum values exist
-        assertEquals(2, MemoryType.values().length);
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.valueOf("RAW_MESSAGE"));
-        assertEquals(MemoryType.FACT, MemoryType.valueOf("FACT"));
+        assertEquals(4, MemoryType.values().length);
+        assertEquals(MemoryType.SESSIONS, MemoryType.valueOf("SESSIONS"));
+        assertEquals(MemoryType.WORKING, MemoryType.valueOf("WORKING"));
+        assertEquals(MemoryType.LONG_TERM, MemoryType.valueOf("LONG_TERM"));
+        assertEquals(MemoryType.HISTORY, MemoryType.valueOf("HISTORY"));
     }
 
     @Test
     public void testGetValue() {
-        assertEquals("RAW_MESSAGE", MemoryType.RAW_MESSAGE.getValue());
-        assertEquals("FACT", MemoryType.FACT.getValue());
+        assertEquals("sessions", MemoryType.SESSIONS.getValue());
+        assertEquals("working", MemoryType.WORKING.getValue());
+        assertEquals("long-term", MemoryType.LONG_TERM.getValue());
+        assertEquals("history", MemoryType.HISTORY.getValue());
     }
 
     @Test
-    public void testToString() {
-        assertEquals("RAW_MESSAGE", MemoryType.RAW_MESSAGE.toString());
-        assertEquals("FACT", MemoryType.FACT.toString());
+    public void testGetIndexSuffix() {
+        assertEquals("sessions", MemoryType.SESSIONS.getIndexSuffix());
+        assertEquals("working", MemoryType.WORKING.getIndexSuffix());
+        assertEquals("long-term", MemoryType.LONG_TERM.getIndexSuffix());
+        assertEquals("history", MemoryType.HISTORY.getIndexSuffix());
+    }
+
+    @Test
+    public void testIsDisableable() {
+        assertTrue(MemoryType.SESSIONS.isDisableable());
+        assertFalse(MemoryType.WORKING.isDisableable());
+        assertFalse(MemoryType.LONG_TERM.isDisableable());
+        assertTrue(MemoryType.HISTORY.isDisableable());
+    }
+
+    @Test
+    public void testToIndexName() {
+        String prefix = ".plugins-ml-am-";
+        assertEquals(".plugins-ml-am-sessions", MemoryType.SESSIONS.toIndexName(prefix));
+        assertEquals(".plugins-ml-am-working", MemoryType.WORKING.toIndexName(prefix));
+        assertEquals(".plugins-ml-am-long-term", MemoryType.LONG_TERM.toIndexName(prefix));
+        assertEquals(".plugins-ml-am-history", MemoryType.HISTORY.toIndexName(prefix));
     }
 
     @Test
     public void testFromString_ValidValues() {
         // Test exact match
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("RAW_MESSAGE"));
-        assertEquals(MemoryType.FACT, MemoryType.fromString("FACT"));
+        assertEquals(MemoryType.SESSIONS, MemoryType.fromString("sessions"));
+        assertEquals(MemoryType.WORKING, MemoryType.fromString("working"));
+        assertEquals(MemoryType.LONG_TERM, MemoryType.fromString("long-term"));
+        assertEquals(MemoryType.HISTORY, MemoryType.fromString("history"));
 
         // Test case insensitive
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("raw_message"));
-        assertEquals(MemoryType.FACT, MemoryType.fromString("FaCt"));
-        assertEquals(MemoryType.RAW_MESSAGE, MemoryType.fromString("Raw_Message"));
+        assertEquals(MemoryType.SESSIONS, MemoryType.fromString("SESSIONS"));
+        assertEquals(MemoryType.SESSIONS, MemoryType.fromString("Sessions"));
+        assertEquals(MemoryType.WORKING, MemoryType.fromString("WORKING"));
+        assertEquals(MemoryType.LONG_TERM, MemoryType.fromString("LONG-TERM"));
+        assertEquals(MemoryType.HISTORY, MemoryType.fromString("HISTORY"));
     }
 
     @Test
@@ -51,31 +81,73 @@ public class MemoryTypeTest {
         assertNull(MemoryType.fromString(null));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testFromString_InvalidValue() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString("INVALID_TYPE"));
-        assertEquals("Invalid memory type: INVALID_TYPE. Must be either RAW_MESSAGE or FACT", exception.getMessage());
+        MemoryType.fromString("INVALID_TYPE");
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testFromString_EmptyString() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString(""));
-        assertEquals("Invalid memory type: . Must be either RAW_MESSAGE or FACT", exception.getMessage());
+        MemoryType.fromString("");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testFromString_WhitespaceString() {
+        MemoryType.fromString("   ");
     }
 
     @Test
-    public void testFromString_Whitespace() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString("   "));
-        assertEquals("Invalid memory type:    . Must be either RAW_MESSAGE or FACT", exception.getMessage());
+    public void testIsValid() {
+        assertTrue(MemoryType.isValid("sessions"));
+        assertTrue(MemoryType.isValid("working"));
+        assertTrue(MemoryType.isValid("long-term"));
+        assertTrue(MemoryType.isValid("history"));
+
+        assertTrue(MemoryType.isValid("SESSIONS"));
+        assertTrue(MemoryType.isValid("WORKING"));
+
+        assertFalse(MemoryType.isValid("invalid"));
+        assertFalse(MemoryType.isValid(null));
+        assertFalse(MemoryType.isValid(""));
+    }
+
+    @Test
+    public void testGetAllValues() {
+        List<String> allValues = MemoryType.getAllValues();
+        assertEquals(4, allValues.size());
+        assertTrue(allValues.contains("sessions"));
+        assertTrue(allValues.contains("working"));
+        assertTrue(allValues.contains("long-term"));
+        assertTrue(allValues.contains("history"));
+    }
+
+    @Test
+    public void testGetAllValuesAsString() {
+        String allValuesStr = MemoryType.getAllValuesAsString();
+        assertNotNull(allValuesStr);
+        assertTrue(allValuesStr.contains("sessions"));
+        assertTrue(allValuesStr.contains("working"));
+        assertTrue(allValuesStr.contains("long-term"));
+        assertTrue(allValuesStr.contains("history"));
+        assertTrue(allValuesStr.contains(", "));
+    }
+
+    @Test
+    public void testToString() {
+        assertEquals("sessions", MemoryType.SESSIONS.toString());
+        assertEquals("working", MemoryType.WORKING.toString());
+        assertEquals("long-term", MemoryType.LONG_TERM.toString());
+        assertEquals("history", MemoryType.HISTORY.toString());
     }
 
     @Test
     public void testEnumConsistency() {
-        // Verify each enum's getValue() returns its name
+        // Verify each enum's getValue() returns expected value
         for (MemoryType type : MemoryType.values()) {
             assertNotNull(type.getValue());
-            assertEquals(type.getValue(), type.toString());
+            assertNotNull(type.getIndexSuffix());
             assertEquals(type, MemoryType.fromString(type.getValue()));
+            assertEquals(type.getValue(), type.toString());
         }
     }
 }

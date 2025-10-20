@@ -31,6 +31,10 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import com.google.gson.JsonElement;
 import com.google.gson.TypeAdapter;
@@ -124,6 +128,91 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void fromJsonWithWrappingKey_SimpleMap() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{\"key\": \"value\"}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertEquals("value", wrappedMap.get("key"));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_NestedMap() {
+        Map<String, Object> response = StringUtils
+            .fromJsonWithWrappingKey("{\"key\": {\"nested_key\": \"nested_value\", \"nested_array\": [1, \"a\"]}}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertTrue(wrappedMap.get("key") instanceof Map);
+        Map nestedMap = (Map) wrappedMap.get("key");
+        assertEquals("nested_value", nestedMap.get("nested_key"));
+        List list = (List) nestedMap.get("nested_array");
+        assertEquals(2, list.size());
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_SimpleList() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\"]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_NestedList() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[1, \"a\", [2, 3], {\"key\": \"value\"}]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertEquals(1.0, list.get(0));
+        assertEquals("a", list.get(1));
+        assertTrue(list.get(2) instanceof List);
+        assertTrue(list.get(3) instanceof Map);
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_EmptyObject() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("{}", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof Map);
+        Map wrappedMap = (Map) response.get("wrapper");
+        assertTrue(wrappedMap.isEmpty());
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_EmptyArray() {
+        Map<String, Object> response = StringUtils.fromJsonWithWrappingKey("[]", "wrapper");
+        assertEquals(1, response.size());
+        assertTrue(response.get("wrapper") instanceof List);
+        List list = (List) response.get("wrapper");
+        assertTrue(list.isEmpty());
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedType() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("\"simple string\"", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedNumber() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("42", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedBoolean() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("true", "wrapper"); });
+    }
+
+    @Test
+    public void fromJsonWithWrappingKey_UnsupportedNull() {
+        assertThrows(IllegalArgumentException.class, () -> { StringUtils.fromJsonWithWrappingKey("null", "wrapper"); });
+    }
+
+    @Test
     public void getParameterMap() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("key1", "value1");
@@ -138,6 +227,18 @@ public class StringUtilsTest {
         assertEquals("2.1", parameterMap.get("key3"));
         assertEquals("[10,20]", parameterMap.get("key4"));
         assertEquals("[1.01,\"abc\"]", parameterMap.get("key5"));
+    }
+
+    @Test
+    public void getParameterMapWithNullInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(null);
+        Assert.assertTrue(parameterMap.isEmpty());
+    }
+
+    @Test
+    public void getParameterMapWithEmptyInput() {
+        Map<String, String> parameterMap = StringUtils.getParameterMap(Map.of());
+        Assert.assertTrue(parameterMap.isEmpty());
     }
 
     @Test
@@ -244,6 +345,48 @@ public class StringUtilsTest {
      * in the values. Verifies that the method correctly extracts the prefixes of the toString()
      * method calls.
      */
+    @Test
+    public void testCollectToStringPrefixes() {
+        Map<String, String> map = new HashMap<>();
+        map.put("key1", "${parameters.tensor.toString()}");
+        map.put("key2", "${parameters.output.toString()}");
+        map.put("key3", "normal value");
+
+        List<String> prefixes = StringUtils.collectToStringPrefixes(map);
+
+        assertEquals(2, prefixes.size());
+        assertTrue(prefixes.contains("tensor"));
+        assertTrue(prefixes.contains("output"));
+    }
+
+    @Test
+    public void test_GsonTypeAdapters() {
+        // Test ModelTensor serialization
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .name("test_tensor")
+            .data(new Number[] { 1, 2, 3 })
+            .dataType(MLResultDataType.INT32)
+            .build();
+
+        String tensorJson = StringUtils.gson.toJson(tensor);
+        assertEquals(tensor.toString(), tensorJson);
+
+        // Test ModelTensorOutput serialization
+        List<ModelTensors> outputs = new ArrayList<>();
+        outputs.add(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build());
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(outputs).build();
+
+        String outputJson = StringUtils.gson.toJson(output);
+        assertEquals(output.toString(), outputJson);
+
+        // Test ModelTensors serialization
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+
+        String tensorsJson = StringUtils.gson.toJson(tensors);
+        assertEquals(tensors.toString(), tensorsJson);
+    }
+
     @Test
     public void testGetToStringPrefix() {
         Map<String, String> parameters = new HashMap<>();

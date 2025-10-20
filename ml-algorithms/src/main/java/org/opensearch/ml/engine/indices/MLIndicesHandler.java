@@ -6,12 +6,29 @@
 package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
+import static org.opensearch.ml.common.CommonValue.ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_SESSION_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_WORKING_MEMORY_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_SEARCH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_ENGINE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_M;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_HISTORY_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
 import static org.opensearch.ml.common.utils.IndexUtils.ALL_NODES_REPLICA_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS;
 import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_DEFAULT_INDEX_SETTINGS;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,12 +42,21 @@ import org.opensearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.utils.IndexUtils;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -122,9 +148,152 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }
 
+    public void initMemoryContainerIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MEMORY_CONTAINER, listener);
+    }
+
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();
+        Integer version = index.getVersion();
+        initIndexIfAbsent(indexName, mapping, version, listener);
+    }
+
+    private String getMapping(String mappingPath) {
+        if (mappingPath == null) {
+            throw new IllegalArgumentException("Mapping path cannot be null");
+        }
+
+        try {
+            return IndexUtils.getMappingFromFile(mappingPath);
+        } catch (IOException e) {
+            // Unchecked exception is thrown since the method is being called within a constructor
+            throw new UncheckedIOException("Failed to fetch index mapping from file: " + mappingPath, e);
+        }
+    }
+
+    public void createSessionMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_MEMORY_SESSION_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SESSION_INDEX);
+        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+    }
+
+    public void createWorkingMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_WORKING_MEMORY_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX);
+        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+    }
+
+    public void createLongTermMemoryHistoryIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
+        String indexMappings = getMapping(ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX);
+        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+    }
+
+    /**
+     * Builds the long-term memory index mapping dynamically based on configuration.
+     * Loads base mapping from JSON and adds embedding field configuration if needed.
+     */
+    private String buildLongTermMemoryMapping(MemoryConfiguration memoryConfig) throws IOException {
+        // Get base mapping from JSON file
+        String baseMappingJson = getMapping(ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH);
+
+        // Parse the JSON to extract properties
+        Map<String, Object> mapping = new HashMap<>();
+        Map<String, Object> properties = new HashMap<>();
+
+        // Parse base mapping - we'll rebuild it with additional fields if needed
+        XContentParser parser = XContentHelper
+            .createParser(
+                NamedXContentRegistry.EMPTY,
+                LoggingDeprecationHandler.INSTANCE,
+                new BytesArray(baseMappingJson),
+                XContentType.JSON
+            );
+
+        Map<String, Object> baseMapping = parser.mapOrdered();
+        mapping.put("_meta", baseMapping.get("_meta"));
+        properties.putAll((Map<String, Object>) baseMapping.get("properties"));
+
+        // Add embedding field based on configuration
+        if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+            // Build KNN vector configuration for text embeddings
+            Map<String, Object> knnVector = new HashMap<>();
+            knnVector.put("type", "knn_vector");
+            knnVector.put("dimension", memoryConfig.getDimension());
+
+            Map<String, Object> method = new HashMap<>();
+            method.put("name", KNN_METHOD_NAME);
+            method.put("space_type", KNN_SPACE_TYPE);
+            method.put("engine", KNN_ENGINE);
+            method.put("parameters", Map.of("ef_construction", KNN_EF_CONSTRUCTION, "m", KNN_M));
+            knnVector.put("method", method);
+
+            properties.put(MEMORY_EMBEDDING_FIELD, knnVector);
+        } else if (memoryConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+            // Use rank_features for sparse embeddings
+            properties.put(MEMORY_EMBEDDING_FIELD, Map.of("type", "rank_features"));
+        }
+        // If no embedding type, no embedding field is added
+
+        mapping.put("properties", properties);
+        return StringUtils.toJson(mapping);
+    }
+
+    public void createLongTermMemoryIndex(
+        String pipelineName,
+        String indexName,
+        MemoryConfiguration memoryConfig,
+        ActionListener<Boolean> listener
+    ) {
+        try {
+            // Build the dynamic mapping based on configuration
+            String indexMappings = buildLongTermMemoryMapping(memoryConfig);
+
+            // Build index settings
+            Map<String, Object> indexSettings = new HashMap<>();
+
+            // Add KNN settings for text embeddings
+            if (memoryConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+                indexSettings.put("index.knn", true);
+                indexSettings.put("index.knn.algo_param.ef_search", KNN_EF_SEARCH);
+            }
+
+            // Add pipeline if specified
+            if (pipelineName != null) {
+                indexSettings.put("default_pipeline", pipelineName);
+            }
+
+            // Add custom settings from configuration
+            if (!memoryConfig.getIndexSettings().isEmpty() && memoryConfig.getIndexSettings().containsKey(LONG_TERM_MEMORY_INDEX)) {
+                Map<String, Object> configuredIndexSettings = memoryConfig.getMemoryIndexMapping(LONG_TERM_MEMORY_INDEX);
+                indexSettings.putAll(configuredIndexSettings);
+            }
+
+            // Initialize index with mapping and settings
+            initIndexIfAbsent(indexName, indexMappings, indexSettings, 1, listener);
+        } catch (Exception e) {
+            log.error("Failed to create long-term memory index", e);
+            listener.onFailure(e);
+        }
+    }
+
+    public void initIndexWithMappingFileIfAbsent(String indexName, String mappingPath, Integer version, ActionListener<Boolean> listener) {
+        String mapping = getMapping(mappingPath);
+        initIndexIfAbsent(indexName, mapping, version, listener);
+    }
+
+    public void initIndexIfAbsent(String indexName, String mapping, Integer version, ActionListener<Boolean> listener) {
+        initIndexIfAbsent(indexName, mapping, null, version, listener);
+    }
+
+    public void initIndexIfAbsent(
+        String indexName,
+        String mapping,
+        Map<String, Object> indexSettings,
+        Integer version,
+        ActionListener<Boolean> listener
+    ) {
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             if (!MLIndicesHandler.doesMultiTenantIndexExist(clusterService, mlFeatureEnabledSetting.isMultiTenancyEnabled(), indexName)) {
@@ -145,14 +314,20 @@ public class MLIndicesHandler {
                         internalListener.onFailure(e);
                     }
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName)
-                    .mapping(mapping, XContentType.JSON)
-                    .settings(indexName.equals(MLIndex.CONFIG.getIndexName()) ? ALL_NODES_REPLICA_INDEX_SETTINGS : DEFAULT_INDEX_SETTINGS);
+                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping, XContentType.JSON);
+                if (indexSettings != null) {
+                    request.settings(indexSettings);
+                } else {
+                    request
+                        .settings(
+                            indexName.equals(MLIndex.CONFIG.getIndexName()) ? ALL_NODES_REPLICA_INDEX_SETTINGS : DEFAULT_INDEX_SETTINGS
+                        );
+                }
                 client.admin().indices().create(request, actionListener);
             } else {
                 log.debug("index:{} is already created", indexName);
                 if (indexMappingUpdated.containsKey(indexName) && !indexMappingUpdated.get(indexName).get()) {
-                    shouldUpdateIndex(indexName, index.getVersion(), ActionListener.wrap(r -> {
+                    shouldUpdateIndex(indexName, version, ActionListener.wrap(r -> {
                         if (r) {
                             // return true if should update index
                             client
@@ -163,13 +338,17 @@ public class MLIndicesHandler {
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
                                             UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                            updateSettingRequest
-                                                .indices(indexName)
-                                                .settings(
-                                                    indexName.equals(MLIndex.CONFIG.getIndexName())
-                                                        ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
-                                                        : UPDATED_DEFAULT_INDEX_SETTINGS
-                                                );
+                                            updateSettingRequest.indices(indexName);
+                                            if (indexSettings != null) {
+                                                updateSettingRequest.settings(indexSettings);
+                                            } else {
+                                                updateSettingRequest
+                                                    .settings(
+                                                        indexName.equals(MLIndex.CONFIG.getIndexName())
+                                                            ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
+                                                            : UPDATED_DEFAULT_INDEX_SETTINGS
+                                                    );
+                                            }
                                             client
                                                 .admin()
                                                 .indices()

@@ -24,11 +24,11 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -72,7 +72,7 @@ public class IndexMappingTool implements Tool {
     @Setter
     private Parser<?, ?> inputParser;
     @Setter
-    private Parser<?, ?> outputParser;
+    private Parser outputParser;
 
     public IndexMappingTool(Client client) {
         this.client = client;
@@ -81,14 +81,6 @@ public class IndexMappingTool implements Tool {
         attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
         attributes.put(STRICT_FIELD, true);
 
-        outputParser = new Parser<>() {
-            @Override
-            public Object parse(Object o) {
-                @SuppressWarnings("unchecked")
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
     }
 
     @Override
@@ -150,8 +142,8 @@ public class IndexMappingTool implements Tool {
                         }
 
                         @SuppressWarnings("unchecked")
-                        T response = (T) sb.toString();
-                        listener.onResponse(response);
+                        T output = (T) sb.toString();
+                        listener.onResponse((T) (outputParser != null ? outputParser.parse(output) : output));
                     } catch (Exception e) {
                         onFailure(e);
                     }
@@ -219,8 +211,10 @@ public class IndexMappingTool implements Tool {
         }
 
         @Override
-        public IndexMappingTool create(Map<String, Object> map) {
-            return new IndexMappingTool(client);
+        public IndexMappingTool create(Map<String, Object> params) {
+            IndexMappingTool indexMappingTool = new IndexMappingTool(client);
+            indexMappingTool.setOutputParser(ToolParser.createFromToolParams(params));
+            return indexMappingTool;
         }
 
         @Override

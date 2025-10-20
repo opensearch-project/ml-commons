@@ -5,11 +5,12 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEARCH_MEMORIES_PATH;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.RestActionUtils.getSourceContext;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
@@ -17,7 +18,7 @@ import java.util.List;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesInput;
@@ -25,6 +26,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemorie
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -76,15 +78,23 @@ public class RestMLSearchMemoriesAction extends BaseRestHandler {
         }
 
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
 
-        XContentParser parser = request.contentParser();
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLSearchMemoriesInput mlSearchMemoriesInput = MLSearchMemoriesInput.parse(parser);
-
-        // Set the container ID from the path
-        mlSearchMemoriesInput.setMemoryContainerId(memoryContainerId);
-
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.parseXContent(request.contentOrSourceParamParser());
+        searchSourceBuilder.fetchSource(getSourceContext(request, searchSourceBuilder));
+        searchSourceBuilder.seqNoAndPrimaryTerm(true).version(true);
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+
+        MLSearchMemoriesInput mlSearchMemoriesInput = MLSearchMemoriesInput
+            .builder()
+            .memoryContainerId(memoryContainerId)
+            .memoryType(memoryType)
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
         return new MLSearchMemoriesRequest(mlSearchMemoriesInput, tenantId);
     }
+
 }

@@ -72,10 +72,7 @@ public class RestMLAddMemoriesAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser);
-
-        // Set the container ID from the path
-        mlAddMemoryInput.setMemoryContainerId(memoryContainerId);
+        MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser, memoryContainerId);
 
         return new MLAddMemoriesRequest(mlAddMemoryInput);
     }

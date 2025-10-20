@@ -1,0 +1,44 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "owner_id": {
+      "type": "keyword"
+    },
+    "memory_container_id": {
+      "type": "keyword"
+    },
+    "memory_id": {
+      "type": "keyword"
+    },
+    "action": {
+      "type": "keyword"
+    },
+    "namespace": {
+      "type": "flat_object"
+    },
+    "namespace_size": {
+      "type": "integer"
+    },
+    "tags": {
+      "type": "flat_object"
+    },
+    "error": {
+      "type": "text"
+    },
+    "before": {
+      "type": "flat_object"
+    },
+    "after": {
+      "type": "flat_object"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

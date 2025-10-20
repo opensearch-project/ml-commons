@@ -89,6 +89,7 @@ import org.opensearch.ml.utils.TestData;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -606,12 +607,14 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         }
     }
 
-    public void testIsStreamingRequestWithStreamParameter() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("stream", "true");
-        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build();
+    public void testIsStreamingRequestWithChannel() {
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(new TextDocsInputDataSet(List.of("test"), null))
+            .build();
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().modelId("test").mlInput(mlInput).build();
+        request.setStreamingChannel(mock(TransportChannel.class));
 
         try {
             java.lang.reflect.Method method = MLPredictTaskRunner.class

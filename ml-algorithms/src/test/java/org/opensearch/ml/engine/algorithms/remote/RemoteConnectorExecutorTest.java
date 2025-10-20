@@ -22,10 +22,13 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
+import static org.opensearch.ml.engine.processor.ProcessorChain.INPUT_PROCESSORS;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
@@ -56,6 +59,7 @@ import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFor
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.script.ScriptService;
@@ -142,7 +146,7 @@ public class RemoteConnectorExecutorTest {
         Exception exception = Assert
             .assertThrows(
                 IllegalArgumentException.class,
-                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null)
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
@@ -162,7 +166,7 @@ public class RemoteConnectorExecutorTest {
         String actionType = inputDataSet.getActionType().toString();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
 
-        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null);
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
         Mockito
             .verify(executor, times(1))
             .invokeRemoteService(any(), any(), any(), argThat(argument -> argument.contains("You are a ${parameters.role}")), any(), any());
@@ -185,7 +189,7 @@ public class RemoteConnectorExecutorTest {
         Exception exception = Assert
             .assertThrows(
                 IllegalArgumentException.class,
-                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null)
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
@@ -217,7 +221,7 @@ public class RemoteConnectorExecutorTest {
         Exception exception = Assert
             .assertThrows(
                 IllegalArgumentException.class,
-                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null)
+                () -> executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener)
             );
         assert exception.getMessage().contains("Some parameter placeholder not filled in payload: role");
     }
@@ -242,7 +246,7 @@ public class RemoteConnectorExecutorTest {
             .inputDataset(inputDataSet)
             .build();
 
-        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener, null);
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
         verify(actionListener).onFailure(argThat(e -> e instanceof IOException && e.getMessage().contains("UT test IOException")));
     }
 
@@ -372,15 +376,102 @@ public class RemoteConnectorExecutorTest {
             ModelTensors mockTensors = mock(ModelTensors.class);
             listener.onResponse(new Tuple<>(200, mockTensors));
             return null;
-        }).when(executor).preparePayloadAndInvoke(any(), any(), any(), any(), any());
+        }).when(executor).preparePayloadAndInvoke(any(), any(), any(), any(), any(), any());
         executor.executeAction(PREDICT.name(), mlInput, streamActionListener, channel);
 
         verify(executor, times(1))
-            .preparePayloadAndInvoke(eq(PREDICT.name()), eq(mlInput), any(ExecutionContext.class), any(ActionListener.class), eq(channel));
+            .preparePayloadAndInvoke(
+                eq(PREDICT.name()),
+                eq(mlInput),
+                any(ExecutionContext.class),
+                any(ActionListener.class),
+                any(ActionListener.class),
+                eq(channel)
+            );
 
         ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
         verify(streamActionListener, times(1)).onResponse(responseCaptor.capture());
         assertNotNull(responseCaptor.getValue());
         assertTrue(responseCaptor.getValue().getOutput() instanceof ModelTensorOutput);
+    }
+
+    @Test
+    public void executePreparePayloadAndInvoke_WithInputProcessors_EmptyList() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("input", "test input"))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
+
+        // Verify that invokeRemoteService is called with the original payload (no processing)
+        Mockito
+            .verify(executor, times(1))
+            .invokeRemoteService(any(), any(), any(), argThat(argument -> argument.contains("test input")), any(), any());
+    }
+
+    @Test
+    public void executePreparePayloadAndInvoke_WithInputProcessors_ExtractJson() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        // Create input processors configuration
+        List<Map<String, Object>> inputProcessors = new ArrayList<>();
+        Map<String, Object> extractJsonConfig = new HashMap<>();
+        extractJsonConfig.put("type", "extract_json");
+        extractJsonConfig.put("extract_type", "object");
+        inputProcessors.add(extractJsonConfig);
+
+        Map<String, Object> inputParams = new HashMap<>();
+        inputParams.put("input", "test input");
+        inputParams.put(INPUT_PROCESSORS, inputProcessors);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(StringUtils.getParameterMap(inputParams))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
+
+        // Verify that invokeRemoteService is called (payload will be processed)
+        Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    public void executePreparePayloadAndInvoke_WithInputProcessors_JsonString() {
+        Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
+        Connector connector = getConnector(parameters);
+        AwsConnectorExecutor executor = getExecutor(connector);
+
+        // Create input processors as JSON string
+        String inputProcessorsJson = "[{\"type\": \"extract_json\", \"extract_type\": \"object\"}]";
+
+        Map<String, Object> inputParams = new HashMap<>();
+        inputParams.put("input", "test input");
+        inputParams.put(INPUT_PROCESSORS, inputProcessorsJson);
+
+        RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(StringUtils.getParameterMap(inputParams))
+            .actionType(PREDICT)
+            .build();
+        String actionType = inputDataSet.getActionType().toString();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+
+        executor.preparePayloadAndInvoke(actionType, mlInput, null, actionListener);
+
+        // Verify that invokeRemoteService is called
+        Mockito.verify(executor, times(1)).invokeRemoteService(any(), any(), any(), any(), any(), any());
     }
 }

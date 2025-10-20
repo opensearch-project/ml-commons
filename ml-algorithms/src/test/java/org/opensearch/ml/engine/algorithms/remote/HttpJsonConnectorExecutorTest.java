@@ -40,6 +40,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
 
 import com.google.common.collect.ImmutableMap;
 

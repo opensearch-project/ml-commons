@@ -233,7 +233,7 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         List<ExecutorBuilder<?>> executorBuilders = plugin.getExecutorBuilders(settings);
         assertNotNull(executorBuilders);
-        assertEquals(11, executorBuilders.size());
+        assertEquals(13, executorBuilders.size());
 
         // Verify we have the expected number of thread pools
         assertTrue(executorBuilders.size() > 5);
@@ -260,7 +260,7 @@ public class MachineLearningPluginTests {
         Settings settings = Settings.EMPTY;
         Collection<SystemIndexDescriptor> descriptors = plugin.getSystemIndexDescriptors(settings);
         assertNotNull(descriptors);
-        assertEquals(13, descriptors.size()); // Plugin defines 13 system indices
+        assertEquals(14, descriptors.size()); // Plugin defines 13 system indices
 
         // Verify we have system index descriptors
         assertFalse(descriptors.isEmpty());

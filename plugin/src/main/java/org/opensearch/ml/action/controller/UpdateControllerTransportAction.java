@@ -104,51 +104,58 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                mlModelManager.getController(modelId, ActionListener.wrap(controller -> {
-                                    boolean isDeployRequiredAfterUpdate = controller.isDeployRequiredAfterUpdate(updateControllerInput);
-                                    controller.update(updateControllerInput);
-                                    updateController(mlModel, controller, isDeployRequiredAfterUpdate, wrappedListener);
-                                }, e -> {
-                                    if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
-                                        final String errorMsg = getErrorMessage(
-                                            "Model controller haven't been created for the model. Consider calling create model controller api instead.",
-                                            modelId,
-                                            isHidden
-                                        );
-                                        wrappedListener.onFailure(new OpenSearchStatusException(errorMsg, RestStatus.CONFLICT));
-                                        log.error(errorMsg, e);
-                                    } else {
-                                        log.error(e);
-                                        wrappedListener.onFailure(e);
-                                    }
-                                }));
-                            } else {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            getErrorMessage(
-                                                "User doesn't have privilege to perform this operation on this model controller.",
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            MLUpdateControllerAction.NAME,
+                            client,
+
+                            ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    mlModelManager.getController(modelId, ActionListener.wrap(controller -> {
+                                        boolean isDeployRequiredAfterUpdate = controller.isDeployRequiredAfterUpdate(updateControllerInput);
+                                        controller.update(updateControllerInput);
+                                        updateController(mlModel, controller, isDeployRequiredAfterUpdate, wrappedListener);
+                                    }, e -> {
+                                        if (mlModel.getIsControllerEnabled() == null || !mlModel.getIsControllerEnabled()) {
+                                            final String errorMsg = getErrorMessage(
+                                                "Model controller haven't been created for the model. Consider calling create model controller api instead.",
                                                 modelId,
                                                 isHidden
-                                            ),
-                                            RestStatus.FORBIDDEN
-                                        )
+                                            );
+                                            wrappedListener.onFailure(new OpenSearchStatusException(errorMsg, RestStatus.CONFLICT));
+                                            log.error(errorMsg, e);
+                                        } else {
+                                            log.error(e);
+                                            wrappedListener.onFailure(e);
+                                        }
+                                    }));
+                                } else {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                getErrorMessage(
+                                                    "User doesn't have privilege to perform this operation on this model controller.",
+                                                    modelId,
+                                                    isHidden
+                                                ),
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
+                            }, exception -> {
+                                log
+                                    .error(
+                                        getErrorMessage(
+                                            "Permission denied: Unable to create the model controller for the model. Details: ",
+                                            modelId,
+                                            isHidden
+                                        ),
+                                        exception
                                     );
-                            }
-                        }, exception -> {
-                            log
-                                .error(
-                                    getErrorMessage(
-                                        "Permission denied: Unable to create the model controller for the model. Details: ",
-                                        modelId,
-                                        isHidden
-                                    ),
-                                    exception
-                                );
-                            wrappedListener.onFailure(exception);
-                        }));
+                                wrappedListener.onFailure(exception);
+                            })
+                        );
                 } else {
                     wrappedListener
                         .onFailure(

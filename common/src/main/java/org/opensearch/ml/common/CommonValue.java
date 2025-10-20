@@ -46,7 +46,9 @@ public class CommonValue {
     public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
     public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
     public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
-    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-memory-container";
+    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-am-memory-container";
+    public static final String ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX = ".plugins-ml-am";
+    public static final String ML_AGENTIC_MEMORY_INDEX_PATTERN = ML_AGENTIC_MEMORY_SYSTEM_INDEX_PREFIX + "*";
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
     // index used in 2.19 to track MlTaskBatchUpdate task
     public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
@@ -68,11 +70,18 @@ public class CommonValue {
     public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "index-mappings/ml_memory_meta.json";
     public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH = "index-mappings/ml_memory_message.json";
     public static final String ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH = "index-mappings/ml_memory_container.json";
+    public static final String ML_MEMORY_SESSION_INDEX_MAPPING_PATH = "index-mappings/ml_memory_sessions.json";
+    public static final String ML_WORKING_MEMORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_working.json";
+    public static final String ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term.json";
+    public static final String ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term_history.json";
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
     public static final String ML_INDEX_INSIGHT_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_config.json";
     public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
+
+    // Resource type used in resource-access-control
+    public static final String ML_MODEL_GROUP_RESOURCE_TYPE = "ml-model-group";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
