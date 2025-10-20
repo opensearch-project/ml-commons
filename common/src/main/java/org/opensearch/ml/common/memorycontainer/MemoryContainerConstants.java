@@ -39,6 +39,7 @@ public class MemoryContainerConstants {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String ID_FIELD = "id";
     public static final String ENABLED_FIELD = "enabled";
+    public static final String REMOTE_STORE_FIELD = "remote_store";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;

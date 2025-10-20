@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 1
+    "schema_version": 2
   },
   "properties": {
     "name": {
@@ -52,6 +52,16 @@
         },
         "max_infer_size": {
           "type": "integer"
+        },
+        "remote_store": {
+          "properties": {
+            "type": {
+              "type": "keyword"
+            },
+            "connector_id": {
+              "type": "keyword"
+            }
+          }
         },
         "strategies": {
           "type": "nested",

@@ -275,6 +275,39 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void createPayload_NdjsonFormat() {
+        // Test NDJSON format (newline-delimited JSON) commonly used for bulk operations
+        String requestBody = "{\"index\": {\"_index\": \"${parameters.index}\"}}\n{\"field\": \"${parameters.value}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("index", "test_index");
+        parameters.put("value", "test_value");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        Assert.assertEquals("{\"index\": {\"_index\": \"test_index\"}}\n{\"field\": \"test_value\"}", payload);
+    }
+
+    @Test
+    public void createPayload_NdjsonFormat_WithStreamParameter() {
+        // Test that stream parameter is not added to NDJSON payloads
+        String requestBody = "{\"index\": {\"_index\": \"${parameters.index}\"}}\n{\"field\": \"${parameters.value}\"}";
+        HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
+
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("index", "test_index");
+        parameters.put("value", "test_value");
+        parameters.put("stream", "true");
+        parameters.put("_llm_interface", "openai/v1/chat/completions");
+
+        String payload = connector.createPayload(PREDICT.name(), parameters);
+
+        // Stream parameter should not be added to NDJSON format
+        Assert.assertEquals("{\"index\": {\"_index\": \"test_index\"}}\n{\"field\": \"test_value\"}", payload);
+    }
+
+    @Test
     public void parseResponse_modelTensorJson() throws IOException {
         HttpConnector connector = createHttpConnector();
 
@@ -388,6 +421,7 @@ public class HttpConnectorTest {
 
         ConnectorAction action = new ConnectorAction(
             actionType,
+            null,
             method,
             url,
             headers,

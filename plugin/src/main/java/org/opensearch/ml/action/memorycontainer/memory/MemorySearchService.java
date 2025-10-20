@@ -74,25 +74,8 @@ public class MemorySearchService {
         String fact = facts.get(currentIndex);
 
         try {
-            QueryBuilder queryBuilder = MemorySearchQueryBuilder
-                .buildFactSearchQuery(strategy, fact, input.getNamespace(), input.getOwnerId(), memoryConfig, input.getMemoryContainerId());
-
-            log.debug("Searching for similar facts");
-
-            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-            searchSourceBuilder.query(queryBuilder);
-            searchSourceBuilder.size(maxInferSize);
-            searchSourceBuilder.fetchSource(new String[] { MEMORY_FIELD }, null);
-
             String indexName = memoryConfig.getLongMemoryIndexName();
             String tenantId = memoryConfig.getTenantId();
-
-            SearchDataObjectRequest searchRequest = SearchDataObjectRequest
-                .builder()
-                .indices(indexName)
-                .searchSourceBuilder(searchSourceBuilder)
-                .tenantId(tenantId)
-                .build();
 
             ActionListener<SearchResponse> searchResponseActionListener = ActionListener.wrap(response -> {
                 for (SearchHit hit : response.getHits().getHits()) {
@@ -103,14 +86,52 @@ public class MemorySearchService {
                     }
                 }
 
-                log.debug("Found {} similar facts", response.getHits().getHits().length);
+                log.debug("Found {} similar facts for: {}", response.getHits().getHits().length, fact);
 
                 searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             }, e -> {
-                log.error("Failed to search for similar facts");
+                log.error("Failed to search for similar facts for: {}", fact, e);
                 searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             });
-            memoryContainerHelper.searchData(memoryConfig, searchRequest, searchResponseActionListener);
+            if (memoryConfig.getRemoteStore() == null) {
+                QueryBuilder queryBuilder = MemorySearchQueryBuilder
+                    .buildFactSearchQuery(
+                        strategy,
+                        fact,
+                        input.getNamespace(),
+                        input.getOwnerId(),
+                        memoryConfig,
+                        input.getMemoryContainerId()
+                    );
+
+            log.debug("Searching for similar facts");
+
+                SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+                searchSourceBuilder.query(queryBuilder);
+                searchSourceBuilder.size(maxInferSize);
+                searchSourceBuilder.fetchSource(new String[] { MEMORY_FIELD }, null);
+
+                SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(indexName)
+                    .searchSourceBuilder(searchSourceBuilder)
+                    .tenantId(tenantId)
+                    .build();
+
+                memoryContainerHelper.searchData(memoryConfig, searchRequest, searchResponseActionListener);
+            } else {
+                String query = MemorySearchQueryBuilder
+                    .buildFactSearchQueryForAoss(
+                        strategy,
+                        fact,
+                        input.getNamespace(),
+                        input.getOwnerId(),
+                        memoryConfig,
+                        input.getMemoryContainerId(),
+                        maxInferSize
+                    );
+                memoryContainerHelper.searchDataFromRemoteStorage(memoryConfig, indexName, query, searchResponseActionListener);
+            }
         } catch (Exception e) {
             log.error("Failed to build search query for facts");
             searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);

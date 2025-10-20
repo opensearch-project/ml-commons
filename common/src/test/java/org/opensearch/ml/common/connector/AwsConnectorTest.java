@@ -222,6 +222,7 @@ public class AwsConnectorTest {
 
         ConnectorAction action = new ConnectorAction(
             actionType,
+            null,
             method,
             url,
             headers,
