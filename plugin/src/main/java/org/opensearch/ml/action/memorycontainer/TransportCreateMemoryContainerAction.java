@@ -34,6 +34,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerModelValidator;
 import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
 import org.opensearch.ml.helper.MemoryContainerSharedIndexValidator;
+import org.opensearch.ml.helper.RemoteStorageHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -163,6 +164,9 @@ public class TransportCreateMemoryContainerAction extends
         MemoryConfiguration configuration = container.getConfiguration();
         String indexPrefix = configuration != null ? configuration.getIndexPrefix() : null;
 
+        // Check if remote store is configured
+        boolean useRemoteStore = configuration.getRemoteStore() != null && configuration.getRemoteStore().getConnectorId() != null;
+
         // Convert to lowercase as OpenSearch doesn't support uppercase in index names
         final String sessionIndexName = configuration.getSessionIndexName();
         final String workingMemoryIndexName = configuration.getWorkingMemoryIndexName();
@@ -173,32 +177,43 @@ public class TransportCreateMemoryContainerAction extends
         // No strategies = 2 indices (session/working only)
         if (configuration.getStrategies() == null || configuration.getStrategies().isEmpty()) {
             if (configuration.isDisableSession()) {
-                mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
-                    // Return the actual index name that was created
-                    // Create the memory data index with appropriate mapping
-                    listener.onResponse(workingMemoryIndexName);
-                }, listener::onFailure));
-            } else {
-                mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
-                    mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
-                        // Return the actual index name that was created
-                        // Create the memory data index with appropriate mapping
+                if (useRemoteStore) {
+                    createRemoteWorkingMemoryIndex(configuration, workingMemoryIndexName, ActionListener.wrap(success -> {
                         listener.onResponse(workingMemoryIndexName);
                     }, listener::onFailure));
-                }, listener::onFailure));
+                } else {
+                    mlIndicesHandler.createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
+                        listener.onResponse(workingMemoryIndexName);
+                    }, listener::onFailure));
+                }
+            } else {
+                if (useRemoteStore) {
+                    createRemoteSessionMemoryIndex(configuration, sessionIndexName, ActionListener.wrap(result -> {
+                        createRemoteWorkingMemoryIndex(configuration, workingMemoryIndexName, ActionListener.wrap(success -> {
+                            listener.onResponse(workingMemoryIndexName);
+                        }, listener::onFailure));
+                    }, listener::onFailure));
+                } else {
+                    mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
+                        mlIndicesHandler
+                            .createWorkingMemoryDataIndex(workingMemoryIndexName, configuration, ActionListener.wrap(success -> {
+                                listener.onResponse(workingMemoryIndexName);
+                            }, listener::onFailure));
+                    }, listener::onFailure));
+                }
             }
         } else {
             if (configuration.isDisableSession()) {
-                createMemoryIndexes(
-                    container,
-                    listener,
-                    configuration,
-                    workingMemoryIndexName,
-                    longTermMemoryIndexName,
-                    longTermMemoryHistoryIndexName
-                );
-            } else {
-                mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
+                if (useRemoteStore) {
+                    createRemoteMemoryIndexes(
+                        container,
+                        listener,
+                        configuration,
+                        workingMemoryIndexName,
+                        longTermMemoryIndexName,
+                        longTermMemoryHistoryIndexName
+                    );
+                } else {
                     createMemoryIndexes(
                         container,
                         listener,
@@ -207,9 +222,32 @@ public class TransportCreateMemoryContainerAction extends
                         longTermMemoryIndexName,
                         longTermMemoryHistoryIndexName
                     );
-                }, listener::onFailure));
+                }
+            } else {
+                if (useRemoteStore) {
+                    createRemoteSessionMemoryIndex(configuration, sessionIndexName, ActionListener.wrap(result -> {
+                        createRemoteMemoryIndexes(
+                            container,
+                            listener,
+                            configuration,
+                            workingMemoryIndexName,
+                            longTermMemoryIndexName,
+                            longTermMemoryHistoryIndexName
+                        );
+                    }, listener::onFailure));
+                } else {
+                    mlIndicesHandler.createSessionMemoryDataIndex(sessionIndexName, configuration, ActionListener.wrap(result -> {
+                        createMemoryIndexes(
+                            container,
+                            listener,
+                            configuration,
+                            workingMemoryIndexName,
+                            longTermMemoryIndexName,
+                            longTermMemoryHistoryIndexName
+                        );
+                    }, listener::onFailure));
+                }
             }
-
         }
     }
 
@@ -337,6 +375,60 @@ public class TransportCreateMemoryContainerAction extends
                     }, listener::onFailure)
                 );
         }, listener::onFailure));
+    }
+
+    // ==================== Remote Storage Helper Methods ====================
+
+    private void createRemoteSessionMemoryIndex(MemoryConfiguration configuration, String indexName, ActionListener<Boolean> listener) {
+        String connectorId = configuration.getRemoteStore().getConnectorId();
+        RemoteStorageHelper.createRemoteSessionMemoryIndex(connectorId, indexName, configuration, mlIndicesHandler, client, listener);
+    }
+
+    private void createRemoteWorkingMemoryIndex(MemoryConfiguration configuration, String indexName, ActionListener<Boolean> listener) {
+        String connectorId = configuration.getRemoteStore().getConnectorId();
+        RemoteStorageHelper.createRemoteWorkingMemoryIndex(connectorId, indexName, configuration, mlIndicesHandler, client, listener);
+    }
+
+    private void createRemoteLongTermMemoryHistoryIndex(
+        MemoryConfiguration configuration,
+        String indexName,
+        ActionListener<Boolean> listener
+    ) {
+        String connectorId = configuration.getRemoteStore().getConnectorId();
+        RemoteStorageHelper
+            .createRemoteLongTermMemoryHistoryIndex(connectorId, indexName, configuration, mlIndicesHandler, client, listener);
+    }
+
+    private void createRemoteMemoryIndexes(
+        MLMemoryContainer container,
+        ActionListener<String> listener,
+        MemoryConfiguration configuration,
+        String workingMemoryIndexName,
+        String longTermMemoryIndexName,
+        String longTermMemoryHistoryIndexName
+    ) {
+        createRemoteWorkingMemoryIndex(configuration, workingMemoryIndexName, ActionListener.wrap(success -> {
+            // Create long-term memory index with pipeline if embedding is configured
+            createRemoteLongTermMemoryIngestPipeline(configuration, longTermMemoryIndexName, ActionListener.wrap(success1 -> {
+                if (!configuration.isDisableHistory()) {
+                    createRemoteLongTermMemoryHistoryIndex(configuration, longTermMemoryHistoryIndexName, ActionListener.wrap(success2 -> {
+                        listener.onResponse(longTermMemoryIndexName);
+                    }, listener::onFailure));
+                } else {
+                    listener.onResponse(longTermMemoryIndexName);
+                }
+            }, listener::onFailure));
+        }, listener::onFailure));
+    }
+
+    private void createRemoteLongTermMemoryIngestPipeline(
+        MemoryConfiguration configuration,
+        String indexName,
+        ActionListener<Boolean> listener
+    ) {
+        String connectorId = configuration.getRemoteStore().getConnectorId();
+        MemoryContainerPipelineHelper
+            .createRemoteLongTermMemoryIngestPipeline(connectorId, indexName, configuration, mlIndicesHandler, client, listener);
     }
 
 }

@@ -8,9 +8,12 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static software.amazon.awssdk.http.SdkHttpMethod.DELETE;
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
+import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
+import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -109,7 +112,13 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
-                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, GET);
+                    break;
+                case "PUT":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, PUT);
+                    break;
+                case "DELETE":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, DELETE);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");

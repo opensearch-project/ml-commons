@@ -31,6 +31,12 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.delete.DeleteRequest;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -75,6 +81,161 @@ public class StringUtilsTest {
         assertFalse(StringUtils.isJson("[]\"123\""));
         assertFalse(StringUtils.isJson("[abc\"]"));
         assertFalse(StringUtils.isJson("[abc\n123]"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidJson() {
+        // Regular JSON should still work
+        assertTrue(StringUtils.isJsonOrNdjson("{}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[]"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"key\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2, 3]"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_ValidNdjson() {
+        // NDJSON format (newline-delimited JSON)
+        assertTrue(StringUtils.isJsonOrNdjson("{\"index\": {\"_index\": \"test\"}}\n{\"field\": \"value\"}"));
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2}\n{\"c\": 3}"));
+        assertTrue(StringUtils.isJsonOrNdjson("[1, 2]\n[3, 4]"));
+
+        // NDJSON with empty lines should be valid
+        assertTrue(StringUtils.isJsonOrNdjson("{\"a\": 1}\n\n{\"b\": 2}"));
+
+        // Single line NDJSON
+        assertTrue(StringUtils.isJsonOrNdjson("{\"single\": \"line\"}"));
+    }
+
+    @Test
+    public void isJsonOrNdjson_Invalid() {
+        // Invalid JSON
+        assertFalse(StringUtils.isJsonOrNdjson("{"));
+        assertFalse(StringUtils.isJsonOrNdjson("["));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"key\": \"value}"));
+
+        // NDJSON with invalid JSON line
+        assertFalse(StringUtils.isJsonOrNdjson("{\"valid\": \"json\"}\n{invalid json}"));
+        assertFalse(StringUtils.isJsonOrNdjson("{\"a\": 1}\n{\"b\": 2\n{\"c\": 3}"));
+
+        // Null and blank
+        assertFalse(StringUtils.isJsonOrNdjson(null));
+        assertFalse(StringUtils.isJsonOrNdjson(""));
+        assertFalse(StringUtils.isJsonOrNdjson("   "));
+    }
+
+    @Test
+    public void isJsonOrNdjson_InvalidJson() {
+        String json =
+            "{\"index\":{\"_index\":\"demo2-memory-long-term\"}}\n{\"created_time\":1760760969707,\"memory\":\"Bob likes swimming.\",\"last_updated_time\":1760760969707,\"namespace_size\":1,\"owner_id\":\"admin\",\"namespace\":{\"user_id\":\"bob\"},\"strategy_id\":\"semantic_9766b0fe\",\"strategy_type\":\"SEMANTIC\",\"memory_container_id\":\"B4DU85kBZsSZwpNve_T0\",\"tags\":{\"topic\":\"personal info\"}}\n";
+        assertTrue(StringUtils.isJsonOrNdjson(json));
+    }
+
+    private String convertBulkRequestToNDJSON(BulkRequest bulkRequest) {
+        StringBuilder ndjson = new StringBuilder();
+
+        for (var docWriteRequest : bulkRequest.requests()) {
+            if (docWriteRequest instanceof IndexRequest) {
+                IndexRequest indexRequest = (IndexRequest) docWriteRequest;
+
+                // Action line
+                Map<String, Object> actionLine = new HashMap<>();
+                actionLine.put("index", Map.of("_index", indexRequest.index()));
+                ndjson.append(StringUtils.toJson(actionLine)).append('\n');
+
+                // Document line
+                ndjson.append(indexRequest.source().utf8ToString()).append('\n');
+            }
+        }
+
+        return ndjson.toString();
+    }
+
+    private String convertBulkRequestToNDJSON1(BulkRequest bulkRequest) {
+        StringBuilder ndjson = new StringBuilder();
+
+        for (var docWriteRequest : bulkRequest.requests()) {
+            if (docWriteRequest instanceof IndexRequest) {
+                IndexRequest indexRequest = (IndexRequest) docWriteRequest;
+
+                // Action line for index operation
+                Map<String, Object> actionMetadata = new HashMap<>();
+                actionMetadata.put("_index", indexRequest.index());
+                if (indexRequest.id() != null) {
+                    actionMetadata.put("_id", indexRequest.id());
+                }
+                Map<String, Object> actionLine = new HashMap<>();
+                actionLine.put("index", actionMetadata);
+                ndjson.append(StringUtils.toJson(actionLine)).append('\n');
+
+                // Document line
+                ndjson.append(indexRequest.source().utf8ToString()).append('\n');
+
+            } else if (docWriteRequest instanceof UpdateRequest) {
+                UpdateRequest updateRequest = (UpdateRequest) docWriteRequest;
+
+                // Action line for update operation
+                Map<String, Object> actionMetadata = new HashMap<>();
+                actionMetadata.put("_index", updateRequest.index());
+                actionMetadata.put("_id", updateRequest.id());
+                Map<String, Object> actionLine = new HashMap<>();
+                actionLine.put("update", actionMetadata);
+                ndjson.append(StringUtils.toJson(actionLine)).append('\n');
+
+                // Document line - for update, we need to wrap in "doc" or "script"
+                Map<String, Object> updateDoc = new HashMap<>();
+                if (updateRequest.doc() != null) {
+                    updateDoc.put("doc", XContentHelper.convertToMap(updateRequest.doc().source(), false, XContentType.JSON).v2());
+                    if (updateRequest.docAsUpsert()) {
+                        updateDoc.put("doc_as_upsert", true);
+                    }
+                } else if (updateRequest.script() != null) {
+                    updateDoc.put("script", updateRequest.script());
+                }
+                if (updateRequest.upsertRequest() != null) {
+                    updateDoc
+                        .put("upsert", XContentHelper.convertToMap(updateRequest.upsertRequest().source(), false, XContentType.JSON).v2());
+                }
+                ndjson.append(StringUtils.toJson(updateDoc)).append('\n');
+
+            } else if (docWriteRequest instanceof DeleteRequest) {
+                DeleteRequest deleteRequest = (DeleteRequest) docWriteRequest;
+
+                // Action line for delete operation
+                Map<String, Object> actionMetadata = new HashMap<>();
+                actionMetadata.put("_index", deleteRequest.index());
+                actionMetadata.put("_id", deleteRequest.id());
+                Map<String, Object> actionLine = new HashMap<>();
+                actionLine.put("delete", actionMetadata);
+                ndjson.append(StringUtils.toJson(actionLine)).append('\n');
+
+                // Delete operations don't have a document line, just the action line
+            }
+        }
+
+        return ndjson.toString();
+    }
+
+    @Test
+    public void test1() {
+        BulkRequest bulkRequest = new BulkRequest();
+        IndexRequest request = new IndexRequest();
+        request.index("test");
+        request.source(Map.of("key", "value"));
+        bulkRequest.add(request);
+
+        DeleteRequest deleteRequest = new DeleteRequest();
+        deleteRequest.index("test");
+        deleteRequest.id("test11");
+        bulkRequest.add(deleteRequest);
+
+        UpdateRequest updateRequest = new UpdateRequest();
+        updateRequest.index("test");
+        updateRequest.id("test123");
+        updateRequest.doc(Map.of("key", "value"));
+        bulkRequest.add(updateRequest);
+
+        String s = convertBulkRequestToNDJSON1(bulkRequest);
+        System.out.println(s);
     }
 
     @Test
