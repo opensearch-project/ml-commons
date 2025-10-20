@@ -227,14 +227,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 if (infer) {
                     threadPool.executor(AGENTIC_MEMORY_THREAD_POOL).execute(() -> {
                         try {
-                            extractLongTermMemory(
-                                input,
-                                container,
-                                user,
-                                ActionListener.wrap(res -> { log.debug("Long term memory results: {}", res.toString()); }, e -> {
-                                    log.error("Failed to extract longTermMemory id from memory container", e);
-                                })
-                            );
+                            extractLongTermMemory(input, container, user, ActionListener.wrap(res -> {}, e -> {
+                                log.error("Failed to extract longTermMemory id from memory container", e);
+                            }));
                         } catch (Exception e) {
                             memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, null, input, e);
                         }
@@ -243,7 +238,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             }, actionListener::onFailure);
             memoryContainerHelper.indexData(memoryConfig, indexRequest, responseActionListener);
         } catch (Exception e) {
-            log.error("Failed to add memory", e);
+            log.error("Failed to add memory");
             actionListener.onFailure(e);
         }
     }
@@ -260,7 +255,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             return indexRequest;
         } catch (IOException e) {
-            logger.error("Failed to build index request source", e);
+            log.error("Failed to build index request source");
             throw new RuntimeException("Failed to build index request", e);
         }
     }
@@ -286,7 +281,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryProcessingService.runMemoryStrategy(strategy, messages, memoryConfig, ActionListener.wrap(facts -> {
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
-                        log.error("Failed to extract facts with LLM", e);
+                        log.error("Failed to extract facts with LLM");
                         memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, strategyNameSpace, input, e);
                         actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
                     }));
@@ -342,7 +337,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     }, actionListener::onFailure)
                                 );
                         }, e -> {
-                            log.error("Failed to make memory decisions", e);
+                            log.error("Failed to make memory decisions");
                             actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
                         }));
                 } else {
@@ -366,7 +361,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         );
                 }
             }, e -> {
-                log.error("Failed to search similar facts", e);
+                log.error("Failed to search similar facts");
                 actionListener.onFailure(new OpenSearchException("Failed to search similar facts: " + e.getMessage(), e));
             }));
         } else {

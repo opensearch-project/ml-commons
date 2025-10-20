@@ -8,6 +8,7 @@ package org.opensearch.ml.common.memorycontainer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration.EmbeddingConfig;
 
@@ -992,5 +994,90 @@ public class MemoryConfigurationTests {
 
         Map<String, Object> result = config.getMemoryIndexMapping("any-index");
         assertNull(result);
+    }
+
+    // ==================== buildIndexPrefix CRLF Injection Tests ====================
+
+    @Test
+    public void testBuildIndexPrefix_RejectsCarriageReturn() {
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\rinjection").build()
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void testBuildIndexPrefix_RejectsLineFeed() {
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\ninjection").build()
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void testBuildIndexPrefix_RejectsCRLF() {
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\r\ninjection").build()
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void testBuildIndexPrefix_RejectsTab() {
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\tinjection").build()
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void testBuildIndexPrefix_RejectsNullCharacter() {
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\u0000injection").build()
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void testBuildIndexPrefix_RejectsOtherControlCharacters() {
+        // Test ASCII control character 1 (SOH - Start of Header)
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\u0001injection").build()
+        );
+        assertTrue(exception.getMessage().contains("control characters"));
+    }
+
+    @Test
+    public void testBuildIndexPrefix_BackslashRejectedByMetadataCreateIndexService() {
+        // Verify that backslash is rejected by OpenSearch's built-in validation
+        // MetadataCreateIndexService.validateIndexOrAliasName handles this
+        OpenSearchParseException exception = assertThrows(
+            OpenSearchParseException.class,
+            () -> MemoryConfiguration.builder().indexPrefix("test\\backslash").build()
+        );
+        // The error message should come from MetadataCreateIndexService
+        assertTrue(
+            exception.getMessage().contains("invalid")
+                || exception.getMessage().contains("index")
+                || exception.getMessage().contains("prefix")
+        );
+    }
+
+    @Test
+    public void testBuildIndexPrefix_AcceptsValidPrefix() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("valid-prefix-123").build();
+        assertEquals("valid-prefix-123", config.getIndexPrefix());
+    }
+
+    @Test
+    public void testBuildIndexPrefix_AcceptsHyphenAndUnderscore() {
+        MemoryConfiguration config = MemoryConfiguration.builder().indexPrefix("valid_prefix-with-chars").build();
+        assertEquals("valid_prefix-with-chars", config.getIndexPrefix());
     }
 }

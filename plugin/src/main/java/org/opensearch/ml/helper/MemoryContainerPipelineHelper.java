@@ -69,7 +69,7 @@ public final class MemoryContainerPipelineHelper {
                 indicesHandler.createLongTermMemoryIndex(null, indexName, config, listener);
             }
         } catch (Exception e) {
-            log.error("Failed to create long-term memory infrastructure for index: {}", indexName, e);
+            log.error("Failed to create text embedding pipeline for long term memory index: {}", indexName, e);
             listener.onFailure(e);
         }
     }

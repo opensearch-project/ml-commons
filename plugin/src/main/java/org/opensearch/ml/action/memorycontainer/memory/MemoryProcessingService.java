@@ -155,7 +155,7 @@ public class MemoryProcessingService {
             String userPrompt = "Analyze the following conversation and extract information:\n```json\n" + conversationJson + "\n```";
             stringParameters.put("user_prompt", userPrompt);
         } catch (Exception e) {
-            log.error("Failed to build messages JSON", e);
+            log.error("Failed to build messages JSON");
             listener.onResponse(new ArrayList<>());
             return;
         }
@@ -176,7 +176,7 @@ public class MemoryProcessingService {
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
-                log.error("Failed to parse facts from LLM response", e);
+                log.error("Failed to parse facts from LLM response");
                 listener.onFailure(new IllegalArgumentException("Failed to parse facts from LLM response", e));
             }
         }, e -> {
@@ -261,15 +261,15 @@ public class MemoryProcessingService {
                     log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
-                    log.error("Failed to parse memory decisions from LLM response", e);
+                    log.error("Failed to parse memory decisions from LLM response");
                     listener.onFailure(e);
                 }
             }, e -> {
-                log.error("Failed to get memory decisions from LLM", e);
+                log.error("Failed to get memory decisions from LLM");
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to build memory decision request", e);
+            log.error("Failed to build memory decision request");
             listener.onFailure(e);
         }
     }
@@ -319,7 +319,7 @@ public class MemoryProcessingService {
                         }
                     }
                 } catch (IOException e) {
-                    log.error("Failed to extract content from dataMap", e);
+                    log.error("Failed to extract content from dataMap");
                     throw new IllegalArgumentException("Failed to extract content from LLM response", e);
                 }
             }
@@ -410,11 +410,11 @@ public class MemoryProcessingService {
                         String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmResultPath);
                         listener.onResponse(summary);
                     } catch (Exception e) {
-                        log.error("Failed to parse memory decisions from LLM response", e);
+                        log.error("Failed to parse memory decisions from LLM response");
                         listener.onFailure(e);
                     }
                 }, e -> {
-                    log.error("Failed to get memory decisions from LLM", e);
+                    log.error("Failed to get memory decisions from LLM");
                     listener.onFailure(e);
                 }));
             } catch (Exception e) {

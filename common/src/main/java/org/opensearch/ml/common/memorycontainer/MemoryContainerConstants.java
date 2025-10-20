@@ -134,6 +134,7 @@ public class MemoryContainerConstants {
     public static final String INVALID_EMBEDDING_MODEL_TYPE_ERROR = "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
     public static final String MAX_INFER_SIZE_LIMIT_ERROR = "Maximum infer size cannot exceed 10";
     public static final String FIELD_NOT_ALLOWED_SEMANTIC_DISABLED_ERROR = "Field %s is not allowed when semantic storage is disabled";
+    public static final String INDEX_PREFIX_INVALID_CHARACTERS_ERROR = "Index prefix must not contain any control characters";
 
     // Model validation error messages
     public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
