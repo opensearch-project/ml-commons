@@ -403,7 +403,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return Map.of();
     }
 
-    private BytesReference combineChunks(List<HttpChunk> chunks) {
+    @VisibleForTesting
+    BytesReference combineChunks(List<HttpChunk> chunks) {
         try {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             for (HttpChunk chunk : chunks) {
