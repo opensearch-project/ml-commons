@@ -27,8 +27,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -55,6 +57,7 @@ import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -297,31 +300,43 @@ public class MemoryProcessingService {
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
             String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
-            Object filterdResult = JsonPath.read(dataMap, llmResultPath);
-            String llmResult = null;
-            if (filterdResult != null) {
-                llmResult = StringUtils.toJson(filterdResult);
-            }
-            if (llmResult != null) {
-                llmResult = StringUtils.toJson(extractJsonProcessorChain.process(llmResult));
-                try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                        String fieldName = parser.currentName();
-                        if ("facts".equals(fieldName)) {
-                            ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
-                            while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                                String fact = parser.text();
-                                facts.add(fact);
-                            }
-                        } else {
-                            parser.skipChildren();
-                        }
-                    }
-                } catch (IOException e) {
-                    log.error("Failed to extract content from dataMap");
-                    throw new IllegalArgumentException("Failed to extract content from LLM response", e);
+            try {
+                Object filterdResult = JsonPath.read(dataMap, llmResultPath);
+                String llmResult = null;
+                if (filterdResult != null) {
+                    llmResult = StringUtils.toJson(filterdResult);
                 }
+                if (llmResult != null) {
+                    llmResult = StringUtils.toJson(extractJsonProcessorChain.process(llmResult));
+                    try (
+                        XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)
+                    ) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                            String fieldName = parser.currentName();
+                            if ("facts".equals(fieldName)) {
+                                ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
+                                while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                                    String fact = parser.text();
+                                    facts.add(fact);
+                                }
+                            } else {
+                                parser.skipChildren();
+                            }
+                        }
+                    } catch (IOException e) {
+                        log.error("Failed to extract content from dataMap");
+                        throw new IllegalArgumentException("Failed to extract content from LLM response", e);
+                    }
+                }
+            } catch (PathNotFoundException e) {
+                String reason = extractFirstSentence(e.getMessage());
+                throw new OpenSearchStatusException(
+                    "LLM predict result cannot be extracted with current llm_result_path with reason: "
+                        + reason
+                        + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
+                    RestStatus.NOT_FOUND
+                );
             }
         }
 
@@ -342,35 +357,47 @@ public class MemoryProcessingService {
             }
 
             Map<String, ?> dataAsMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
-            Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
-            if (filterdResult == null) {
-                throw new IllegalStateException("No response content found in LLM output");
-            }
-            String responseContent = StringUtils.toJson(filterdResult);
+            try {
+                Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+                if (filterdResult == null) {
+                    throw new IllegalStateException("No response content found in LLM output");
+                }
+                String responseContent = StringUtils.toJson(filterdResult);
 
-            // Clean response content
-            responseContent = StringUtils.toJson(extractJsonProcessorChain.process(responseContent));
+                // Clean response content
+                responseContent = StringUtils.toJson(extractJsonProcessorChain.process(responseContent));
 
-            List<MemoryDecision> decisions = new ArrayList<>();
-            try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)) {
-                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                List<MemoryDecision> decisions = new ArrayList<>();
+                try (
+                    XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 
-                while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                    String fieldName = parser.currentName();
-                    parser.nextToken();
+                    while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                        String fieldName = parser.currentName();
+                        parser.nextToken();
 
-                    if (MEMORY_DECISION_FIELD.equals(fieldName)) {
-                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                            decisions.add(MemoryDecision.parse(parser));
+                        if (MEMORY_DECISION_FIELD.equals(fieldName)) {
+                            ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                            while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                                decisions.add(MemoryDecision.parse(parser));
+                            }
+                        } else {
+                            parser.skipChildren();
                         }
-                    } else {
-                        parser.skipChildren();
                     }
                 }
-            }
 
-            return decisions;
+                return decisions;
+            } catch (PathNotFoundException e) {
+                String reason = extractFirstSentence(e.getMessage());
+                throw new OpenSearchStatusException(
+                    "LLM predict result cannot be extracted with current llm_result_path with reason: "
+                        + reason
+                        + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
+                    RestStatus.NOT_FOUND
+                );
+            }
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse memory decisions", e);
         }
@@ -425,12 +452,22 @@ public class MemoryProcessingService {
 
     private String parseSessionSummary(ModelTensorOutput output, String llmResultPath) {
         Map<String, ?> dataAsMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
-        String sessionSummary = null;
-        if (filterdResult != null) {
-            sessionSummary = StringUtils.toJson(filterdResult);
+        try {
+            Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+            String sessionSummary = null;
+            if (filterdResult != null) {
+                sessionSummary = StringUtils.toJson(filterdResult);
+            }
+            return sessionSummary;
+        } catch (PathNotFoundException e) {
+            String reason = extractFirstSentence(e.getMessage());
+            throw new OpenSearchStatusException(
+                "LLM predict result cannot be extracted with current llm_result_path with reason: "
+                    + reason
+                    + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
+                RestStatus.NOT_FOUND
+            );
         }
-        return sessionSummary;
     }
 
     private boolean validatePromptFormat(String prompt) {
@@ -468,5 +505,26 @@ public class MemoryProcessingService {
 
         // Fall back to memory config
         return memoryConfig != null ? memoryConfig.getLlmId() : null;
+    }
+
+    /**
+     * Extracts the first sentence from an exception message without the trailing period.
+     * Uses ". " (period + space) as the sentence boundary to avoid splitting on periods
+     * within JSON paths like "$.data.output".
+     *
+     * @param message The exception message to extract from
+     * @return The first sentence without trailing period, or the whole message if no sentence boundary found
+     */
+    private String extractFirstSentence(String message) {
+        if (message == null) {
+            return "";
+        }
+        // Look for ". " (period + space) which indicates sentence boundary
+        // This avoids splitting on periods within JSON paths like "$.data.output"
+        int sentenceEnd = message.indexOf(". ");
+        if (sentenceEnd >= 0) {
+            return message.substring(0, sentenceEnd); // Exclude the period
+        }
+        return message; // No sentence boundary found, use whole message
     }
 }
