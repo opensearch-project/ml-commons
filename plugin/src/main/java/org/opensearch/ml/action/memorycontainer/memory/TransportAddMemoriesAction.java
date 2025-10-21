@@ -238,7 +238,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             }, actionListener::onFailure);
             memoryContainerHelper.indexData(memoryConfig, indexRequest, responseActionListener);
         } catch (Exception e) {
-            log.error("Failed to add memory");
+            log.error("Failed to add memory", e);
             actionListener.onFailure(e);
         }
     }
@@ -255,7 +255,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             return indexRequest;
         } catch (IOException e) {
-            log.error("Failed to build index request source");
+            log.error("Failed to build index request source", e);
             throw new RuntimeException("Failed to build index request", e);
         }
     }
@@ -281,7 +281,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryProcessingService.runMemoryStrategy(strategy, messages, memoryConfig, ActionListener.wrap(facts -> {
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
-                        log.error("Failed to extract facts with LLM");
+                        log.error("Failed to extract facts with LLM", e);
                         memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, strategyNameSpace, input, e);
                         actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
                     }));
@@ -337,7 +337,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     }, actionListener::onFailure)
                                 );
                         }, e -> {
-                            log.error("Failed to make memory decisions");
+                            log.error("Failed to make memory decisions", e);
                             actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
                         }));
                 } else {
@@ -361,7 +361,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         );
                 }
             }, e -> {
-                log.error("Failed to search similar facts");
+                log.error("Failed to search similar facts", e);
                 actionListener.onFailure(new OpenSearchException("Failed to search similar facts: " + e.getMessage(), e));
             }));
         } else {

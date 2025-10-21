@@ -158,7 +158,7 @@ public class MemoryProcessingService {
             String userPrompt = "Analyze the following conversation and extract information:\n```json\n" + conversationJson + "\n```";
             stringParameters.put("user_prompt", userPrompt);
         } catch (Exception e) {
-            log.error("Failed to build messages JSON");
+            log.error("Failed to build messages JSON", e);
             listener.onResponse(new ArrayList<>());
             return;
         }
@@ -179,7 +179,7 @@ public class MemoryProcessingService {
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
-                log.error("Failed to parse facts from LLM response");
+                log.error("Failed to parse facts from LLM response", e);
                 listener.onFailure(new IllegalArgumentException("Failed to parse facts from LLM response", e));
             }
         }, e -> {
@@ -264,15 +264,15 @@ public class MemoryProcessingService {
                     log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
-                    log.error("Failed to parse memory decisions from LLM response");
+                    log.error("Failed to parse memory decisions from LLM response", e);
                     listener.onFailure(e);
                 }
             }, e -> {
-                log.error("Failed to get memory decisions from LLM");
+                log.error("Failed to get memory decisions from LLM", e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to build memory decision request");
+            log.error("Failed to build memory decision request", e);
             listener.onFailure(e);
         }
     }
@@ -331,6 +331,7 @@ public class MemoryProcessingService {
                 }
             } catch (PathNotFoundException e) {
                 String reason = extractFirstSentence(e.getMessage());
+                log.error("Failed to extract LLM result using path {}: {}", llmResultPath, reason);
                 throw new OpenSearchStatusException(
                     "LLM predict result cannot be extracted with current llm_result_path with reason: "
                         + reason
@@ -391,6 +392,7 @@ public class MemoryProcessingService {
                 return decisions;
             } catch (PathNotFoundException e) {
                 String reason = extractFirstSentence(e.getMessage());
+                log.error("Failed to extract LLM result using path {}: {}", llmResultPath, reason);
                 throw new OpenSearchStatusException(
                     "LLM predict result cannot be extracted with current llm_result_path with reason: "
                         + reason
@@ -437,11 +439,11 @@ public class MemoryProcessingService {
                         String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmResultPath);
                         listener.onResponse(summary);
                     } catch (Exception e) {
-                        log.error("Failed to parse memory decisions from LLM response");
+                        log.error("Failed to parse memory decisions from LLM response", e);
                         listener.onFailure(e);
                     }
                 }, e -> {
-                    log.error("Failed to get memory decisions from LLM");
+                    log.error("Failed to get memory decisions from LLM", e);
                     listener.onFailure(e);
                 }));
             } catch (Exception e) {
@@ -461,6 +463,7 @@ public class MemoryProcessingService {
             return sessionSummary;
         } catch (PathNotFoundException e) {
             String reason = extractFirstSentence(e.getMessage());
+            log.error("Failed to extract LLM result using path {}: {}", llmResultPath, reason);
             throw new OpenSearchStatusException(
                 "LLM predict result cannot be extracted with current llm_result_path with reason: "
                     + reason
