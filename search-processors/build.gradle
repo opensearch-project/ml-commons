@@ -27,6 +27,10 @@ repositories {
     mavenLocal()
 }
 
+configurations.all {
+    resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
+}
+
 dependencies {
     implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
