@@ -16,6 +16,9 @@ import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -365,6 +368,10 @@ public class HttpConnector extends AbstractConnector {
                 jsonObject.addProperty("stream", true);
                 payload = jsonObject.toString();
             }
+            // Log payload for debugging
+
+            log.info("=== PAYLOAD DEBUG === Action: {} | Payload: {}", action, payload);
+
             return (T) payload;
         }
         return (T) parameters.get("http_body");

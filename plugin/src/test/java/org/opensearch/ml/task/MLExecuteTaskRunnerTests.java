@@ -33,6 +33,8 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
+import org.opensearch.ml.action.contextmanagement.ContextManagerFactory;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -78,6 +80,10 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     DiscoveryNodeHelper nodeHelper;
     @Mock
     ClusterApplierService clusterApplierService;
+    @Mock
+    ContextManagementTemplateService contextManagementTemplateService;
+    @Mock
+    ContextManagerFactory contextManagerFactory;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -138,7 +144,9 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
                 mlTaskDispatcher,
                 mlCircuitBreakerService,
                 nodeHelper,
-                mlEngine
+                mlEngine,
+                contextManagementTemplateService,
+                contextManagerFactory
             )
         );
 
