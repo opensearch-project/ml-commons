@@ -9,6 +9,7 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import java.util.Collections;
@@ -100,7 +101,7 @@ public class ModelAccessControlHelper {
         }
         if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
             ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_RESOURCE_TYPE, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -175,7 +176,7 @@ public class ModelAccessControlHelper {
         }
         if (ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null) {
             ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_RESOURCE_TYPE, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
