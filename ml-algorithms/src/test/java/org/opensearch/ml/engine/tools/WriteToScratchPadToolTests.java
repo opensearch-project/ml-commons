@@ -11,8 +11,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -90,33 +88,33 @@ public class WriteToScratchPadToolTests {
 
     @Test
     public void testRun_Success_NoExistingNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Wrote to scratchpad: new note", captor.getValue());
-        assertEquals(Arrays.asList("new note"), parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals("[\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
     public void testRun_Success_WithExistingNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
-        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, new ArrayList<>(Arrays.asList("existing note")));
-        tool.run((Map) parameters, listener);
+        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "[\"existing note\"]");
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Wrote to scratchpad: new note", captor.getValue());
-        assertEquals(Arrays.asList("existing note", "new note"), parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals("[\"existing note\",\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
     public void testRun_Failure_NoNotes() {
-        Map<String, Object> parameters = new HashMap<>();
-        tool.run((Map) parameters, listener);
+        Map<String, String> parameters = new HashMap<>();
+        tool.run(parameters, listener);
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
@@ -126,9 +124,9 @@ public class WriteToScratchPadToolTests {
 
     @Test
     public void testRun_Failure_EmptyNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
@@ -138,67 +136,107 @@ public class WriteToScratchPadToolTests {
 
     @Test
     public void testRun_Success_ReturnHistory_WithExistingNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
-        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, new ArrayList<>(Arrays.asList("existing note")));
+        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "[\"existing note\"]");
         parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "true");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Scratchpad updated. Full content:\n- existing note\n- new note", captor.getValue());
-        assertEquals(Arrays.asList("existing note", "new note"), parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals("[\"existing note\",\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
     public void testRun_Success_ReturnHistory_NoExistingNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
         parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "true");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Scratchpad updated. Full content:\n- new note", captor.getValue());
-        assertEquals(Arrays.asList("new note"), parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals("[\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
     public void testRun_Success_NonListScratchpadNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
         parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "not a list");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Wrote to scratchpad: new note", captor.getValue());
-        assertEquals(Arrays.asList("new note"), parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals("[\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
     public void testRun_Success_WithJsonStringNotes() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
         parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "[\"existing note\"]");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Wrote to scratchpad: new note", captor.getValue());
-        assertEquals(Arrays.asList("existing note", "new note"), parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+        assertEquals("[\"existing note\",\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test
     public void testRun_Success_ReturnHistory_False() {
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, String> parameters = new HashMap<>();
         parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
         parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "false");
-        tool.run((Map) parameters, listener);
+        tool.run(parameters, listener);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(captor.capture());
         assertEquals("Wrote to scratchpad: new note", captor.getValue());
+    }
+
+    @Test
+    public void testRun_StringConversion_EmptyArray() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(WriteToScratchPadTool.NOTES_KEY, "test note");
+        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "[]");
+        tool.run(parameters, listener);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Wrote to scratchpad: test note", captor.getValue());
+        assertEquals("[\"test note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+    }
+
+    @Test
+    public void testRun_StringConversion_WithJsonArray() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
+        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "[\"existing note\"]");
+        tool.run(parameters, listener);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Wrote to scratchpad: new note", captor.getValue());
+        assertEquals("[\"existing note\",\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
+    }
+
+    @Test
+    public void testRun_StringConversion_ReturnHistory() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(WriteToScratchPadTool.NOTES_KEY, "new note");
+        parameters.put(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY, "[\"existing\"]");
+        parameters.put(WriteToScratchPadTool.RETURN_HISTORY_KEY, "true");
+        tool.run(parameters, listener);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(listener).onResponse(captor.capture());
+        assertEquals("Scratchpad updated. Full content:\n- existing\n- new note", captor.getValue());
+        assertEquals("[\"existing\",\"new note\"]", parameters.get(WriteToScratchPadTool.SCRATCHPAD_NOTES_KEY));
     }
 
     @Test

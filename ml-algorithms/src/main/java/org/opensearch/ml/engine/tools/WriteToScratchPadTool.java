@@ -111,21 +111,15 @@ public class WriteToScratchPadTool implements Tool {
             return;
         }
 
-        // Handle both List<String> and String (JSON) formats for existing notes
         List<String> notes;
-        Map rawParameters = parameters;
-        Object existingNotes = rawParameters.get(SCRATCHPAD_NOTES_KEY);
-        if (existingNotes instanceof List) {
-            notes = new ArrayList<>((List<String>) existingNotes);
-        } else if (existingNotes instanceof String) {
-            List<String> parsedNotes = StringUtils.parseStringArrayToList((String) existingNotes);
-            notes = parsedNotes != null ? new ArrayList<>(parsedNotes) : new ArrayList<>();
-        } else {
-            notes = new ArrayList<>();
-        }
+        ;
+        String existingNotes = parameters.getOrDefault(SCRATCHPAD_NOTES_KEY, "[]");
+
+        List<String> parsedNotes = StringUtils.parseStringArrayToList(existingNotes);
+        notes = parsedNotes != null ? new ArrayList<>(parsedNotes) : new ArrayList<>();
 
         notes.add(currentNote);
-        rawParameters.put(SCRATCHPAD_NOTES_KEY, notes);
+        parameters.put(SCRATCHPAD_NOTES_KEY, StringUtils.toJson(notes));
 
         if (returnHistory) {
             String fullNotesFormatted = "- " + String.join("\n- ", notes);
