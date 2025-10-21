@@ -11,7 +11,6 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_IN
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -19,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -40,6 +40,8 @@ import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -74,7 +76,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     private volatile AtomicBoolean connectorPrivateIpEnabled;
 
-    private SdkAsyncHttpClient httpClient;
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     @Setter
     @Getter
@@ -83,10 +85,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     public HttpJsonConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (HttpConnector) connector;
-        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     @Override
@@ -109,11 +107,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
-                    validateHttpClientParameters(action, parameters);
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
-                    validateHttpClientParameters(action, parameters);
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
                     break;
                 default:
@@ -135,7 +131,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
+            AccessController
+                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
             actionListener.onFailure(e);
@@ -169,15 +166,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    private void validateHttpClientParameters(String action, Map<String, String> parameters) throws Exception {
-        String endpoint = connector.getActionEndpoint(action, parameters);
-        URL url = new URL(endpoint);
-        String protocol = url.getProtocol();
-        String host = url.getHost();
-        int port = url.getPort();
-        MLHttpClientFactory.validate(protocol, host, port, connectorPrivateIpEnabled);
-    }
-
     private void validateLLMInterface(String llmInterface) {
         switch (llmInterface) {
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
@@ -185,5 +173,20 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             default:
                 throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
+    }
+
+    @VisibleForTesting
+    protected SdkAsyncHttpClient getHttpClient() {
+        if (httpClientRef.get() == null) {
+            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            this.httpClientRef
+                .compareAndSet(
+                    null,
+                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
+                );
+        }
+        return httpClientRef.get();
     }
 }
