@@ -170,7 +170,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             toolFactories,
             memoryMap,
             sdkClient,
-            encryptor
+            encryptor,
+            null
         );
 
         // Setup tools
