@@ -82,6 +82,7 @@ subprojects {
         resolutionStrategy.force "com.google.guava:guava:32.1.3-jre"
         resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
         resolutionStrategy.force "org.apache.commons:commons-lang3:${versions.commonslang}"
+        resolutionStrategy.force 'software.amazon.awssdk:bom:2.32.29'
 
     }
 }
