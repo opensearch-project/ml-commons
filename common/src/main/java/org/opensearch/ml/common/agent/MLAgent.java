@@ -15,7 +15,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -113,7 +112,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 String.format("Agent name cannot be empty or exceed max length of %d characters", MLAgent.AGENT_NAME_MAX_LENGTH)
             );
         }
-        validateMLAgentType(type);
+        MLAgentType.from(type);
         if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }
@@ -126,19 +125,6 @@ public class MLAgent implements ToXContentObject, Writeable {
                 } else {
                     toolNames.add(toolName);
                 }
-            }
-        }
-    }
-
-    private void validateMLAgentType(String agentType) {
-        if (type == null) {
-            throw new IllegalArgumentException("Agent type can't be null");
-        } else {
-            try {
-                MLAgentType.valueOf(agentType.toUpperCase(Locale.ROOT)); // Use toUpperCase() to allow case-insensitive matching
-            } catch (IllegalArgumentException e) {
-                // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
-                throw new IllegalArgumentException(agentType + " is not a valid Agent Type");
             }
         }
     }

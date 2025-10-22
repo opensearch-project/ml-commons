@@ -379,8 +379,9 @@ public class MemoryContainerHelper {
 
     public SearchSourceBuilder addOwnerIdFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
-
+        if (user != null) {
+            boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
+        }
         return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
     }
 
