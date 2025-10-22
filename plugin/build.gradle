@@ -672,6 +672,9 @@ configurations.all {
     resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3'
     resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.18.3'
     resolutionStrategy.force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
+    resolutionStrategy.force 'io.netty:netty-codec:4.1.125.Final'
+    resolutionStrategy.force 'io.netty:netty-codec-http:4.1.125.Final'
+    resolutionStrategy.force 'io.netty:netty-codec-http2:4.1.125.Final'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
