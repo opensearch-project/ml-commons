@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_FIELD;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -33,12 +34,20 @@ public class RemoteStore implements ToXContentObject, Writeable {
 
     public static final String TYPE_FIELD = "type";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
+    public static final String ENDPOINT_FIELD = "endpoint";
+    public static final String PARAMETERS_FIELD = "parameters";
+    public static final String CREDENTIAL_FIELD = "credential";
 
     private RemoteStoreType type;
     private String connectorId;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
     private Integer embeddingDimension;
+    
+    // Auto-connector creation fields
+    private String endpoint;
+    private Map<String, String> parameters;
+    private Map<String, String> credential;
 
     @Builder
     public RemoteStore(
@@ -46,7 +55,10 @@ public class RemoteStore implements ToXContentObject, Writeable {
         String connectorId,
         FunctionName embeddingModelType,
         String embeddingModelId,
-        Integer embeddingDimension
+        Integer embeddingDimension,
+        String endpoint,
+        Map<String, String> parameters,
+        Map<String, String> credential
     ) {
         if (type == null) {
             throw new IllegalArgumentException("Invalid remote store type");
@@ -56,6 +68,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.embeddingDimension = embeddingDimension;
+        this.endpoint = endpoint;
+        this.parameters = parameters != null ? new java.util.HashMap<>(parameters) : new java.util.HashMap<>();
+        this.credential = credential != null ? new java.util.HashMap<>(credential) : new java.util.HashMap<>();
     }
 
     public RemoteStore(StreamInput input) throws IOException {
@@ -66,6 +81,17 @@ public class RemoteStore implements ToXContentObject, Writeable {
         }
         this.embeddingModelId = input.readOptionalString();
         this.embeddingDimension = input.readOptionalInt();
+        this.endpoint = input.readOptionalString();
+        if (input.readBoolean()) {
+            this.parameters = input.readMap(StreamInput::readString, StreamInput::readString);
+        } else {
+            this.parameters = new java.util.HashMap<>();
+        }
+        if (input.readBoolean()) {
+            this.credential = input.readMap(StreamInput::readString, StreamInput::readString);
+        } else {
+            this.credential = new java.util.HashMap<>();
+        }
     }
 
     @Override
@@ -80,6 +106,19 @@ public class RemoteStore implements ToXContentObject, Writeable {
         }
         out.writeOptionalString(embeddingModelId);
         out.writeOptionalInt(embeddingDimension);
+        out.writeOptionalString(endpoint);
+        if (parameters != null && !parameters.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (credential != null && !credential.isEmpty()) {
+            out.writeBoolean(true);
+            out.writeMap(credential, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -100,6 +139,13 @@ public class RemoteStore implements ToXContentObject, Writeable {
         if (embeddingDimension != null) {
             builder.field(DIMENSION_FIELD, embeddingDimension);
         }
+        if (endpoint != null) {
+            builder.field(ENDPOINT_FIELD, endpoint);
+        }
+        if (parameters != null && !parameters.isEmpty()) {
+            builder.field(PARAMETERS_FIELD, parameters);
+        }
+        // Don't serialize credentials for security - they are stored in the connector
         builder.endObject();
         return builder;
     }
@@ -110,6 +156,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
         FunctionName embeddingModelType = null;
         String embeddingModelId = null;
         Integer embeddingDimension = null;
+        String endpoint = null;
+        Map<String, String> parameters = new java.util.HashMap<>();
+        Map<String, String> credential = new java.util.HashMap<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -132,6 +181,15 @@ public class RemoteStore implements ToXContentObject, Writeable {
                 case DIMENSION_FIELD:
                     embeddingDimension = parser.intValue();
                     break;
+                case ENDPOINT_FIELD:
+                    endpoint = parser.text();
+                    break;
+                case PARAMETERS_FIELD:
+                    parameters = parser.mapStrings();
+                    break;
+                case CREDENTIAL_FIELD:
+                    credential = parser.mapStrings();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -145,6 +203,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
             .embeddingModelType(embeddingModelType)
             .embeddingModelId(embeddingModelId)
             .embeddingDimension(embeddingDimension)
+            .endpoint(endpoint)
+            .parameters(parameters)
+            .credential(credential)
             .build();
     }
 }
