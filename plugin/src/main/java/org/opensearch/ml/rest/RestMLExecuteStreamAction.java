@@ -19,7 +19,6 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -217,17 +216,22 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         );
 
                     return Mono.fromCompletionStage(future);
-                } catch (IOException e) {
-                    return Mono.error(new OpenSearchStatusException("Failed to parse request", RestStatus.BAD_REQUEST, e));
+                } catch (Exception e) {
+                    log.error("Failed to parse or process request", e);
+                    return Mono.error(e);
                 }
-            }).doOnNext(channel::sendChunk).onErrorComplete(ex -> {
-                // Error handling
+            }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
+                log.error("Error occurred", ex);
                 try {
-                    channel.sendResponse(new BytesRestResponse(channel, (Exception) ex));
-                    return true;
-                } catch (final IOException e) {
-                    throw new UncheckedIOException(e);
+                    String errorMessage = ex instanceof IOException
+                        ? "Failed to parse request: " + ex.getMessage()
+                        : "Error processing request: " + ex.getMessage();
+                    HttpChunk errorChunk = createHttpChunk("data: {\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}\n\n", true);
+                    channel.sendChunk(errorChunk);
+                } catch (Exception e) {
+                    log.error("Failed to send error chunk", e);
                 }
+                return Mono.empty();
             }).subscribe();
         };
 
