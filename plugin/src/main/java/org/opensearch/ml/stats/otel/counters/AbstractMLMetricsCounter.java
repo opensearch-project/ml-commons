@@ -10,7 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.stats.otel.metrics.AdoptionMetric;
 import org.opensearch.ml.stats.otel.metrics.MetricType;
 import org.opensearch.telemetry.metrics.Counter;
 import org.opensearch.telemetry.metrics.Histogram;
@@ -82,10 +81,6 @@ public abstract class AbstractMLMetricsCounter<T extends Enum<T>> {
 
     private Counter createMetricCounter(T metric) {
         return metricsRegistry.createCounter(PREFIX + metric.name(), getMetricDescription(metric), UNIT);
-    }
-
-    public static void main(String[] args) {
-        System.out.println(AdoptionMetric.MODEL_COUNT.name());
     }
 
     private Histogram createMetricHistogram(T metric) {

@@ -42,10 +42,11 @@ public class MLAgentModelSpec implements ToXContentObject {
     @Builder(toBuilder = true)
     public MLAgentModelSpec(String modelId, String modelProvider, Map<String, String> credential, Map<String, String> modelParameters) {
         if (modelId == null) {
-            throw new IllegalArgumentException("model is null");
+            throw new IllegalArgumentException("model_id must be provided");
         }
+
         if (modelProvider == null) {
-            throw new IllegalArgumentException("model_provider is null");
+            throw new IllegalArgumentException("model_provider must be provided");
         }
         this.modelId = modelId;
         this.modelProvider = modelProvider;
@@ -101,7 +102,7 @@ public class MLAgentModelSpec implements ToXContentObject {
     }
 
     public static MLAgentModelSpec parse(XContentParser parser) throws IOException {
-        String modelId = null;
+        String model = null;
         String modelProvider = null;
         Map<String, String> credential = null;
         Map<String, String> modelParameters = null;
@@ -113,7 +114,7 @@ public class MLAgentModelSpec implements ToXContentObject {
 
             switch (fieldName) {
                 case MODEL_ID_FIELD:
-                    modelId = parser.text();
+                    model = parser.text();
                     break;
                 case MODEL_PROVIDER_FIELD:
                     modelProvider = parser.text();
@@ -130,7 +131,7 @@ public class MLAgentModelSpec implements ToXContentObject {
             }
         }
 
-        return new MLAgentModelSpec(modelId, modelProvider, credential, modelParameters);
+        return new MLAgentModelSpec(model, modelProvider, credential, modelParameters);
     }
 
     public static MLAgentModelSpec fromStream(StreamInput in) throws IOException {

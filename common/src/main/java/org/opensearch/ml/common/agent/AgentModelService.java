@@ -15,6 +15,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class AgentModelService {
+
     /**
      * Creates a model input from the agent model specification
      * @param modelSpec the model specification from agent registration
@@ -23,13 +24,13 @@ public class AgentModelService {
      */
     public static MLRegisterModelInput createModelFromSpec(MLAgentModelSpec modelSpec) {
         validateModelSpec(modelSpec);
-        // Get the appropriate model provider
         ModelProvider provider = ModelProviderFactory.getProvider(modelSpec.getModelProvider());
 
         Connector connector = provider.createConnector(modelSpec.getModelId(), modelSpec.getCredential(), modelSpec.getModelParameters());
 
         return provider.createModelInput(modelSpec.getModelId(), connector, modelSpec.getModelParameters());
     }
+
     /**
      * Infers the LLM interface from model provider for function calling
      * @param modelProvider the model provider string
@@ -48,6 +49,7 @@ public class AgentModelService {
             return null;
         }
     }
+
     /**
      * Validates that the model specification is complete and valid
      * @param modelSpec the model specification to validate

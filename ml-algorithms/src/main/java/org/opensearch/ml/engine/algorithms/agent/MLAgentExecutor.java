@@ -51,8 +51,11 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.AgentInput;
 import org.opensearch.ml.common.agent.AgentInputProcessor;
+import org.opensearch.ml.common.agent.ContentBlock;
+import org.opensearch.ml.common.agent.ContentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.Message;
 import org.opensearch.ml.common.agent.ModelProvider;
 import org.opensearch.ml.common.agent.ModelProviderFactory;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -115,7 +118,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
 
     public MLAgentExecutor(
         Client client,
@@ -219,7 +221,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
 
                                         processAgentInput(agentMLInput, mlAgent);
-
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
