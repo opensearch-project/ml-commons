@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.determineProtocol;
 import static org.opensearch.ml.helper.RemoteStorageHelper.BULK_LOAD_ACTION;
 import static org.opensearch.ml.helper.RemoteStorageHelper.CREATE_INDEX_ACTION;
 import static org.opensearch.ml.helper.RemoteStorageHelper.CREATE_INGEST_PIPELINE_ACTION;
@@ -545,26 +546,6 @@ public class TransportCreateMemoryContainerAction extends
     }
 
     /**
-     * Determines the protocol based on parameters and credentials
-     */
-    private String determineProtocol(Map<String, String> parameters, Map<String, String> credential) {
-        // Check if service_name is in parameters (indicates AWS SigV4)
-        if (parameters != null && parameters.containsKey("service_name")) {
-            return "aws_sigv4";
-        }
-        // Check if roleArn is in credential (indicates AWS SigV4)
-        if (credential != null && credential.containsKey("roleArn")) {
-            return "aws_sigv4";
-        }
-        // Check if access_key and secret_key are in credential (indicates AWS SigV4)
-        if (credential != null && credential.containsKey("access_key") && credential.containsKey("secret_key")) {
-            return "aws_sigv4";
-        }
-        // Default to http (for basic auth or other)
-        return "http";
-    }
-
-    /**
      * Builds connector actions based on remote store type
      */
     private List<ConnectorAction> buildConnectorActions(RemoteStore remoteStore) {
@@ -574,17 +555,15 @@ public class TransportCreateMemoryContainerAction extends
         Map<String, String> credential = remoteStore.getCredential();
 
         // Determine if AWS SigV4 or basic auth
-        boolean isAwsSigV4 = (parameters != null && parameters.containsKey("service_name"))
-            || (credential != null && (credential.containsKey("roleArn") || credential.containsKey("access_key")));
-        boolean isBasicAuth = credential != null && credential.containsKey("basic_auth_key");
+        String protocol = determineProtocol(parameters, credential);
 
         // Common headers for JSON
         Map<String, String> jsonHeaders = new HashMap<>();
         jsonHeaders.put("content-type", "application/json");
+        boolean isAwsSigV4 = "aws_sigv4".equals(protocol);
         if (isAwsSigV4) {
             jsonHeaders.put("x-amz-content-sha256", "required");
-        }
-        if (isBasicAuth) {
+        } else { // TODO: add more auth options
             jsonHeaders.put("Authorization", "Basic ${credential.basic_auth_key}");
         }
 
@@ -649,8 +628,7 @@ public class TransportCreateMemoryContainerAction extends
         bulkHeaders.put("content-type", "application/x-ndjson");
         if (isAwsSigV4) {
             bulkHeaders.put("x-amz-content-sha256", "required");
-        }
-        if (isBasicAuth) {
+        } else {
             bulkHeaders.put("Authorization", "Basic ${credential.basic_auth_key}");
         }
 

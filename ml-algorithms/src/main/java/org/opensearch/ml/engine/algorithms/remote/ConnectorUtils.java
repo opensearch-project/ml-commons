@@ -12,6 +12,8 @@ import static org.opensearch.ml.common.connector.ConnectorAction.BEDROCK;
 import static org.opensearch.ml.common.connector.ConnectorAction.COHERE;
 import static org.opensearch.ml.common.connector.ConnectorAction.OPENAI;
 import static org.opensearch.ml.common.connector.ConnectorAction.SAGEMAKER;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -75,6 +77,22 @@ public class ConnectorUtils {
 
     static {
         signer = AwsV4HttpSigner.create();
+    }
+
+    /**
+     * Determines the protocol based on parameters and credentials
+     */
+    public static String determineProtocol(Map<String, String> parameters, Map<String, String> credential) {
+        boolean hasAwsRegion = parameters != null && parameters.containsKey("region");
+        boolean hasAwsServiceName = parameters != null && parameters.containsKey("service_name");
+        boolean hasRoleArn = credential != null && credential.containsKey("roleArn");
+        boolean hasAwsCredential = credential != null && credential.containsKey("access_key") && credential.containsKey("secret_key");
+        // Check if service_name is in parameters (indicates AWS SigV4)
+        if (hasAwsRegion && hasAwsServiceName && (hasRoleArn || hasAwsCredential)) {
+            return AWS_SIGV4;
+        }
+        // Default to http (for basic auth or other)
+        return HTTP;
     }
 
     public static RemoteInferenceInputDataSet processInput(
