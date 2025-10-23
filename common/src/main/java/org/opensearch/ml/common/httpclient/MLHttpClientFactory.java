@@ -8,7 +8,6 @@ package org.opensearch.ml.common.httpclient;
 import static org.opensearch.secure_sm.AccessController.doPrivileged;
 
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
@@ -21,7 +20,7 @@ public class MLHttpClientFactory {
         Duration connectionTimeout,
         Duration readTimeout,
         int maxConnections,
-        AtomicBoolean connectorPrivateIpEnabled
+        boolean connectorPrivateIpEnabled
     ) {
         return doPrivileged(() -> {
             log
@@ -37,7 +36,7 @@ public class MLHttpClientFactory {
                 .readTimeout(readTimeout)
                 .maxConcurrency(maxConnections)
                 .build();
-            return new ValidatingHttpClient(delegate, connectorPrivateIpEnabled);
+            return new MLValidatableAsyncHttpClient(delegate, connectorPrivateIpEnabled);
         });
     }
 }

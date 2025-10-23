@@ -19,7 +19,6 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -97,7 +96,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.setConnectorPrivateIpEnabled(new AtomicBoolean(false));
+        executor.setConnectorPrivateIpEnabled(false);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -130,7 +129,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.setConnectorPrivateIpEnabled(new AtomicBoolean(true));
+        executor.setConnectorPrivateIpEnabled(true);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -160,7 +159,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        executor.setConnectorPrivateIpEnabled(new AtomicBoolean(false));
+        executor.setConnectorPrivateIpEnabled(false);
         executor
             .invokeRemoteService(
                 PREDICT.name(),

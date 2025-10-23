@@ -17,7 +17,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -74,7 +73,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
     @Setter
-    private volatile AtomicBoolean connectorPrivateIpEnabled;
+    private volatile boolean connectorPrivateIpEnabled;
 
     private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 

@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -81,7 +80,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     private StreamTransportService streamTransportService;
 
     @Setter
-    private AtomicBoolean connectorPrivateIpEnabled;
+    private boolean connectorPrivateIpEnabled;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);

@@ -11,18 +11,17 @@ import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
-public class ValidatingHttpClient implements SdkAsyncHttpClient {
+public class MLValidatableAsyncHttpClient implements SdkAsyncHttpClient {
     private final SdkAsyncHttpClient delegate;
-    private final AtomicBoolean connectorPrivateIpEnabled;
+    private final boolean connectorPrivateIpEnabled;
 
-    protected ValidatingHttpClient(SdkAsyncHttpClient client, AtomicBoolean connectorPrivateIpEnabled) {
+    protected MLValidatableAsyncHttpClient(SdkAsyncHttpClient client, boolean connectorPrivateIpEnabled) {
         this.delegate = client;
         this.connectorPrivateIpEnabled = connectorPrivateIpEnabled;
     }
@@ -54,7 +53,7 @@ public class ValidatingHttpClient implements SdkAsyncHttpClient {
      * @param connectorPrivateIpEnabled The port number of the remote inference server, port number must be in range [0, 65536].
      * @throws UnknownHostException Allow to use private IP or not.
      */
-    public void validate(String protocol, String host, int port, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
+    public void validate(String protocol, String host, int port, boolean connectorPrivateIpEnabled) throws UnknownHostException {
         if (protocol != null && !"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
             log.error("Remote inference protocol is not http or https: {}", protocol);
             throw new IllegalArgumentException("Protocol is not http or https: " + protocol);
@@ -74,9 +73,9 @@ public class ValidatingHttpClient implements SdkAsyncHttpClient {
         validateIp(host, connectorPrivateIpEnabled);
     }
 
-    private void validateIp(String hostName, AtomicBoolean connectorPrivateIpEnabled) throws UnknownHostException {
+    private void validateIp(String hostName, boolean connectorPrivateIpEnabled) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
-        if (connectorPrivateIpEnabled != null && !connectorPrivateIpEnabled.get() && hasPrivateIpAddress(addresses)) {
+        if (!connectorPrivateIpEnabled && hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: {}", hostName);
             throw new IllegalArgumentException("Remote inference host name has private ip address: " + hostName);
         }

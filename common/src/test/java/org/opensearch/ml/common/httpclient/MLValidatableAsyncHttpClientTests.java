@@ -10,22 +10,23 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
-public class ValidatingHttpClientTests {
+public class MLValidatableAsyncHttpClientTests {
     private static final String TEST_HOST = "api.openai.com";
     private static final String HTTP = "http";
     private static final String HTTPS = "https";
-    private static final AtomicBoolean PRIVATE_IP_DISABLED = new AtomicBoolean(false);
-    private static final AtomicBoolean PRIVATE_IP_ENABLED = new AtomicBoolean(true);
+    private static final boolean PRIVATE_IP_DISABLED = false;
+    private static final boolean PRIVATE_IP_ENABLED = true;
 
-    private final ValidatingHttpClient validatingHttpClient = new ValidatingHttpClient(mock(SdkAsyncHttpClient.class), PRIVATE_IP_DISABLED);
+    private final MLValidatableAsyncHttpClient validatingHttpClient = new MLValidatableAsyncHttpClient(
+        mock(SdkAsyncHttpClient.class),
+        PRIVATE_IP_DISABLED
+    );
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
