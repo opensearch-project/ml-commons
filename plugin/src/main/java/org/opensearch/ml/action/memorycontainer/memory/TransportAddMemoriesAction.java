@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -181,16 +180,32 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());
                         processAndIndexMemory(input, container, user, actionListener);
-                    }, e -> actionListener.onFailure(e));
+                    }, e -> {
+                        log.error("Failed to index session data", e);
+                        actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    });
                     memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
-                }, exception -> actionListener.onFailure(exception));
+                }, exception -> {
+                    // Preserve client errors (4XX) with their detailed messages
+                    if (exception instanceof OpenSearchStatusException) {
+                        OpenSearchStatusException osException = (OpenSearchStatusException) exception;
+                        if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                            actionListener.onFailure(exception);
+                            return;
+                        }
+                    }
+                    // Wrap server errors and unexpected exceptions
+                    log.error("Failed to summarize messages for session creation", exception);
+                    actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                });
 
                 memoryProcessingService.summarizeMessages(container.getConfiguration(), messages, summaryListener);
             } else {
                 processAndIndexMemory(input, container, user, actionListener);
             }
         } catch (Exception e) {
-            actionListener.onFailure(e);
+            log.error("Failed to create session", e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -239,7 +254,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             memoryContainerHelper.indexData(memoryConfig, indexRequest, responseActionListener);
         } catch (Exception e) {
             log.error("Failed to add memory", e);
-            actionListener.onFailure(e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -256,7 +271,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             return indexRequest;
         } catch (IOException e) {
             log.error("Failed to build index request source", e);
-            throw new RuntimeException("Failed to build index request", e);
+            throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -281,9 +296,18 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryProcessingService.runMemoryStrategy(strategy, messages, memoryConfig, ActionListener.wrap(facts -> {
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
+                        // Preserve client errors (4XX) with their detailed messages
+                        if (e instanceof OpenSearchStatusException) {
+                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                            if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                                actionListener.onFailure(e);
+                                return;
+                            }
+                        }
+                        // Wrap server errors and unexpected exceptions
                         log.error("Failed to extract facts with LLM", e);
                         memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, strategyNameSpace, input, e);
-                        actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
+                        actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     }));
                 }
             }
@@ -337,8 +361,18 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     }, actionListener::onFailure)
                                 );
                         }, e -> {
+                            // Preserve client errors (4XX) with their detailed messages
+                            if (e instanceof OpenSearchStatusException) {
+                                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                                if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                                    actionListener.onFailure(e);
+                                    return;
+                                }
+                            }
+                            // Wrap server errors and unexpected exceptions
                             log.error("Failed to make memory decisions", e);
-                            actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
+                            actionListener
+                                .onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                         }));
                 } else {
                     List<MemoryDecision> decisions = new ArrayList<>();
@@ -362,7 +396,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 }
             }, e -> {
                 log.error("Failed to search similar facts", e);
-                actionListener.onFailure(new OpenSearchException("Failed to search similar facts: " + e.getMessage(), e));
+                actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }));
         } else {
             // No memory decisions needed

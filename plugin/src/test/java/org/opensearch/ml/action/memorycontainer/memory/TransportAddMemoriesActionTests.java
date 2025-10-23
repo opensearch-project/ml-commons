@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -35,6 +36,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -595,7 +597,9 @@ public class TransportAddMemoriesActionTests {
 
         // Verify summarize was called and failure was propagated
         verify(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
-        verify(actionListener).onFailure(summarizeException);
+        verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException)exception).status() == RestStatus.INTERNAL_SERVER_ERROR
+            && exception.getMessage().contains("Internal server error")));
     }
 
     @Test
@@ -1484,8 +1488,61 @@ public class TransportAddMemoriesActionTests {
         // The async callback handles its own error differently
     }
 
-    // Note: testStoreLongTermMemory_NoLLM_SkipsDecisions removed - invalid scenario
-    // When llmId is null, infer=true fails validation at line 200 (INFER_REQUIRES_LLM_MODEL_ERROR)
-    // The storeLongTermMemory code path for no LLM (line 357-369) can only be reached when
-    // facts.isEmpty() OR llmId is null, but the validation ensures infer=true always has an LLM
+    @Test
+    public void testSummarizeMessages_Preserves4XXErrors() {
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
+
+        MessageInput message = MessageInput.builder().content(createTestContent("Hello")).role("user").build();
+        List<MessageInput> messages = Arrays.asList(message);
+
+        Map<String, String> namespace = new HashMap<>();
+
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getMemoryContainerId()).thenReturn("container-123");
+        when(input.getMessages()).thenReturn(messages);
+        when(input.isInfer()).thenReturn(false);
+        when(input.getNamespace()).thenReturn(namespace);
+        when(input.getOwnerId()).thenReturn("user-123");
+        when(input.getPayloadType()).thenReturn(PayloadType.CONVERSATIONAL);
+        when(input.getParameters()).thenReturn(new HashMap<>());
+
+        MLAddMemoriesRequest request = mock(MLAddMemoriesRequest.class);
+        when(request.getMlAddMemoryInput()).thenReturn(input);
+
+        MemoryConfiguration config = mock(MemoryConfiguration.class);
+        when(config.getParameters()).thenReturn(new HashMap<>());
+        when(config.getWorkingMemoryIndexName()).thenReturn("working-memory-index");
+        when(config.getSessionIndexName()).thenReturn("session-index");
+        when(config.isDisableSession()).thenReturn(false);
+        when(config.getLlmId()).thenReturn("llm-123");
+
+        MLMemoryContainer container = mock(MLMemoryContainer.class);
+        when(container.getConfiguration()).thenReturn(config);
+
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(container);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(eq("container-123"), any());
+
+        when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
+
+        // Mock summarizeMessages to return NOT_FOUND (4XX)
+        OpenSearchStatusException notFoundException = new OpenSearchStatusException(
+            "LLM predict result cannot be extracted with current llm_result_path",
+            RestStatus.NOT_FOUND
+        );
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(2);
+            listener.onFailure(notFoundException);
+            return null;
+        }).when(memoryProcessingService).summarizeMessages(eq(config), eq(messages), any());
+
+        transportAddMemoriesAction.doExecute(task, request, actionListener);
+
+        // Verify 4XX error is preserved with detailed message
+        verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
+            && ((OpenSearchStatusException)exception).status() == RestStatus.NOT_FOUND
+            && exception.getMessage().contains("LLM predict result cannot be extracted")));
+    }
 }

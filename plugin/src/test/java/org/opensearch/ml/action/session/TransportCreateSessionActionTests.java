@@ -380,8 +380,9 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(exceptionCaptor.capture());
 
         Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof IOException);
-        assertEquals("Indexing failed", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     @Test

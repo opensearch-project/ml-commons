@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
@@ -179,12 +178,21 @@ public class MemoryProcessingService {
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
+                // Preserve client errors (4XX) with their detailed messages
+                if (e instanceof OpenSearchStatusException) {
+                    OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                    if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                        listener.onFailure(e);
+                        return;
+                    }
+                }
+                // Wrap server errors and unexpected exceptions
                 log.error("Failed to parse facts from LLM response", e);
-                listener.onFailure(new IllegalArgumentException("Failed to parse facts from LLM response", e));
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }
         }, e -> {
             log.error("Failed to call LLM for fact extraction", e);
-            listener.onFailure(new OpenSearchException("Failed to extract facts using LLM model: " + e.getMessage(), e));
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }));
     }
 
@@ -264,16 +272,25 @@ public class MemoryProcessingService {
                     log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
+                    // Preserve client errors (4XX) with their detailed messages
+                    if (e instanceof OpenSearchStatusException) {
+                        OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                        if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                            listener.onFailure(e);
+                            return;
+                        }
+                    }
+                    // Wrap server errors and unexpected exceptions
                     log.error("Failed to parse memory decisions from LLM response", e);
-                    listener.onFailure(e);
+                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }
             }, e -> {
                 log.error("Failed to get memory decisions from LLM", e);
-                listener.onFailure(e);
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }));
         } catch (Exception e) {
             log.error("Failed to build memory decision request", e);
-            listener.onFailure(e);
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -325,8 +342,8 @@ public class MemoryProcessingService {
                             }
                         }
                     } catch (IOException e) {
-                        log.error("Failed to extract content from dataMap");
-                        throw new IllegalArgumentException("Failed to extract content from LLM response", e);
+                        log.error("Failed to extract content from dataMap", e);
+                        throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
                     }
                 }
             } catch (PathNotFoundException e) {
@@ -348,20 +365,23 @@ public class MemoryProcessingService {
         try {
             MLOutput mlOutput = response.getOutput();
             if (!(mlOutput instanceof ModelTensorOutput)) {
-                throw new IllegalStateException("Expected ModelTensorOutput but got: " + mlOutput.getClass().getSimpleName());
+                log.error("Expected ModelTensorOutput but got: {}", mlOutput.getClass().getSimpleName());
+                throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
             }
 
             ModelTensorOutput tensorOutput = (ModelTensorOutput) mlOutput;
             List<ModelTensors> tensors = tensorOutput.getMlModelOutputs();
             if (tensors == null || tensors.isEmpty()) {
-                throw new IllegalStateException("No model output tensors found");
+                log.error("No model output tensors found in LLM response");
+                throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
             }
 
             Map<String, ?> dataAsMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
             try {
                 Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
                 if (filterdResult == null) {
-                    throw new IllegalStateException("No response content found in LLM output");
+                    log.error("No response content found in LLM output");
+                    throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
                 }
                 String responseContent = StringUtils.toJson(filterdResult);
 
@@ -401,7 +421,16 @@ public class MemoryProcessingService {
                 );
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse memory decisions", e);
+            // Preserve client errors (4XX) with their detailed messages
+            if (e instanceof OpenSearchStatusException) {
+                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                    throw osException;
+                }
+            }
+            // Wrap server errors and unexpected exceptions
+            log.error("Failed to parse memory decisions", e);
+            throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -439,15 +468,25 @@ public class MemoryProcessingService {
                         String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmResultPath);
                         listener.onResponse(summary);
                     } catch (Exception e) {
+                        // Preserve client errors (4XX) with their detailed messages
+                        if (e instanceof OpenSearchStatusException) {
+                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                            if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                                listener.onFailure(e);
+                                return;
+                            }
+                        }
+                        // Wrap server errors and unexpected exceptions
                         log.error("Failed to parse memory decisions from LLM response", e);
-                        listener.onFailure(e);
+                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     }
                 }, e -> {
                     log.error("Failed to get memory decisions from LLM", e);
-                    listener.onFailure(e);
+                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }));
             } catch (Exception e) {
-                listener.onFailure(e);
+                log.error("Failed to build summarization request", e);
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }
         }
     }

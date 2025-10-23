@@ -10,6 +10,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -31,7 +32,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
@@ -303,7 +306,14 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        verify(factsListener).onFailure(any(IllegalArgumentException.class));
+        verify(factsListener)
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.INTERNAL_SERVER_ERROR
+                        && exception.getMessage().contains("Internal server error")
+                )
+            );
     }
 
     @Test
@@ -1091,5 +1101,158 @@ public class MemoryProcessingServiceTests {
         // Verify role clarity
         assertTrue("Should not be a chat assistant", prompt.contains("not a chat assistant"));
         assertTrue("Should only output JSON facts", prompt.contains("only job is to output JSON facts"));
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_Preserves4XXErrors() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        // Mock LLM response with path that will trigger NOT_FOUND (404)
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        // Missing the expected path - will trigger PathNotFoundException
+        dataMap.put("wrong_field", "data");
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+
+        // Verify that 4XX error (NOT_FOUND) is preserved with its detailed message
+        verify(factsListener)
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.NOT_FOUND
+                        && exception.getMessage().contains("LLM predict result cannot be extracted")
+                        && exception.getMessage().contains("llm_result_path")
+                )
+            );
+    }
+
+    @Test
+    public void testExtractFactsFromConversation_Wraps5XXErrors() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        // Mock LLM to throw a server error (5XX)
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new OpenSearchStatusException("Service unavailable", RestStatus.SERVICE_UNAVAILABLE));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+
+        // Verify that 5XX error is wrapped in generic "Internal server error"
+        verify(factsListener)
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.INTERNAL_SERVER_ERROR
+                        && exception.getMessage().contains("Internal server error")
+                )
+            );
+    }
+
+    @Test
+    public void testMakeMemoryDecisions_Preserves4XXErrors() {
+        List<String> facts = Arrays.asList("User name is John");
+        List<FactSearchResult> searchResults = Arrays.asList();
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+
+        // Mock LLM response with path that will trigger NOT_FOUND (404)
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        // Missing the expected path - will trigger PathNotFoundException
+        dataMap.put("wrong_field", "data");
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+
+        // Verify that 4XX error (NOT_FOUND) is preserved with its detailed message
+        verify(decisionsListener)
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.NOT_FOUND
+                        && exception.getMessage().contains("LLM predict result cannot be extracted")
+                        && exception.getMessage().contains("llm_result_path")
+                )
+            );
+    }
+
+    @Test
+    public void testSummarizeMessages_Preserves4XXErrors() {
+        List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.getLlmId()).thenReturn("llm-model-123");
+        when(storageConfig.getParameters()).thenReturn(new HashMap<>());
+
+        ActionListener<String> summaryListener = mock(ActionListener.class);
+
+        // Mock LLM response with path that will trigger NOT_FOUND (404)
+        MLTaskResponse mockResponse = mock(MLTaskResponse.class);
+        ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
+        ModelTensors mockTensors = mock(ModelTensors.class);
+        ModelTensor mockTensor = mock(ModelTensor.class);
+
+        Map<String, Object> dataMap = new HashMap<>();
+        // Missing the expected path - will trigger PathNotFoundException
+        dataMap.put("wrong_field", "data");
+
+        when(mockResponse.getOutput()).thenReturn(mockOutput);
+        when(mockOutput.getMlModelOutputs()).thenReturn(Arrays.asList(mockTensors));
+        when(mockTensors.getMlModelTensors()).thenReturn(Arrays.asList(mockTensor));
+        when(mockTensor.getDataAsMap()).thenReturn((Map) dataMap);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        memoryProcessingService.summarizeMessages(storageConfig, messages, summaryListener);
+
+        // Verify that 4XX error (NOT_FOUND) is preserved with its detailed message
+        verify(summaryListener)
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.NOT_FOUND
+                        && exception.getMessage().contains("LLM predict result cannot be extracted")
+                        && exception.getMessage().contains("llm_result_path")
+                )
+            );
     }
 }

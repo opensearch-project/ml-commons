@@ -223,8 +223,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onFailure(captor.capture());
 
         Exception exception = captor.getValue();
-        assertTrue(exception instanceof RuntimeException);
-        assertEquals("Container not found", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     public void testDoExecuteWhenAccessDenied() {
@@ -566,7 +567,8 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         Exception exception = captor.getValue();
         assertTrue(exception instanceof OpenSearchStatusException);
-        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exception).status());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     public void testUpdateStrategies_CannotChangeType() {
@@ -642,8 +644,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         verify(listener).onFailure(captor.capture());
 
         Exception exception = captor.getValue();
-        assertTrue(exception instanceof IllegalArgumentException);
-        assertTrue(exception.getMessage().contains("Cannot change strategy type"));
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     public void testUpdateStrategies_PartialFieldUpdate() {
@@ -1003,8 +1006,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof IllegalArgumentException);
-        assertTrue(captor.getValue().getMessage().contains("Strategies require both an LLM model and embedding model"));
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
+        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
     }
 
     public void testUpdateContainer_AddStrategyWithOnlyLlm_ShouldFail() {
@@ -1047,8 +1051,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof IllegalArgumentException);
-        assertTrue(captor.getValue().getMessage().contains("Missing: embedding model"));
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
+        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
     }
 
     public void testUpdateContainer_ChangeEmbeddingModel_ShouldFail() {
@@ -1105,8 +1110,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(captor.capture());
-        assertTrue(captor.getValue() instanceof IllegalArgumentException);
-        assertTrue(captor.getValue().getMessage().contains("Cannot change embedding configuration once strategies are configured"));
+        assertTrue(captor.getValue() instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) captor.getValue()).status());
+        assertTrue(captor.getValue().getMessage().contains("Internal server error"));
     }
 
     public void testUpdateContainer_SameEmbeddingValues_ShouldSucceed() {
