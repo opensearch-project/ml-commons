@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.helper;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.CONNECTOR_ACTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH;
@@ -23,12 +24,12 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
 import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
@@ -67,6 +68,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RemoteStorageHelper {
 
+    private static final String REGISTER_MODEL_ACTION = "register_model";
     private static final String CREATE_INGEST_PIPELINE_ACTION = "create_ingest_pipeline";
     private static final String CREATE_INDEX_ACTION = "create_index";
     private static final String WRITE_DOC_ACTION = "write_doc";
@@ -583,7 +585,7 @@ public class RemoteStorageHelper {
                     .append("{\"neural\":{\"")
                     .append(MEMORY_EMBEDDING_FIELD)
                     .append("\":{\"query_text\":\"")
-                    .append(StringEscapeUtils.escapeJson(fact))
+                    .append(escapeJson(fact))
                     .append("\",\"model_id\":\"")
                     .append(memoryConfig.getEmbeddingModelId())
                     .append("\"}}}");
@@ -593,7 +595,7 @@ public class RemoteStorageHelper {
                     .append("{\"neural_sparse\":{\"")
                     .append(MEMORY_EMBEDDING_FIELD)
                     .append("\":{\"query_text\":\"")
-                    .append(StringEscapeUtils.escapeJson(fact))
+                    .append(escapeJson(fact))
                     .append("\",\"model_id\":\"")
                     .append(memoryConfig.getEmbeddingModelId())
                     .append("\"}}}");
@@ -700,6 +702,169 @@ public class RemoteStorageHelper {
         } catch (Exception e) {
             log.error("Error preparing remote long-term memory index creation with pipeline for: {}", indexName, e);
             listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Creates an embedding model in remote AOSS collection
+     *
+     * @param connectorId The connector ID to use for remote storage
+     * @param embeddingModel The embedding model configuration
+     * @param remoteStoreCredential The remote store credentials (used if embedding model doesn't have its own)
+     * @param client The OpenSearch client
+     * @param listener The action listener that receives the created model ID
+     */
+    public static void createRemoteEmbeddingModel(
+        String connectorId,
+        org.opensearch.ml.common.memorycontainer.RemoteEmbeddingModel embeddingModel,
+        Map<String, String> remoteStoreCredential,
+        Client client,
+        ActionListener<String> listener
+    ) {
+        try {
+            // Build model registration request body
+            String requestBody = buildEmbeddingModelRegistrationBody(embeddingModel, remoteStoreCredential);
+
+            // Prepare parameters for connector execution
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put(INPUT_PARAM, requestBody);
+            parameters.put(NO_ESCAPE_PARAMS, INPUT_PARAM);
+            parameters.put(SKIP_VALIDATE_MISSING_PARAMETERS, "true");
+
+            // Execute the connector action with register_model action name
+            executeConnectorAction(connectorId, REGISTER_MODEL_ACTION, parameters, client, ActionListener.wrap(response -> {
+                // Parse model_id from response
+                String modelId = extractModelIdFromResponse(response);
+                log.info("Successfully created embedding model in remote store: {}", modelId);
+                listener.onResponse(modelId);
+            }, e -> {
+                log.error("Failed to create embedding model in remote store", e);
+                listener.onFailure(e);
+            }));
+
+        } catch (Exception e) {
+            log.error("Error building embedding model registration request", e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Builds the request body for embedding model registration in remote AOSS
+     */
+    private static String buildEmbeddingModelRegistrationBody(
+        org.opensearch.ml.common.memorycontainer.RemoteEmbeddingModel embeddingModel,
+        Map<String, String> remoteStoreCredential
+    ) {
+        // Build connector configuration based on provider
+        // String connectorConfig = buildEmbeddingModelConnectorConfig(embeddingModel, remoteStoreCredential);
+
+        String provider = embeddingModel.getProvider();
+        String connectorConfig = buildBedrockEmbeddingConnectorConfig(provider, embeddingModel, remoteStoreCredential);
+
+        // Build model name from provider and model ID (e.g., "bedrock/amazon.titan-embed-text-v2:0")
+        String sanitizedProvider = provider.replace("/", "-"); // AOSS doesn't allow / in model name.
+        String sanitizedModelId = embeddingModel.getModelId().replace("/", "-");
+        String modelName = String.format("%s__%s", sanitizedProvider, sanitizedModelId);
+
+        return String
+            .format(
+                "{ \"function_name\": \"remote\", \"name\": \"%s\", \"description\": \"Auto-generated model\", \"connector\": %s }",
+                modelName,
+                connectorConfig
+            );
+    }
+
+    /**
+     * Builds Bedrock embedding connector configuration from template
+     */
+    private static String buildBedrockEmbeddingConnectorConfig(
+        String provider,
+        org.opensearch.ml.common.memorycontainer.RemoteEmbeddingModel embeddingModel,
+        Map<String, String> remoteStoreCredential
+    ) {
+        try {
+            // Load template from resource file, sample provider "bedrock/text_embedding"
+            String template = loadConnectorTemplate(provider, embeddingModel.getModelId());
+
+            // Get parameters and credential from embedding model
+            Map<String, String> parameters = embeddingModel.getParameters();
+            Map<String, String> credential = embeddingModel.getCredential();
+
+            // Use embedding model credentials if provided, otherwise use remote store credentials
+            if (credential == null || credential.isEmpty()) {
+                credential = remoteStoreCredential;
+            }
+
+            // Validate that parameters are provided
+            if (parameters == null || parameters.isEmpty()) {
+                throw new IllegalArgumentException("Bedrock embedding model requires parameters block");
+            }
+
+            // Parse the template as JSON and inject parameters and credential
+            String connectorConfig = injectParametersAndCredential(template, parameters, credential);
+
+            return connectorConfig;
+        } catch (IOException e) {
+            log.error("Failed to load connector template", e);
+            throw new IllegalArgumentException("Failed to load connector template");
+        }
+    }
+
+    /**
+     * Injects parameters and credential into the connector template
+     */
+    private static String injectParametersAndCredential(String template, Map<String, String> parameters, Map<String, String> credential)
+        throws IOException {
+        // Parse template as JSON
+        XContentParser parser = XContentHelper
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, new BytesArray(template), XContentType.JSON);
+        Map<String, Object> connectorMap = parser.mapOrdered();
+
+        // Inject parameters
+        connectorMap.put("parameters", parameters);
+
+        // Inject credential
+        connectorMap.put("credential", credential);
+
+        // Convert back to JSON string
+        return StringUtils.toJson(connectorMap);
+    }
+
+    /**
+     * Loads connector template from resource file
+     * Path format: model-connectors/<provider>/<function>/<model_id>.json
+     * 
+     * @param provider The model provider (e.g., "bedrock", "openai", "cohere")
+     * @param modelId The model identifier (e.g., "amazon.titan-embed-text-v2")
+     * @return The connector template as a string
+     */
+    private static String loadConnectorTemplate(String provider, String modelId) throws IOException {
+        // Normalize model ID for file name (replace : with -)
+        String normalizedModelId = modelId.replace(":", "-");
+        String path = String.format("model-connectors/%s/%s.json", provider, normalizedModelId);
+
+        try (java.io.InputStream is = RemoteStorageHelper.class.getClassLoader().getResourceAsStream(path)) {
+            if (is == null) {
+                throw new IOException("Connector template not found: " + path);
+            }
+            return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    /**
+     * Extracts model ID from model registration response
+     */
+    private static String extractModelIdFromResponse(ModelTensorOutput response) {
+        try {
+            Map<String, ?> dataAsMap = response.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+            Object modelIdObj = dataAsMap.get("model_id");
+            if (modelIdObj == null) {
+                throw new IllegalArgumentException("model_id not found in response");
+            }
+            return modelIdObj.toString();
+        } catch (Exception e) {
+            log.error("Failed to parse model_id from response", e);
+            throw new IllegalArgumentException("Failed to parse model_id from response", e);
         }
     }
 }
