@@ -169,11 +169,15 @@ public class ConnectorUtils {
     }
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
-        if (inputData.getParameters() == null) {
-            return;
+        inputData.setParameters(escapeRemoteInferenceInputData(inputData.getParameters()));
+    }
+
+    public static Map<String, String> escapeRemoteInferenceInputData(Map<String, String> parameters) {
+        if (parameters == null) {
+            return parameters;
         }
         Map<String, String> newParameters = new HashMap<>();
-        String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
+        String noEscapeParams = parameters.get(NO_ESCAPE_PARAMS);
         Set<String> noEscapParamSet = new HashSet<>();
         if (noEscapeParams != null && !noEscapeParams.isEmpty()) {
             String[] keys = noEscapeParams.split(",");
@@ -181,21 +185,19 @@ public class ConnectorUtils {
                 noEscapParamSet.add(key.trim());
             }
         }
-        if (inputData.getParameters() != null) {
-            inputData.getParameters().forEach((key, value) -> {
-                if (value == null) {
-                    newParameters.put(key, null);
-                } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
-                    // no need to escape if it's already valid json
-                    newParameters.put(key, value);
-                } else if (!noEscapParamSet.contains(key)) {
-                    newParameters.put(key, escapeJson(value));
-                } else {
-                    newParameters.put(key, value);
-                }
-            });
-            inputData.setParameters(newParameters);
-        }
+        parameters.forEach((key, value) -> {
+            if (value == null) {
+                newParameters.put(key, null);
+            } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
+                // no need to escape if it's already valid json
+                newParameters.put(key, value);
+            } else if (!noEscapParamSet.contains(key)) {
+                newParameters.put(key, escapeJson(value));
+            } else {
+                newParameters.put(key, value);
+            }
+        });
+        return newParameters;
     }
 
     private static String getPreprocessFunction(String action, MLInput mlInput, Connector connector) {

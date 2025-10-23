@@ -37,17 +37,21 @@ public class RemoteStore implements ToXContentObject, Writeable {
     public static final String ENDPOINT_FIELD = "endpoint";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREDENTIAL_FIELD = "credential";
+    public static final String EMBEDDING_MODEL_FIELD = "embedding_model";
 
     private RemoteStoreType type;
     private String connectorId;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
     private Integer embeddingDimension;
-    
+
     // Auto-connector creation fields
     private String endpoint;
     private Map<String, String> parameters;
     private Map<String, String> credential;
+
+    // Auto embedding model creation
+    private RemoteEmbeddingModel embeddingModel;
 
     @Builder
     public RemoteStore(
@@ -58,7 +62,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
         Integer embeddingDimension,
         String endpoint,
         Map<String, String> parameters,
-        Map<String, String> credential
+        Map<String, String> credential,
+        RemoteEmbeddingModel embeddingModel
     ) {
         if (type == null) {
             throw new IllegalArgumentException("Invalid remote store type");
@@ -71,6 +76,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
         this.endpoint = endpoint;
         this.parameters = parameters != null ? new java.util.HashMap<>(parameters) : new java.util.HashMap<>();
         this.credential = credential != null ? new java.util.HashMap<>(credential) : new java.util.HashMap<>();
+        this.embeddingModel = embeddingModel;
     }
 
     public RemoteStore(StreamInput input) throws IOException {
@@ -91,6 +97,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
             this.credential = input.readMap(StreamInput::readString, StreamInput::readString);
         } else {
             this.credential = new java.util.HashMap<>();
+        }
+        if (input.readBoolean()) {
+            this.embeddingModel = new RemoteEmbeddingModel(input);
         }
     }
 
@@ -116,6 +125,12 @@ public class RemoteStore implements ToXContentObject, Writeable {
         if (credential != null && !credential.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(credential, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (embeddingModel != null) {
+            out.writeBoolean(true);
+            embeddingModel.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -145,6 +160,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
         if (parameters != null && !parameters.isEmpty()) {
             builder.field(PARAMETERS_FIELD, parameters);
         }
+        if (embeddingModel != null) {
+            builder.field(EMBEDDING_MODEL_FIELD, embeddingModel);
+        }
         // Don't serialize credentials for security - they are stored in the connector
         builder.endObject();
         return builder;
@@ -159,6 +177,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
         String endpoint = null;
         Map<String, String> parameters = new java.util.HashMap<>();
         Map<String, String> credential = new java.util.HashMap<>();
+        RemoteEmbeddingModel embeddingModel = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -190,6 +209,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
                 case CREDENTIAL_FIELD:
                     credential = parser.mapStrings();
                     break;
+                case EMBEDDING_MODEL_FIELD:
+                    embeddingModel = RemoteEmbeddingModel.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -206,6 +228,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
             .endpoint(endpoint)
             .parameters(parameters)
             .credential(credential)
+            .embeddingModel(embeddingModel)
             .build();
     }
 }
