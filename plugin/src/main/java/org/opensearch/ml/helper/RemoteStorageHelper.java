@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_LONG_MEMORY_HISTORY_INDEX_
 import static org.opensearch.ml.common.CommonValue.ML_LONG_TERM_MEMORY_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_SESSION_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_WORKING_MEMORY_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_HISTORY_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LONG_TERM_MEMORY_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
@@ -23,11 +24,13 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.ToolUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.bulk.BulkResponse;
@@ -57,6 +60,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.transport.client.Client;
 
@@ -80,6 +84,8 @@ public class RemoteStorageHelper {
     public static final String INDEX_NAME_PARAM = "index_name";
     public static final String DOC_ID_PARAM = "doc_id";
     public static final String INPUT_PARAM = "input";
+    public static final String HEADERS_FIELD = "headers";
+    public static final String ACTIONS_FIELD = "actions";
 
     /**
      * Creates a memory index in remote storage using a connector
@@ -825,6 +831,31 @@ public class RemoteStorageHelper {
 
         // Inject credential
         connectorMap.put("credential", credential);
+
+        String protocol = ConnectorUtils.determineProtocol(parameters, credential);
+        connectorMap.put("protocol", protocol);
+
+        boolean isAwsSigv4 = AWS_SIGV4.equals(protocol);
+
+        Map headersMap = new HashMap();
+        if (parameters.containsKey(HEADERS_FIELD) && StringUtils.isJson(parameters.get(HEADERS_FIELD))) {
+            headersMap.putAll(gson.fromJson(parameters.get(HEADERS_FIELD), Map.class));
+        }
+        if (connectorMap.containsKey(ACTIONS_FIELD)) {
+            List actions = (List) connectorMap.get(ACTIONS_FIELD);
+            for (Object actionObj : actions) {
+                Map<String, Object> action = (Map<String, Object>) actionObj;
+                if (action.containsKey(HEADERS_FIELD)) {
+                    Map<String, Object> headers = (Map<String, Object>) action.get(HEADERS_FIELD);
+                    if (isAwsSigv4) {
+                        headers.put("x-amz-content-sha256", "required");
+                    }
+                    headers.putAll(headersMap);
+                } else {
+                    action.put(HEADERS_FIELD, headersMap);
+                }
+            }
+        }
 
         // Convert back to JSON string
         return StringUtils.toJson(connectorMap);
