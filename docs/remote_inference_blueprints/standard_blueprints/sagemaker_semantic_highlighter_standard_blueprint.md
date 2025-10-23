@@ -1,6 +1,6 @@
 # AWS SageMaker Semantic Highlighter Model Standard Blueprint
 
-This blueprint demonstrates how to deploy a semantic highlighter model using AWS SageMaker and integrate it with OpenSearch. For a detailed Python-based tutorial on deploying the model to SageMaker, please refer to the [Deploying OpenSearch Sentence Highlighter Model To AWS SageMaker Guide](https://github.com/opensearch-project/opensearch-py-ml/blob/main/docs/source/examples/aws_sagemaker_sentence_highlighter_model/README.md).
+This blueprint demonstrates how to deploy a semantic highlighter model using AWS SageMaker and integrate it with OpenSearch. For a detailed Python-based tutorial on deploying the model to SageMaker, please refer to the [Deploying OpenSearch Sentence Highlighter Model To AWS SageMaker Guide](https://github.com/opensearch-project/opensearch-py-ml/blob/main/docs/source/examples/semantic_highlighting/README.md).
 
 ## Overview
 
@@ -11,6 +11,8 @@ The semantic highlighter model helps identify and highlight the most relevant pa
 3. Register and deploy the model
 4. Test the model inference
 
+**Note:** Batch inference semantic highlighting support requires OpenSearch 3.3 or later. For OpenSearch 3.0-3.2, only single document inference is supported.
+
 ## Prerequisites
 
 1. AWS account with SageMaker access
@@ -18,6 +20,8 @@ The semantic highlighter model helps identify and highlight the most relevant pa
 3. AWS credentials with appropriate permissions
 
 ## Steps
+
+> **Note:** This connector supports both single document inference (OpenSearch 3.0+) and batch inference (OpenSearch 3.3+). The unified pre-process function automatically handles both formats for backward compatibility.
 
 ### 1. Create SageMaker Connector
 
@@ -47,8 +51,8 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "url": "https://runtime.sagemaker.${parameters.region}.amazonaws.com/endpoints/${parameters.model}/invocations",
-      "request_body": "{ \"question\": \"${parameters.question}\", \"context\": \"${parameters.context}\" }",
-      "pre_process_function": "// Extract question and context directly from params\nif (params.question != null && params.context != null) {\n    return '{\"parameters\":{\"question\":\"' + params.question + '\",\"context\":\"' + params.context + '\"}}'; \n} \nelse {\n    throw new IllegalArgumentException(\"Missing required parameters: question and context\");\n}"
+      "request_body": "{ \"question\": \"${parameters.question:-}\", \"context\": \"${parameters.context:-}\", \"inputs\": ${parameters.inputs:-[]} }",
+      "pre_process_function": "// Unified pre-process function for backward compatibility\nif (params.question != null && params.context != null && params.inputs == null) {\n  // Single document format from older versions\n  return '{\"parameters\":{\"question\":\"' + params.question + '\",\"context\":\"' + params.context + '\"}}';\n}\nelse if (params.inputs != null) {\n  // Batch format from newer versions - pass inputs as JSON string\n  String inputsJson = params.inputs.toString();\n  return '{\"parameters\":{\"inputs\":' + inputsJson + '}}';\n}\nelse {\n  throw new IllegalArgumentException(\"Invalid input format: must provide either (question and context) or (inputs)\");\n}"
     }
   ]
 }
@@ -102,7 +106,35 @@ POST /_plugins/_ml/models/<MODEL_ID>/_predict
 
 Replace `<MODEL_ID>` with your deployed model ID.
 
+### 5. Test Batch Inference (OpenSearch 3.3+)
+
+```json
+POST /_plugins/_ml/models/<MODEL_ID>/_predict
+{
+  "parameters": {
+    "inputs": [
+      {
+        "question": "What are the symptoms of heart failure?",
+        "context": "Heart failure symptoms include shortness of breath, swelling in the feet and ankles, fatigue, and irregular pulse. Patients may also experience difficulty sleeping flat in bed."
+      },
+      {
+        "question": "What causes high blood pressure?",
+        "context": "High blood pressure can be caused by various factors including genetics, poor diet, lack of exercise, and stress. Sodium intake and obesity are major contributors."
+      },
+      {
+        "question": "How is diabetes managed?",
+        "context": "Diabetes management involves monitoring blood sugar levels, maintaining a healthy diet, regular exercise, and medication when necessary. Insulin therapy may be required for some patients."
+      }
+    ]
+  }
+}
+```
+
+Replace `<MODEL_ID>` with your deployed model ID.
+
 ## Example Response
+
+### Single Document Response
 
 ```json
 {
@@ -126,8 +158,46 @@ Replace `<MODEL_ID>` with your deployed model ID.
 }
 ```
 
+### Batch Inference Response
+
+```json
+{
+  "inference_results": [
+    {
+      "output": [
+        {
+          "highlights": [
+            {
+              "start": 0,
+              "end": 145
+            }
+          ]
+        },
+        {
+          "highlights": [
+            {
+              "start": 62,
+              "end": 134
+            }
+          ]
+        },
+        {
+          "highlights": [
+            {
+              "start": 0,
+              "end": 108
+            }
+          ]
+        }
+      ],
+      "status_code": 200
+    }
+  ]
+}
+```
+
 ## References
-- [Deploying OpenSearch Sentence Highlighter Model To AWS SageMaker Guide](https://github.com/opensearch-project/opensearch-py-ml/docs/source/examples/aws_sagemaker_sentence_highlighter_model/README.md)
+- [Deploying OpenSearch Sentence Highlighter Model To AWS SageMaker Guide](https://github.com/opensearch-project/opensearch-py-ml/docs/source/examples/semantic_highlighting/README.md)
 - [Using OpenSearch Semantic Highlighting Guide](https://docs.opensearch.org/docs/latest/tutorials/vector-search/semantic-highlighting-tutorial/)
 - [OpenSearch ML Commons Documentation](https://opensearch.org/docs/latest/ml-commons-plugin/remote-models/index/)
 - [SageMaker Endpoints Documentation](https://docs.aws.amazon.com/sagemaker/latest/dg/deploy-model.html)
