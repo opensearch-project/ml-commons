@@ -26,7 +26,7 @@ public class ContentBlock implements Writeable {
     private ImageContent image; // for image content
     private VideoContent video; // for video content
     private DocumentContent document; // for document content
-    
+
     /**
      * Constructor for text content block.
      */
@@ -34,7 +34,7 @@ public class ContentBlock implements Writeable {
         this.type = ContentType.TEXT;
         this.text = text;
     }
-    
+
     /**
      * Constructor for image content block.
      */
@@ -42,7 +42,7 @@ public class ContentBlock implements Writeable {
         this.type = ContentType.IMAGE;
         this.image = image;
     }
-    
+
     /**
      * Constructor for video content block.
      */
@@ -50,7 +50,7 @@ public class ContentBlock implements Writeable {
         this.type = ContentType.VIDEO;
         this.video = video;
     }
-    
+
     /**
      * Constructor for document content block.
      */
@@ -61,7 +61,7 @@ public class ContentBlock implements Writeable {
 
     // TODO: Add stream and XContent constructors when content classes support them
     // For now, we'll implement a basic version for the POC
-    
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         // Basic implementation for POC - only support text content for now

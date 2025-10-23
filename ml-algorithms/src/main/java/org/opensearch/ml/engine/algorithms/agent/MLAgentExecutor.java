@@ -54,10 +54,10 @@ import org.opensearch.ml.common.agent.AgentInput;
 import org.opensearch.ml.common.agent.AgentInputProcessor;
 import org.opensearch.ml.common.agent.ContentBlock;
 import org.opensearch.ml.common.agent.ContentType;
-import org.opensearch.ml.common.agent.Message;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.agent.Message;
 import org.opensearch.ml.common.agent.ModelProvider;
 import org.opensearch.ml.common.agent.ModelProviderFactory;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -120,7 +120,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-
 
     public MLAgentExecutor(
         Client client,
@@ -223,16 +222,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     )
                                                 );
                                         }
-                                        
+
                                         // Process standardized input if present
                                         processStandardInput(agentMLInput, mlAgent);
-                                        
+
                                         // After processing, ensure we have a valid inputDataSet
-                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
+                                            .getInputDataset();
                                         if (inputDataSet == null || inputDataSet.getParameters() == null) {
                                             throw new IllegalArgumentException("Agent input data can not be empty after processing.");
                                         }
-                                        
+
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
@@ -747,31 +747,31 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         try {
             // Validate the standardized input
             AgentInput agentInput = AgentInputProcessor.validateInput(agentMLInput.getAgentInput());
-            
+
             // Extract the question text for prompt template and memory storage
             String questionText = extractQuestionText(agentInput);
-            
+
             // Get the model provider for this agent
             ModelProvider modelProvider = getModelProviderForAgent(mlAgent);
-            
+
             // Map the standardized input to provider-specific parameters
             Map<String, Object> processedParams = modelProvider.mapAgentInput(agentInput);
-            
+
             // Ensure we have an inputDataset to merge parameters into
             if (agentMLInput.getInputDataset() == null) {
                 // Create a new RemoteInferenceInputDataSet for the new format
                 agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
             }
-            
+
             // Merge the processed parameters with existing inputDataset
             mergeParameters(agentMLInput.getInputDataset(), processedParams);
-            
+
             // Set the question parameter for prompt template and memory storage
             if (questionText != null) {
                 RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
                 inputDataSet.getParameters().put(QUESTION, questionText);
                 log.debug("Set question parameter: {}", questionText);
-                
+
                 // TODO: Future Enhancement - Store complete structured input in memory
                 // Currently we only store the extracted text in the question field.
                 // Future enhancement should:
@@ -781,9 +781,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 // 4. Enable rich conversation replay and context understanding
                 // For now, we extract text for basic functionality
             }
-            
+
             log.debug("Successfully processed standardized input for agent {}", mlAgent.getName());
-            
+
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
@@ -798,30 +798,30 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         if (agentInput == null || agentInput.getInput() == null) {
             return null;
         }
-        
+
         switch (agentInput.getInputType()) {
             case TEXT:
                 // For plain text input, return the text directly
                 return (String) agentInput.getInput();
-                
+
             case CONTENT_BLOCKS:
                 // For content blocks, extract and combine text content
                 @SuppressWarnings("unchecked")
                 List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
                 return extractTextFromContentBlocks(blocks);
-                
+
             case MESSAGES:
                 // For messages, extract the last user message text
                 @SuppressWarnings("unchecked")
                 List<Message> messages = (List<Message>) agentInput.getInput();
                 return extractTextFromMessages(messages);
-                
+
             default:
                 log.warn("Unknown input type: {}, cannot extract question text", agentInput.getInputType());
                 return null;
         }
     }
-    
+
     /**
      * Extracts text content from content blocks for human-readable display.
      * 
@@ -838,10 +838,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         if (blocks == null || blocks.isEmpty()) {
             return "[Empty content blocks]";
         }
-        
+
         StringBuilder textBuilder = new StringBuilder();
         int nonTextBlockCount = 0;
-        
+
         for (ContentBlock block : blocks) {
             if (block.getType() == ContentType.TEXT) {
                 String text = block.getText();
@@ -855,13 +855,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 // TODO: Future Enhancement - Handle non-text content types
                 // For now, we just count them. Future implementation should:
                 // - Extract image descriptions/alt text
-                // - Include document titles/summaries  
+                // - Include document titles/summaries
                 // - Add video/audio metadata
                 // - Preserve content for memory storage
                 nonTextBlockCount++;
             }
         }
-        
+
         // If we have text content, return it with a note about non-text content
         if (textBuilder.length() > 0) {
             if (nonTextBlockCount > 0) {
@@ -869,11 +869,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             }
             return textBuilder.toString();
         }
-        
+
         // If no text content, provide a descriptive summary
         return "[" + blocks.size() + " content block(s) - no text content]";
     }
-    
+
     /**
      * Extracts text content from messages for human-readable display.
      */
@@ -881,7 +881,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         if (messages == null || messages.isEmpty()) {
             return "[Empty conversation]";
         }
-        
+
         // Find the last user message
         for (int i = messages.size() - 1; i >= 0; i--) {
             Message message = messages.get(i);
@@ -890,16 +890,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 return userText + " [from conversation with " + messages.size() + " message(s)]";
             }
         }
-        
+
         // If no user message found, use the last message
         Message lastMessage = messages.get(messages.size() - 1);
         String lastText = extractTextFromContentBlocks(lastMessage.getContent());
         return lastText + " [from conversation with " + messages.size() + " message(s)]";
     }
-    
 
-
-    
     /**
      * Determines the appropriate ModelProvider for the given agent.
      * Uses the agent's model configuration to select the correct provider.
@@ -910,7 +907,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             String modelProviderType = mlAgent.getModel().getModelProvider();
             return ModelProviderFactory.getProvider(modelProviderType);
         }
-        
+
         // Fallback: check LLM spec for model provider information
         if (mlAgent.getLlm() != null) {
             // For now, we'll need to infer the provider from LLM spec
@@ -919,7 +916,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // Default to Bedrock Converse for now
             return ModelProviderFactory.getProvider("bedrock/converse");
         }
-        
+
         throw new IllegalArgumentException("Agent " + mlAgent.getName() + " does not have model provider information");
     }
 
@@ -931,31 +928,31 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         if (inputDataset == null || !(inputDataset instanceof RemoteInferenceInputDataSet)) {
             throw new IllegalArgumentException("InputDataset must be a RemoteInferenceInputDataSet for parameter merging");
         }
-        
+
         RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) inputDataset;
         Map<String, String> existingParams = remoteDataSet.getParameters();
-        
+
         if (existingParams == null) {
             existingParams = new HashMap<>();
         } else {
             // Create a new map to avoid modifying the original
             existingParams = new HashMap<>(existingParams);
         }
-        
+
         // Merge processed parameters (convert Object values to String as needed)
         for (Map.Entry<String, Object> entry : processedParams.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
-            
+
             // Convert value to string representation
             String stringValue = (value != null) ? value.toString() : null;
-            
+
             // Add to parameters, with processed params taking precedence
             existingParams.put(key, stringValue);
-            
+
             log.debug("Added processed parameter: {} = {}", key, stringValue);
         }
-        
+
         // Update the dataset with the merged parameters
         remoteDataSet.setParameters(existingParams);
     }

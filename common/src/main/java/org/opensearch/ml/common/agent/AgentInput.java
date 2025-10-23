@@ -33,14 +33,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AgentInput implements Writeable {
     private Object input; // String, List<ContentBlock>, or List<Message>
-    
+
     /**
      * Constructor for stream input deserialization.
      * Supports all input types including images, videos, and documents.
      */
     public AgentInput(StreamInput in) throws IOException {
         InputType inputType = InputType.valueOf(in.readString());
-        
+
         switch (inputType) {
             case TEXT:
                 this.input = in.readString();
@@ -55,22 +55,22 @@ public class AgentInput implements Writeable {
                 throw new IOException("Unsupported input type: " + inputType);
         }
     }
-    
+
     /**
      * Reads a list of ContentBlocks from stream input.
      */
     private List<ContentBlock> readContentBlocksList(StreamInput in) throws IOException {
         int size = in.readVInt();
         List<ContentBlock> contentBlocks = new ArrayList<>(size);
-        
+
         for (int i = 0; i < size; i++) {
             ContentBlock block = readContentBlock(in);
             contentBlocks.add(block);
         }
-        
+
         return contentBlocks;
     }
-    
+
     /**
      * Reads a single ContentBlock from stream input.
      */
@@ -78,7 +78,7 @@ public class AgentInput implements Writeable {
         ContentType type = ContentType.valueOf(in.readString());
         ContentBlock block = new ContentBlock();
         block.setType(type);
-        
+
         switch (type) {
             case TEXT:
                 block.setText(in.readString());
@@ -93,10 +93,10 @@ public class AgentInput implements Writeable {
                 block.setDocument(readDocumentContent(in));
                 break;
         }
-        
+
         return block;
     }
-    
+
     /**
      * Reads ImageContent from stream input.
      */
@@ -104,10 +104,10 @@ public class AgentInput implements Writeable {
         SourceType sourceType = SourceType.valueOf(in.readString());
         String format = in.readString();
         String data = in.readString();
-        
+
         return new ImageContent(sourceType, format, data);
     }
-    
+
     /**
      * Reads VideoContent from stream input.
      */
@@ -115,10 +115,10 @@ public class AgentInput implements Writeable {
         SourceType sourceType = SourceType.valueOf(in.readString());
         String format = in.readString();
         String data = in.readString();
-        
+
         return new VideoContent(sourceType, format, data);
     }
-    
+
     /**
      * Reads DocumentContent from stream input.
      */
@@ -126,32 +126,32 @@ public class AgentInput implements Writeable {
         SourceType sourceType = SourceType.valueOf(in.readString());
         String format = in.readString();
         String data = in.readString();
-        
+
         return new DocumentContent(sourceType, format, data);
     }
-    
+
     /**
      * Reads a list of Messages from stream input.
      */
     private List<Message> readMessagesList(StreamInput in) throws IOException {
         int size = in.readVInt();
         List<Message> messages = new ArrayList<>(size);
-        
+
         for (int i = 0; i < size; i++) {
             Message message = readMessage(in);
             messages.add(message);
         }
-        
+
         return messages;
     }
-    
+
     /**
      * Reads a single Message from stream input.
      */
     private Message readMessage(StreamInput in) throws IOException {
         String role = in.readString();
         List<ContentBlock> content = readContentBlocksList(in);
-        
+
         Message message = new Message();
         message.setRole(role);
         message.setContent(content);
@@ -165,7 +165,7 @@ public class AgentInput implements Writeable {
     public AgentInput(XContentParser parser) throws IOException {
         // The parser is positioned at the value of the "input" field
         XContentParser.Token currentToken = parser.currentToken();
-        
+
         if (currentToken == XContentParser.Token.VALUE_STRING) {
             // Plain text: {"input": "hi does this work"}
             this.input = parser.text();
@@ -176,20 +176,20 @@ public class AgentInput implements Writeable {
             throw new IllegalArgumentException("Invalid input format. Expected string or array.");
         }
     }
-    
+
     /**
      * Parses an array input and determines if it's content blocks or messages.
      */
     private Object parseInputArray(XContentParser parser) throws IOException {
         List<Object> items = new ArrayList<>();
-        
+
         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-            
+
             Object item = parseArrayItem(parser);
             items.add(item);
         }
-        
+
         // Determine if this is messages or content blocks based on first item
         if (!items.isEmpty()) {
             Object firstItem = items.get(0);
@@ -209,21 +209,21 @@ public class AgentInput implements Writeable {
                 return contentBlocks;
             }
         }
-        
+
         return items;
     }
-    
+
     /**
      * Parses a single item from the input array.
      * Determines if it's a Message or ContentBlock based on structure.
      */
     private Object parseArrayItem(XContentParser parser) throws IOException {
         Map<String, Object> itemMap = new HashMap<>();
-        
+
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
-            
+
             switch (fieldName) {
                 case "role":
                     // This indicates it's a Message
@@ -249,7 +249,7 @@ public class AgentInput implements Writeable {
                     break;
             }
         }
-        
+
         // Determine if this is a Message or ContentBlock
         if (itemMap.containsKey("role")) {
             return createMessage(itemMap);
@@ -259,49 +259,49 @@ public class AgentInput implements Writeable {
             throw new IllegalArgumentException("Invalid item format. Must have 'role' (for messages) or 'type' (for content blocks).");
         }
     }
-    
+
     /**
      * Parses content array for messages.
      */
     @SuppressWarnings("unchecked")
     private List<ContentBlock> parseContentArray(XContentParser parser) throws IOException {
         List<ContentBlock> contentBlocks = new ArrayList<>();
-        
+
         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-        
+
         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-            
+
             ContentBlock contentBlock = (ContentBlock) parseArrayItem(parser);
             contentBlocks.add(contentBlock);
         }
-        
+
         return contentBlocks;
     }
-    
+
     /**
      * Parses source object for media content.
      */
     private Map<String, Object> parseSource(XContentParser parser) throws IOException {
         Map<String, Object> source = new HashMap<>();
-        
+
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-        
+
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
             source.put(fieldName, parseValue(parser));
         }
-        
+
         return source;
     }
-    
+
     /**
      * Parses a generic value from the parser.
      */
     private Object parseValue(XContentParser parser) throws IOException {
         XContentParser.Token token = parser.currentToken();
-        
+
         switch (token) {
             case VALUE_STRING:
                 return parser.text();
@@ -329,7 +329,7 @@ public class AgentInput implements Writeable {
                 throw new IllegalArgumentException("Unexpected token: " + token);
         }
     }
-    
+
     /**
      * Creates a Message object from parsed data.
      */
@@ -337,13 +337,13 @@ public class AgentInput implements Writeable {
     private Message createMessage(Map<String, Object> itemMap) {
         String role = (String) itemMap.get("role");
         List<ContentBlock> content = (List<ContentBlock>) itemMap.get("content");
-        
+
         Message message = new Message();
         message.setRole(role);
         message.setContent(content);
         return message;
     }
-    
+
     /**
      * Creates a ContentBlock object from parsed data.
      */
@@ -351,10 +351,10 @@ public class AgentInput implements Writeable {
     private ContentBlock createContentBlock(Map<String, Object> itemMap) {
         String type = (String) itemMap.get("type");
         ContentType contentType = ContentType.valueOf(type.toUpperCase());
-        
+
         ContentBlock contentBlock = new ContentBlock();
         contentBlock.setType(contentType);
-        
+
         switch (contentType) {
             case TEXT:
                 contentBlock.setText((String) itemMap.get("text"));
@@ -375,10 +375,10 @@ public class AgentInput implements Writeable {
                 contentBlock.setDocument(documentContent);
                 break;
         }
-        
+
         return contentBlock;
     }
-    
+
     /**
      * Creates ImageContent from source data.
      */
@@ -386,16 +386,16 @@ public class AgentInput implements Writeable {
         String format = (String) source.get("format");
         String type = (String) source.get("type");
         String data = (String) source.get("data");
-        
+
         SourceType sourceType = SourceType.valueOf(type.toUpperCase());
-        
+
         ImageContent imageContent = new ImageContent();
         imageContent.setFormat(format);
         imageContent.setType(sourceType);
         imageContent.setData(data);
         return imageContent;
     }
-    
+
     /**
      * Creates VideoContent from source data.
      */
@@ -403,16 +403,16 @@ public class AgentInput implements Writeable {
         String format = (String) source.get("format");
         String type = (String) source.get("type");
         String data = (String) source.get("data");
-        
+
         SourceType sourceType = SourceType.valueOf(type.toUpperCase());
-        
+
         VideoContent videoContent = new VideoContent();
         videoContent.setFormat(format);
         videoContent.setType(sourceType);
         videoContent.setData(data);
         return videoContent;
     }
-    
+
     /**
      * Creates DocumentContent from source data.
      */
@@ -420,9 +420,9 @@ public class AgentInput implements Writeable {
         String format = (String) source.get("format");
         String type = (String) source.get("type");
         String data = (String) source.get("data");
-        
+
         SourceType sourceType = SourceType.valueOf(type.toUpperCase());
-        
+
         DocumentContent documentContent = new DocumentContent();
         documentContent.setFormat(format);
         documentContent.setType(sourceType);
@@ -430,12 +430,11 @@ public class AgentInput implements Writeable {
         return documentContent;
     }
 
-
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         InputType inputType = getInputType();
         out.writeString(inputType.name());
-        
+
         switch (inputType) {
             case TEXT:
                 out.writeString((String) input);
@@ -454,24 +453,24 @@ public class AgentInput implements Writeable {
                 throw new IOException("Unsupported input type: " + inputType);
         }
     }
-    
+
     /**
      * Writes a list of ContentBlocks to stream output.
      */
     private void writeContentBlocksList(StreamOutput out, List<ContentBlock> contentBlocks) throws IOException {
         out.writeVInt(contentBlocks.size());
-        
+
         for (ContentBlock block : contentBlocks) {
             writeContentBlock(out, block);
         }
     }
-    
+
     /**
      * Writes a single ContentBlock to stream output.
      */
     private void writeContentBlock(StreamOutput out, ContentBlock block) throws IOException {
         out.writeString(block.getType().name());
-        
+
         switch (block.getType()) {
             case TEXT:
                 out.writeString(block.getText());
@@ -487,7 +486,7 @@ public class AgentInput implements Writeable {
                 break;
         }
     }
-    
+
     /**
      * Writes ImageContent to stream output.
      */
@@ -496,7 +495,7 @@ public class AgentInput implements Writeable {
         out.writeString(image.getFormat());
         out.writeString(image.getData());
     }
-    
+
     /**
      * Writes VideoContent to stream output.
      */
@@ -505,7 +504,7 @@ public class AgentInput implements Writeable {
         out.writeString(video.getFormat());
         out.writeString(video.getData());
     }
-    
+
     /**
      * Writes DocumentContent to stream output.
      */
@@ -514,18 +513,18 @@ public class AgentInput implements Writeable {
         out.writeString(document.getFormat());
         out.writeString(document.getData());
     }
-    
+
     /**
      * Writes a list of Messages to stream output.
      */
     private void writeMessagesList(StreamOutput out, List<Message> messages) throws IOException {
         out.writeVInt(messages.size());
-        
+
         for (Message message : messages) {
             writeMessage(out, message);
         }
     }
-    
+
     /**
      * Writes a single Message to stream output.
      */
@@ -542,7 +541,7 @@ public class AgentInput implements Writeable {
         if (input instanceof String) {
             return InputType.TEXT;
         }
-        
+
         if (input instanceof List) {
             List<?> list = (List<?>) input;
             if (!list.isEmpty()) {
@@ -555,7 +554,7 @@ public class AgentInput implements Writeable {
                 }
             }
         }
-        
+
         return InputType.UNKNOWN;
     }
 }

@@ -15,7 +15,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
  */
 // ToDo: this validation is too strict, take a look at the validation logic and fix it
 public class InputValidator {
-    
+
     /**
      * Validates an AgentInput object based on its detected input type.
      * 
@@ -26,7 +26,7 @@ public class InputValidator {
         if (input == null || input.getInput() == null) {
             throw new MLValidationException("Input cannot be null");
         }
-        
+
         InputType type = input.getInputType();
         switch (type) {
             case CONTENT_BLOCKS:
@@ -43,7 +43,7 @@ public class InputValidator {
                 throw new MLValidationException("Invalid input format. Expected string, array of content blocks, or array of messages");
         }
     }
-    
+
     /**
      * Validates an array of content blocks.
      * 
@@ -54,7 +54,7 @@ public class InputValidator {
         if (blocks == null || blocks.isEmpty()) {
             throw new MLValidationException("Content blocks cannot be null or empty");
         }
-        
+
         int index = 0;
         for (ContentBlock block : blocks) {
             try {
@@ -65,7 +65,7 @@ public class InputValidator {
             index++;
         }
     }
-    
+
     /**
      * Validates an array of messages.
      * 
@@ -76,22 +76,22 @@ public class InputValidator {
         if (messages == null || messages.isEmpty()) {
             throw new MLValidationException("Messages cannot be null or empty");
         }
-        
+
         int index = 0;
         for (Message message : messages) {
             try {
                 if (message == null) {
                     throw new MLValidationException("Message cannot be null");
                 }
-                
+
                 if (message.getRole() == null || message.getRole().trim().isEmpty()) {
                     throw new MLValidationException("Message must have a non-empty role");
                 }
-                
+
                 if (message.getContent() == null) {
                     throw new MLValidationException("Message must have content");
                 }
-                
+
                 validateContentBlocks(message.getContent());
             } catch (MLValidationException e) {
                 throw new MLValidationException("Message at index " + index + " is invalid: " + e.getMessage());
@@ -99,7 +99,7 @@ public class InputValidator {
             index++;
         }
     }
-    
+
     /**
      * Validates a single content block.
      * 
@@ -110,11 +110,11 @@ public class InputValidator {
         if (block == null) {
             throw new MLValidationException("Content block cannot be null");
         }
-        
+
         if (block.getType() == null) {
             throw new MLValidationException("Content block must have a type");
         }
-        
+
         switch (block.getType()) {
             case TEXT:
                 if (block.getText() == null || block.getText().trim().isEmpty()) {
@@ -134,7 +134,7 @@ public class InputValidator {
                 throw new MLValidationException("Unsupported content block type: " + block.getType());
         }
     }
-    
+
     /**
      * Validates image content.
      * 
@@ -145,26 +145,27 @@ public class InputValidator {
         if (imageContent == null) {
             throw new MLValidationException("Image content cannot be null for image content block");
         }
-        
+
         if (imageContent.getType() == null) {
             throw new MLValidationException("Image content must have a source type (URL or BASE64)");
         }
-        
+
         if (imageContent.getFormat() == null || imageContent.getFormat().trim().isEmpty()) {
             throw new MLValidationException("Image content must specify a format (e.g., jpeg, png, gif, webp)");
         }
-        
+
         if (imageContent.getData() == null || imageContent.getData().trim().isEmpty()) {
             throw new MLValidationException("Image content must have data (URL or base64 encoded data)");
         }
-        
+
         // Validate format is reasonable for images
         String format = imageContent.getFormat().toLowerCase();
         if (!format.matches("^(jpeg|jpg|png|gif|webp|bmp|tiff|svg)$")) {
-            throw new MLValidationException("Unsupported image format: " + imageContent.getFormat() + 
-                ". Supported formats: jpeg, jpg, png, gif, webp, bmp, tiff, svg");
+            throw new MLValidationException(
+                "Unsupported image format: " + imageContent.getFormat() + ". Supported formats: jpeg, jpg, png, gif, webp, bmp, tiff, svg"
+            );
         }
-        
+
         // Basic validation for URL vs base64
         if (imageContent.getType() == SourceType.URL) {
             if (!imageContent.getData().matches("^https?://.*")) {
@@ -178,7 +179,7 @@ public class InputValidator {
             }
         }
     }
-    
+
     /**
      * Validates video content.
      * 
@@ -189,26 +190,29 @@ public class InputValidator {
         if (videoContent == null) {
             throw new MLValidationException("Video content cannot be null for video content block");
         }
-        
+
         if (videoContent.getType() == null) {
             throw new MLValidationException("Video content must have a source type (URL or BASE64)");
         }
-        
+
         if (videoContent.getFormat() == null || videoContent.getFormat().trim().isEmpty()) {
             throw new MLValidationException("Video content must specify a format (e.g., mp4, mov, avi)");
         }
-        
+
         if (videoContent.getData() == null || videoContent.getData().trim().isEmpty()) {
             throw new MLValidationException("Video content must have data (URL or base64 encoded data)");
         }
-        
+
         // Validate format is reasonable for videos
         String format = videoContent.getFormat().toLowerCase();
         if (!format.matches("^(mp4|mov|avi|mkv|wmv|flv|webm|m4v|3gp)$")) {
-            throw new MLValidationException("Unsupported video format: " + videoContent.getFormat() + 
-                ". Supported formats: mp4, mov, avi, mkv, wmv, flv, webm, m4v, 3gp");
+            throw new MLValidationException(
+                "Unsupported video format: "
+                    + videoContent.getFormat()
+                    + ". Supported formats: mp4, mov, avi, mkv, wmv, flv, webm, m4v, 3gp"
+            );
         }
-        
+
         // Basic validation for URL vs base64
         if (videoContent.getType() == SourceType.URL) {
             if (!videoContent.getData().matches("^https?://.*")) {
@@ -222,7 +226,7 @@ public class InputValidator {
             }
         }
     }
-    
+
     /**
      * Validates document content.
      * 
@@ -233,26 +237,29 @@ public class InputValidator {
         if (documentContent == null) {
             throw new MLValidationException("Document content cannot be null for document content block");
         }
-        
+
         if (documentContent.getType() == null) {
             throw new MLValidationException("Document content must have a source type (URL or BASE64)");
         }
-        
+
         if (documentContent.getFormat() == null || documentContent.getFormat().trim().isEmpty()) {
             throw new MLValidationException("Document content must specify a format (e.g., pdf, docx, txt)");
         }
-        
+
         if (documentContent.getData() == null || documentContent.getData().trim().isEmpty()) {
             throw new MLValidationException("Document content must have data (URL or base64 encoded data)");
         }
-        
+
         // Validate format is reasonable for documents
         String format = documentContent.getFormat().toLowerCase();
         if (!format.matches("^(pdf|docx|doc|txt|rtf|odt|html|xml|csv|xlsx|xls|pptx|ppt)$")) {
-            throw new MLValidationException("Unsupported document format: " + documentContent.getFormat() + 
-                ". Supported formats: pdf, docx, doc, txt, rtf, odt, html, xml, csv, xlsx, xls, pptx, ppt");
+            throw new MLValidationException(
+                "Unsupported document format: "
+                    + documentContent.getFormat()
+                    + ". Supported formats: pdf, docx, doc, txt, rtf, odt, html, xml, csv, xlsx, xls, pptx, ppt"
+            );
         }
-        
+
         // Basic validation for URL vs base64
         if (documentContent.getType() == SourceType.URL) {
             if (!documentContent.getData().matches("^https?://.*")) {
@@ -266,7 +273,7 @@ public class InputValidator {
             }
         }
     }
-    
+
     /**
      * Validates plain text input.
      * 

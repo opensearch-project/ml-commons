@@ -70,7 +70,14 @@ public class AgentMLInput extends MLInput {
 
     // New constructor for standardized input
     @Builder(builderMethodName = "AgentMLInputBuilderWithStandardInput")
-    public AgentMLInput(String agentId, String tenantId, FunctionName functionName, AgentInput agentInput, MLInputDataset inputDataset, Boolean isAsync) {
+    public AgentMLInput(
+        String agentId,
+        String tenantId,
+        FunctionName functionName,
+        AgentInput agentInput,
+        MLInputDataset inputDataset,
+        Boolean isAsync
+    ) {
         this.agentId = agentId;
         this.tenantId = tenantId;
         this.algorithm = functionName;
@@ -180,7 +187,5 @@ public class AgentMLInput extends MLInput {
     public boolean hasDualInput() {
         return agentInput != null && inputDataset != null;
     }
-
-
 
 }

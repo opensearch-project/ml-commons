@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.common.agent;
 
-import java.util.Locale;
-
 /**
  * Enum for supported model provider types
  */

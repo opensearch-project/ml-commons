@@ -854,7 +854,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.putIfAbsent(PROMPT_SUFFIX, PromptTemplate.PROMPT_TEMPLATE_SUFFIX);
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);
         tmpParameters.putIfAbsent(TOOL_RESPONSE, PromptTemplate.PROMPT_TEMPLATE_TOOL_RESPONSE);
-        
+
         // Set default system prompt only if none exists
         if (!tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
             // ToDo: figure out a good default prompt for conversational agent
@@ -867,7 +867,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
             tmpParameters.put(SYSTEM_PROMPT_FIELD, defaultSystemPrompt);
         }
-        
+
         return tmpParameters;
     }
 

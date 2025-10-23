@@ -103,7 +103,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.tenantId = tenantId;
         validate();
     }
-    
+
     // Backward compatible constructor for existing tests
     public MLAgent(
         String name,
@@ -261,9 +261,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (llm != null) {
             builder.field(LLM_FIELD, llm);
         }
-        if (model != null) {
-            builder.field(MODEL_FIELD, model);
-        }
+        // model field is not serialized to index - information is stored in LLMSpec
         if (tools != null && tools.size() > 0) {
             builder.field(TOOLS_FIELD, tools);
         }

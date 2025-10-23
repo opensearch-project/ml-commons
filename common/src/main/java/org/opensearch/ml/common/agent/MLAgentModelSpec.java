@@ -22,45 +22,38 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
- * Specification for model configuration in simplified agent registration
+ * Specification for model configuration in agent registration
  */
 @EqualsAndHashCode
 @Getter
 public class MLAgentModelSpec implements ToXContentObject {
-    public static final String MODEL_FIELD = "model";
+    public static final String MODEL_ID_FIELD = "model_id";
     public static final String MODEL_PROVIDER_FIELD = "model_provider";
     public static final String CREDENTIAL_FIELD = "credential";
     public static final String MODEL_PARAMETERS_FIELD = "model_parameters";
 
-    private String model;
-    private String modelProvider;
+    private final String modelId;
+    private final String modelProvider;
     private Map<String, String> credential;
     private Map<String, String> modelParameters;
 
     @Builder(toBuilder = true)
-    public MLAgentModelSpec(String model, String modelProvider, Map<String, String> credential, Map<String, String> modelParameters) {
-        if (model == null) {
-            throw new IllegalArgumentException("model is null");
+    public MLAgentModelSpec(String modelId, String modelProvider, Map<String, String> credential, Map<String, String> modelParameters) {
+        if (modelId == null) {
+            throw new IllegalArgumentException("model_id must be provided");
         }
+
         if (modelProvider == null) {
-            throw new IllegalArgumentException("model_provider is null");
+            throw new IllegalArgumentException("model_provider must be provided");
         }
-        this.model = model;
-        this.modelProvider = modelProvider;
-        this.credential = credential;
-        this.modelParameters = modelParameters;
-    }
-    
-    // Constructor for parsing - no validation
-    private MLAgentModelSpec(String model, String modelProvider, Map<String, String> credential, Map<String, String> modelParameters, boolean skipValidation) {
-        this.model = model;
+        this.modelId = modelId;
         this.modelProvider = modelProvider;
         this.credential = credential;
         this.modelParameters = modelParameters;
     }
 
     public MLAgentModelSpec(StreamInput input) throws IOException {
-        model = input.readString();
+        modelId = input.readString();
         modelProvider = input.readString();
         if (input.readBoolean()) {
             credential = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
@@ -71,7 +64,7 @@ public class MLAgentModelSpec implements ToXContentObject {
     }
 
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(model);
+        out.writeString(modelId);
         out.writeString(modelProvider);
         if (credential != null && !credential.isEmpty()) {
             out.writeBoolean(true);
@@ -90,8 +83,8 @@ public class MLAgentModelSpec implements ToXContentObject {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        if (model != null) {
-            builder.field(MODEL_FIELD, model);
+        if (modelId != null) {
+            builder.field(MODEL_ID_FIELD, modelId);
         }
         if (modelProvider != null) {
             builder.field(MODEL_PROVIDER_FIELD, modelProvider);
@@ -118,7 +111,7 @@ public class MLAgentModelSpec implements ToXContentObject {
             parser.nextToken();
 
             switch (fieldName) {
-                case MODEL_FIELD:
+                case MODEL_ID_FIELD:
                     model = parser.text();
                     break;
                 case MODEL_PROVIDER_FIELD:
@@ -135,7 +128,8 @@ public class MLAgentModelSpec implements ToXContentObject {
                     break;
             }
         }
-        return new MLAgentModelSpec(model, modelProvider, credential, modelParameters, true);
+
+        return new MLAgentModelSpec(model, modelProvider, credential, modelParameters);
     }
 
     public static MLAgentModelSpec fromStream(StreamInput in) throws IOException {
