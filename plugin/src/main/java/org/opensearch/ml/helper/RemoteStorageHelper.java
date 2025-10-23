@@ -68,18 +68,18 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RemoteStorageHelper {
 
-    private static final String REGISTER_MODEL_ACTION = "register_model";
-    private static final String CREATE_INGEST_PIPELINE_ACTION = "create_ingest_pipeline";
-    private static final String CREATE_INDEX_ACTION = "create_index";
-    private static final String WRITE_DOC_ACTION = "write_doc";
-    private static final String BULK_LOAD_ACTION = "bulk_load";
-    private static final String SEARCH_INDEX_ACTION = "search_index";
-    private static final String UPDATE_DOC_ACTION = "update_doc";
-    private static final String GET_DOC_ACTION = "get_doc";
-    private static final String DELETE_DOC_ACTION = "delete_doc";
-    private static final String INDEX_NAME_PARAM = "index_name";
-    private static final String DOC_ID_PARAM = "doc_id";
-    private static final String INPUT_PARAM = "input";
+    public static final String REGISTER_MODEL_ACTION = "register_model";
+    public static final String CREATE_INGEST_PIPELINE_ACTION = "create_ingest_pipeline";
+    public static final String CREATE_INDEX_ACTION = "create_index";
+    public static final String WRITE_DOC_ACTION = "write_doc";
+    public static final String BULK_LOAD_ACTION = "bulk_load";
+    public static final String SEARCH_INDEX_ACTION = "search_index";
+    public static final String GET_DOC_ACTION = "get_doc";
+    public static final String DELETE_DOC_ACTION = "delete_doc";
+    public static final String UPDATE_DOC_ACTION = "update_doc";
+    public static final String INDEX_NAME_PARAM = "index_name";
+    public static final String DOC_ID_PARAM = "doc_id";
+    public static final String INPUT_PARAM = "input";
 
     /**
      * Creates a memory index in remote storage using a connector
