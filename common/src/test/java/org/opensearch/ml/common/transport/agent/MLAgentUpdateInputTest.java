@@ -392,6 +392,7 @@ public class MLAgentUpdateInputTest {
             {
               "agent_id": "test-agent-id",
               "name": "test-agent",
+              "type": "flow",
               "description": "test description",
               "llm": {
                 "model_id": "test-model-id",
@@ -423,6 +424,7 @@ public class MLAgentUpdateInputTest {
             """;
         testParseFromJsonString(inputStr, parsedInput -> {
             assertEquals("test-agent", parsedInput.getName());
+            assertEquals("flow", parsedInput.getType());
             assertEquals("test description", parsedInput.getDescription());
             assertEquals("test-model-id", parsedInput.getLlmModelId());
             assertEquals(1, parsedInput.getTools().size());
@@ -957,6 +959,41 @@ public class MLAgentUpdateInputTest {
         assertEquals("conversation_index", updatedAgent.getMemory().getType()); // Preserved
         assertEquals("original-session", updatedAgent.getMemory().getSessionId()); // Preserved
         assertEquals(Integer.valueOf(10), updatedAgent.getMemory().getWindowSize()); // Updated
+    }
+
+    @Test
+    public void testAgentTypeValidation() {
+        MLAgent originalAgent = MLAgent.builder().type(MLAgentType.FLOW.name()).name("Test Agent").build();
+
+        // Same type should be allowed
+        MLAgentUpdateInput sameTypeInput = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .type(MLAgentType.FLOW.name())
+            .name("Updated Name")
+            .build();
+
+        MLAgent updatedAgent = sameTypeInput.toMLAgent(originalAgent);
+        assertEquals(MLAgentType.FLOW.name(), updatedAgent.getType());
+        assertEquals("Updated Name", updatedAgent.getName());
+
+        // Different type should throw error
+        MLAgentUpdateInput differentTypeInput = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .name("Updated Name")
+            .build();
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> { differentTypeInput.toMLAgent(originalAgent); });
+        assertEquals("Agent type cannot be updated", e.getMessage());
+
+        // No type provided should work (original type)
+        MLAgentUpdateInput noTypeInput = MLAgentUpdateInput.builder().agentId("test-agent-id").name("Updated Name").build();
+
+        MLAgent originalAgentType = noTypeInput.toMLAgent(originalAgent);
+        assertEquals(MLAgentType.FLOW.name(), originalAgentType.getType());
+        assertEquals("Updated Name", originalAgentType.getName());
     }
 
     @Test

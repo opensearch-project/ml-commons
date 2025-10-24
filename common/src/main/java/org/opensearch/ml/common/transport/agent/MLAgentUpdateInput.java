@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_3_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -50,12 +51,14 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     public static final String MEMORY_TYPE_FIELD = "type";
     public static final String MEMORY_SESSION_ID_FIELD = "session_id";
     public static final String MEMORY_WINDOW_SIZE_FIELD = "window_size";
+    public static final String TYPE_FIELD = "type";
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
 
     @Getter
     private String agentId;
     private String name;
+    private String type;
     private String description;
     private String llmModelId;
     private Map<String, String> llmParameters;
@@ -72,6 +75,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     public MLAgentUpdateInput(
         String agentId,
         String name,
+        String type,
         String description,
         String llmModelId,
         Map<String, String> llmParameters,
@@ -86,6 +90,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     ) {
         this.agentId = agentId;
         this.name = name;
+        this.type = type;
         this.description = description;
         this.llmModelId = llmModelId;
         this.llmParameters = llmParameters;
@@ -104,6 +109,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         Version streamInputVersion = in.getVersion();
         agentId = in.readString();
         name = in.readOptionalString();
+        type = streamInputVersion.onOrAfter(VERSION_3_3_0) ? in.readOptionalString() : null;
         description = in.readOptionalString();
         llmModelId = in.readOptionalString();
         if (in.readBoolean()) {
@@ -133,6 +139,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         builder.field(AGENT_ID_FIELD, agentId);
         if (name != null) {
             builder.field(AGENT_NAME_FIELD, name);
+        }
+        if (type != null) {
+            builder.field(TYPE_FIELD, type);
         }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
@@ -184,6 +193,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         Version streamOutputVersion = out.getVersion();
         out.writeString(agentId);
         out.writeOptionalString(name);
+        if (streamOutputVersion.onOrAfter(VERSION_3_3_0)) {
+            out.writeOptionalString(type);
+        }
         out.writeOptionalString(description);
         out.writeOptionalString(llmModelId);
         if (llmParameters != null && !llmParameters.isEmpty()) {
@@ -220,6 +232,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     public static MLAgentUpdateInput parse(XContentParser parser) throws IOException {
         String agentId = null;
         String name = null;
+        String type = null;
         String description = null;
         String llmModelId = null;
         Map<String, String> llmParameters = null;
@@ -242,6 +255,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                     break;
                 case AGENT_NAME_FIELD:
                     name = parser.text();
+                    break;
+                case TYPE_FIELD:
+                    type = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
@@ -313,6 +329,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         return new MLAgentUpdateInput(
             agentId,
             name,
+            type,
             description,
             llmModelId,
             llmParameters,
@@ -328,6 +345,9 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
     }
 
     public MLAgent toMLAgent(MLAgent originalAgent) {
+        if (type != null && !type.equals(originalAgent.getType())) {
+            throw new IllegalArgumentException("Agent type cannot be updated");
+        }
         LLMSpec finalLlm;
         if (llmModelId == null && (llmParameters == null || llmParameters.isEmpty())) {
             finalLlm = originalAgent.getLlm();
