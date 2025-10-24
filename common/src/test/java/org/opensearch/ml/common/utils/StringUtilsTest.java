@@ -17,7 +17,6 @@ import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -1202,9 +1201,9 @@ public class StringUtilsTest {
     @Test
     public void testDeserializeScientificNotation_ToFloatAndPrimitive() {
         String jsonObj = "{\"fObj\":1.23e-5}";
-        Type mapType = new TypeToken<Map<String, Float>>() {
+        java.lang.reflect.Type mapType = new com.google.gson.reflect.TypeToken<java.util.Map<String, Float>>() {
         }.getType();
-        Map<String, Float> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonObj, mapType);
+        java.util.Map<String, Float> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(jsonObj, mapType);
         assertEquals(1.23e-5f, m.get("fObj"), 1e-9f);
 
         String jsonArr = "[4.56e1]";
@@ -1216,9 +1215,9 @@ public class StringUtilsTest {
     public void testDeserializeNullFloat_ToNull() {
         String json = "{\"fObj\":null,\"fPrim\":1.0}";
 
-        Type mapType = new TypeToken<Map<String, JsonElement>>() {
+        java.lang.reflect.Type mapType = new TypeToken<java.util.Map<String, JsonElement>>() {
         }.getType();
-        Map<String, JsonElement> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, mapType);
+        java.util.Map<String, JsonElement> m = StringUtils.PLAIN_NUMBER_GSON.fromJson(json, mapType);
 
         assertTrue(m.containsKey("fObj"));
         assertTrue(m.get("fObj").isJsonNull());
