@@ -185,6 +185,7 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         updateClusterSettings("plugins.ml_commons.only_run_on_ml_node", false);
         updateClusterSettings("plugins.ml_commons.memory_feature_enabled", true);
         updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^.*$"));
+        updateClusterSettings("plugins.ml_commons.connector.private_ip_enabled", true);
     }
 
     private void restoreClusterSettings() throws IOException {

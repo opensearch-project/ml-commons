@@ -81,7 +81,7 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isRemoteInferenceEnabled());
         assertTrue(setting.isAgentFrameworkEnabled());
         assertTrue(setting.isLocalModelEnabled());
-        assertTrue(setting.isConnectorPrivateIpEnabled().get());
+        assertTrue(setting.isConnectorPrivateIpEnabled());
         assertTrue(setting.isControllerEnabled());
         assertTrue(setting.isOfflineBatchIngestionEnabled());
         assertTrue(setting.isOfflineBatchInferenceEnabled());
@@ -122,7 +122,7 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isRemoteInferenceEnabled());
         assertFalse(setting.isAgentFrameworkEnabled());
         assertFalse(setting.isLocalModelEnabled());
-        assertFalse(setting.isConnectorPrivateIpEnabled().get());
+        assertFalse(setting.isConnectorPrivateIpEnabled());
         assertFalse(setting.isControllerEnabled());
         assertFalse(setting.isOfflineBatchIngestionEnabled());
         assertFalse(setting.isOfflineBatchInferenceEnabled());

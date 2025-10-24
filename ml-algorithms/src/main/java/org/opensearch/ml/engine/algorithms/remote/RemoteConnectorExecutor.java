@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -183,7 +182,7 @@ public interface RemoteConnectorExecutor {
 
     default void setClient(Client client) {}
 
-    default void setConnectorPrivateIpEnabled(AtomicBoolean connectorPrivateIpEnabled) {}
+    default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 
