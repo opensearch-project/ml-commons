@@ -94,7 +94,7 @@ public class MLAgentUpdateInputTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
             MLAgentUpdateInput.builder().agentId("test-agent-id").name("test-agent").memoryType("invalid_type").build();
         });
-        assertEquals("Wrong Memory type", e.getMessage());
+        assertEquals("Invalid memory type: invalid_type", e.getMessage());
     }
 
     @Test
