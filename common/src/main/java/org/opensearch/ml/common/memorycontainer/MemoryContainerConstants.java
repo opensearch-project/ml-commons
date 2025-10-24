@@ -40,6 +40,8 @@ public class MemoryContainerConstants {
     public static final String ID_FIELD = "id";
     public static final String ENABLED_FIELD = "enabled";
     public static final String REMOTE_STORE_FIELD = "remote_store";
+    public static final String INGEST_PIPELINE_FIELD = "ingest_pipeline";
+    public static final String SEARCH_PIPELINE_FIELD = "search_pipeline";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;

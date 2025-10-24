@@ -128,6 +128,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 .searchSourceBuilder(input.getSearchSourceBuilder())
                 .tenantId(tenantId)
                 .build();
+            // TODO: add search pipeline support in SearchDataObjectRequest
+            // if (memoryConfig.getSearchPipeline() != null) {
+            // searchDataObjecRequest.pipeline(memoryConfig.getSearchPipeline());
+            // }
 
             // Execute search
             ActionListener<SearchResponse> searchResponseActionListener = ActionListener.wrap(response -> {

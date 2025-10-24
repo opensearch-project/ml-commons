@@ -38,6 +38,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREDENTIAL_FIELD = "credential";
     public static final String EMBEDDING_MODEL_FIELD = "embedding_model";
+    public static final String INGEST_PIPELINE_FIELD = "ingest_pipeline";
+    public static final String SEARCH_PIPELINE_FIELD = "search_pipeline";
 
     private RemoteStoreType type;
     private String connectorId;
@@ -53,6 +55,10 @@ public class RemoteStore implements ToXContentObject, Writeable {
     // Auto embedding model creation
     private RemoteEmbeddingModel embeddingModel;
 
+    // Optional pre-existing pipeline configuration
+    private String ingestPipeline;
+    private String searchPipeline;
+
     @Builder
     public RemoteStore(
         RemoteStoreType type,
@@ -63,7 +69,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
         String endpoint,
         Map<String, String> parameters,
         Map<String, String> credential,
-        RemoteEmbeddingModel embeddingModel
+        RemoteEmbeddingModel embeddingModel,
+        String ingestPipeline,
+        String searchPipeline
     ) {
         if (type == null) {
             throw new IllegalArgumentException("Invalid remote store type");
@@ -77,6 +85,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
         this.parameters = parameters != null ? new java.util.HashMap<>(parameters) : new java.util.HashMap<>();
         this.credential = credential != null ? new java.util.HashMap<>(credential) : new java.util.HashMap<>();
         this.embeddingModel = embeddingModel;
+        this.ingestPipeline = ingestPipeline;
+        this.searchPipeline = searchPipeline;
     }
 
     public RemoteStore(StreamInput input) throws IOException {
@@ -101,6 +111,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.embeddingModel = new RemoteEmbeddingModel(input);
         }
+        this.ingestPipeline = input.readOptionalString();
+        this.searchPipeline = input.readOptionalString();
     }
 
     @Override
@@ -134,6 +146,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(ingestPipeline);
+        out.writeOptionalString(searchPipeline);
     }
 
     @Override
@@ -163,6 +177,12 @@ public class RemoteStore implements ToXContentObject, Writeable {
         if (embeddingModel != null) {
             builder.field(EMBEDDING_MODEL_FIELD, embeddingModel);
         }
+        if (ingestPipeline != null) {
+            builder.field(INGEST_PIPELINE_FIELD, ingestPipeline);
+        }
+        if (searchPipeline != null) {
+            builder.field(SEARCH_PIPELINE_FIELD, searchPipeline);
+        }
         // Don't serialize credentials for security - they are stored in the connector
         builder.endObject();
         return builder;
@@ -178,6 +198,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
         Map<String, String> parameters = new java.util.HashMap<>();
         Map<String, String> credential = new java.util.HashMap<>();
         RemoteEmbeddingModel embeddingModel = null;
+        String ingestPipeline = null;
+        String searchPipeline = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -212,6 +234,12 @@ public class RemoteStore implements ToXContentObject, Writeable {
                 case EMBEDDING_MODEL_FIELD:
                     embeddingModel = RemoteEmbeddingModel.parse(parser);
                     break;
+                case INGEST_PIPELINE_FIELD:
+                    ingestPipeline = parser.text();
+                    break;
+                case SEARCH_PIPELINE_FIELD:
+                    searchPipeline = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -229,6 +257,8 @@ public class RemoteStore implements ToXContentObject, Writeable {
             .parameters(parameters)
             .credential(credential)
             .embeddingModel(embeddingModel)
+            .ingestPipeline(ingestPipeline)
+            .searchPipeline(searchPipeline)
             .build();
     }
 }

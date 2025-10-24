@@ -117,7 +117,10 @@ public class MemorySearchService {
                     .searchSourceBuilder(searchSourceBuilder)
                     .tenantId(tenantId)
                     .build();
-
+                // TODO: add search pipeline support in SearchDataObjectRequest
+                // if (memoryConfig.getSearchPipeline() != null) {
+                // searchRequest.pipeline(memoryConfig.getSearchPipeline());
+                // }
                 memoryContainerHelper.searchData(memoryConfig, searchRequest, searchResponseActionListener);
             } else {
                 String query = MemorySearchQueryBuilder

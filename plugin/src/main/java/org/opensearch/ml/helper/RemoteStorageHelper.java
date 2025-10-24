@@ -21,6 +21,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEARCH_PIPELINE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.WORKING_MEMORY_INDEX;
@@ -399,6 +400,7 @@ public class RemoteStorageHelper {
         String connectorId,
         String indexName,
         String query,
+        String searchPipeline,
         Client client,
         ActionListener<SearchResponse> listener
     ) {
@@ -406,6 +408,9 @@ public class RemoteStorageHelper {
             // Prepare parameters for connector execution
             Map<String, String> parameters = new HashMap<>();
             parameters.put(INDEX_NAME_PARAM, indexName);
+            if (searchPipeline != null) {
+                parameters.put(SEARCH_PIPELINE_FIELD, "?search_pipeline=" + searchPipeline);
+            }
             parameters.put(INPUT_PARAM, query);
 
             // Execute the connector action with search_index action name
@@ -688,6 +693,56 @@ public class RemoteStorageHelper {
             // Add settings with default pipeline (settings already have "index." prefix)
             Map<String, Object> settings = new HashMap<>(indexSettings);
             settings.put("index.default_pipeline", pipelineName);
+            requestBody.put("settings", settings);
+
+            // Prepare parameters for connector execution
+            Map<String, String> parameters = new HashMap<>();
+            parameters.put(INDEX_NAME_PARAM, indexName);
+            parameters.put(INPUT_PARAM, StringUtils.toJson(requestBody));
+            parameters.put(CONNECTOR_ACTION_FIELD, CREATE_INDEX_ACTION);
+
+            // Execute the connector action
+            executeConnectorAction(connectorId, parameters, client, ActionListener.wrap(response -> {
+                log.info("Successfully created remote long-term memory index with pipeline: {}", indexName);
+                listener.onResponse(true);
+            }, e -> {
+                log.error("Failed to create remote long-term memory index with pipeline: {}", indexName, e);
+                listener.onFailure(e);
+            }));
+
+        } catch (Exception e) {
+            log.error("Error preparing remote long-term memory index creation with pipeline for: {}", indexName, e);
+            listener.onFailure(e);
+        }
+    }
+
+    public static void createRemoteLongTermMemoryIndexWithIngestAndSearchPipeline(
+        String connectorId,
+        String indexName,
+        String ingestPipelineName,
+        String searchPipelineName,
+        MemoryConfiguration memoryConfig,
+        MLIndicesHandler mlIndicesHandler,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
+        try {
+            String indexMapping = buildLongTermMemoryMapping(memoryConfig, mlIndicesHandler);
+            Map<String, Object> indexSettings = buildLongTermMemorySettings(memoryConfig);
+
+            // Parse the mapping string to a Map
+            Map<String, Object> mappingMap = parseMappingToMap(indexMapping);
+
+            // Build the request body for creating the index with pipeline
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("mappings", mappingMap);
+
+            // Add settings with default pipeline (settings already have "index." prefix)
+            Map<String, Object> settings = new HashMap<>(indexSettings);
+            settings.put("index.default_pipeline", ingestPipelineName);
+            if (searchPipelineName != null) {
+                settings.put("index.search.default_pipeline", searchPipelineName);
+            }
             requestBody.put("settings", settings);
 
             // Prepare parameters for connector execution

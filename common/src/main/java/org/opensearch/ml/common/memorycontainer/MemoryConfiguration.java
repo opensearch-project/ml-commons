@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INDEX_PREFIX_INVALID_CHARACTERS_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INDEX_SETTINGS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INGEST_PIPELINE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE;
@@ -24,7 +25,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_PREFIX_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.REMOTE_STORE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEARCH_PIPELINE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRATEGIES_FIELD;
@@ -88,6 +89,10 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
     private String tenantId;
     private RemoteStore remoteStore;
 
+    // Optional pre-existing pipeline configuration for local storage
+    private String ingestPipeline;
+    private String searchPipeline;
+
     public MemoryConfiguration(
         String indexPrefix,
         FunctionName embeddingModelType,
@@ -102,7 +107,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         boolean disableSession,
         boolean useSystemIndex,
         String tenantId,
-        RemoteStore remoteStore
+        RemoteStore remoteStore,
+        String ingestPipeline,
+        String searchPipeline
     ) {
         // Validate first
         validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
@@ -131,6 +138,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         this.useSystemIndex = useSystemIndex;
         this.tenantId = tenantId;
         this.remoteStore = remoteStore;
+        this.ingestPipeline = ingestPipeline;
+        this.searchPipeline = searchPipeline;
     }
 
     private String buildIndexPrefix(String indexPrefix, boolean useSystemIndex) {
@@ -175,6 +184,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.remoteStore = new RemoteStore(input);
         }
+        this.ingestPipeline = input.readOptionalString();
+        this.searchPipeline = input.readOptionalString();
     }
 
     @Override
@@ -213,6 +224,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(ingestPipeline);
+        out.writeOptionalString(searchPipeline);
     }
 
     @Override
@@ -266,6 +279,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (remoteStore != null) {
             builder.field(REMOTE_STORE_FIELD, remoteStore);
         }
+        if (ingestPipeline != null) {
+            builder.field(INGEST_PIPELINE_FIELD, ingestPipeline);
+        }
+        if (searchPipeline != null) {
+            builder.field(SEARCH_PIPELINE_FIELD, searchPipeline);
+        }
         builder.endObject();
         return builder;
     }
@@ -285,6 +304,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         boolean useSystemIndex = true;
         String tenantId = null;
         RemoteStore remoteStore = null;
+        String ingestPipeline = null;
+        String searchPipeline = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -339,6 +360,12 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
                 case REMOTE_STORE_FIELD:
                     remoteStore = RemoteStore.parse(parser);
                     break;
+                case INGEST_PIPELINE_FIELD:
+                    ingestPipeline = parser.text();
+                    break;
+                case SEARCH_PIPELINE_FIELD:
+                    searchPipeline = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -362,6 +389,8 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             .useSystemIndex(useSystemIndex)
             .tenantId(tenantId)
             .remoteStore(remoteStore)
+            .ingestPipeline(ingestPipeline)
+            .searchPipeline(searchPipeline)
             .build();
     }
 
@@ -437,9 +466,9 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
         if (embeddingModelId != null && embeddingModelType == null) {
             throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
         }
-        if (embeddingModelType != null && embeddingModelId == null) {
-            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
-        }
+        // if (embeddingModelType != null && embeddingModelId == null) {
+        // throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
+        // }
 
         // If embedding model type is provided, validate it
         if (embeddingModelType != null) {
@@ -499,20 +528,24 @@ public class MemoryConfiguration implements ToXContentObject, Writeable {
             hasEmbedding = config.getRemoteStore().getEmbeddingModelId() != null && config.getRemoteStore().getEmbeddingModelId() != null;
         }
 
-        if (!hasLlm || !hasEmbedding) {
-            String missing = !hasLlm && !hasEmbedding ? "LLM model and embedding model"
-                : !hasLlm ? "LLM model (llm_id)"
-                : "embedding model (embedding_model_id, embedding_model_type, dimension)";
-
-            throw new IllegalArgumentException(
-                String
-                    .format(
-                        "Strategies require both an LLM model and embedding model to be configured. Missing: %s. "
-                            + "Strategies use LLM for fact extraction and embedding model for semantic search.",
-                        missing
-                    )
-            );
+        if (!hasLlm) {
+            throw new IllegalArgumentException("Strategies require an LLM model to be configured.");
         }
+
+        // if (!hasLlm || !hasEmbedding) {
+        // String missing = !hasLlm && !hasEmbedding ? "LLM model and embedding model"
+        // : !hasLlm ? "LLM model (llm_id)"
+        // : "embedding model (embedding_model_id, embedding_model_type, dimension)";
+        //
+        // throw new IllegalArgumentException(
+        // String
+        // .format(
+        // "Strategies require both an LLM model and embedding model to be configured. Missing: %s. "
+        // + "Strategies use LLM for fact extraction and embedding model for semantic search.",
+        // missing
+        // )
+        // );
+        // }
     }
 
     /**

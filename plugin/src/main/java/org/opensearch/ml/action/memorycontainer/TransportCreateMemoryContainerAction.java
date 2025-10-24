@@ -358,7 +358,9 @@ public class TransportCreateMemoryContainerAction extends
                 log.info("Auto-created connector with ID: {} for remote store", connectorId);
 
                 // Check if we need to auto-create embedding model
-                if (config.getRemoteStore().getEmbeddingModel() != null) {
+                // Skip if user provided a pre-existing ingest pipeline
+                if (config.getRemoteStore().getEmbeddingModel() != null
+                    && (config.getRemoteStore().getIngestPipeline() == null || config.getRemoteStore().getIngestPipeline().isEmpty())) {
                     RemoteStorageHelper
                         .createRemoteEmbeddingModel(
                             connectorId,
@@ -378,6 +380,13 @@ public class TransportCreateMemoryContainerAction extends
                             }, listener::onFailure)
                         );
                 } else {
+                    if (config.getRemoteStore().getIngestPipeline() != null && !config.getRemoteStore().getIngestPipeline().isEmpty()) {
+                        log
+                            .info(
+                                "Skipping embedding model auto-creation, using pre-existing ingest pipeline: {}",
+                                config.getRemoteStore().getIngestPipeline()
+                            );
+                    }
                     // Continue with normal validation
                     validateConfigurationInternal(config, listener);
                 }
@@ -653,7 +662,7 @@ public class TransportCreateMemoryContainerAction extends
                     .actionType(org.opensearch.ml.common.connector.ConnectorAction.ActionType.EXECUTE)
                     .name(SEARCH_INDEX_ACTION)
                     .method("POST")
-                    .url(endpoint + "/${parameters.index_name}/_search")
+                    .url(endpoint + "/${parameters.index_name}/_search${parameters.search_pipeline:-}")
                     .headers(jsonHeaders)
                     .requestBody("${parameters.input}")
                     .build()
