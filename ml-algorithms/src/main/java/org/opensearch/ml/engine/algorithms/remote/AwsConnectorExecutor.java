@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -39,6 +40,8 @@ import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -70,19 +73,18 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
-    private SdkAsyncHttpClient httpClient;
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     @Setter
     @Getter
     private StreamTransportService streamTransportService;
 
+    @Setter
+    private boolean connectorPrivateIpEnabled;
+
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
-        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
     @Override
@@ -129,7 +131,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
+            AccessController
+                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute {} in aws connector: {}", action, exception.getMessage(), exception);
             actionListener.onFailure(exception);
@@ -179,5 +182,20 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             default:
                 throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
+    }
+
+    @VisibleForTesting
+    protected SdkAsyncHttpClient getHttpClient() {
+        if (httpClientRef.get() == null) {
+            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            this.httpClientRef
+                .compareAndSet(
+                    null,
+                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
+                );
+        }
+        return httpClientRef.get();
     }
 }
