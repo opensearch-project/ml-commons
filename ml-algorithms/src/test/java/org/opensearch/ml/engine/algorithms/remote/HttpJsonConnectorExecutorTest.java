@@ -10,15 +10,15 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -96,8 +96,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
-        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
+        executor.setConnectorPrivateIpEnabled(false);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -130,8 +129,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        AtomicBoolean privateIpEnabled = new AtomicBoolean(true);
-        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
+        executor.setConnectorPrivateIpEnabled(true);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -161,8 +159,7 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
-        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
+        executor.setConnectorPrivateIpEnabled(false);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -195,8 +192,6 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
-        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor.invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
@@ -246,7 +241,7 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
-    public void invokeRemoteService_nullHttpClient_throwMLException() throws NoSuchFieldException, IllegalAccessException {
+    public void invokeRemoteService_nullHttpClient_throwMLException() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -261,10 +256,8 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        Field httpClientField = HttpJsonConnectorExecutor.class.getDeclaredField("httpClient");
-        httpClientField.setAccessible(true);
-        httpClientField.set(executor, null);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        when(executor.getHttpClient()).thenReturn(null);
         executor
             .invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), "hello world", new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
