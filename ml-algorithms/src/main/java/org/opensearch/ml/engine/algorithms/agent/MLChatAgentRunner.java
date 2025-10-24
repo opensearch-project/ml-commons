@@ -486,7 +486,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-                    streamingWrapper.sendToolResponse(outputToOutputString(output), sessionId, parentInteractionId);
+                    streamingWrapper.sendToolResponse(outputToOutputString(filteredOutput), sessionId, parentInteractionId);
                     traceTensors
                         .add(
                             ModelTensors
