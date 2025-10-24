@@ -33,6 +33,9 @@ import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.EXECUTOR_
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_RESPONSIBILITY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,10 +61,10 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -290,32 +293,35 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // todo: use chat history instead of completed steps
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory
-            .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-                memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
-                    List<String> completedSteps = new ArrayList<>();
-                    for (Interaction interaction : interactions) {
-                        String question = interaction.getInput();
-                        String response = interaction.getResponse();
+            .create(
+                Map.of(MEMORY_ID, memoryId, MEMORY_NAME, apiParams.get(USER_PROMPT_FIELD), APP_TYPE, appType),
+                ActionListener.<ConversationIndexMemory>wrap(memory -> {
+                    memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
+                        List<String> completedSteps = new ArrayList<>();
+                        for (Interaction interaction : interactions) {
+                            String question = interaction.getInput();
+                            String response = interaction.getResponse();
 
-                        if (Strings.isNullOrEmpty(response)) {
-                            continue;
+                            if (Strings.isNullOrEmpty(response)) {
+                                continue;
+                            }
+
+                            completedSteps.add(question);
+                            completedSteps.add(response);
                         }
 
-                        completedSteps.add(question);
-                        completedSteps.add(response);
-                    }
+                        if (!completedSteps.isEmpty()) {
+                            addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
+                            usePlannerWithHistoryPromptTemplate(allParams);
+                        }
 
-                    if (!completedSteps.isEmpty()) {
-                        addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
-                        usePlannerWithHistoryPromptTemplate(allParams);
-                    }
-
-                    setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getConversationId(), listener);
-                }, e -> {
-                    log.error("Failed to get chat history", e);
-                    listener.onFailure(e);
-                }), messageHistoryLimit);
-            }, listener::onFailure));
+                        setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getConversationId(), listener);
+                    }, e -> {
+                        log.error("Failed to get chat history", e);
+                        listener.onFailure(e);
+                    }));
+                }, listener::onFailure)
+            );
     }
 
     private void setToolsAndRunAgent(
