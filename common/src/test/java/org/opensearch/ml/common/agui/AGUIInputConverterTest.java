@@ -14,6 +14,8 @@ import org.junit.Test;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 
+import com.google.gson.JsonObject;
+
 public class AGUIInputConverterTest {
 
     @Test
@@ -254,7 +256,7 @@ public class AGUIInputConverterTest {
         parameters.put("agui_messages", "[]");
         parameters.put("agui_tools", "[]");
 
-        com.google.gson.JsonObject result = AGUIInputConverter.reconstructAGUIInput(parameters);
+        JsonObject result = AGUIInputConverter.reconstructAGUIInput(parameters);
 
         assertNotNull("Reconstructed result should not be null", result);
         assertTrue("Should contain threadId", result.has("threadId"));

@@ -76,6 +76,13 @@ import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.transport.stream.StreamTransportResponse;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
+
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -179,7 +186,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         RemoteInferenceInputDataSet inputDataSet =
                             (RemoteInferenceInputDataSet) ((org.opensearch.ml.common.input.execute.agent.AgentMLInput) mlExecuteTaskRequest
                                 .getInput()).getInputDataset();
-                        inputDataSet.getParameters().put("backend_tool_names", new com.google.gson.Gson().toJson(backendToolNames));
+                        inputDataSet.getParameters().put("backend_tool_names", new Gson().toJson(backendToolNames));
                         log
                             .info(
                                 "AG-UI: Added {} backend tool names to request for streaming filter: {}",
@@ -403,10 +410,10 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             String backendToolNamesJson = inputDataSet.getParameters().get("backend_tool_names");
             if (backendToolNamesJson != null && !backendToolNamesJson.isEmpty()) {
                 try {
-                    com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(backendToolNamesJson);
+                    JsonElement element = JsonParser.parseString(backendToolNamesJson);
                     if (element.isJsonArray()) {
                         List<String> toolNames = new ArrayList<>();
-                        for (com.google.gson.JsonElement toolElement : element.getAsJsonArray()) {
+                        for (JsonElement toolElement : element.getAsJsonArray()) {
                             toolNames.add(toolElement.getAsString());
                         }
                         log.info("AG-UI: Extracted {} backend tool names for filtering: {}", toolNames.size(), toolNames);
@@ -529,13 +536,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         if (content != null && !content.isEmpty()) {
             try {
                 // Try to parse as AG-UI events JSON array
-                com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(content);
+                JsonElement element = JsonParser.parseString(content);
                 if (element.isJsonArray()) {
                     // Content is already AG-UI events - stream them directly
-                    com.google.gson.JsonArray events = element.getAsJsonArray();
-                    for (com.google.gson.JsonElement eventElement : events) {
+                    JsonArray events = element.getAsJsonArray();
+                    for (JsonElement eventElement : events) {
                         if (eventElement.isJsonObject()) {
-                            com.google.gson.JsonObject event = eventElement.getAsJsonObject();
+                            JsonObject event = eventElement.getAsJsonObject();
                             String eventType = event.has("type") ? event.get("type").getAsString() : "unknown";
 
                             // Add proper SSE formatting for each event
@@ -657,9 +664,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             Map<String, Object> llmResponseData = new LinkedHashMap<>();
 
             // Try to parse the content as JSON
-            com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(content);
+            JsonElement element = JsonParser.parseString(content);
             if (element.isJsonObject()) {
-                com.google.gson.JsonObject responseObj = element.getAsJsonObject();
+                JsonObject responseObj = element.getAsJsonObject();
 
                 if (isCompleteResponse) {
                     // Content is already in the complete OpenAI response format
@@ -802,9 +809,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Convert JsonObject to Map<String, Object> recursively
      */
-    private Map<String, Object> jsonObjectToMap(com.google.gson.JsonObject jsonObject) {
+    private Map<String, Object> jsonObjectToMap(JsonObject jsonObject) {
         Map<String, Object> map = new LinkedHashMap<>();
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : jsonObject.entrySet()) {
+        for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
             map.put(entry.getKey(), jsonElementToObject(entry.getValue()));
         }
         return map;
@@ -813,11 +820,11 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Convert JsonElement to Java Object recursively
      */
-    private Object jsonElementToObject(com.google.gson.JsonElement element) {
+    private Object jsonElementToObject(JsonElement element) {
         if (element.isJsonNull()) {
             return null;
         } else if (element.isJsonPrimitive()) {
-            com.google.gson.JsonPrimitive primitive = element.getAsJsonPrimitive();
+            JsonPrimitive primitive = element.getAsJsonPrimitive();
             if (primitive.isString()) {
                 return primitive.getAsString();
             } else if (primitive.isNumber()) {
@@ -829,7 +836,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             return jsonObjectToMap(element.getAsJsonObject());
         } else if (element.isJsonArray()) {
             List<Object> list = new ArrayList<>();
-            for (com.google.gson.JsonElement arrayElement : element.getAsJsonArray()) {
+            for (JsonElement arrayElement : element.getAsJsonArray()) {
                 list.add(jsonElementToObject(arrayElement));
             }
             return list;
@@ -853,9 +860,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
             if (isStreamingChunk) {
                 // Parse as JSON to verify it's a valid OpenAI function call chunk
-                com.google.gson.JsonElement element = com.google.gson.JsonParser.parseString(content);
+                JsonElement element = JsonParser.parseString(content);
                 if (element.isJsonObject()) {
-                    com.google.gson.JsonObject obj = element.getAsJsonObject();
+                    JsonObject obj = element.getAsJsonObject();
                     return obj.has("index") && (obj.has("type") || obj.has("function"));
                 }
             }
