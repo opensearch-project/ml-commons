@@ -58,6 +58,7 @@ dependencies {
     // Multi-tenant SDK Client
     implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
     implementation 'commons-beanutils:commons-beanutils:1.11.0'
+    implementation "org.opensearch:opensearch-remote-metadata-sdk-ddb-client:${opensearch_build}"
 
     def os = DefaultNativePlatform.currentOperatingSystem
     //arm/macos doesn't support GPU
@@ -71,24 +72,27 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.30.18')
-    api 'software.amazon.awssdk:auth:2.30.18'
-    implementation 'software.amazon.awssdk:apache-client'
+    implementation platform(group: 'software.amazon.awssdk', name: 'bom', version:"2.32.29")
+    api "software.amazon.awssdk:auth:2.32.29"
+    implementation group: 'software.amazon.awssdk', name:'apache-client', version: "2.32.29"
+    implementation (group: 'software.amazon.awssdk', name: 'bedrockruntime', version: "2.32.29") {
+        exclude group: 'io.netty'
+    }
     implementation ('com.amazonaws:aws-encryption-sdk-java:2.4.1') {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
-    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
-
-    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
-    compileOnly group: 'software.amazon.awssdk', name: 's3', version: "2.30.18"
-    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "2.30.18"
+    // needed by aws-encryption-sdk-java
+    implementation "org.bouncycastle:bc-fips:2.1.1"
+    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "2.32.29"
+    compileOnly group: 'software.amazon.awssdk', name: 's3', version: "2.32.29"
+    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: "2.32.29"
 
     implementation ('com.jayway.jsonpath:json-path:2.9.0') {
         exclude group: 'net.minidev', module: 'json-smart'
     }
     implementation('net.minidev:json-smart:2.5.2')
     implementation group: 'org.json', name: 'json', version: '20231013'
-    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "2.32.29"
     testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
@@ -101,7 +105,7 @@ lombok {
 configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
-    resolutionStrategy.force 'software.amazon.awssdk:bom:2.30.18'
+    resolutionStrategy.force group: 'software.amazon.awssdk', name:'bom', version:"2.32.29"
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
 }
 
