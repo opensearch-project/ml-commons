@@ -516,9 +516,15 @@ public class TransportGetMemoryContainerActionTests extends OpenSearchTestCase {
         // Execute
         action.doExecute(task, getRequest, actionListener);
 
-        // Verify failure response with the original exception
+        // Verify failure response with security-hardened exception
         verify(actionListener, timeout(1000))
-            .onFailure(argThat(exception -> exception instanceof RuntimeException && exception.getMessage().equals("General async error")));
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.INTERNAL_SERVER_ERROR
+                        && exception.getMessage().contains("Internal server error")
+                )
+            );
     }
 
     public void testDoExecuteWithNonExistentMemoryContainer() {
