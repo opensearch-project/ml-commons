@@ -37,6 +37,10 @@ public class MLResourceSharingExtensionTests {
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
+    private static Object getResourceSharingClient() {
+        return ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+    }
+
     @Test
     public void testGetResourceProviders_returnsExpectedSingleProvider() {
         MLResourceSharingExtension ext = new MLResourceSharingExtension();
@@ -71,15 +75,11 @@ public class MLResourceSharingExtensionTests {
         MLResourceSharingExtension ext = new MLResourceSharingExtension();
         ResourceSharingClient mockClient = mock(ResourceSharingClient.class);
 
-        assertThat(ResourceSharingClientAccessor.getInstance().getResourceSharingClient(), is(nullValue()));
+        assertThat(getResourceSharingClient(), is(nullValue()));
 
         ext.assignResourceSharingClient(mockClient);
 
-        assertThat(
-            "Accessor should hold the client passed to extension",
-            ResourceSharingClientAccessor.getInstance().getResourceSharingClient(),
-            equalTo(mockClient)
-        );
+        assertThat("Accessor should hold the client passed to extension", getResourceSharingClient(), equalTo(mockClient));
     }
 
     @Test
@@ -90,16 +90,12 @@ public class MLResourceSharingExtensionTests {
 
         // Prime with the first client
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(first);
-        assertThat(ResourceSharingClientAccessor.getInstance().getResourceSharingClient(), equalTo(first));
+        assertThat(getResourceSharingClient(), equalTo(first));
 
         // Now assign a new one via the extension
         ext.assignResourceSharingClient(second);
 
-        assertThat(
-            "Accessor should be updated to the new client",
-            ResourceSharingClientAccessor.getInstance().getResourceSharingClient(),
-            equalTo(second)
-        );
+        assertThat("Accessor should be updated to the new client", getResourceSharingClient(), equalTo(second));
     }
 
     @Test
