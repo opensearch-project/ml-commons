@@ -8,9 +8,12 @@ package org.opensearch.ml.common.agent;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
+import lombok.extern.log4j.Log4j2;
+
 /**
  * Service class for handling model creation during agent registration
  */
+@Log4j2
 public class AgentModelService {
 
     /**
@@ -42,6 +45,7 @@ public class AgentModelService {
             ModelProvider provider = ModelProviderFactory.getProvider(modelProvider);
             return provider.getLLMInterface();
         } catch (Exception e) {
+            log.error("Failed to infer LLM interface", e);
             return null;
         }
     }

@@ -8,6 +8,7 @@ package org.opensearch.ml.common.input.execute.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_3_0;
 
 import java.io.IOException;
 import java.util.Map;
@@ -97,11 +98,12 @@ public class AgentMLInput extends MLInput {
         if (streamOutputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             out.writeOptionalBoolean(isAsync);
         }
-        // Write AgentInput for future versions (when standardized input is supported)
-        // For now, we'll write a boolean to indicate if AgentInput is present
-        out.writeBoolean(agentInput != null);
-        if (agentInput != null) {
-            agentInput.writeTo(out);
+        // Todo: finalize the version
+        if (streamOutputVersion.onOrAfter(VERSION_3_3_0)) {
+            out.writeBoolean(agentInput != null);
+            if (agentInput != null) {
+                agentInput.writeTo(out);
+            }
         }
     }
 
@@ -113,12 +115,10 @@ public class AgentMLInput extends MLInput {
         if (streamInputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             this.isAsync = in.readOptionalBoolean();
         }
-        // Read AgentInput for future versions (when standardized input is supported)
-        boolean hasAgentInput = in.readBoolean();
-        if (hasAgentInput) {
-            this.agentInput = new AgentInput(in);
-        } else {
-            this.agentInput = null;
+        if (streamInputVersion.onOrAfter(VERSION_3_3_0)) {
+            if (in.readBoolean()) {
+                this.agentInput = new AgentInput(in);
+            }
         }
     }
 
@@ -143,8 +143,7 @@ public class AgentMLInput extends MLInput {
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
                 case INPUT_FIELD:
-                    // New standardized format - parse AgentInput
-                    agentInput = parseAgentInput(parser);
+                    agentInput = new AgentInput(parser);
                     break;
                 case ASYNC_FIELD:
                     isAsync = parser.booleanValue();
@@ -157,35 +156,10 @@ public class AgentMLInput extends MLInput {
     }
 
     /**
-     * Parses AgentInput from XContent parser.
-     * Handles different input formats: text, content_blocks, messages.
-     */
-    private AgentInput parseAgentInput(XContentParser parser) throws IOException {
-        return new AgentInput(parser);
-    }
-
-    /**
      * Checks if this AgentMLInput uses the new standardized input format.
      * @return true if AgentInput is present
      */
     public boolean hasStandardInput() {
         return agentInput != null;
     }
-
-    /**
-     * Checks if this AgentMLInput has the legacy input dataset.
-     * @return true if inputDataset is present
-     */
-    public boolean hasInputDataset() {
-        return inputDataset != null;
-    }
-
-    /**
-     * Checks if this AgentMLInput has both standardized and legacy input formats.
-     * @return true if both AgentInput and inputDataset are present
-     */
-    public boolean hasDualInput() {
-        return agentInput != null && inputDataset != null;
-    }
-
 }

@@ -20,12 +20,14 @@ import org.opensearch.core.xcontent.XContentParser;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Specification for model configuration in agent registration
  */
 @EqualsAndHashCode
 @Getter
+@Setter
 public class MLAgentModelSpec implements ToXContentObject {
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String MODEL_PROVIDER_FIELD = "model_provider";

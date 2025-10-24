@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
@@ -37,6 +38,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
  * 
  * All parameters consistently use the ${parameters.} prefix for uniformity.
  */
+// todo: refactor the processing so providers have to only provide the constants
 public class BedrockConverseModelProvider extends ModelProvider {
 
     private static final String DEFAULT_REGION = "us-east-1";
@@ -117,27 +119,17 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     @Override
-    public String getProtocol() {
-        return ConnectorProtocols.AWS_SIGV4;
-    }
-
-    @Override
-    public String getServiceName() {
-        return "bedrock";
-    }
-
-    @Override
     public String getLLMInterface() {
         return "bedrock/converse/claude";
     }
 
     @Override
-    public Map<String, Object> mapTextInput(String text) {
-        Map<String, Object> parameters = createDefaultParameters();
+    public Map<String, String> mapTextInput(String text) {
+        Map<String, String> parameters = new HashMap<>();
 
         // Use StringSubstitutor for parameter replacement
-        Map<String, Object> templateParams = new HashMap<>();
-        templateParams.put("user_text", escapeJsonString(text));
+        Map<String, String> templateParams = new HashMap<>();
+        templateParams.put("user_text", StringEscapeUtils.escapeJson(text));
 
         StringSubstitutor substitutor = new StringSubstitutor(templateParams, "${parameters.", "}");
         String body = substitutor.replace(TEXT_INPUT_BODY_TEMPLATE);
@@ -147,12 +139,12 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     @Override
-    public Map<String, Object> mapContentBlocks(List<ContentBlock> contentBlocks) {
-        Map<String, Object> parameters = createDefaultParameters();
+    public Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks) {
+        Map<String, String> parameters = new HashMap<>();
 
         // Use StringSubstitutor for parameter replacement
         String contentArray = buildContentArrayFromBlocks(contentBlocks);
-        Map<String, Object> templateParams = new HashMap<>();
+        Map<String, String> templateParams = new HashMap<>();
         templateParams.put("content_array", contentArray);
 
         StringSubstitutor substitutor = new StringSubstitutor(templateParams, "${parameters.", "}");
@@ -163,38 +155,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
     }
 
     @Override
-    public Map<String, Object> mapMessages(List<Message> messages) {
-        Map<String, Object> parameters = createDefaultParameters();
-
-        // Find the last user message (current input)
-        Message lastUserMessage = null;
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            if ("user".equalsIgnoreCase(messages.get(i).getRole())) {
-                lastUserMessage = messages.get(i);
-                break;
-            }
-        }
-
-        // Build conversation history (all messages except the last user message)
-        String conversationHistory = buildMessagesArray(messages);
-
-        // Build current user input from the last user message
-        String currentUserInput = "";
-        if (lastUserMessage != null) {
-            String contentArray = buildContentArrayFromBlocks(lastUserMessage.getContent());
-            Map<String, Object> msgParams = new HashMap<>();
-            msgParams.put("msg_role", "user");
-            msgParams.put("msg_content_array", contentArray);
-            StringSubstitutor msgSubstitutor = new StringSubstitutor(msgParams, "${parameters.", "}");
-            currentUserInput = msgSubstitutor.replace(MESSAGE_TEMPLATE);
-        }
-
-        // Set the conversation history and current input
-        if (!conversationHistory.isEmpty()) {
-            parameters.put("_chat_history", conversationHistory + ",");
-        }
-        parameters.put("body", currentUserInput);
-
+    public Map<String, String> mapMessages(List<Message> messages) {
+        Map<String, String> parameters = new HashMap<>();
+        String messagesString = buildMessagesArray(messages);
+        parameters.put("body", messagesString);
         return parameters;
     }
 
@@ -209,7 +173,6 @@ public class BedrockConverseModelProvider extends ModelProvider {
 
         StringBuilder contentArray = new StringBuilder();
         boolean first = true;
-
         for (ContentBlock block : blocks) {
             if (!first) {
                 contentArray.append(",");
@@ -219,7 +182,7 @@ public class BedrockConverseModelProvider extends ModelProvider {
             switch (block.getType()) {
                 case TEXT:
                     Map<String, Object> textParams = new HashMap<>();
-                    textParams.put("content_text", escapeJsonString(block.getText()));
+                    textParams.put("content_text", StringEscapeUtils.escapeJson(block.getText()));
                     StringSubstitutor textSubstitutor = new StringSubstitutor(textParams, "${parameters.", "}");
                     contentArray.append(textSubstitutor.replace(TEXT_CONTENT_TEMPLATE));
                     break;
@@ -276,26 +239,9 @@ public class BedrockConverseModelProvider extends ModelProvider {
             return "";
         }
 
-        // Find the last user message index
-        int lastUserMessageIndex = -1;
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            if ("user".equalsIgnoreCase(messages.get(i).getRole())) {
-                lastUserMessageIndex = i;
-                break;
-            }
-        }
-
         StringBuilder messagesArray = new StringBuilder();
         boolean first = true;
-
-        // Include all messages except the last user message (which becomes current input)
-        for (int i = 0; i < messages.size(); i++) {
-            // Skip the last user message
-            if (i == lastUserMessageIndex) {
-                continue;
-            }
-
-            Message message = messages.get(i);
+        for (Message message : messages) {
             if (!first) {
                 messagesArray.append(",");
             }
@@ -319,28 +265,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
      * @return the corresponding Bedrock API source field name
      */
     private String mapSourceTypeToBedrock(SourceType sourceType) {
-        if (sourceType == null) {
-            // Default to bytes for backward compatibility
-            return "bytes";
+        if (sourceType == SourceType.URL) {
+            return "s3Location"; // Bedrock Converse API uses s3Location for URL-based content
         }
 
-        switch (sourceType) {
-            case BASE64:
-                return "bytes";
-            case URL:
-                return "s3Location"; // Bedrock Converse API uses s3Location for URL-based content
-            default:
-                return "bytes";
-        }
-    }
-
-    /**
-     * Escapes special characters in JSON strings.
-     */
-    private String escapeJsonString(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.replace("\"", "\\\"").replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+        return "bytes";
     }
 }

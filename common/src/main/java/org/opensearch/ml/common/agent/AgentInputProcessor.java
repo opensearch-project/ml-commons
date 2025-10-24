@@ -7,13 +7,16 @@ package org.opensearch.ml.common.agent;
 
 import java.util.List;
 
+import lombok.extern.log4j.Log4j2;
+
 /**
  * Utility class for validating standardized agent input formats.
  * The AgentInput itself is already standardized - this validator just validates it
  * and ensures it's ready to be passed to ModelProviders for conversion to their
  * specific request body formats.
  */
-public final class AgentInputProcessor {
+@Log4j2
+public class AgentInputProcessor {
 
     // Private constructor to prevent instantiation
     private AgentInputProcessor() {
@@ -26,10 +29,9 @@ public final class AgentInputProcessor {
      * handle the conversion to their specific request body parameters.
      * 
      * @param agentInput the standardized agent input
-     * @return the same AgentInput after validation
      * @throws IllegalArgumentException if input is invalid
      */
-    public static AgentInput validateInput(AgentInput agentInput) {
+    public static void validateInput(AgentInput agentInput) {
         if (agentInput == null || agentInput.getInput() == null) {
             throw new IllegalArgumentException("AgentInput and its input field cannot be null");
         }
@@ -53,8 +55,6 @@ public final class AgentInputProcessor {
             default:
                 throw new IllegalArgumentException("Unsupported input type: " + type);
         }
-
-        return agentInput;
     }
 
     /**
@@ -135,5 +135,74 @@ public final class AgentInputProcessor {
             // Validate each content block in the message
             validateContentBlocks(message.getContent());
         }
+    }
+
+    /**
+     * Extracts question text from AgentInput for prompt template usage.
+     * This provides the text that will be used in prompt templates that reference $parameters.question.
+     */
+    public static String extractQuestionText(AgentInput agentInput) {
+        if (agentInput == null || agentInput.getInput() == null) {
+            throw new IllegalArgumentException("AgentInput and its input field cannot be null");
+        }
+
+        return switch (agentInput.getInputType()) {
+            case TEXT -> (String) agentInput.getInput();
+            case CONTENT_BLOCKS -> {
+                // For content blocks, extract and combine text content
+                @SuppressWarnings("unchecked")
+                List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
+                yield extractTextFromContentBlocks(blocks);
+            }
+            case MESSAGES -> {
+                // For messages, extract the last user message text
+                @SuppressWarnings("unchecked")
+                List<Message> messages = (List<Message>) agentInput.getInput();
+                yield extractTextFromMessages(messages);
+            }
+            default -> {
+                log.warn("Unknown input type: {}, cannot extract question text", agentInput.getInputType());
+                yield null;
+            }
+        };
+    }
+
+    /**
+     * Extracts text content from content blocks for human-readable display.
+     * Ignores non text blocks
+     * @throws IllegalArgumentException if content blocks are invalid[
+     */
+    private static String extractTextFromContentBlocks(List<ContentBlock> blocks) {
+        if (blocks == null || blocks.isEmpty()) {
+            throw new IllegalArgumentException("Content blocks cannot be null or empty");
+        }
+
+        StringBuilder textBuilder = new StringBuilder();
+        textBuilder.append("[Content-Block]");
+        for (ContentBlock block : blocks) {
+            if (block.getType() == ContentType.TEXT) {
+                String text = block.getText();
+                if (text != null && !text.trim().isEmpty()) {
+                    if (!textBuilder.isEmpty()) {
+                        textBuilder.append(" ");
+                    }
+                    textBuilder.append(text.trim());
+                }
+            }
+        }
+
+        return textBuilder.toString();
+    }
+
+    /**
+     * Extracts text content from last message.
+     */
+    private static String extractTextFromMessages(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            throw new IllegalArgumentException("Messages cannot be null or empty");
+        }
+
+        Message message = messages.getLast();
+        return extractTextFromContentBlocks(message.getContent());
     }
 }

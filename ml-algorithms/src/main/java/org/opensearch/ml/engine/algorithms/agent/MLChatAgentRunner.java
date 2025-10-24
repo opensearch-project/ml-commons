@@ -126,6 +126,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    private static final String DEFAULT_SYSTEM_PROMPT = "You are an helpful assistant."; // empty system prompt
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
@@ -857,15 +858,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         // Set default system prompt only if none exists
         if (!tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
-            // ToDo: figure out a good default prompt for conversational agent
-            String defaultSystemPrompt = "You are a helpful assistant.";
+            String systemPrompt = DEFAULT_SYSTEM_PROMPT;
             // If datetime injection was enabled, include it in the default system prompt
             if (injectDate) {
                 String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
                 String currentDateTime = getCurrentDateTime(dateFormat);
-                defaultSystemPrompt = defaultSystemPrompt + "\n\n" + currentDateTime;
+                systemPrompt = systemPrompt + "\n\n" + currentDateTime;
             }
-            tmpParameters.put(SYSTEM_PROMPT_FIELD, defaultSystemPrompt);
+            tmpParameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
         }
 
         return tmpParameters;

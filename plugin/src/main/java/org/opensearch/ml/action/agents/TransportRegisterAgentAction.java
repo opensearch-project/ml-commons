@@ -30,6 +30,7 @@ import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.AgentModelService;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
@@ -114,10 +115,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
                 LLMSpec llmSpec = LLMSpec.builder().modelId(modelId).parameters(mlAgent.getModel().getModelParameters()).build();
 
-                // setting model to null in the document to avoid duplicates
+                // Remove credentials and model parameters as it is stored in the model document and LLMSpec respectively
+                MLAgentModelSpec modelSpec = mlAgent.getModel();
+                modelSpec.setModelParameters(null);
+                modelSpec.setCredential(null);
                 // ToDo: store model details within agent to prevent creating a new model document
-                MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(null).parameters(parameters).build();
-
+                MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(modelSpec).parameters(parameters).build();
                 registerAgent(agent, listener);
             }, listener::onFailure));
         } catch (Exception e) {

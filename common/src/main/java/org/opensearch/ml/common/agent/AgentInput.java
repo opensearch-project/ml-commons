@@ -32,7 +32,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AgentInput implements Writeable {
-    private Object input; // String, List<ContentBlock>, or List<Message>
+    // String, List<ContentBlock>, or List<Message>
+    private Object input;
 
     /**
      * Constructor for stream input deserialization.
@@ -40,7 +41,6 @@ public class AgentInput implements Writeable {
      */
     public AgentInput(StreamInput in) throws IOException {
         InputType inputType = InputType.valueOf(in.readString());
-
         switch (inputType) {
             case TEXT:
                 this.input = in.readString();
@@ -60,9 +60,8 @@ public class AgentInput implements Writeable {
      * Reads a list of ContentBlocks from stream input.
      */
     private List<ContentBlock> readContentBlocksList(StreamInput in) throws IOException {
-        int size = in.readVInt();
+        int size = in.readInt();
         List<ContentBlock> contentBlocks = new ArrayList<>(size);
-
         for (int i = 0; i < size; i++) {
             ContentBlock block = readContentBlock(in);
             contentBlocks.add(block);
@@ -134,9 +133,8 @@ public class AgentInput implements Writeable {
      * Reads a list of Messages from stream input.
      */
     private List<Message> readMessagesList(StreamInput in) throws IOException {
-        int size = in.readVInt();
+        int size = in.readInt();
         List<Message> messages = new ArrayList<>(size);
-
         for (int i = 0; i < size; i++) {
             Message message = readMessage(in);
             messages.add(message);
@@ -163,9 +161,7 @@ public class AgentInput implements Writeable {
      * Supports the simplified format where everything is under "input" field.
      */
     public AgentInput(XContentParser parser) throws IOException {
-        // The parser is positioned at the value of the "input" field
         XContentParser.Token currentToken = parser.currentToken();
-
         if (currentToken == XContentParser.Token.VALUE_STRING) {
             // Plain text: {"input": "hi does this work"}
             this.input = parser.text();
@@ -192,16 +188,14 @@ public class AgentInput implements Writeable {
 
         // Determine if this is messages or content blocks based on first item
         if (!items.isEmpty()) {
-            Object firstItem = items.get(0);
+            Object firstItem = items.getFirst();
             if (firstItem instanceof Message) {
-                // Convert to List<Message>
                 List<Message> messages = new ArrayList<>();
                 for (Object item : items) {
                     messages.add((Message) item);
                 }
                 return messages;
             } else if (firstItem instanceof ContentBlock) {
-                // Convert to List<ContentBlock>
                 List<ContentBlock> contentBlocks = new ArrayList<>();
                 for (Object item : items) {
                     contentBlocks.add((ContentBlock) item);
@@ -253,11 +247,13 @@ public class AgentInput implements Writeable {
         // Determine if this is a Message or ContentBlock
         if (itemMap.containsKey("role")) {
             return createMessage(itemMap);
-        } else if (itemMap.containsKey("type")) {
-            return createContentBlock(itemMap);
-        } else {
-            throw new IllegalArgumentException("Invalid item format. Must have 'role' (for messages) or 'type' (for content blocks).");
         }
+
+        if (itemMap.containsKey("type")) {
+            return createContentBlock(itemMap);
+        }
+
+        throw new IllegalArgumentException("Invalid item format. Must have 'role' (for messages) or 'type' (for content blocks).");
     }
 
     /**
@@ -431,7 +427,7 @@ public class AgentInput implements Writeable {
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
+    public void writeTo(StreamOutput out) throws IllegalArgumentException, IOException {
         InputType inputType = getInputType();
         out.writeString(inputType.name());
 
@@ -450,7 +446,7 @@ public class AgentInput implements Writeable {
                 writeMessagesList(out, messages);
                 break;
             default:
-                throw new IOException("Unsupported input type: " + inputType);
+                throw new IllegalArgumentException("Unsupported input type: " + inputType);
         }
     }
 
@@ -458,8 +454,7 @@ public class AgentInput implements Writeable {
      * Writes a list of ContentBlocks to stream output.
      */
     private void writeContentBlocksList(StreamOutput out, List<ContentBlock> contentBlocks) throws IOException {
-        out.writeVInt(contentBlocks.size());
-
+        out.writeInt(contentBlocks.size());
         for (ContentBlock block : contentBlocks) {
             writeContentBlock(out, block);
         }
@@ -518,7 +513,7 @@ public class AgentInput implements Writeable {
      * Writes a list of Messages to stream output.
      */
     private void writeMessagesList(StreamOutput out, List<Message> messages) throws IOException {
-        out.writeVInt(messages.size());
+        out.writeInt(messages.size());
 
         for (Message message : messages) {
             writeMessage(out, message);
@@ -537,24 +532,24 @@ public class AgentInput implements Writeable {
      * Determines the type of input based on the input object.
      * @return InputType enum value indicating the format of the input
      */
-    public InputType getInputType() {
+    public InputType getInputType() throws IllegalArgumentException {
         if (input instanceof String) {
             return InputType.TEXT;
         }
 
-        if (input instanceof List) {
-            List<?> list = (List<?>) input;
+        if (input instanceof List<?> list) {
             if (!list.isEmpty()) {
-                Object firstElement = list.get(0);
+                Object firstElement = list.getFirst();
                 if (firstElement instanceof ContentBlock) {
                     return InputType.CONTENT_BLOCKS;
                 }
+
                 if (firstElement instanceof Message) {
                     return InputType.MESSAGES;
                 }
             }
         }
 
-        return InputType.UNKNOWN;
+        throw new IllegalArgumentException("Input type not supported: " + input);
     }
 }

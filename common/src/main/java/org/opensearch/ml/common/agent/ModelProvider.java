@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.agent;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,16 +35,6 @@ public abstract class ModelProvider {
     public abstract MLRegisterModelInput createModelInput(String modelName, Connector connector, Map<String, String> modelParameters);
 
     /**
-     * Get the protocol for this provider
-     */
-    public abstract String getProtocol();
-
-    /**
-     * Get the service name for this provider
-     */
-    public abstract String getServiceName();
-
-    /**
      * Gets the LLM interface for function calling
      * @return the LLM interface string, or null if not supported
      */
@@ -60,7 +49,7 @@ public abstract class ModelProvider {
      * @param text the text input
      * @return Map of parameters for the provider's request body template
      */
-    public abstract Map<String, Object> mapTextInput(String text);
+    public abstract Map<String, String> mapTextInput(String text);
 
     /**
      * Maps multi-modal content blocks to provider-specific request body parameters.
@@ -69,7 +58,7 @@ public abstract class ModelProvider {
      * @param contentBlocks the list of content blocks
      * @return Map of parameters for the provider's request body template
      */
-    public abstract Map<String, Object> mapContentBlocks(List<ContentBlock> contentBlocks);
+    public abstract Map<String, String> mapContentBlocks(List<ContentBlock> contentBlocks);
 
     /**
      * Maps message-based conversation to provider-specific request body parameters.
@@ -78,7 +67,7 @@ public abstract class ModelProvider {
      * @param messages the list of messages
      * @return Map of parameters for the provider's request body template
      */
-    public abstract Map<String, Object> mapMessages(List<Message> messages);
+    public abstract Map<String, String> mapMessages(List<Message> messages);
 
     /**
      * Maps standardized AgentInput to provider-specific request body parameters.
@@ -88,13 +77,12 @@ public abstract class ModelProvider {
      * @return Map of parameters for the provider's request body template
      * @throws IllegalArgumentException if input type is unsupported
      */
-    public Map<String, Object> mapAgentInput(AgentInput agentInput) {
+    public Map<String, String> mapAgentInput(AgentInput agentInput) {
         if (agentInput == null || agentInput.getInput() == null) {
             throw new IllegalArgumentException("AgentInput and its input field cannot be null");
         }
 
         InputType inputType = agentInput.getInputType();
-
         switch (inputType) {
             case TEXT:
                 return mapTextInput((String) agentInput.getInput());
@@ -109,15 +97,5 @@ public abstract class ModelProvider {
             default:
                 throw new IllegalArgumentException("Unsupported input type: " + inputType);
         }
-    }
-
-    /**
-     * Creates default parameters map for backward compatibility.
-     * Providers can use this as a starting point for their parameter maps.
-     * 
-     * @return empty parameters map
-     */
-    protected Map<String, Object> createDefaultParameters() {
-        return new HashMap<>();
     }
 }
