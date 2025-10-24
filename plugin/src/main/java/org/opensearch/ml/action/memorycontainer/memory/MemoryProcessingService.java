@@ -26,9 +26,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -55,6 +56,7 @@ import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -176,12 +178,21 @@ public class MemoryProcessingService {
                 log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
+                // Preserve client errors (4XX) with their detailed messages
+                if (e instanceof OpenSearchStatusException) {
+                    OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                    if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                        listener.onFailure(e);
+                        return;
+                    }
+                }
+                // Wrap server errors and unexpected exceptions
                 log.error("Failed to parse facts from LLM response", e);
-                listener.onFailure(new IllegalArgumentException("Failed to parse facts from LLM response", e));
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }
         }, e -> {
             log.error("Failed to call LLM for fact extraction", e);
-            listener.onFailure(new OpenSearchException("Failed to extract facts using LLM model: " + e.getMessage(), e));
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }));
     }
 
@@ -261,16 +272,25 @@ public class MemoryProcessingService {
                     log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
+                    // Preserve client errors (4XX) with their detailed messages
+                    if (e instanceof OpenSearchStatusException) {
+                        OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                        if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                            listener.onFailure(e);
+                            return;
+                        }
+                    }
+                    // Wrap server errors and unexpected exceptions
                     log.error("Failed to parse memory decisions from LLM response", e);
-                    listener.onFailure(e);
+                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }
             }, e -> {
                 log.error("Failed to get memory decisions from LLM", e);
-                listener.onFailure(e);
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }));
         } catch (Exception e) {
             log.error("Failed to build memory decision request", e);
-            listener.onFailure(e);
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -297,31 +317,44 @@ public class MemoryProcessingService {
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             Map<String, ?> dataMap = modelTensors.getMlModelTensors().get(i).getDataAsMap();
             String llmResultPath = memoryContainerHelper.getLlmResultPath(strategy, memoryConfig);
-            Object filterdResult = JsonPath.read(dataMap, llmResultPath);
-            String llmResult = null;
-            if (filterdResult != null) {
-                llmResult = StringUtils.toJson(filterdResult);
-            }
-            if (llmResult != null) {
-                llmResult = StringUtils.toJson(extractJsonProcessorChain.process(llmResult));
-                try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                        String fieldName = parser.currentName();
-                        if ("facts".equals(fieldName)) {
-                            ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
-                            while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                                String fact = parser.text();
-                                facts.add(fact);
-                            }
-                        } else {
-                            parser.skipChildren();
-                        }
-                    }
-                } catch (IOException e) {
-                    log.error("Failed to extract content from dataMap", e);
-                    throw new IllegalArgumentException("Failed to extract content from LLM response", e);
+            try {
+                Object filterdResult = JsonPath.read(dataMap, llmResultPath);
+                String llmResult = null;
+                if (filterdResult != null) {
+                    llmResult = StringUtils.toJson(filterdResult);
                 }
+                if (llmResult != null) {
+                    llmResult = StringUtils.toJson(extractJsonProcessorChain.process(llmResult));
+                    try (
+                        XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, llmResult)
+                    ) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                            String fieldName = parser.currentName();
+                            if ("facts".equals(fieldName)) {
+                                ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
+                                while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                                    String fact = parser.text();
+                                    facts.add(fact);
+                                }
+                            } else {
+                                parser.skipChildren();
+                            }
+                        }
+                    } catch (IOException e) {
+                        log.error("Failed to extract content from dataMap", e);
+                        throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
+                    }
+                }
+            } catch (PathNotFoundException e) {
+                String reason = extractFirstSentence(e.getMessage());
+                log.error("Failed to extract LLM result using path {}: {}", llmResultPath, reason);
+                throw new OpenSearchStatusException(
+                    "LLM predict result cannot be extracted with current llm_result_path with reason: "
+                        + reason
+                        + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
+                    RestStatus.BAD_REQUEST
+                );
             }
         }
 
@@ -332,47 +365,72 @@ public class MemoryProcessingService {
         try {
             MLOutput mlOutput = response.getOutput();
             if (!(mlOutput instanceof ModelTensorOutput)) {
-                throw new IllegalStateException("Expected ModelTensorOutput but got: " + mlOutput.getClass().getSimpleName());
+                log.error("Expected ModelTensorOutput but got: {}", mlOutput.getClass().getSimpleName());
+                throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
             }
 
             ModelTensorOutput tensorOutput = (ModelTensorOutput) mlOutput;
             List<ModelTensors> tensors = tensorOutput.getMlModelOutputs();
             if (tensors == null || tensors.isEmpty()) {
-                throw new IllegalStateException("No model output tensors found");
+                log.error("No model output tensors found in LLM response");
+                throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
             }
 
             Map<String, ?> dataAsMap = tensors.get(0).getMlModelTensors().get(0).getDataAsMap();
-            Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
-            if (filterdResult == null) {
-                throw new IllegalStateException("No response content found in LLM output");
-            }
-            String responseContent = StringUtils.toJson(filterdResult);
+            try {
+                Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+                if (filterdResult == null) {
+                    log.error("No response content found in LLM output");
+                    throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
+                }
+                String responseContent = StringUtils.toJson(filterdResult);
 
-            // Clean response content
-            responseContent = StringUtils.toJson(extractJsonProcessorChain.process(responseContent));
+                // Clean response content
+                responseContent = StringUtils.toJson(extractJsonProcessorChain.process(responseContent));
 
-            List<MemoryDecision> decisions = new ArrayList<>();
-            try (XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)) {
-                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                List<MemoryDecision> decisions = new ArrayList<>();
+                try (
+                    XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, responseContent)
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 
-                while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                    String fieldName = parser.currentName();
-                    parser.nextToken();
+                    while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                        String fieldName = parser.currentName();
+                        parser.nextToken();
 
-                    if (MEMORY_DECISION_FIELD.equals(fieldName)) {
-                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                            decisions.add(MemoryDecision.parse(parser));
+                        if (MEMORY_DECISION_FIELD.equals(fieldName)) {
+                            ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                            while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                                decisions.add(MemoryDecision.parse(parser));
+                            }
+                        } else {
+                            parser.skipChildren();
                         }
-                    } else {
-                        parser.skipChildren();
                     }
                 }
-            }
 
-            return decisions;
+                return decisions;
+            } catch (PathNotFoundException e) {
+                String reason = extractFirstSentence(e.getMessage());
+                log.error("Failed to extract LLM result using path {}: {}", llmResultPath, reason);
+                throw new OpenSearchStatusException(
+                    "LLM predict result cannot be extracted with current llm_result_path with reason: "
+                        + reason
+                        + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
+                    RestStatus.BAD_REQUEST
+                );
+            }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse memory decisions", e);
+            // Preserve client errors (4XX) with their detailed messages
+            if (e instanceof OpenSearchStatusException) {
+                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                    throw osException;
+                }
+            }
+            // Wrap server errors and unexpected exceptions
+            log.error("Failed to parse memory decisions", e);
+            throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -410,27 +468,48 @@ public class MemoryProcessingService {
                         String summary = parseSessionSummary((ModelTensorOutput) response.getOutput(), llmResultPath);
                         listener.onResponse(summary);
                     } catch (Exception e) {
+                        // Preserve client errors (4XX) with their detailed messages
+                        if (e instanceof OpenSearchStatusException) {
+                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                            if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                                listener.onFailure(e);
+                                return;
+                            }
+                        }
+                        // Wrap server errors and unexpected exceptions
                         log.error("Failed to parse memory decisions from LLM response", e);
-                        listener.onFailure(e);
+                        listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     }
                 }, e -> {
                     log.error("Failed to get memory decisions from LLM", e);
-                    listener.onFailure(e);
+                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }));
             } catch (Exception e) {
-                listener.onFailure(e);
+                log.error("Failed to build summarization request", e);
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }
         }
     }
 
     private String parseSessionSummary(ModelTensorOutput output, String llmResultPath) {
         Map<String, ?> dataAsMap = output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
-        String sessionSummary = null;
-        if (filterdResult != null) {
-            sessionSummary = StringUtils.toJson(filterdResult);
+        try {
+            Object filterdResult = JsonPath.read(dataAsMap, llmResultPath);
+            String sessionSummary = null;
+            if (filterdResult != null) {
+                sessionSummary = StringUtils.toJson(filterdResult);
+            }
+            return sessionSummary;
+        } catch (PathNotFoundException e) {
+            String reason = extractFirstSentence(e.getMessage());
+            log.error("Failed to extract LLM result using path {}: {}", llmResultPath, reason);
+            throw new OpenSearchStatusException(
+                "LLM predict result cannot be extracted with current llm_result_path with reason: "
+                    + reason
+                    + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
+                RestStatus.BAD_REQUEST
+            );
         }
-        return sessionSummary;
     }
 
     private boolean validatePromptFormat(String prompt) {
@@ -468,5 +547,26 @@ public class MemoryProcessingService {
 
         // Fall back to memory config
         return memoryConfig != null ? memoryConfig.getLlmId() : null;
+    }
+
+    /**
+     * Extracts the first sentence from an exception message without the trailing period.
+     * Uses ". " (period + space) as the sentence boundary to avoid splitting on periods
+     * within JSON paths like "$.data.output".
+     *
+     * @param message The exception message to extract from
+     * @return The first sentence without trailing period, or the whole message if no sentence boundary found
+     */
+    private String extractFirstSentence(String message) {
+        if (message == null) {
+            return "";
+        }
+        // Look for ". " (period + space) which indicates sentence boundary
+        // This avoids splitting on periods within JSON paths like "$.data.output"
+        int sentenceEnd = message.indexOf(". ");
+        if (sentenceEnd >= 0) {
+            return message.substring(0, sentenceEnd); // Exclude the period
+        }
+        return message; // No sentence boundary found, use whole message
     }
 }

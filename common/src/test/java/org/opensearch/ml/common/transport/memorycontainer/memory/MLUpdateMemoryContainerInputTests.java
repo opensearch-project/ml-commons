@@ -13,11 +13,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -523,5 +525,72 @@ public class MLUpdateMemoryContainerInputTests {
                 deserialized.getConfiguration().getStrategies().get(i).getId()
             );
         }
+    }
+
+    // Backend Roles Validation Tests
+
+    @Test
+    public void testValidateBackendRoles_ValidRoles() {
+        // Test various valid backend roles
+        List<String> validRoles = Arrays
+            .asList("admin", "user123", "team:developers", "role+test", "email@domain.com", "path/to/resource", "key=value");
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(validRoles).build();
+
+        assertNotNull(input);
+        assertEquals(validRoles, input.getBackendRoles());
+    }
+
+    @Test
+    public void testValidateBackendRoles_NullList() {
+        // Null list should be allowed
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(null).build();
+
+        assertNotNull(input);
+        assertNull(input.getBackendRoles());
+    }
+
+    @Test
+    public void testValidateBackendRoles_EmptyList() {
+        // Empty list should be allowed
+        List<String> emptyList = Collections.emptyList();
+
+        MLUpdateMemoryContainerInput input = MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(emptyList).build();
+
+        assertNotNull(input);
+        assertEquals(emptyList, input.getBackendRoles());
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_TooLong() {
+        // 129 characters - should fail
+        String tooLong = "a".repeat(129);
+        List<String> roles = Arrays.asList(tooLong);
+
+        MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_InvalidCharacters() {
+        // Spaces are not allowed
+        List<String> roles = Arrays.asList("role with spaces");
+
+        MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_EmptyString() {
+        // Empty string should be rejected
+        List<String> roles = Arrays.asList("");
+
+        MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(roles).build();
+    }
+
+    @Test(expected = OpenSearchParseException.class)
+    public void testValidateBackendRoles_NullElement() {
+        // Null element in list should be rejected
+        List<String> roles = Arrays.asList("valid-role", null);
+
+        MLUpdateMemoryContainerInput.builder().name("test-update").backendRoles(roles).build();
     }
 }
