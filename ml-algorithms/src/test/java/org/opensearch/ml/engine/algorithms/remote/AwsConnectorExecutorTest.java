@@ -22,7 +22,6 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -448,7 +447,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() throws NoSuchFieldException, IllegalAccessException {
+    public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -469,14 +468,11 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
-        AwsConnectorExecutor executor0 = new AwsConnectorExecutor(connector);
-        Field httpClientField = AwsConnectorExecutor.class.getDeclaredField("httpClient");
-        httpClientField.setAccessible(true);
-        httpClientField.set(executor0, null);
-        AwsConnectorExecutor executor = spy(executor0);
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(executor.getClient()).thenReturn(client);
+        when(executor.getHttpClient()).thenReturn(null);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
