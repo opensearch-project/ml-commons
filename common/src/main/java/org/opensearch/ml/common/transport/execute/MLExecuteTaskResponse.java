@@ -26,6 +26,8 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
+import com.google.gson.Gson;
+
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
@@ -103,7 +105,7 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
         try {
             ModelTensors modelTensors = modelOutput.getMlModelOutputs().get(0);
             String eventsJson = modelTensors.getMlModelTensors().get(0).getResult();
-            com.google.gson.Gson gson = new com.google.gson.Gson();
+            Gson gson = new Gson();
             List<Object> events = gson.fromJson(eventsJson, List.class);
             return AGUIOutput.builder().events(events).build();
         } catch (Exception e) {
