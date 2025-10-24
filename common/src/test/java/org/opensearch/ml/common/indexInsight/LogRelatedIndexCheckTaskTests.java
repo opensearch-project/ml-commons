@@ -277,6 +277,7 @@ public class LogRelatedIndexCheckTaskTests {
         mockSearchResponse();
         // Mock getAgentIdToRun
         mockMLConfigFailure(client, "Config not found");
+        mockUpdateSuccess(sdkClient);
 
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.runTask("tenant-id", listener);
