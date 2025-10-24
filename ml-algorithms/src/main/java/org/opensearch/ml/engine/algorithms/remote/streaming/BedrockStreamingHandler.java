@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.remote.streaming;
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +35,8 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -66,6 +69,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private final SdkAsyncHttpClient httpClient;
     private final AwsConnector connector;
+    private final boolean isAGUIAgent;
+    private final Map<String, String> parameters;
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
 
     private enum StreamState {
@@ -77,8 +82,20 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector) {
+        this(httpClient, connector, null);
+    }
+
+    public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector, Map<String, String> parameters) {
         this.httpClient = httpClient;
         this.connector = connector;
+        this.parameters = parameters;
+
+        // Detect if this is an AG-UI agent by checking for AG-UI specific parameters
+        this.isAGUIAgent = parameters != null && (parameters.containsKey("agui_thread_id") || parameters.containsKey("agui_run_id"));
+
+        if (isAGUIAgent) {
+            log.info("BedrockStreamingHandler: Detected AG-UI agent - raw tool use events will be filtered");
+        }
     }
 
     @Override
@@ -157,8 +174,35 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
+            log.debug("AG-UI: Building Bedrock request from payload: {}", payload);
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
+
+            // Log the messages array for debugging
+            if (payloadJson.has("messages")) {
+                JsonNode messagesArray = payloadJson.get("messages");
+                log.debug("AG-UI: Messages array in payload: {}", messagesArray);
+
+                // Check for consecutive messages with the same role (Bedrock doesn't allow this)
+                String previousRole = null;
+                for (int i = 0; i < messagesArray.size(); i++) {
+                    JsonNode msg = messagesArray.get(i);
+                    String currentRole = msg.has("role") ? msg.get("role").asText() : "unknown";
+                    if (previousRole != null && previousRole.equals(currentRole)) {
+                        log
+                            .warn(
+                                "AG-UI: Found consecutive messages with same role '{}' at index {} and {}. Bedrock requires alternating roles!",
+                                currentRole,
+                                i - 1,
+                                i
+                            );
+                    }
+                    previousRole = currentRole;
+                }
+            } else {
+                log.warn("AG-UI: No messages array found in payload!");
+            }
+
             return ConverseStreamRequest
                 .builder()
                 .modelId(parameters.get("model"))
@@ -202,15 +246,31 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 if (isToolInputDelta(event)) {
                     currentState.set(StreamState.ACCUMULATING_TOOL_INPUT);
                     accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+
+                    // Skip streaming raw tool input for AG-UI agents
+                    // The proper AG-UI events will be generated in the completion response
+                    if (!isAGUIAgent) {
+                        sendContentResponse(getToolInputFragment(event), false, listener);
+                    } else {
+                        log.debug("AG-UI: Suppressing raw tool input start chunk for AG-UI agent");
+                    }
                 }
                 break;
 
             case ACCUMULATING_TOOL_INPUT:
                 if (isToolInputDelta(event)) {
                     accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+
+                    // Skip streaming raw tool input fragments for AG-UI agents
+                    // The proper AG-UI events will be generated in the completion response
+                    if (!isAGUIAgent) {
+                        sendContentResponse(getToolInputFragment(event), false, listener);
+                    } else {
+                        log.debug("AG-UI: Suppressing raw tool input fragment chunk for AG-UI agent");
+                    }
                 } else if (isToolInputComplete(event)) {
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
-                    listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId));
+                    completeBedrockToolCall(toolName, toolInput, toolUseId, listener);
                 }
                 break;
 
@@ -266,15 +326,89 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && event.toString().contains(STOP_REASON_TOOL_USE);
     }
 
-    private MLTaskResponse createToolUseResponse(
+    private void completeBedrockToolCall(
+        AtomicReference<String> toolName,
+        AtomicReference<Map<String, Object>> toolInput,
+        AtomicReference<String> toolUseId,
+        StreamPredictActionListener<MLTaskResponse, ?> listener
+    ) {
+        if (isAGUIAgent) {
+            // Check if this is a backend tool or frontend tool
+            boolean isBackendTool = isBackendTool(toolName.get());
+
+            if (isBackendTool) {
+                // Backend tools: use native Bedrock format for proper ReAct processing
+                log.debug("AG-UI: Processing backend tool call '{}' in native Bedrock format", toolName.get());
+                listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
+            } else {
+                // Frontend tools: convert to OpenAI format for AG-UI event generation
+                log.debug("AG-UI: Processing frontend tool call '{}' in OpenAI-compatible format", toolName.get());
+                String openAICompatibleResponse = buildOpenAICompatibleToolCall(toolName, toolInput, toolUseId);
+
+                // Send content response for streaming (like OpenAI handler does)
+                sendContentResponse(openAICompatibleResponse, false, listener);
+
+                // Create ModelTensorOutput in OpenAI format for AG-UI processing
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    Map<String, Object> responseData = mapper.readValue(openAICompatibleResponse, Map.class);
+                    ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(responseData).build();
+                    ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+                    listener.onResponse(new MLTaskResponse(output));
+
+                    log.debug("AG-UI: Sent frontend tool call in OpenAI-compatible format for AG-UI event processing");
+                } catch (Exception e) {
+                    log.error("AG-UI: Failed to convert frontend tool call to OpenAI format", e);
+                    // Fallback to original Bedrock format
+                    listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
+                }
+            }
+        } else {
+            // For non-AG-UI agents, use original Bedrock format
+            listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
+        }
+    }
+
+    private String buildOpenAICompatibleToolCall(
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId
     ) {
-        // Validate inputs
-        if (toolName == null || toolInput == null || toolUseId == null) {
-            throw new IllegalArgumentException("Tool references cannot be null");
+        // Convert Bedrock tool call to OpenAI-compatible format
+        // This matches the format expected by MLAGUIAgentRunner.processToolCallsFromDataMap()
+
+        ObjectMapper mapper = new ObjectMapper();
+        String argumentsJson;
+        try {
+            argumentsJson = mapper.writeValueAsString(toolInput.get());
+        } catch (Exception e) {
+            argumentsJson = "{}";
         }
+
+        Map<String, Object> function = Map.of("name", toolName.get(), "arguments", argumentsJson);
+
+        Map<String, Object> toolCall = Map.of("id", toolUseId.get(), "type", "function", "function", function);
+
+        Map<String, Object> message = Map.of("tool_calls", List.of(toolCall));
+        Map<String, Object> choice = Map.of("message", message, "finish_reason", "tool_calls");
+
+        Map<String, Object> response = Map.of("choices", List.of(choice));
+
+        try {
+            return mapper.writeValueAsString(response);
+        } catch (Exception e) {
+            log.error("Failed to serialize OpenAI-compatible response", e);
+            return "{}";
+        }
+    }
+
+    private MLTaskResponse createBedrockToolUseResponse(
+        AtomicReference<String> toolName,
+        AtomicReference<Map<String, Object>> toolInput,
+        AtomicReference<String> toolUseId
+    ) {
+        // Original Bedrock format for backward compatibility
         Map<String, Object> wrappedResponse = Map
             .of(
                 "output",
@@ -302,6 +436,30 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
         return new MLTaskResponse(output);
+    }
+
+    private boolean isBackendTool(String toolName) {
+        if (parameters == null) {
+            return false;
+        }
+
+        String backendToolNamesJson = parameters.get("backend_tool_names");
+        if (backendToolNamesJson == null || backendToolNamesJson.isEmpty()) {
+            return false;
+        }
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Type listType = new TypeToken<List<String>>() {
+            }.getType();
+            List<String> backendToolNames = new Gson().fromJson(backendToolNamesJson, listType);
+            boolean isBackend = backendToolNames.contains(toolName);
+            log.debug("AG-UI: Tool '{}' is {} tool (backend tools: {})", toolName, isBackend ? "backend" : "frontend", backendToolNames);
+            return isBackend;
+        } catch (Exception e) {
+            log.warn("AG-UI: Failed to parse backend tool names, assuming tool '{}' is frontend", toolName, e);
+            return false; // Default to frontend tool if parsing fails
+        }
     }
 
     private void accumulateToolInput(
@@ -363,17 +521,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private BedrockRuntimeAsyncClient buildBedrockRuntimeAsyncClient() {
-        AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
-            ? StaticCredentialsProvider
-                .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
-            : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
+        return java.security.AccessController.doPrivileged((java.security.PrivilegedAction<BedrockRuntimeAsyncClient>) () -> {
+            AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
+                ? StaticCredentialsProvider
+                    .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
+                : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
 
-        return BedrockRuntimeAsyncClient
-            .builder()
-            .region(Region.of(connector.getRegion()))
-            .credentialsProvider(awsCredentialsProvider)
-            .httpClient(httpClient)
-            .build();
+            return BedrockRuntimeAsyncClient
+                .builder()
+                .region(Region.of(connector.getRegion()))
+                .credentialsProvider(awsCredentialsProvider)
+                .httpClient(httpClient)
+                .build();
+        });
     }
 
     private List<SystemContentBlock> parseSystemMessages(JsonNode systemArray) {
@@ -395,8 +555,37 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private Message buildMessage(JsonNode messageItem) {
         String role = messageItem.has("role") && messageItem.get("role") != null ? messageItem.get("role").asText() : "assistant";
 
+        // Handle AG-UI tool result messages
+        if ("tool".equals(role)) {
+            return buildToolResultMessage(messageItem);
+        }
+
         List<ContentBlock> contentBlocks = buildContentBlocks(messageItem.get("content"));
         return Message.builder().role(role).content(contentBlocks).build();
+    }
+
+    private Message buildToolResultMessage(JsonNode toolMessage) {
+        // Convert AG-UI tool message format to Bedrock format
+        // AG-UI format: {"role": "tool", "content": "...", "toolCallId": "..."}
+        // Bedrock format: {"role": "user", "content": [{"toolResult": {"toolUseId": "...", "content": [{"text": "..."}]}}]}
+
+        String toolCallId = toolMessage.has("toolCallId") ? toolMessage.get("toolCallId").asText() : "";
+        String content = toolMessage.has("content") ? toolMessage.get("content").asText() : "";
+
+        ContentBlock toolResultBlock = ContentBlock
+            .builder()
+            .toolResult(
+                ToolResultBlock.builder().toolUseId(toolCallId).content(ToolResultContentBlock.builder().text(content).build()).build()
+            )
+            .build();
+
+        log.debug("AG-UI: Converted tool message to Bedrock format - toolUseId: {}, content length: {}", toolCallId, content.length());
+
+        return Message
+            .builder()
+            .role("user")  // Bedrock requires tool results to have "user" role
+            .content(List.of(toolResultBlock))
+            .build();
     }
 
     private List<ContentBlock> buildContentBlocks(JsonNode contentArray) {
