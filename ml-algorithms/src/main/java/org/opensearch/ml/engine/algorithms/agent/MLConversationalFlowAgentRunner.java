@@ -19,9 +19,12 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,15 +42,14 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.memory.Memory;
+import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.spi.memory.Memory;
-import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -109,9 +111,15 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String title = params.get(QUESTION);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.wrap(memory -> {
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+
+        Map<String, Object> createMemoryParams = new HashMap<>();
+        params.put(MEMORY_NAME, title);
+        params.put(MEMORY_ID, memoryId);
+        params.put(APP_TYPE, appType);
+
+        memoryFactory.create(createMemoryParams, ActionListener.wrap(memory -> {
+            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {
                     String question = next.getInput();
@@ -125,7 +133,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         .add(
                             ConversationIndexMessage
                                 .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
+                                .sessionId(memory.getId())
                                 .question(question)
                                 .response(response)
                                 .build()
@@ -141,11 +149,11 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                 }
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), parentInteractionId);
+                runAgent(mlAgent, params, listener, memory, memory.getId(), parentInteractionId);
             }, e -> {
                 log.error("Failed to get chat history", e);
                 listener.onFailure(e);
-            }), messageHistoryLimit);
+            }));
         }, listener::onFailure));
     }
 
@@ -153,7 +161,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         MLAgent mlAgent,
         Map<String, String> params,
         ActionListener<Object> listener,
-        ConversationIndexMemory memory,
+        Memory memory,
         String memoryId,
         String parentInteractionId
     ) {
@@ -244,7 +252,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     private void processOutput(
         Map<String, String> params,
         ActionListener<Object> listener,
-        ConversationIndexMemory memory,
+        Memory memory,
         String memoryId,
         String parentInteractionId,
         List<MLToolSpec> toolSpecs,
@@ -357,7 +365,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
     private void saveMessage(
         Map<String, String> params,
-        ConversationIndexMemory memory,
+        Memory memory,
         String outputResponse,
         String memoryId,
         String parentInteractionId,
@@ -392,11 +400,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         if (memoryId == null || interactionId == null || memorySpec == null || memorySpec.getType() == null) {
             return;
         }
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
-            .get(memorySpec.getType());
-        conversationIndexMemoryFactory
+        Memory.Factory<Memory> factory = memoryFactoryMap.get(memorySpec.getType());
+        factory
             .create(
-                memoryId,
+                Map.of(MEMORY_ID, memoryId),
                 ActionListener
                     .wrap(
                         memory -> memory.update(interactionId, Map.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo), listener),
