@@ -1527,10 +1527,10 @@ public class TransportAddMemoriesActionTests {
 
         when(memoryContainerHelper.checkMemoryContainerAccess(isNull(), eq(container))).thenReturn(true);
 
-        // Mock summarizeMessages to return NOT_FOUND (4XX)
+        // Mock summarizeMessages to return BAD_REQUEST (4XX)
         OpenSearchStatusException notFoundException = new OpenSearchStatusException(
             "LLM predict result cannot be extracted with current llm_result_path",
-            RestStatus.NOT_FOUND
+            RestStatus.BAD_REQUEST
         );
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(2);
@@ -1542,7 +1542,7 @@ public class TransportAddMemoriesActionTests {
 
         // Verify 4XX error is preserved with detailed message
         verify(actionListener).onFailure(argThat(exception -> exception instanceof OpenSearchStatusException
-            && ((OpenSearchStatusException)exception).status() == RestStatus.NOT_FOUND
+            && ((OpenSearchStatusException)exception).status() == RestStatus.BAD_REQUEST
             && exception.getMessage().contains("LLM predict result cannot be extracted")));
     }
 }

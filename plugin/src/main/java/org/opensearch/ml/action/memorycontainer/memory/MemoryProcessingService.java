@@ -353,7 +353,7 @@ public class MemoryProcessingService {
                     "LLM predict result cannot be extracted with current llm_result_path with reason: "
                         + reason
                         + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
-                    RestStatus.NOT_FOUND
+                    RestStatus.BAD_REQUEST
                 );
             }
         }
@@ -417,7 +417,7 @@ public class MemoryProcessingService {
                     "LLM predict result cannot be extracted with current llm_result_path with reason: "
                         + reason
                         + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
-                    RestStatus.NOT_FOUND
+                    RestStatus.BAD_REQUEST
                 );
             }
         } catch (Exception e) {
@@ -507,7 +507,7 @@ public class MemoryProcessingService {
                 "LLM predict result cannot be extracted with current llm_result_path with reason: "
                     + reason
                     + ". Please check either your llm configuration or your llm_result_path setting in memory container configuration",
-                RestStatus.NOT_FOUND
+                RestStatus.BAD_REQUEST
             );
         }
     }

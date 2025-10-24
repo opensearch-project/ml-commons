@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -30,6 +31,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
@@ -1109,7 +1111,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        // Mock LLM response with path that will trigger NOT_FOUND (404)
+        // Mock LLM response with path that will trigger BAD_REQUEST (400)
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
         ModelTensors mockTensors = mock(ModelTensors.class);
@@ -1132,12 +1134,12 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
 
-        // Verify that 4XX error (NOT_FOUND) is preserved with its detailed message
+        // Verify that 4XX error (BAD_REQUEST) is preserved with its detailed message
         verify(factsListener)
             .onFailure(
                 argThat(
                     exception -> exception instanceof OpenSearchStatusException
-                        && ((OpenSearchStatusException) exception).status() == RestStatus.NOT_FOUND
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.BAD_REQUEST
                         && exception.getMessage().contains("LLM predict result cannot be extracted")
                         && exception.getMessage().contains("llm_result_path")
                 )
@@ -1177,7 +1179,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        // Mock LLM response with path that will trigger NOT_FOUND (404)
+        // Mock LLM response with path that will trigger BAD_REQUEST (400)
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
         ModelTensors mockTensors = mock(ModelTensors.class);
@@ -1200,12 +1202,12 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
 
-        // Verify that 4XX error (NOT_FOUND) is preserved with its detailed message
+        // Verify that 4XX error (BAD_REQUEST) is preserved with its detailed message
         verify(decisionsListener)
             .onFailure(
                 argThat(
                     exception -> exception instanceof OpenSearchStatusException
-                        && ((OpenSearchStatusException) exception).status() == RestStatus.NOT_FOUND
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.BAD_REQUEST
                         && exception.getMessage().contains("LLM predict result cannot be extracted")
                         && exception.getMessage().contains("llm_result_path")
                 )
@@ -1221,7 +1223,7 @@ public class MemoryProcessingServiceTests {
 
         ActionListener<String> summaryListener = mock(ActionListener.class);
 
-        // Mock LLM response with path that will trigger NOT_FOUND (404)
+        // Mock LLM response with path that will trigger BAD_REQUEST (400)
         MLTaskResponse mockResponse = mock(MLTaskResponse.class);
         ModelTensorOutput mockOutput = mock(ModelTensorOutput.class);
         ModelTensors mockTensors = mock(ModelTensors.class);
@@ -1244,15 +1246,15 @@ public class MemoryProcessingServiceTests {
 
         memoryProcessingService.summarizeMessages(storageConfig, messages, summaryListener);
 
-        // Verify that 4XX error (NOT_FOUND) is preserved with its detailed message
-        verify(summaryListener)
-            .onFailure(
-                argThat(
-                    exception -> exception instanceof OpenSearchStatusException
-                        && ((OpenSearchStatusException) exception).status() == RestStatus.NOT_FOUND
-                        && exception.getMessage().contains("LLM predict result cannot be extracted")
-                        && exception.getMessage().contains("llm_result_path")
-                )
-            );
+        // Verify that 4XX error (BAD_REQUEST) is preserved with its detailed message
+        ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
+        verify(summaryListener).onFailure(captor.capture());
+
+        Exception thrown = captor.getValue();
+        assertTrue(thrown instanceof OpenSearchStatusException);
+        OpenSearchStatusException osException = (OpenSearchStatusException) thrown;
+        assertEquals(RestStatus.BAD_REQUEST, osException.status());
+        assertTrue(osException.getMessage().contains("LLM predict result cannot be extracted"));
+        assertTrue(osException.getMessage().contains("llm_result_path"));
     }
 }
