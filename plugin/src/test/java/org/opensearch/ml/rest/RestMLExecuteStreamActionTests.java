@@ -33,7 +33,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.http.HttpChunk;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -301,5 +303,72 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
         assertThrows(IllegalStateException.class, () -> restAction.handleRequest(request, channel, client));
+    }
+
+    @Test
+    public void testCombineChunksWithSingleChunk() {
+        String testContent = "{\"parameters\":{\"question\":\"test\"}}";
+        BytesArray bytesArray = new BytesArray(testContent);
+
+        HttpChunk mockChunk = mock(HttpChunk.class);
+        when(mockChunk.content()).thenReturn(bytesArray);
+
+        BytesReference result = restAction.combineChunks(List.of(mockChunk));
+
+        assertNotNull(result);
+        assertEquals(testContent, result.utf8ToString());
+    }
+
+    @Test
+    public void testCombineChunksWithMultipleChunks() {
+        String chunk1Content = "{\"parameters\":";
+        String chunk2Content = "{\"question\":";
+        String chunk3Content = "\"test\"}}";
+
+        BytesArray bytes1 = new BytesArray(chunk1Content);
+        BytesArray bytes2 = new BytesArray(chunk2Content);
+        BytesArray bytes3 = new BytesArray(chunk3Content);
+
+        HttpChunk mockChunk1 = mock(HttpChunk.class);
+        HttpChunk mockChunk2 = mock(HttpChunk.class);
+        HttpChunk mockChunk3 = mock(HttpChunk.class);
+
+        when(mockChunk1.content()).thenReturn(bytes1);
+        when(mockChunk2.content()).thenReturn(bytes2);
+        when(mockChunk3.content()).thenReturn(bytes3);
+
+        BytesReference result = restAction.combineChunks(List.of(mockChunk1, mockChunk2, mockChunk3));
+
+        assertNotNull(result);
+        String expectedContent = chunk1Content + chunk2Content + chunk3Content;
+        assertEquals(expectedContent, result.utf8ToString());
+    }
+
+    @Test
+    public void testCombineChunksWithEmptyList() {
+        BytesReference result = restAction.combineChunks(List.of());
+
+        assertNotNull(result);
+        assertEquals(0, result.length());
+    }
+
+    @Test
+    public void testCombineChunksWithLargeContent() {
+        StringBuilder largeContent = new StringBuilder();
+        for (int i = 0; i < 1000; i++) {
+            largeContent.append("chunk").append(i).append(",");
+        }
+        String content = largeContent.toString();
+
+        BytesArray bytesArray = new BytesArray(content);
+
+        HttpChunk mockChunk = mock(HttpChunk.class);
+        when(mockChunk.content()).thenReturn(bytesArray);
+
+        BytesReference result = restAction.combineChunks(List.of(mockChunk));
+
+        assertNotNull(result);
+        assertEquals(content.length(), result.length());
+        assertEquals(content, result.utf8ToString());
     }
 }
