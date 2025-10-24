@@ -305,7 +305,8 @@ public class MemoryContainerHelper {
     ) {
         try {
             String connectorId = configuration.getRemoteStore().getConnectorId();
-            RemoteStorageHelper.searchDocuments(connectorId, indexName, query, client, ActionListener.wrap(response -> {
+            String searchPipeline = configuration.getRemoteStore().getSearchPipeline();
+            RemoteStorageHelper.searchDocuments(connectorId, indexName, query, searchPipeline, client, ActionListener.wrap(response -> {
                 listener.onResponse(response);
             }, listener::onFailure));
         } catch (Exception e) {

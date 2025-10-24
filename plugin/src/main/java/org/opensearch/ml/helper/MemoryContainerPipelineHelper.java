@@ -38,7 +38,8 @@ public final class MemoryContainerPipelineHelper {
     /**
      * Creates an ingest pipeline and long-term memory index.
      * <p>
-     * If embedding is configured, creates a text embedding pipeline first,
+     * If a pre-existing ingest pipeline is configured, uses that pipeline directly.
+     * Otherwise, if embedding is configured, creates a text embedding pipeline first,
      * then creates the long-term index with the pipeline attached.
      * If no embedding is configured, creates the index without a pipeline.
      *
@@ -56,7 +57,13 @@ public final class MemoryContainerPipelineHelper {
         ActionListener<Boolean> listener
     ) {
         try {
-            if (config.getEmbeddingModelType() != null) {
+            // Check if user provided a pre-existing ingest pipeline at configuration level
+            if (config.getIngestPipeline() != null && !config.getIngestPipeline().isEmpty()) {
+                log.info("Using pre-existing ingest pipeline from configuration: {}", config.getIngestPipeline());
+                // Use the user-provided pipeline directly
+                indicesHandler.createLongTermMemoryIndex(config.getIngestPipeline(), indexName, config, listener);
+            } else if (config.getEmbeddingModelType() != null) {
+                // Auto-create pipeline if embedding model is configured
                 String pipelineName = indexName + "-embedding";
 
                 createTextEmbeddingPipeline(pipelineName, config, client, ActionListener.wrap(success -> {
@@ -232,7 +239,8 @@ public final class MemoryContainerPipelineHelper {
     /**
      * Creates an ingest pipeline in remote storage and long-term memory index.
      * <p>
-     * If embedding is configured, creates a text embedding pipeline in the remote cluster first,
+     * If a pre-existing ingest pipeline is configured in remote_store, uses that pipeline directly.
+     * Otherwise, if embedding is configured, creates a text embedding pipeline in the remote cluster first,
      * then creates the long-term index with the pipeline attached.
      * If no embedding is configured, creates the index without a pipeline.
      *
@@ -252,7 +260,25 @@ public final class MemoryContainerPipelineHelper {
         ActionListener<Boolean> listener
     ) {
         try {
-            if (config.getRemoteStore().getEmbeddingModelType() != null) {
+            RemoteStore remoteStore = config.getRemoteStore();
+
+            // Check if user provided a pre-existing ingest pipeline in remote_store
+            if (remoteStore.getIngestPipeline() != null && !remoteStore.getIngestPipeline().isEmpty()) {
+                log.info("Using pre-existing ingest pipeline from remote_store: {}", remoteStore.getIngestPipeline());
+                // Use the user-provided pipeline directly
+                org.opensearch.ml.helper.RemoteStorageHelper
+                    .createRemoteLongTermMemoryIndexWithIngestAndSearchPipeline(
+                        connectorId,
+                        indexName,
+                        remoteStore.getIngestPipeline(),
+                        remoteStore.getSearchPipeline(),
+                        config,
+                        indicesHandler,
+                        client,
+                        listener
+                    );
+            } else if (remoteStore.getEmbeddingModelType() != null) {
+                // Auto-create pipeline if embedding model is configured
                 String pipelineName = indexName + "-embedding";
 
                 createRemoteTextEmbeddingPipeline(connectorId, pipelineName, config, client, ActionListener.wrap(success -> {
