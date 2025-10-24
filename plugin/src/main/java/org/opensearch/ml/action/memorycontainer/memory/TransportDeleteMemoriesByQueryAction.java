@@ -7,6 +7,8 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
+import java.time.Instant;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -128,7 +130,7 @@ public class TransportDeleteMemoriesByQueryAction extends
             deleteByQueryRequest.setRefresh(true);
 
             // Step 9: Execute the delete by query
-            executeDeleteByQuery(container.getConfiguration(), deleteByQueryRequest, actionListener);
+            executeDeleteByQuery(memoryContainerId, memoryType, user, container.getConfiguration(), deleteByQueryRequest, actionListener);
 
         }, error -> {
             log.error("Failed to get memory container: " + memoryContainerId, error);
@@ -164,6 +166,9 @@ public class TransportDeleteMemoriesByQueryAction extends
      * Execute the delete by query request, handling system indices appropriately
      */
     private void executeDeleteByQuery(
+        String memoryContainerId,
+        MemoryType memoryType,
+        User user,
         MemoryConfiguration configuration,
         DeleteByQueryRequest deleteByQueryRequest,
         ActionListener<MLDeleteMemoriesByQueryResponse> actionListener
@@ -181,7 +186,16 @@ public class TransportDeleteMemoriesByQueryAction extends
                 log.warn("Delete by query operation timed out");
             }
 
-            log.info("Delete by query completed. Deleted {} documents in {} ms", response.getDeleted(), response.getTook().millis());
+            log
+                .info(
+                    "Delete memories by query - Event: MEMORIES_DELETED_BY_QUERY, Container ID: {}, Memory Type: {}, Deleted Count: {}, Duration: {}ms, User: {}, Timestamp: {}",
+                    memoryContainerId,
+                    memoryType,
+                    response.getDeleted(),
+                    response.getTook().millis(),
+                    user != null ? user.getName() : "unknown",
+                    Instant.now()
+                );
             // Wrap the BulkByScrollResponse in our response wrapper
             actionListener.onResponse(new MLDeleteMemoriesByQueryResponse(response));
         }, error -> {
