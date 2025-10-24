@@ -110,7 +110,9 @@ public class SlidingWindowManager implements ContextManager {
         List<String> updatedInteractions = new ArrayList<>(interactions.subList(originalSize - maxMessages, originalSize));
 
         // Update toolInteractions in context to keep only the most recent ones
-        List<Map<String, Object>> updatedToolInteractions = new ArrayList<>(toolInteractions.subList(originalSize - maxMessages, originalSize));
+        List<Map<String, Object>> updatedToolInteractions = new ArrayList<>(
+            toolInteractions.subList(originalSize - maxMessages, originalSize)
+        );
         context.setToolInteractions(updatedToolInteractions);
 
         // Update the _interactions parameter with smaller size of updated interactions

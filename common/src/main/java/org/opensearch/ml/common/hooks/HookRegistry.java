@@ -49,8 +49,12 @@ public class HookRegistry {
         Class<? extends HookEvent> eventType = event.getClass();
         List<HookCallback<? extends HookEvent>> eventCallbacks = callbacks.get(eventType);
 
-        log.info("HookRegistry.emit() called for event type: {}, callbacks available: {}", 
-            eventType.getSimpleName(), eventCallbacks != null ? eventCallbacks.size() : 0);
+        log
+            .info(
+                "HookRegistry.emit() called for event type: {}, callbacks available: {}",
+                eventType.getSimpleName(),
+                eventCallbacks != null ? eventCallbacks.size() : 0
+            );
 
         if (eventCallbacks != null) {
             log.info("Emitting {} event to {} callbacks", eventType.getSimpleName(), eventCallbacks.size());

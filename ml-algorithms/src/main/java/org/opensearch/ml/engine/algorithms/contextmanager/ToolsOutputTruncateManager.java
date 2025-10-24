@@ -98,7 +98,7 @@ public class ToolsOutputTruncateManager implements ContextManager {
 
         // Truncate the output
         String truncatedOutput = outputString.substring(0, maxOutputLength);
-        
+
         // Add truncation indicator
         truncatedOutput += "... [Output truncated - original length: " + originalLength + " characters]";
 

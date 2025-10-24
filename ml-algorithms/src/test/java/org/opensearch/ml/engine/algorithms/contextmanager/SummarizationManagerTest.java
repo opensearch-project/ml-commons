@@ -33,10 +33,7 @@ public class SummarizationManagerTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         manager = new SummarizationManager(client);
-        context = ContextManagerContext.builder()
-            .toolInteractions(new ArrayList<>())
-            .parameters(new HashMap<>())
-            .build();
+        context = ContextManagerContext.builder().toolInteractions(new ArrayList<>()).parameters(new HashMap<>()).build();
     }
 
     @Test
@@ -154,13 +151,7 @@ public class SummarizationManagerTest {
         addToolInteractionsToContext(10);
         List<String> remainingMessages = List.of("Message 6", "Message 7", "Message 8", "Message 9", "Message 10");
 
-        manager.processSummarizationResult(
-            context,
-            "Test summary",
-            5,
-            remainingMessages,
-            context.getToolInteractions()
-        );
+        manager.processSummarizationResult(context, "Test summary", 5, remainingMessages, context.getToolInteractions());
 
         // Should have 1 summary + 5 remaining = 6 total
         Assert.assertEquals(6, context.getToolInteractions().size());

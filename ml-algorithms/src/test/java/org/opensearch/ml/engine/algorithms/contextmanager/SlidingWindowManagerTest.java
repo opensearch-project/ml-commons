@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.algorithms.contextmanager;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
@@ -26,10 +25,7 @@ public class SlidingWindowManagerTest {
     @Before
     public void setUp() {
         manager = new SlidingWindowManager();
-        context = ContextManagerContext.builder()
-            .toolInteractions(new ArrayList<>())
-            .parameters(new HashMap<>())
-            .build();
+        context = ContextManagerContext.builder().toolInteractions(new ArrayList<>()).parameters(new HashMap<>()).build();
     }
 
     @Test
@@ -110,11 +106,11 @@ public class SlidingWindowManagerTest {
         // Parameters should be updated with truncated interactions
         String interactionsParam = (String) context.getParameters().get("_interactions");
         Assert.assertNotNull(interactionsParam);
-        
+
         // Should contain only the last 5 interactions
         String[] interactions = interactionsParam.substring(2).split(", "); // Remove ", " prefix
         Assert.assertEquals(5, interactions.length);
-        
+
         // Should keep the most recent interactions (6-10)
         for (int i = 0; i < interactions.length; i++) {
             String expected = "Tool output " + (6 + i);
@@ -226,7 +222,7 @@ public class SlidingWindowManagerTest {
         Assert.assertNotNull(context.getParameters());
         String interactionsParam = (String) context.getParameters().get("_interactions");
         Assert.assertNotNull(interactionsParam);
-        
+
         String[] interactions = interactionsParam.substring(2).split(", ");
         Assert.assertEquals(3, interactions.length);
     }

@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
+import static org.opensearch.ml.common.FunctionName.REMOTE;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,8 +32,6 @@ import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
-import static org.opensearch.ml.common.FunctionName.REMOTE;
-
 /**
  * Context manager that implements summarization approach for tool interactions.
  * Summarizes older interactions while preserving recent ones to manage context window.
@@ -50,7 +50,8 @@ public class SummarizationManager implements ContextManager {
     // Default values
     private static final double DEFAULT_SUMMARY_RATIO = 0.3;
     private static final int DEFAULT_PRESERVE_RECENT_MESSAGES = 10;
-    private static final String DEFAULT_SUMMARIZATION_PROMPT = "You are a tool interactions summarization agent. Summarize the provided tool interactions concisely while preserving key information and context.";
+    private static final String DEFAULT_SUMMARIZATION_PROMPT =
+        "You are a tool interactions summarization agent. Summarize the provided tool interactions concisely while preserving key information and context.";
 
     protected double summaryRatio;
     protected int preserveRecentMessages;
@@ -162,7 +163,7 @@ public class SummarizationManager implements ContextManager {
 
         // Prepare summarization parameters
         Map<String, String> summarizationParameters = new HashMap<>();
-        summarizationParameters.put("prompt", StringUtils.toJson(String.join("\n", messagesToSummarize)) );
+        summarizationParameters.put("prompt", StringUtils.toJson(String.join("\n", messagesToSummarize)));
         summarizationParameters.put("system_prompt", summarizationSystemPrompt);
 
         executeSummarization(context, modelId, summarizationParameters, messagesToSummarizeCount, remainingMessages, toolInteractions);
@@ -178,47 +179,54 @@ public class SummarizationManager implements ContextManager {
     ) {
         try {
             // Create ML input dataset for remote inference
-            MLInputDataset inputDataset = RemoteInferenceInputDataSet.builder()
-                .parameters(summarizationParameters)
-                .build();
+            MLInputDataset inputDataset = RemoteInferenceInputDataSet.builder().parameters(summarizationParameters).build();
 
             // Create ML input
-            MLInput mlInput = MLInput.builder()
-                .algorithm(REMOTE)
-                .inputDataset(inputDataset)
-                .build();
+            MLInput mlInput = MLInput.builder().algorithm(REMOTE).inputDataset(inputDataset).build();
 
             // Create prediction request
-            MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .modelId(modelId)
-                .mlInput(mlInput)
-                .build();
+            MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().modelId(modelId).mlInput(mlInput).build();
 
             // Execute prediction
-            ActionListener<MLTaskResponse> listener = ActionListener.wrap(
-                response -> {
-                    try {
-                        String summary = extractSummaryFromResponse(response);
-                        processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalToolInteractions);
-                    } catch (Exception e) {
-                        log.error("Failed to process summarization response", e);
-                        // Fallback to default behavior
-                        processSummarizationResult(context, "Summarized " + messagesToSummarizeCount + " previous tool interactions", messagesToSummarizeCount, remainingMessages, originalToolInteractions);
-                    }
-                },
-                e -> {
-                    log.error("Summarization prediction failed", e);
+            ActionListener<MLTaskResponse> listener = ActionListener.wrap(response -> {
+                try {
+                    String summary = extractSummaryFromResponse(response);
+                    processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalToolInteractions);
+                } catch (Exception e) {
+                    log.error("Failed to process summarization response", e);
                     // Fallback to default behavior
-                    processSummarizationResult(context, "Summarized " + messagesToSummarizeCount + " previous tool interactions", messagesToSummarizeCount, remainingMessages, originalToolInteractions);
+                    processSummarizationResult(
+                        context,
+                        "Summarized " + messagesToSummarizeCount + " previous tool interactions",
+                        messagesToSummarizeCount,
+                        remainingMessages,
+                        originalToolInteractions
+                    );
                 }
-            );
+            }, e -> {
+                log.error("Summarization prediction failed", e);
+                // Fallback to default behavior
+                processSummarizationResult(
+                    context,
+                    "Summarized " + messagesToSummarizeCount + " previous tool interactions",
+                    messagesToSummarizeCount,
+                    remainingMessages,
+                    originalToolInteractions
+                );
+            });
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
 
         } catch (Exception e) {
             log.error("Failed to execute summarization", e);
             // Fallback to default behavior
-            processSummarizationResult(context, "Summarized " + messagesToSummarizeCount + " previous tool interactions", messagesToSummarizeCount, remainingMessages, originalToolInteractions);
+            processSummarizationResult(
+                context,
+                "Summarized " + messagesToSummarizeCount + " previous tool interactions",
+                messagesToSummarizeCount,
+                remainingMessages,
+                originalToolInteractions
+            );
         }
     }
 
@@ -232,27 +240,27 @@ public class SummarizationManager implements ContextManager {
         try {
             // Create summarized interaction
             String summarizedInteraction = "{\"role\":\"tool\",\"content\":\"Summarized previous tool interactions: " + summary + "\"}";
-            
+
             // Update interactions: summary + remaining messages
             List<String> updatedInteractions = new ArrayList<>();
             updatedInteractions.add(summarizedInteraction);
             updatedInteractions.addAll(remainingMessages);
-            
+
             // Update toolInteractions in context
             List<Map<String, Object>> updatedToolInteractions = new ArrayList<>();
-            
+
             // Add summary as first interaction
             Map<String, Object> summaryInteraction = new HashMap<>();
             summaryInteraction.put("output", summarizedInteraction);
             updatedToolInteractions.add(summaryInteraction);
-            
+
             // Add remaining tool interactions
             for (int i = messagesToSummarizeCount; i < originalToolInteractions.size(); i++) {
                 updatedToolInteractions.add(originalToolInteractions.get(i));
             }
-            
+
             context.setToolInteractions(updatedToolInteractions);
-            
+
             // Update parameters
             Map<String, Object> parameters = context.getParameters();
             if (parameters == null) {
@@ -260,10 +268,14 @@ public class SummarizationManager implements ContextManager {
                 context.setParameters(parameters);
             }
             parameters.put("_interactions", ", " + String.join(", ", updatedInteractions));
-            
-            log.info("Summarization completed: {} messages summarized, {} messages preserved", 
-                messagesToSummarizeCount, remainingMessages.size());
-                
+
+            log
+                .info(
+                    "Summarization completed: {} messages summarized, {} messages preserved",
+                    messagesToSummarizeCount,
+                    remainingMessages.size()
+                );
+
         } catch (Exception e) {
             log.error("Failed to process summarization result", e);
         }
@@ -275,26 +287,26 @@ public class SummarizationManager implements ContextManager {
             if (output instanceof ModelTensorOutput) {
                 ModelTensorOutput tensorOutput = (ModelTensorOutput) output;
                 List<ModelTensors> mlModelOutputs = tensorOutput.getMlModelOutputs();
-                
+
                 if (mlModelOutputs != null && !mlModelOutputs.isEmpty()) {
                     List<ModelTensor> tensors = mlModelOutputs.get(0).getMlModelTensors();
                     if (tensors != null && !tensors.isEmpty()) {
                         Map<String, ?> dataAsMap = tensors.get(0).getDataAsMap();
-                        //TODO need to parse LLM response output, maybe reused how filtered output from chatAgentRunner
+                        // TODO need to parse LLM response output, maybe reused how filtered output from chatAgentRunner
                         return StringUtils.toJson(dataAsMap);
-//                        if (dataAsMap.containsKey("response")) {
-//                            return dataAsMap.get("response").toString();
-//                        }
-//                        if (dataAsMap.containsKey("result")) {
-//                            return dataAsMap.get("result").toString();
-//                        }
+                        // if (dataAsMap.containsKey("response")) {
+                        // return dataAsMap.get("response").toString();
+                        // }
+                        // if (dataAsMap.containsKey("result")) {
+                        // return dataAsMap.get("result").toString();
+                        // }
                     }
                 }
             }
         } catch (Exception e) {
             log.error("Failed to extract summary from response", e);
         }
-        
+
         return "Summary generation failed";
     }
 
