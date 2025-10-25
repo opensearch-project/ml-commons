@@ -9,6 +9,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -58,7 +59,7 @@ public class MLAGUIAgentRunnerTest {
 
         // Use reflection to call the private method
         try {
-            java.lang.reflect.Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
+            Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
             method.setAccessible(true);
             method.invoke(agentRunner, mlAgent, params);
         } catch (Exception e) {
@@ -84,7 +85,7 @@ public class MLAGUIAgentRunnerTest {
 
         // Use reflection to call the private method
         try {
-            java.lang.reflect.Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
+            Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
             method.setAccessible(true);
             method.invoke(agentRunner, mlAgent, params);
         } catch (Exception e) {
@@ -102,7 +103,7 @@ public class MLAGUIAgentRunnerTest {
 
         // Use reflection to call the private method
         try {
-            java.lang.reflect.Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
+            Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
             method.setAccessible(true);
             method.invoke(agentRunner, mlAgent, params);
         } catch (Exception e) {
@@ -121,7 +122,7 @@ public class MLAGUIAgentRunnerTest {
 
         // Use reflection to call the private method
         try {
-            java.lang.reflect.Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
+            Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
             method.setAccessible(true);
             method.invoke(agentRunner, mlAgent, params);
         } catch (Exception e) {
@@ -148,7 +149,7 @@ public class MLAGUIAgentRunnerTest {
 
         // Use reflection to call the private method
         try {
-            java.lang.reflect.Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
+            Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
             method.setAccessible(true);
             method.invoke(agentRunner, mlAgent, params);
         } catch (Exception e) {
@@ -183,7 +184,7 @@ public class MLAGUIAgentRunnerTest {
 
         // Use reflection to call the private method
         try {
-            java.lang.reflect.Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
+            Method method = MLAGUIAgentRunner.class.getDeclaredMethod("processAGUIContext", MLAgent.class, Map.class);
             method.setAccessible(true);
             method.invoke(agentRunner, mlAgent, params);
         } catch (Exception e) {

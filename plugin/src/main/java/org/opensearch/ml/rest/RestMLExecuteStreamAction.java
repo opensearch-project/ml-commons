@@ -51,6 +51,7 @@ import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.agui.ToolCallArgsEvent;
 import org.opensearch.ml.common.agui.ToolCallEndEvent;
@@ -190,9 +191,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     List<String> backendToolNames = extractBackendToolNamesFromAgent(agent);
                     if (isAGUI && !backendToolNames.isEmpty()) {
                         // Add backend tool names to request parameters so they're available during streaming
-                        RemoteInferenceInputDataSet inputDataSet =
-                            (RemoteInferenceInputDataSet) ((org.opensearch.ml.common.input.execute.agent.AgentMLInput) mlExecuteTaskRequest
-                                .getInput()).getInputDataset();
+                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) mlExecuteTaskRequest
+                            .getInput()).getInputDataset();
                         inputDataSet.getParameters().put(AGUI_PARAM_BACKEND_TOOL_NAMES, new Gson().toJson(backendToolNames));
                         log
                             .info(
@@ -367,7 +367,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         String requestBodyJson = content.utf8ToString();
         Input input;
         if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
-            log.info("Detected AG-UI input format for streaming agent: {}", agentId);
+            log.debug("AG-UI: Detected AG-UI input format for streaming agent: {}", agentId);
             input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
         } else {
             input = MLInput.parse(parser, functionName.name());
@@ -383,11 +383,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     }
 
     private boolean isAGUIAgent(MLExecuteTaskRequest request) {
-        if (request.getInput() instanceof org.opensearch.ml.common.input.execute.agent.AgentMLInput) {
-            org.opensearch.ml.common.input.execute.agent.AgentMLInput agentInput =
-                (org.opensearch.ml.common.input.execute.agent.AgentMLInput) request.getInput();
-            org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet inputDataSet =
-                (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
+        if (request.getInput() instanceof AgentMLInput) {
+            AgentMLInput agentInput = (AgentMLInput) request.getInput();
+            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
             // Check if this request came from AG-UI by looking for AG-UI specific parameters
             return inputDataSet.getParameters().containsKey(AGUI_PARAM_THREAD_ID)
@@ -399,7 +397,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     private List<String> extractBackendToolNamesFromAgent(MLAgent agent) {
         List<String> backendToolNames = new ArrayList<>();
         if (agent != null && agent.getTools() != null) {
-            for (org.opensearch.ml.common.agent.MLToolSpec toolSpec : agent.getTools()) {
+            for (MLToolSpec toolSpec : agent.getTools()) {
                 if (toolSpec.getName() != null) {
                     backendToolNames.add(toolSpec.getName());
                 }
@@ -409,11 +407,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     }
 
     private List<String> extractBackendToolNames(MLExecuteTaskRequest request) {
-        if (request.getInput() instanceof org.opensearch.ml.common.input.execute.agent.AgentMLInput) {
-            org.opensearch.ml.common.input.execute.agent.AgentMLInput agentInput =
-                (org.opensearch.ml.common.input.execute.agent.AgentMLInput) request.getInput();
-            org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet inputDataSet =
-                (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
+        if (request.getInput() instanceof AgentMLInput) {
+            AgentMLInput agentInput = (AgentMLInput) request.getInput();
+            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
             String backendToolNamesJson = inputDataSet.getParameters().get(AGUI_PARAM_BACKEND_TOOL_NAMES);
             if (backendToolNamesJson != null && !backendToolNamesJson.isEmpty()) {
@@ -424,7 +420,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         for (JsonElement toolElement : element.getAsJsonArray()) {
                             toolNames.add(toolElement.getAsString());
                         }
-                        log.info("AG-UI: Extracted {} backend tool names for filtering: {}", toolNames.size(), toolNames);
+                        log.debug("AG-UI: Extracted {} backend tool names for filtering: {}", toolNames.size(), toolNames);
                         return toolNames;
                     }
                 } catch (Exception e) {
@@ -748,7 +744,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     String textMessageEndEvent = AGUIStreamingEventManager.getTextMessageEndEvent(threadId, runId);
                     if (textMessageEndEvent != null) {
                         sseResponse.append("data: ").append(textMessageEndEvent).append("\n\n");
-                        log.info("AG-UI: Sent TEXT_MESSAGE_END before tool calls");
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END before tool calls");
                     } else {
                         log
                             .warn(
@@ -767,7 +763,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
                         // Skip backend tools - they will be executed in the ReAct loop
                         if (backendToolNames != null && backendToolNames.contains(toolName)) {
-                            log.info("AG-UI: Skipping backend tool '{}' from AG-UI events - will be executed in ReAct loop", toolName);
+                            log.debug("AG-UI: Skipping backend tool '{}' from AG-UI events - will be executed in ReAct loop", toolName);
                             continue;
                         }
 
@@ -793,7 +789,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
                     // Only return true if we generated events for frontend tools
                     if (frontendToolCallCount == 0) {
-                        log.info("AG-UI: All tool calls were backend tools - not generating AG-UI events");
+                        log.debug("AG-UI: All tool calls were backend tools - not generating AG-UI events");
                         return false;
                     }
 
