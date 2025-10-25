@@ -13,7 +13,6 @@ import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
-import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;

@@ -15,16 +15,14 @@ import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -113,12 +111,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
 
-        Map<String, Object> createMemoryParams = new HashMap<>();
-        params.put(MEMORY_NAME, title);
-        params.put(MEMORY_ID, memoryId);
-        params.put(APP_TYPE, appType);
-
-        memoryFactory.create(createMemoryParams, ActionListener.wrap(memory -> {
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent);
+        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {

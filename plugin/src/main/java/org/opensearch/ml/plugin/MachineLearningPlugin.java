@@ -845,7 +845,7 @@ public class MachineLearningPlugin extends Plugin
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
 
         AgenticConversationMemory.Factory agenticConversationMemoryFactory = new AgenticConversationMemory.Factory();
-        conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
+        agenticConversationMemoryFactory.init(client);
         memoryFactoryMap.put(AgenticConversationMemory.TYPE, agenticConversationMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(

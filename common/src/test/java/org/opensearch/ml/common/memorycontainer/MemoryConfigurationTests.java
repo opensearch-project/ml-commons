@@ -1088,11 +1088,11 @@ public class MemoryConfigurationTests {
         RemoteStore remoteStore = RemoteStore.builder().type("aoss").connectorId("ySf08JkBym-3qj1O2uub").build();
 
         MemoryConfiguration config = MemoryConfiguration
-                .builder()
-                .indexPrefix("test")
-                .useSystemIndex(false)
-                .remoteStore(remoteStore)
-                .build();
+            .builder()
+            .indexPrefix("test")
+            .useSystemIndex(false)
+            .remoteStore(remoteStore)
+            .build();
 
         assertNotNull(config.getRemoteStore());
         assertEquals("aoss", config.getRemoteStore().getType());

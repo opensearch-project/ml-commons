@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 
 import java.security.AccessController;
@@ -248,11 +249,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             && (memoryId == null || parentInteractionId == null)) {
                                             Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap.get(memorySpec.getType());
 
-                                            Map<String, Object> params = new HashMap<>();
-                                            params.put(ConversationIndexMemory.MEMORY_NAME, question);
-                                            params.put(ConversationIndexMemory.MEMORY_ID, memoryId);
-                                            params.put(APP_TYPE, appType);
-                                            memoryFactory.create(params, ActionListener.wrap(memory -> {
+                                            Map<String, Object> memoryParams = createMemoryParams(question, memoryId, appType, mlAgent);
+                                            memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
                                                 inputDataSet.getParameters().put(MEMORY_ID, memory.getId());
                                                 // get question for regenerate
                                                 if (regenerateInteractionId != null) {
