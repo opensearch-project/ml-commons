@@ -13,6 +13,7 @@ import java.util.Map;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -26,7 +27,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @Getter
 public class ConversationIndexMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
-    public static final String TYPE = "conversation_index";
+    public static final String TYPE = MLMemoryType.CONVERSATION_INDEX.name();
     public static final String CONVERSATION_ID = "conversation_id";
     public static final String FINAL_ANSWER = "final_answer";
     public static final String CREATED_TIME = "created_time";
