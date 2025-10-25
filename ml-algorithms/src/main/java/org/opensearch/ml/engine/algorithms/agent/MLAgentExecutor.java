@@ -276,6 +276,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             && memoryFactoryMap != null
                                             && !memoryFactoryMap.isEmpty()
                                             && (memoryId == null || parentInteractionId == null)) {
+                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap.get(memorySpec.getType());
+
                                             Map<String, Object> memoryParams = createMemoryParams(
                                                 question,
                                                 memoryId,
