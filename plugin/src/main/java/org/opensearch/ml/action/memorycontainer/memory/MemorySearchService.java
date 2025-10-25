@@ -104,7 +104,7 @@ public class MemorySearchService {
                         input.getMemoryContainerId()
                     );
 
-            log.debug("Searching for similar facts");
+                log.debug("Searching for similar facts");
 
                 SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
                 searchSourceBuilder.query(queryBuilder);
