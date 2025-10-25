@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
@@ -76,7 +78,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     ) {
         try {
             log.info("Creating SSE connection for streaming request");
-            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface);
+            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, parameters);
             Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
@@ -99,6 +101,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     public final class HTTPEventSourceListener extends EventSourceListener {
         private StreamPredictActionListener<MLTaskResponse, ?> streamActionListener;
         private final String llmInterface;
+        private final boolean isAGUIAgent;
         private AtomicBoolean isStreamClosed;
         private boolean functionCallInProgress = false;
         private boolean agentExecutionInProgress = false;
@@ -106,10 +109,22 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private String accumulatedToolName = null;
         private String accumulatedArguments = "";
 
-        public HTTPEventSourceListener(StreamPredictActionListener<MLTaskResponse, ?> streamActionListener, String llmInterface) {
+        public HTTPEventSourceListener(
+            StreamPredictActionListener<MLTaskResponse, ?> streamActionListener,
+            String llmInterface,
+            Map<String, String> parameters
+        ) {
             this.streamActionListener = streamActionListener;
             this.llmInterface = llmInterface;
             this.isStreamClosed = new AtomicBoolean(false);
+
+            // Detect if this is an AG-UI agent by checking for AG-UI specific parameters
+            this.isAGUIAgent = parameters != null
+                && (parameters.containsKey(AGUI_PARAM_THREAD_ID) || parameters.containsKey(AGUI_PARAM_RUN_ID));
+
+            if (isAGUIAgent) {
+                log.debug("HttpStreamingHandler: Detected AG-UI agent - raw function call chunks will be filtered");
+            }
         }
 
         /***
@@ -220,8 +235,16 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             // Process tool call
             List<?> toolCalls = extractPath(dataMap, "$.choices[0].delta.tool_calls");
             if (toolCalls != null) {
+                // Always accumulate tool call data for completion response
                 accumulateFunctionCall(toolCalls);
-                sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+
+                // For AG-UI agents, skip streaming the raw tool call chunks
+                // The proper AG-UI events will be generated in the completion response
+                if (!isAGUIAgent) {
+                    sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+                } else {
+                    log.debug("AG-UI: Suppressing raw tool call chunk for AG-UI agent");
+                }
             }
 
             // Handle tool_calls finish reason

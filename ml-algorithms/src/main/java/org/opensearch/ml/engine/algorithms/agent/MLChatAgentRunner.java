@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -36,6 +39,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
 import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
+import java.lang.reflect.Type;
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,7 +51,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
@@ -83,6 +86,7 @@ import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.gson.reflect.TypeToken;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -159,6 +163,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener, TransportChannel channel) {
         this.streamingWrapper = new StreamingWrapper(channel, client);
+
         Map<String, String> params = new HashMap<>();
         if (mlAgent.getParameters() != null) {
             params.putAll(mlAgent.getParameters());
@@ -260,24 +265,34 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         FunctionCalling functionCalling
     ) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
+        // Check if this is an AG-UI request with tool call results
+        String aguiToolCallResults = params.get(AGUI_PARAM_TOOL_CALL_RESULTS);
+        if (aguiToolCallResults != null && !aguiToolCallResults.isEmpty()) {
+            // Process tool call results from frontend
+            processAGUIToolResults(mlAgent, params, listener, memory, sessionId, functionCalling, aguiToolCallResults);
+            return;
+        }
 
-        // Create a common method to handle both success and failure cases
-        Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
-            Map<String, Tool> tools = new HashMap<>();
-            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-            createTools(toolFactories, params, allToolSpecs, tools, toolSpecMap, mlAgent);
-            runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener, functionCalling);
-        };
+        // NEW UNIFIED APPROACH: Always combine frontend and backend tools
 
-        // Fetch MCP tools and handle both success and failure cases
-        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
-            toolSpecs.addAll(mcpTools);
-            processTools.accept(toolSpecs);
-        }, e -> {
-            log.error("Failed to get MCP tools, continuing with base tools only", e);
-            processTools.accept(toolSpecs);
-        }));
+        // Parse frontend tools if present
+        String aguiTools = params.get(AGUI_PARAM_TOOLS);
+        List<Map<String, Object>> frontendTools = new ArrayList<>();
+        if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+            try {
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> parsedTools = gson.fromJson(aguiTools, listType);
+                if (parsedTools != null) {
+                    frontendTools.addAll(parsedTools);
+                }
+            } catch (Exception e) {
+                log.warn("AG-UI: Failed to parse frontend tools: {}", e.getMessage());
+            }
+        }
+
+        // Process with unified tools (both frontend and backend)
+        processUnifiedTools(mlAgent, params, listener, memory, sessionId, functionCalling, frontendTools);
     }
 
     private void runReAct(
@@ -289,7 +304,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         String tenantId,
         ActionListener<Object> listener,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Map<String, Tool> backendTools
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -322,11 +338,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StringBuilder scratchpadBuilder = new StringBuilder();
         List<String> interactions = new CopyOnWriteArrayList<>();
 
+        // Check if interactions were passed in from AG-UI tool results
+        if (tmpParameters.containsKey(INTERACTIONS)) {
+            log.debug("ReAct: INTERACTIONS parameter already present in tmpParameters (AG-UI tool results)");
+        } else {
+            log.debug("ReAct: Starting with empty interactions list");
+        }
+
         StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
         tmpParameters.put(PROMPT, newPrompt.get());
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
+        log.debug("ReAct: Starting loop with maxIterations={}, tools count={}", maxIterations, tools.size());
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
@@ -419,28 +443,86 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     if (tools.containsKey(action)) {
-                        Map<String, String> toolParams = constructToolParams(
-                            tools,
-                            toolSpecMap,
-                            question,
-                            lastActionInput,
-                            action,
-                            actionInput
-                        );
-                        lastToolParams.clear();
-                        lastToolParams.putAll(toolParams);
-                        runTool(
-                            tools,
-                            toolSpecMap,
-                            tmpParameters,
-                            (ActionListener<Object>) nextStepListener,
-                            action,
-                            actionInput,
-                            toolParams,
-                            interactions,
-                            toolCallId,
-                            functionCalling
-                        );
+                        // Check if this is a backend tool - if it is, execute it normally in the ReAct loop
+                        // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
+                        boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
+                        boolean isFrontendTool = !isBackendTool;
+
+                        log
+                            .info(
+                                "AG-UI: Tool execution request - action: {}, isBackendTool: {}, isFrontendTool: {}",
+                                action,
+                                isBackendTool,
+                                isFrontendTool
+                            );
+
+                        if (isFrontendTool) {
+                            // Frontend tools: generate AG-UI events immediately and return them
+                            log
+                                .info(
+                                    "AG-UI: Detected frontend tool call - generating AG-UI events for: {} with input: {}",
+                                    action,
+                                    actionInput
+                                );
+
+                            // Create a ModelTensorOutput with tool call events for AG-UI processing
+                            Map<String, Object> toolCallData = Map
+                                .of(
+                                    "tool_calls",
+                                    List
+                                        .of(
+                                            Map
+                                                .of(
+                                                    "id",
+                                                    toolCallId,
+                                                    "type",
+                                                    "function",
+                                                    "function",
+                                                    Map.of("name", action, "arguments", actionInput)
+                                                )
+                                        )
+                                );
+
+                            ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(toolCallData).build();
+
+                            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(responseTensor)).build();
+
+                            ModelTensorOutput frontendToolResponse = ModelTensorOutput
+                                .builder()
+                                .mlModelOutputs(List.of(modelTensors))
+                                .build();
+
+                            log.debug("AG-UI: Generated ModelTensorOutput with frontend tool call events for tool: {}", action);
+                            log.debug("AG-UI: Bypassing ReAct loop and returning frontend tool calls directly to MLAGUIAgentRunner");
+
+                            // Exit ReAct loop early and return frontend tool calls directly to main listener (MLAGUIAgentRunner)
+                            listener.onResponse(frontendToolResponse);
+                            return;
+                        } else {
+                            // Handle backend tool normally
+                            Map<String, String> toolParams = constructToolParams(
+                                tools,
+                                toolSpecMap,
+                                question,
+                                lastActionInput,
+                                action,
+                                actionInput
+                            );
+                            lastToolParams.clear();
+                            lastToolParams.putAll(toolParams);
+                            runTool(
+                                tools,
+                                toolSpecMap,
+                                tmpParameters,
+                                (ActionListener<Object>) nextStepListener,
+                                action,
+                                actionInput,
+                                toolParams,
+                                interactions,
+                                toolCallId,
+                                functionCalling
+                            );
+                        }
 
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
@@ -482,7 +564,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
                     if (!interactions.isEmpty()) {
-                        tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
+                        String interactionsValue = ", " + String.join(", ", interactions);
+                        tmpParameters.put(INTERACTIONS, interactionsValue);
+                        log.debug("ReAct: Added {} interactions to tmpParameters for next LLM call", interactions.size());
+                        log.info("ReAct: Full INTERACTIONS value: {}", interactionsValue);
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
@@ -518,6 +603,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                         return;
                     }
+                    log
+                        .debug(
+                            "ReAct: Creating prediction request for iteration {}, tmpParameters contains INTERACTIONS: {}",
+                            finalI,
+                            tmpParameters.containsKey(INTERACTIONS)
+                        );
+                    if (tmpParameters.containsKey(INTERACTIONS)) {
+                        log.info("ReAct: Full INTERACTIONS in iteration {}: {}", finalI, tmpParameters.get(INTERACTIONS));
+                    }
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
@@ -530,6 +624,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
         }
 
+        log
+            .debug(
+                "ReAct: Creating initial prediction request, tmpParameters contains INTERACTIONS: {}",
+                tmpParameters.containsKey(INTERACTIONS)
+            );
+        if (tmpParameters.containsKey(INTERACTIONS)) {
+            log.info("ReAct: Full INTERACTIONS value being sent to LLM: {}", tmpParameters.get(INTERACTIONS));
+        }
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
     }
@@ -608,27 +710,42 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
-                        interactions.add(llmMessages.getFirst().getResponse());
+                        String interactionMessage = llmMessages.getFirst().getResponse();
+                        interactions.add(interactionMessage);
+                        log
+                            .debug(
+                                "ReAct: Added tool result to interactions (function calling), tool: {}, interactions size: {}",
+                                finalAction,
+                                interactions.size()
+                            );
+                        log
+                            .debug(
+                                "ReAct: Tool result interaction message (first 200 chars): {}",
+                                interactionMessage.length() > 200 ? interactionMessage.substring(0, 200) + "..." : interactionMessage
+                            );
                     } else {
-                        interactions
-                            .add(
-                                substitute(
-                                    tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
-                                    INTERACTIONS_PREFIX
-                                )
+                        String interactionMessage = substitute(
+                            tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
+                            Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
+                            INTERACTIONS_PREFIX
+                        );
+                        interactions.add(interactionMessage);
+                        log
+                            .debug(
+                                "ReAct: Added tool result to interactions (template), tool: {}, interactions size: {}",
+                                finalAction,
+                                interactions.size()
                             );
                     }
                     nextStepListener.onResponse(r);
                 }, e -> {
-                    interactions
-                        .add(
-                            substitute(
-                                tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
-                                INTERACTIONS_PREFIX
-                            )
-                        );
+                    String errorInteraction = substitute(
+                        tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
+                        Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                        INTERACTIONS_PREFIX
+                    );
+                    interactions.add(errorInteraction);
+                    log.debug("ReAct: Added tool error to interactions, tool: {}, interactions size: {}", finalAction, interactions.size());
                     nextStepListener
                         .onResponse(
                             String
@@ -867,6 +984,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .build()
                 )
         );
+        log
+            .info(
+                "AG-UI: ReAct loop completing, returning final result. Verbose: {}, cotModelTensors size: {}, finalModelTensors size: {}",
+                verbose,
+                cotModelTensors != null ? cotModelTensors.size() : 0,
+                finalModelTensors != null ? finalModelTensors.size() : 0
+            );
+
         if (verbose) {
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
         } else {
@@ -933,4 +1058,386 @@ public class MLChatAgentRunner implements MLAgentRunner {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
         }
     }
+
+    /**
+     * Process unified tools - combines frontend and backend tools for LLM visibility
+     */
+    private void processUnifiedTools(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        String sessionId,
+        FunctionCalling functionCalling,
+        List<Map<String, Object>> frontendTools
+    ) {
+        // Always get backend tools
+        List<MLToolSpec> backendToolSpecs = getMlToolSpecs(mlAgent, params);
+
+        // Handle backend tool loading with MCP tools
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+            // Add MCP tools to backend tools
+            backendToolSpecs.addAll(mcpTools);
+
+            // Create backend tools map
+            Map<String, Tool> backendToolsMap = new HashMap<>();
+            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+            createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
+
+            // Create unified tool list for function calling (frontend + backend)
+            processUnifiedToolsWithBackend(
+                mlAgent,
+                params,
+                listener,
+                memory,
+                sessionId,
+                functionCalling,
+                frontendTools,
+                backendToolsMap,
+                toolSpecMap
+            );
+        }, e -> {
+            // Even if MCP tools fail, continue with base backend tools
+            log.warn("Failed to get MCP tools, continuing with base backend tools only", e);
+
+            Map<String, Tool> backendToolsMap = new HashMap<>();
+            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+            createTools(toolFactories, params, backendToolSpecs, backendToolsMap, toolSpecMap, mlAgent);
+
+            processUnifiedToolsWithBackend(
+                mlAgent,
+                params,
+                listener,
+                memory,
+                sessionId,
+                functionCalling,
+                frontendTools,
+                backendToolsMap,
+                toolSpecMap
+            );
+        }));
+    }
+
+    /**
+     * Process unified tools with both frontend and backend tools ready
+     */
+    private void processUnifiedToolsWithBackend(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        String sessionId,
+        FunctionCalling functionCalling,
+        List<Map<String, Object>> frontendTools,
+        Map<String, Tool> backendToolsMap,
+        Map<String, MLToolSpec> toolSpecMap
+    ) {
+        // Create unified tool map by adding frontend tools as Tool objects
+        Map<String, Tool> unifiedToolsMap = new HashMap<>(backendToolsMap);
+
+        // Add frontend tools as proper Tool objects
+        for (Map<String, Object> frontendTool : frontendTools) {
+            String toolName = (String) frontendTool.get("name");
+            String toolDescription = (String) frontendTool.get("description");
+
+            // Create frontend tool object with source marker
+            Map<String, Object> toolAttributes = new HashMap<>();
+            toolAttributes.put("source", "frontend");
+            toolAttributes.put("tool_definition", frontendTool); // Store original definition for runtime lookup
+
+            // Add input_schema for function calling template substitution
+            Object parameters = frontendTool.get("parameters");
+            if (parameters != null) {
+                toolAttributes.put("input_schema", gson.toJson(parameters));
+            } else {
+                // Provide empty schema if no parameters
+                Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
+                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+            }
+
+            // Create a simple Tool implementation for frontend tools
+            Tool frontendToolObj = new Tool() {
+                @Override
+                public String getName() {
+                    return toolName;
+                }
+
+                @Override
+                public void setName(String name) { /* Not needed for frontend tools */ }
+
+                @Override
+                public String getDescription() {
+                    return toolDescription;
+                }
+
+                @Override
+                public void setDescription(String description) { /* Not needed for frontend tools */ }
+
+                @Override
+                public Map<String, Object> getAttributes() {
+                    return toolAttributes;
+                }
+
+                @Override
+                public void setAttributes(Map<String, Object> attributes) { /* Not needed for frontend tools */ }
+
+                @Override
+                @SuppressWarnings("unchecked")
+                public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+                    // Frontend tools return a placeholder result that allows ReAct to continue
+                    // The actual AG-UI events will be generated when MLAGUIAgentRunner processes the LLM response
+                    log.debug("AG-UI: Frontend tool {} executed with parameters: {}", toolName, parameters);
+                    // Frontend tools should not be executed during ReAct - they should be called by the LLM in its final response
+                    // Return an error to indicate this tool should be called differently
+                    String errorResult = String
+                        .format(
+                            "Error: Tool '%s' is a frontend tool and should be called via function calling in the final response, not during ReAct execution.",
+                            toolName
+                        );
+                    listener.onResponse((T) errorResult);
+                }
+
+                @Override
+                public boolean validate(Map<String, String> parameters) {
+                    // Frontend tools are always valid - validation happens in browser
+                    return true;
+                }
+
+                @Override
+                public String getType() {
+                    return "AGUIFrontendTool";
+                }
+
+                @Override
+                public String getVersion() {
+                    return "1.0.0";
+                }
+            };
+
+            unifiedToolsMap.put(toolName, frontendToolObj);
+        }
+
+        // Store frontend tools mapping for runtime lookup
+        if (!frontendTools.isEmpty()) {
+            params.put("frontend_tools_json", gson.toJson(frontendTools));
+        }
+
+        // Store backend tool names so streaming handler can filter them out from AG-UI events
+        if (!backendToolsMap.isEmpty()) {
+            List<String> backendToolNames = new ArrayList<>(backendToolsMap.keySet());
+            params.put("backend_tool_names", gson.toJson(backendToolNames));
+        }
+
+        // Call runReAct with unified tools - both frontend and backend tools will be visible to LLM
+        // Pass backendToolsMap so runReAct can distinguish between frontend and backend tools
+        runReAct(
+            mlAgent.getLlm(),
+            unifiedToolsMap,
+            toolSpecMap,
+            params,
+            memory,
+            sessionId,
+            mlAgent.getTenantId(),
+            listener,
+            functionCalling,
+            backendToolsMap
+        );
+    }
+
+    /**
+     * Process AG-UI tool call results from frontend execution
+     */
+    private void processAGUIToolResults(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        String sessionId,
+        FunctionCalling functionCalling,
+        String aguiToolCallResults
+    ) {
+        try {
+            log.debug("AG-UI: Processing tool call results for agent: {}", mlAgent.getName());
+
+            // Parse tool call results from frontend
+            Type listType = new TypeToken<List<Map<String, String>>>() {
+            }.getType();
+            List<Map<String, String>> toolResults = gson.fromJson(aguiToolCallResults, listType);
+
+            if (functionCalling != null && !toolResults.isEmpty()) {
+                // Convert to format expected by FunctionCalling
+                List<Map<String, Object>> formattedResults = new ArrayList<>();
+                for (Map<String, String> result : toolResults) {
+                    Map<String, Object> formattedResult = new HashMap<>();
+                    formattedResult.put(TOOL_CALL_ID, result.get("tool_call_id"));
+                    formattedResult.put(TOOL_RESULT, Map.of("text", result.get("content")));
+                    formattedResults.add(formattedResult);
+                }
+
+                // Supply tool results to function calling for LLM processing
+                List<LLMMessage> llmMessages = functionCalling.supply(formattedResults);
+
+                // Create LLM parameters for final response generation
+                Map<String, String> llmParams = constructLLMParams(mlAgent.getLlm(), params);
+
+                // Call LLM with tool results to generate final response
+                if (!llmMessages.isEmpty()) {
+                    // Build interactions list: assistant message with tool_calls FIRST, then tool results
+                    List<String> interactions = new ArrayList<>();
+
+                    // First, add the assistant message(s) with tool_calls
+                    String assistantToolCallMessagesJson = params.get(AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES);
+                    if (assistantToolCallMessagesJson != null && !assistantToolCallMessagesJson.isEmpty()) {
+                        Type listType2 = new TypeToken<List<String>>() {
+                        }.getType();
+                        List<String> assistantMessages = gson.fromJson(assistantToolCallMessagesJson, listType2);
+                        interactions.addAll(assistantMessages);
+                    } else {
+                        log.warn("AG-UI: No assistant tool call messages found in params - this may cause OpenAI error");
+                    }
+
+                    // Then, add the tool result messages
+                    for (LLMMessage llmMessage : llmMessages) {
+                        interactions.add(llmMessage.getResponse());
+                    }
+
+                    // Update parameters with the tool result interactions
+                    Map<String, String> updatedParams = new HashMap<>(params);
+                    if (!interactions.isEmpty()) {
+                        String interactionsValue = ", " + String.join(", ", interactions);
+                        updatedParams.put(INTERACTIONS, interactionsValue);
+                    } else {
+                        log.warn("AG-UI: Interactions list is empty, not adding to parameters");
+                    }
+
+                    // Parse frontend tools to include in the request
+                    // Even though we're processing tool results, Bedrock needs the tool definitions
+                    // to validate the toolUse in the assistant message
+                    String aguiTools = params.get(AGUI_PARAM_TOOLS);
+                    List<Map<String, Object>> frontendTools = new ArrayList<>();
+                    if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+                        try {
+                            Type toolListType = new TypeToken<List<Map<String, Object>>>() {
+                            }.getType();
+                            List<Map<String, Object>> parsedTools = gson.fromJson(aguiTools, toolListType);
+                            if (parsedTools != null) {
+                                frontendTools.addAll(parsedTools);
+                            }
+                        } catch (Exception e) {
+                            log.warn("AG-UI: Failed to parse frontend tools: {}", e.getMessage());
+                        }
+                    }
+
+                    // Use unified tools approach to ensure tool definitions are included
+                    processUnifiedTools(mlAgent, updatedParams, listener, memory, sessionId, functionCalling, frontendTools);
+                } else {
+                    log.error("AG-UI: No LLM messages generated from tool results");
+                    listener.onFailure(new RuntimeException("No LLM messages generated from tool results"));
+                }
+            } else {
+                String errorMsg = functionCalling == null ? "No function calling interface available" : "Empty tool results";
+                log.error("AG-UI: Cannot process tool results - {}", errorMsg);
+                listener.onFailure(new RuntimeException("No function calling interface or empty tool results"));
+            }
+        } catch (Exception e) {
+            log.error("AG-UI: Error processing tool call results", e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Process AG-UI tool call generation (frontend tools)
+     */
+    private void processAGUIToolCall(
+        MLAgent mlAgent,
+        Map<String, String> params,
+        ActionListener<Object> listener,
+        Memory memory,
+        String sessionId,
+        FunctionCalling functionCalling,
+        String aguiTools
+    ) {
+        try {
+            if (functionCalling != null) {
+                // Parse frontend tools
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> frontendTools = gson.fromJson(aguiTools, listType);
+
+                // Create LLM parameters first
+                Map<String, String> llmParams = constructLLMParams(mlAgent.getLlm(), params);
+
+                // Configure function calling first to set up tool template
+                functionCalling.configure(llmParams);
+
+                // Now get the tool template that was set by function calling
+                String toolTemplate = llmParams.get(AgentUtils.TOOL_TEMPLATE);
+
+                // Convert frontend tools to function calling format and put in _tools parameter
+                List<String> toolInfos = new ArrayList<>();
+                if (toolTemplate != null) {
+                    for (Map<String, Object> tool : frontendTools) {
+                        Map<String, Object> toolParams = new HashMap<>();
+                        toolParams.put("name", tool.get("name"));
+                        toolParams.put("description", tool.get("description"));
+
+                        // Map frontend tool parameters to attributes.input_schema for function calling
+                        Object parameters = tool.get("parameters");
+                        if (parameters != null) {
+                            // Convert parameters to JSON string for proper OpenAI function calling format
+                            String parametersJson = gson.toJson(parameters);
+                            toolParams.put("attributes.input_schema", parametersJson);
+                        }
+
+                        // Add any other attributes if present
+                        Object attributesObj = tool.get("attributes");
+                        if (attributesObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> attributes = (Map<String, Object>) attributesObj;
+                            for (String key : attributes.keySet()) {
+                                toolParams.put("attributes." + key, attributes.get(key));
+                            }
+                        }
+                        StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
+                        String formattedTool = substitutor.replace(toolTemplate);
+                        toolInfos.add(formattedTool);
+                    }
+                    llmParams.put(AgentUtils.TOOLS, String.join(", ", toolInfos));
+                } else {
+                    log.error("AG-UI: Tool template is NULL - cannot format frontend tools for function calling!");
+                }
+
+                String question = params.get("question");
+
+                if (question != null && !question.isEmpty()) {
+                    // Use the existing runReAct pattern with frontend tools to generate tool calls
+                    Map<String, Tool> emptyTools = new HashMap<>();
+                    Map<String, MLToolSpec> emptyToolSpecs = new HashMap<>();
+
+                    // The frontend tools are already configured in functionCalling
+                    // Now call LLM with frontend tools to generate tool calls
+                    runReAct(
+                        mlAgent.getLlm(),
+                        emptyTools,
+                        emptyToolSpecs,
+                        llmParams,
+                        memory,
+                        sessionId,
+                        mlAgent.getTenantId(),
+                        listener,
+                        functionCalling,
+                        emptyTools  // No backend tools in this context
+                    );
+                } else {
+                    listener.onFailure(new RuntimeException("No question found for AG-UI tool call generation"));
+                }
+            } else {
+                listener.onFailure(new RuntimeException("No function calling interface available"));
+            }
+        } catch (Exception e) {
+            log.error("Error processing AG-UI tool call generation", e);
+            listener.onFailure(e);
+        }
+    }
+
 }
