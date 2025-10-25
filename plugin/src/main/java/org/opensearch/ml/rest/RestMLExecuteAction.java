@@ -128,7 +128,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
             String requestBodyJson = request.contentOrSourceParam().v2().utf8ToString();
             if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
-                log.info("Detected AG-UI input format for agent: {}", agentId);
+                log.debug("AG-UI: Detected AG-UI input format for agent: {}", agentId);
                 input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
             } else {
                 input = MLInput.parse(parser, functionName.name());

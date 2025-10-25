@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
@@ -117,10 +119,11 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             this.isStreamClosed = new AtomicBoolean(false);
 
             // Detect if this is an AG-UI agent by checking for AG-UI specific parameters
-            this.isAGUIAgent = parameters != null && (parameters.containsKey("agui_thread_id") || parameters.containsKey("agui_run_id"));
+            this.isAGUIAgent = parameters != null
+                && (parameters.containsKey(AGUI_PARAM_THREAD_ID) || parameters.containsKey(AGUI_PARAM_RUN_ID));
 
             if (isAGUIAgent) {
-                log.info("HttpStreamingHandler: Detected AG-UI agent - raw function call chunks will be filtered");
+                log.debug("HttpStreamingHandler: Detected AG-UI agent - raw function call chunks will be filtered");
             }
         }
 

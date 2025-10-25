@@ -492,8 +492,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .mlModelOutputs(List.of(modelTensors))
                                 .build();
 
-                            log.info("AG-UI: Generated ModelTensorOutput with frontend tool call events for tool: {}", action);
-                            log.info("AG-UI: Bypassing ReAct loop and returning frontend tool calls directly to MLAGUIAgentRunner");
+                            log.debug("AG-UI: Generated ModelTensorOutput with frontend tool call events for tool: {}", action);
+                            log.debug("AG-UI: Bypassing ReAct loop and returning frontend tool calls directly to MLAGUIAgentRunner");
 
                             // Exit ReAct loop early and return frontend tool calls directly to main listener (MLAGUIAgentRunner)
                             listener.onResponse(frontendToolResponse);
@@ -1186,7 +1186,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
                     // Frontend tools return a placeholder result that allows ReAct to continue
                     // The actual AG-UI events will be generated when MLAGUIAgentRunner processes the LLM response
-                    log.info("AG-UI: Frontend tool {} executed with parameters: {}", toolName, parameters);
+                    log.debug("AG-UI: Frontend tool {} executed with parameters: {}", toolName, parameters);
                     // Frontend tools should not be executed during ReAct - they should be called by the LLM in its final response
                     // Return an error to indicate this tool should be called differently
                     String errorResult = String
@@ -1257,7 +1257,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String aguiToolCallResults
     ) {
         try {
-            log.info("AG-UI: Processing tool call results for agent: {}", mlAgent.getName());
+            log.debug("AG-UI: Processing tool call results for agent: {}", mlAgent.getName());
 
             // Parse tool call results from frontend
             Type listType = new TypeToken<List<Map<String, String>>>() {

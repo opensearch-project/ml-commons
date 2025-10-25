@@ -11,8 +11,8 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_FUNCTION;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_NAME;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ROLE;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALLS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TYPE;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
@@ -164,10 +164,10 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             String resultString = (String) result;
             // Check if this is a frontend tool call response
             if (resultString.startsWith("FRONTEND_TOOL_CALL: ")) {
-                log.info("AG-UI: Detected frontend tool call response, processing...");
+                log.debug("AG-UI: Detected frontend tool call response, processing...");
                 processFrontendToolCall(resultString, eventCollector);
             } else {
-                log.info("AG-UI: String result is not a frontend tool call");
+                log.debug("AG-UI: String result is not a frontend tool call");
             }
         }
         List<Object> messages = new ArrayList<>();
@@ -284,11 +284,11 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     }
 
     private void processFrontendToolCall(String frontendToolCallResponse, AGUIEventCollector eventCollector) {
-        log.info("AG-UI: Processing frontend tool call response: {}", frontendToolCallResponse);
+        log.debug("AG-UI: Processing frontend tool call response: {}", frontendToolCallResponse);
         try {
             // Extract the JSON part after "FRONTEND_TOOL_CALL: "
             String jsonPart = frontendToolCallResponse.substring("FRONTEND_TOOL_CALL: ".length());
-            log.info("AG-UI: Extracted JSON part: {}", jsonPart);
+            log.debug("AG-UI: Extracted JSON part: {}", jsonPart);
 
             JsonElement element = gson.fromJson(jsonPart, JsonElement.class);
 
@@ -297,7 +297,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 String toolName = toolCallObj.get("tool").getAsString();
                 String toolInput = toolCallObj.get("input").getAsString();
 
-                log.info("AG-UI: Processing frontend tool call - tool: {}, input: {}", toolName, toolInput);
+                log.debug("AG-UI: Processing frontend tool call - tool: {}, input: {}", toolName, toolInput);
 
                 // Generate AG-UI events for the frontend tool call
                 String toolCallId = eventCollector.startToolCall(toolName, null);
