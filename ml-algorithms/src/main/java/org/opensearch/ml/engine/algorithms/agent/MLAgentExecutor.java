@@ -17,7 +17,6 @@ import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -48,6 +47,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -245,9 +245,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
                                         if (memorySpec != null
                                             && memorySpec.getType() != null
-                                            && memoryFactoryMap.containsKey(memorySpec.getType())
+                                            && memoryFactoryMap.containsKey(MLMemoryType.from(memorySpec.getType()).name())
                                             && (memoryId == null || parentInteractionId == null)) {
-                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap.get(memorySpec.getType());
+                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap
+                                                .get(MLMemoryType.from(memorySpec.getType()).name());
 
                                             Map<String, Object> memoryParams = createMemoryParams(question, memoryId, appType, mlAgent);
                                             memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
@@ -299,14 +300,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         } else {
                                             // For existing conversations, create memory instance using factory
                                             if (memorySpec != null && memorySpec.getType() != null) {
+                                                String memoryType = MLMemoryType.from(memorySpec.getType()).name();
+                                                Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+
                                                 ConversationIndexMemory.Factory factory = (ConversationIndexMemory.Factory) memoryFactoryMap
                                                     .get(memorySpec.getType());
-                                                if (factory != null) {
+                                                if (memoryFactory != null) {
                                                     // memoryId exists, so create returns an object with existing memory, therefore name can
                                                     // be null
-                                                    factory
+                                                    Map<String, Object> memoryParams = createMemoryParams(
+                                                        question,
+                                                        memoryId,
+                                                        appType,
+                                                        mlAgent
+                                                    );
+
+                                                    memoryFactory
                                                         .create(
-                                                            Map.of(MEMORY_ID, memoryId, APP_TYPE, appType),
+                                                            memoryParams,
                                                             ActionListener
                                                                 .wrap(
                                                                     createdMemory -> executeAgent(
