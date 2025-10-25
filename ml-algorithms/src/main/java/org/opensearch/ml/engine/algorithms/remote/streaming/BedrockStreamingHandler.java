@@ -6,6 +6,9 @@
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_ASSISTANT;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -91,7 +94,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         this.parameters = parameters;
 
         // Detect if this is an AG-UI agent by checking for AG-UI specific parameters
-        this.isAGUIAgent = parameters != null && (parameters.containsKey("agui_thread_id") || parameters.containsKey("agui_run_id"));
+        this.isAGUIAgent = parameters != null
+            && (parameters.containsKey(AGUI_PARAM_THREAD_ID) || parameters.containsKey(AGUI_PARAM_RUN_ID));
 
         if (isAGUIAgent) {
             log.info("BedrockStreamingHandler: Detected AG-UI agent - raw tool use events will be filtered");
@@ -553,7 +557,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private Message buildMessage(JsonNode messageItem) {
-        String role = messageItem.has("role") && messageItem.get("role") != null ? messageItem.get("role").asText() : "assistant";
+        String role = messageItem.has("role") && messageItem.get("role") != null ? messageItem.get("role").asText() : AGUI_ROLE_ASSISTANT;
 
         // Handle AG-UI tool result messages
         if ("tool".equals(role)) {

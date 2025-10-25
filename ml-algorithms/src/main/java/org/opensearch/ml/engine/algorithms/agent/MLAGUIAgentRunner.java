@@ -5,6 +5,22 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ARGUMENTS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_CONTENT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_FUNCTION;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_NAME;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ROLE;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALLS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TYPE;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_ASSISTANT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_TOOL;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_USER;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_MESSAGE_PREFIX;
@@ -104,7 +120,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 encryptor
             );
 
-            String messageId = eventCollector.startTextMessage("assistant");
+            String messageId = eventCollector.startTextMessage(AGUI_ROLE_ASSISTANT);
             ActionListener<Object> aguiListener = ActionListener.wrap(result -> {
                 try {
                     processAgentResult(result, eventCollector, messageId);
@@ -156,7 +172,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
         }
         List<Object> messages = new ArrayList<>();
         String responseText = extractResponseText(result);
-        messages.add(Map.of("id", messageId, "role", "assistant", "content", responseText));
+        messages.add(Map.of(AGUI_FIELD_ID, messageId, AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT, AGUI_FIELD_CONTENT, responseText));
         eventCollector.addMessagesSnapshot(messages);
     }
 
@@ -342,7 +358,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     }
 
     private void processAGUIMessages(MLAgent mlAgent, Map<String, String> params, String llmInterface) {
-        String aguiMessagesJson = params.get("agui_messages");
+        String aguiMessagesJson = params.get(AGUI_PARAM_MESSAGES);
         if (aguiMessagesJson == null || aguiMessagesJson.isEmpty()) {
             return;
         }
@@ -393,14 +409,14 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 JsonElement messageElement = messageArray.get(i);
                 if (messageElement.isJsonObject()) {
                     JsonObject message = messageElement.getAsJsonObject();
-                    String role = getStringField(message, "role");
+                    String role = getStringField(message, AGUI_FIELD_ROLE);
 
                     // Track and extract assistant messages with tool calls
-                    if ("assistant".equals(role) && message.has("toolCalls")) {
+                    if (AGUI_ROLE_ASSISTANT.equals(role) && message.has(AGUI_FIELD_TOOL_CALLS)) {
                         toolCallMessageIndices.add(i);
 
                         // Convert to OpenAI format for interactions
-                        JsonElement toolCallsElement = message.get("toolCalls");
+                        JsonElement toolCallsElement = message.get(AGUI_FIELD_TOOL_CALLS);
                         if (toolCallsElement != null && toolCallsElement.isJsonArray()) {
                             List<Map<String, Object>> toolCalls = new ArrayList<>();
                             for (JsonElement tcElement : toolCallsElement.getAsJsonArray()) {
@@ -409,19 +425,19 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                                     Map<String, Object> toolCall = new HashMap<>();
 
                                     // OpenAI format: id, type, and function at the same level
-                                    String toolCallId = getStringField(tc, "id");
-                                    String toolCallType = getStringField(tc, "type");
+                                    String toolCallId = getStringField(tc, AGUI_FIELD_ID);
+                                    String toolCallType = getStringField(tc, AGUI_FIELD_TYPE);
 
-                                    toolCall.put("id", toolCallId);
-                                    toolCall.put("type", toolCallType != null ? toolCallType : "function");
+                                    toolCall.put(AGUI_FIELD_ID, toolCallId);
+                                    toolCall.put(AGUI_FIELD_TYPE, toolCallType != null ? toolCallType : "function");
 
-                                    JsonElement functionElement = tc.get("function");
+                                    JsonElement functionElement = tc.get(AGUI_FIELD_FUNCTION);
                                     if (functionElement != null && functionElement.isJsonObject()) {
                                         JsonObject func = functionElement.getAsJsonObject();
                                         Map<String, String> function = new HashMap<>();
-                                        function.put("name", getStringField(func, "name"));
-                                        function.put("arguments", getStringField(func, "arguments"));
-                                        toolCall.put("function", function);
+                                        function.put(AGUI_FIELD_NAME, getStringField(func, AGUI_FIELD_NAME));
+                                        function.put(AGUI_FIELD_ARGUMENTS, getStringField(func, AGUI_FIELD_ARGUMENTS));
+                                        toolCall.put(AGUI_FIELD_FUNCTION, function);
                                     }
                                     toolCalls.add(toolCall);
                                 }
@@ -457,13 +473,13 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                                 }
 
                                 Map<String, Object> bedrockMsg = new HashMap<>();
-                                bedrockMsg.put("role", "assistant");
-                                bedrockMsg.put("content", contentBlocks);
+                                bedrockMsg.put(AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT);
+                                bedrockMsg.put(AGUI_FIELD_CONTENT, contentBlocks);
                                 assistantMessage = gson.toJson(bedrockMsg);
                             } else {
                                 // OpenAI format: {"role": "assistant", "tool_calls": [...]}
                                 Map<String, Object> assistantMsg = new HashMap<>();
-                                assistantMsg.put("role", "assistant");
+                                assistantMsg.put(AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT);
                                 assistantMsg.put("tool_calls", toolCalls);
                                 assistantMessage = gson.toJson(assistantMsg);
                                 log.debug("AG-UI: Created OpenAI-format assistant message with {} tool calls", toolCalls.size());
@@ -475,9 +491,9 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                         }
                     }
 
-                    if ("tool".equals(role)) {
-                        String content = getStringField(message, "content");
-                        String toolCallId = getStringField(message, "toolCallId");
+                    if (AGUI_ROLE_TOOL.equals(role)) {
+                        String content = getStringField(message, AGUI_FIELD_CONTENT);
+                        String toolCallId = getStringField(message, AGUI_FIELD_TOOL_CALL_ID);
 
                         if (content != null && toolCallId != null) {
                             Map<String, String> toolResult = new HashMap<>();
@@ -499,8 +515,8 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     JsonElement messageElement = messageArray.get(i);
                     if (messageElement.isJsonObject()) {
                         JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, "role");
-                        if ("assistant".equals(role)) {
+                        String role = getStringField(message, AGUI_FIELD_ROLE);
+                        if (AGUI_ROLE_ASSISTANT.equals(role)) {
                             hasAssistantAfterToolResult = true;
                             break;
                         }
@@ -527,11 +543,11 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 List<Map<String, String>> recentToolResults = List.of(lastToolResult);
 
                 String toolResultsJson = gson.toJson(recentToolResults);
-                params.put("agui_tool_call_results", toolResultsJson);
+                params.put(AGUI_PARAM_TOOL_CALL_RESULTS, toolResultsJson);
 
                 // Only pass the most recent assistant message with tool_calls
                 if (lastToolCallMessage != null) {
-                    params.put("agui_assistant_tool_call_messages", gson.toJson(List.of(lastToolCallMessage)));
+                    params.put(AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES, gson.toJson(List.of(lastToolCallMessage)));
                 }
             } else if (!toolResults.isEmpty()) {
                 log
@@ -555,25 +571,25 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     JsonElement messageElement = messageArray.get(i);
                     if (messageElement.isJsonObject()) {
                         JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, "role");
-                        String content = getStringField(message, "content");
+                        String role = getStringField(message, AGUI_FIELD_ROLE);
+                        String content = getStringField(message, AGUI_FIELD_CONTENT);
 
                         // Skip tool messages - they're not part of chat history
-                        if ("tool".equals(role)) {
+                        if (AGUI_ROLE_TOOL.equals(role)) {
                             continue;
                         }
 
                         // Skip assistant messages with tool_calls - they're not part of chat history
-                        if ("assistant".equals(role) && message.has("toolCalls")) {
+                        if (AGUI_ROLE_ASSISTANT.equals(role) && message.has(AGUI_FIELD_TOOL_CALLS)) {
                             continue;
                         }
 
                         // Include user messages and assistant messages with content (final answers)
-                        if (("user".equals(role) || "assistant".equals(role)) && content != null && !content.isEmpty()) {
+                        if ((AGUI_ROLE_USER.equals(role) || AGUI_ROLE_ASSISTANT.equals(role)) && content != null && !content.isEmpty()) {
                             if (chatHistoryBuilder.length() > 0) {
                                 chatHistoryBuilder.append("\n");
                             }
-                            chatHistoryBuilder.append(role.equals("user") ? "Human: " : "Assistant: ").append(content);
+                            chatHistoryBuilder.append(role.equals(AGUI_ROLE_USER) ? "Human: " : "Assistant: ").append(content);
                         }
                     }
                 }
@@ -588,15 +604,15 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     JsonElement messageElement = messageArray.get(i);
                     if (messageElement.isJsonObject()) {
                         JsonObject message = messageElement.getAsJsonObject();
-                        String role = getStringField(message, "role");
-                        String content = getStringField(message, "content");
+                        String role = getStringField(message, AGUI_FIELD_ROLE);
+                        String content = getStringField(message, AGUI_FIELD_CONTENT);
 
                         // Skip tool messages - they're never part of chat history
-                        if ("tool".equals(role)) {
+                        if (AGUI_ROLE_TOOL.equals(role)) {
                             continue;
                         }
 
-                        if ("user".equals(role) && content != null && !content.isEmpty()) {
+                        if (AGUI_ROLE_USER.equals(role) && content != null && !content.isEmpty()) {
                             // When we have recent tool results, skip the user message that triggered the tool call
                             // This is the user message right before the assistant message with tool calls
                             if (toolResultsAreRecent && !toolCallMessageIndices.isEmpty()) {
@@ -613,10 +629,10 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                             StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
                             String chatMessage = substitutor.replace(chatHistoryQuestionTemplate);
                             chatHistory.add(chatMessage);
-                        } else if ("assistant".equals(role)) {
+                        } else if (AGUI_ROLE_ASSISTANT.equals(role)) {
                             // Skip ALL assistant messages with tool_calls - they're never part of chat history
                             // (matching backend behavior where only final answers are in chat history)
-                            if (message.has("toolCalls")) {
+                            if (message.has(AGUI_FIELD_TOOL_CALLS)) {
                                 // Skip - not part of chat history
                             } else if (content != null && !content.isEmpty()) {
                                 // Regular assistant message with content (final answer)
@@ -640,7 +656,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
     }
 
     private void processAGUIContext(MLAgent mlAgent, Map<String, String> params) {
-        String aguiContextJson = params.get("agui_context");
+        String aguiContextJson = params.get(AGUI_PARAM_CONTEXT);
 
         if (aguiContextJson == null || aguiContextJson.isEmpty()) {
             return;
