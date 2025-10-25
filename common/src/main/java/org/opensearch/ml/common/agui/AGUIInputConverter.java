@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 
@@ -47,27 +48,27 @@ public class AGUIInputConverter {
     public static boolean isAGUIInput(String inputJson) {
         try {
             JsonObject jsonObj = JsonParser.parseString(inputJson).getAsJsonObject();
-            
+
             // Check required fields exist
-            if (!jsonObj.has(AGUI_FIELD_THREAD_ID) 
-                || !jsonObj.has(AGUI_FIELD_RUN_ID) 
-                || !jsonObj.has(AGUI_FIELD_MESSAGES) 
+            if (!jsonObj.has(AGUI_FIELD_THREAD_ID)
+                || !jsonObj.has(AGUI_FIELD_RUN_ID)
+                || !jsonObj.has(AGUI_FIELD_MESSAGES)
                 || !jsonObj.has(AGUI_FIELD_TOOLS)) {
                 return false;
             }
-            
+
             // Validate messages is an array
             JsonElement messages = jsonObj.get(AGUI_FIELD_MESSAGES);
             if (!messages.isJsonArray()) {
                 return false;
             }
-            
+
             // Validate tools is an array
             JsonElement tools = jsonObj.get(AGUI_FIELD_TOOLS);
             if (!tools.isJsonArray()) {
                 return false;
             }
-            
+
             return true;
         } catch (Exception e) {
             log.debug("Failed to parse input as JSON for AG-UI detection", e);
@@ -112,13 +113,7 @@ public class AGUIInputConverter {
                 parameters.put(AGUI_PARAM_FORWARDED_PROPS, gson.toJson(forwardedProps));
             }
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-            AgentMLInput agentMLInput = new AgentMLInput(
-                agentId,
-                tenantId,
-                org.opensearch.ml.common.FunctionName.AGENT,
-                inputDataSet,
-                isAsync
-            );
+            AgentMLInput agentMLInput = new AgentMLInput(agentId, tenantId, FunctionName.AGENT, inputDataSet, isAsync);
 
             log.debug("Converted AG-UI input to ML-Commons format for agent: {}", agentId);
             return agentMLInput;

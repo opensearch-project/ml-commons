@@ -98,7 +98,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             && (parameters.containsKey(AGUI_PARAM_THREAD_ID) || parameters.containsKey(AGUI_PARAM_RUN_ID));
 
         if (isAGUIAgent) {
-            log.info("BedrockStreamingHandler: Detected AG-UI agent - raw tool use events will be filtered");
+            log.debug("BedrockStreamingHandler: Detected AG-UI agent - raw tool use events will be filtered");
         }
     }
 
