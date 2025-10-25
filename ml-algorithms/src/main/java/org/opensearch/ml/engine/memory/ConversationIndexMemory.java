@@ -69,6 +69,29 @@ public class ConversationIndexMemory implements Memory<Message, CreateInteractio
         return this.conversationId;
     }
 
+    // @Override
+    // public void save(String id, Message message) {
+    // this.save(id, message, ActionListener.wrap(r -> { log.info("saved message into {} memory, session id: {}", TYPE, id); }, e -> {
+    // log.error("Failed to save message to memory", e);
+    // }));
+    // }
+
+    // @Override
+    // public void save(String id, Message message, ActionListener listener) {
+    // mlIndicesHandler.initMemoryMessageIndex(ActionListener.wrap(created -> {
+    // if (created) {
+    // IndexRequest indexRequest = new IndexRequest(memoryMessageIndexName).setRefreshPolicy(IMMEDIATE);
+    // ConversationIndexMessage conversationIndexMessage = (ConversationIndexMessage) message;
+    // XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+    // conversationIndexMessage.toXContent(builder, ToXContent.EMPTY_PARAMS);
+    // indexRequest.source(builder);
+    // client.index(indexRequest, listener);
+    // } else {
+    // listener.onFailure(new RuntimeException("Failed to create memory message index"));
+    // }
+    // }, e -> { listener.onFailure(new RuntimeException("Failed to create memory message index", e)); }));
+    // }
+
     @Override
     public void save(Message message, String parentId, Integer traceNum, String action) {
         this.save(message, parentId, traceNum, action, ActionListener.<CreateInteractionResponse>wrap(r -> {
@@ -95,6 +118,28 @@ public class ConversationIndexMemory implements Memory<Message, CreateInteractio
         memoryManager
             .createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), action, null, parentId, traceNum, listener);
     }
+
+    // @Override
+    // public void getMessages(String id, ActionListener listener) {
+    // SearchRequest searchRequest = new SearchRequest();
+    // searchRequest.indices(memoryMessageIndexName);
+    // SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+    // sourceBuilder.size(10000);
+    // QueryBuilder sessionIdQueryBuilder = new TermQueryBuilder(CONVERSATION_ID, id);
+    //
+    // BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+    // boolQueryBuilder.must(sessionIdQueryBuilder);
+    //
+    // if (retrieveFinalAnswer) {
+    // QueryBuilder finalAnswerQueryBuilder = new TermQueryBuilder(FINAL_ANSWER, true);
+    // boolQueryBuilder.must(finalAnswerQueryBuilder);
+    // }
+    //
+    // sourceBuilder.query(boolQueryBuilder);
+    // sourceBuilder.sort(CREATED_TIME, SortOrder.ASC);
+    // searchRequest.source(sourceBuilder);
+    // client.search(searchRequest, listener);
+    // }
 
     @Override
     public void getMessages(int size, ActionListener listener) {

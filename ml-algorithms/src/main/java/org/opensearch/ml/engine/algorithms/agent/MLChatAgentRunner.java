@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -59,6 +58,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -124,6 +124,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    private static final String DEFAULT_SYSTEM_PROMPT = "You are an helpful assistant."; // empty system prompt
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
@@ -195,7 +196,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             functionCalling.configure(params);
         }
 
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
         String title = params.get(MLAgentExecutor.QUESTION);
@@ -204,9 +205,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
 
-        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params.get(MEMORY_CONTAINER_ID_FIELD));
+        // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
+        if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+            // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+            memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+            log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+        } else {
+            // Use the originally specified memory factory
+            memoryFactory = memoryFactoryMap.get(memoryType);
+        }
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
@@ -324,6 +334,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
         boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
 
+        // Create root interaction.
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
 
@@ -749,7 +760,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
      * some special parameters like SCRATCHPAD_NOTES_KEY,
      * some new llmToolTmpParameters produced by the tool run can opt to be copied
      * back to tmpParameters to share across tools in the same interaction
-     * 
+     *
      * @param tmpParameters
      * @param llmToolTmpParameters
      */
@@ -909,6 +920,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.putIfAbsent(PROMPT_SUFFIX, PromptTemplate.PROMPT_TEMPLATE_SUFFIX);
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);
         tmpParameters.putIfAbsent(TOOL_RESPONSE, PromptTemplate.PROMPT_TEMPLATE_TOOL_RESPONSE);
+
+        // Set default system prompt only if none exists
+        if (!tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
+            String systemPrompt = DEFAULT_SYSTEM_PROMPT;
+            // If datetime injection was enabled, include it in the default system prompt
+            if (injectDate) {
+                String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
+                String currentDateTime = getCurrentDateTime(dateFormat);
+                systemPrompt = systemPrompt + "\n\n" + currentDateTime;
+            }
+            tmpParameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
+        }
+
         return tmpParameters;
     }
 

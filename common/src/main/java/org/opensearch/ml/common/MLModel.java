@@ -882,14 +882,14 @@ public class MLModel implements ToXContentObject {
      * - The service provider (e.g., bedrock, sagemaker, azure, etc.)
      * - The specific model being used
      * - The model type (e.g., llm, embedding, image_generation, speech_audio)
-     * 
+     *
      * The method attempts to extract this information in the following order:
      * 1. From the predict action URL (for service provider and some model identifiers)
      * 2. From the request body JSON (for model name)
      * 3. From the connector parameters (as a fallback for model name)
-     * 
+     *
      * If any information cannot be determined, it will be marked as "unknown" in the tags.
-     * 
+     *
      * @param connector The connector associated with the remote model, containing the predict action configuration
      * @return Tags object containing deployment type, service provider, algorithm, model name, and model type
      * @throws RuntimeException if there are issues parsing the connector configuration
@@ -958,10 +958,10 @@ public class MLModel implements ToXContentObject {
      * - textract
      * - mistral
      * - x.ai
-     * 
+     *
      * If no matching provider keyword is found in the URL,
      * returns "unknown" as the service provider.
-     * 
+     *
      * @param url The URL to analyze for service provider identification
      * @return The identified service provider name, or "unknown" if not found
      */
@@ -981,10 +981,10 @@ public class MLModel implements ToXContentObject {
      * 1. For Bedrock models: Extracts model name from the URL path after '/model/'
      * 2. From request body JSON: Checks for 'model' or 'ModelName' fields
      * 3. From connector parameters: Uses the 'model' parameter if available
-     * 
+     *
      * If the model name cannot be determined through any of these methods,
      * returns "unknown".
-     * 
+     *
      * @param provider The service provider (e.g., bedrock, sagemaker, azure)
      * @param url The predict action URL from the connector
      * @param requestBody The JSON request body from the predict action
@@ -1041,10 +1041,10 @@ public class MLModel implements ToXContentObject {
      * - Embedding: checks for keywords like "embedding", "embed", "ada", etc.
      * - Image Generation: checks for keywords like "diffusion", "dall-e", "imagen", etc.
      * - Speech/Audio: checks for keywords like "whisper", "audio", "speech", etc.
-     * 
+     *
      * If no matching keywords are found or if the model name is null/unknown,
      * returns "unknown" as the model type.
-     * 
+     *
      * @param model The name of the model to identify
      * @return The identified model type (llm, embedding, image_generation, speech_audio, or unknown)
      */
@@ -1079,14 +1079,14 @@ public class MLModel implements ToXContentObject {
      * Generates tags for a pre-trained ML model based on its name and configuration.
      * This method is specifically designed for models that follow the naming convention
      * "provider/algorithm/model" (e.g., "amazon/bert/model-name" or "huggingface/bert/model-name").
-     * 
+     *
      * The method extracts the following information:
      * - Service provider from the first part of the model name
      * - Algorithm from the model's algorithm field
      * - Model name from the third part of the model name
      * - Model type from the model configuration (if available)
      * - Model format from the model's format field (if available)
-     * 
+     *
      * @return Tags object containing deployment type (pre-trained), service provider,
      *         algorithm, model name, model type, and model format (if available)
      */
@@ -1117,11 +1117,11 @@ public class MLModel implements ToXContentObject {
      * Generates tags for a custom ML model based on its configuration.
      * This method is used for models that do not follow the pre-trained naming convention
      * (e.g., "model-name" or "model-name/model-name").
-     * 
+     *
      * The method extracts the following information:
      * - Model type from the model configuration (if available)
      * - Model format from the model's format field (if available)
-     * 
+     *
      * @return Tags object containing deployment type (custom), algorithm, and model type (if available)
      */
     @VisibleForTesting

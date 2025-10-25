@@ -108,7 +108,7 @@ public class MemoryContainerHelper {
 
     /**
      * Check if remote store is configured with either connectorId or internal connector
-     * 
+     *
      * @param configuration the memory configuration
      * @return true if remote store is configured
      */
@@ -119,7 +119,7 @@ public class MemoryContainerHelper {
 
     /**
      * Get memory container by ID
-     * 
+     *
      * @param memoryContainerId the container ID
      * @param listener action listener for the result
      */
@@ -129,7 +129,7 @@ public class MemoryContainerHelper {
 
     /**
      * Get memory container by ID with tenant support
-     * 
+     *
      * @param memoryContainerId the container ID
      * @param tenantId the tenant ID (optional)
      * @param listener action listener for the result
@@ -183,7 +183,7 @@ public class MemoryContainerHelper {
 
     /**
      * Check if user has access to memory container
-     * 
+     *
      * @param user the user to check
      * @param mlMemoryContainer the container to check access for
      * @return true if user has access, false otherwise

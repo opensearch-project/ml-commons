@@ -31,18 +31,21 @@ public class MLUpdateMemoryRequest extends ActionRequest {
     private String memoryContainerId;
     private MemoryType memoryType;
     private String memoryId;
+    private String tenantId;
 
     @Builder
     public MLUpdateMemoryRequest(
         String memoryContainerId,
         MemoryType memoryType,
         String memoryId,
-        MLUpdateMemoryInput mlUpdateMemoryInput
+        MLUpdateMemoryInput mlUpdateMemoryInput,
+        String tenantId
     ) {
         this.memoryContainerId = memoryContainerId;
         this.memoryType = memoryType;
         this.memoryId = memoryId;
         this.mlUpdateMemoryInput = mlUpdateMemoryInput;
+        this.tenantId = tenantId;
     }
 
     public MLUpdateMemoryRequest(StreamInput in) throws IOException {
@@ -51,6 +54,7 @@ public class MLUpdateMemoryRequest extends ActionRequest {
         this.memoryType = in.readEnum(MemoryType.class);
         this.memoryId = in.readString();
         this.mlUpdateMemoryInput = new MLUpdateMemoryInput(in);
+        this.tenantId = in.readOptionalString();
     }
 
     @Override
@@ -60,6 +64,7 @@ public class MLUpdateMemoryRequest extends ActionRequest {
         out.writeEnum(memoryType);
         out.writeString(memoryId);
         mlUpdateMemoryInput.writeTo(out);
+        out.writeOptionalString(tenantId);
     }
 
     @Override

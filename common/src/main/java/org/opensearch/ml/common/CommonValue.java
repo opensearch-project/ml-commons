@@ -28,6 +28,8 @@ public class CommonValue {
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
 
+    public static final String AGENTIC_MEMORY_THREAD_POOL = "opensearch_ml_agentic_memory";
+
     public static final String BOX_TYPE_KEY = "box_type";
     // hot node
     public static String HOT_BOX_TYPE = "hot";
@@ -99,7 +101,6 @@ public class CommonValue {
     public static final Version VERSION_3_1_0 = Version.fromString("3.1.0");
     public static final Version VERSION_3_2_0 = Version.fromString("3.2.0");
     public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
-    public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";

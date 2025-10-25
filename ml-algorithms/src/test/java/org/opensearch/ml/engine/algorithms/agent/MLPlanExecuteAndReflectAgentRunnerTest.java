@@ -135,7 +135,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
         // memory
-        mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10, null);
+        mlMemorySpec = MLMemorySpec.builder().type(ConversationIndexMemory.TYPE).sessionId("uuid").windowSize(10).build();
         when(memoryMap.get(ConversationIndexMemory.TYPE)).thenReturn(memoryFactory);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         when(conversationIndexMemory.getConversationId()).thenReturn("test_memory_id");
@@ -148,7 +148,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(1);
             listener.onResponse(conversationIndexMemory);
             return null;
-        }).when(memoryFactory).create(any(), memoryFactoryCapture.capture());
+        }).when(memoryFactory).create(any(Map.class), memoryFactoryCapture.capture());
 
         // Setup conversation index memory
         doAnswer(invocation -> {

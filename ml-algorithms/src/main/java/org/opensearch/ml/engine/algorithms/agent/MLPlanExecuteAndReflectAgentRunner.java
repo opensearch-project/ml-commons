@@ -52,6 +52,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -161,6 +162,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
 
+    private static final String BODY_FIELD = "body";
+    private static final String BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.prompt}\"}]}";
+
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
         Settings settings,
@@ -193,6 +197,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
+        // workaround for agent revamp until PER supports messages
+        if (params.containsKey(BODY_FIELD)) {
+            params.put(BODY_FIELD, BODY_TEMPLATE);
+        }
 
         String userPrompt = params.get(QUESTION_FIELD);
         params.put(USER_PROMPT_FIELD, userPrompt);
@@ -292,22 +300,16 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         usePlannerPromptTemplate(allParams);
 
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
         // todo: use chat history instead of completed steps
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
-        Map<String, Object> memoryParams = createMemoryParams(
-            apiParams.get(USER_PROMPT_FIELD),
-            memoryId,
-            appType,
-            mlAgent,
-            apiParams.get(MEMORY_CONTAINER_ID_FIELD)
-        );
+        Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent, apiParams);
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
-                List<String> completedSteps = new ArrayList<>();
+                final List<String> completedSteps = new ArrayList<>();
                 for (Interaction interaction : interactions) {
                     String question = interaction.getInput();
                     String response = interaction.getResponse();
@@ -352,7 +354,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             AtomicInteger traceNumber = new AtomicInteger(0);
 
-            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+            executePlanningLoop(
+                mlAgent.getLlm(),
+                allParams,
+                completedSteps,
+                memory,
+                conversationId,
+                0,
+                traceNumber,
+                mlAgent.getTenantId(),
+                finalListener
+            );
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -373,6 +385,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String conversationId,
         int stepsExecuted,
         AtomicInteger traceNumber,
+        String tenantId,
         ActionListener<Object> finalListener
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
@@ -443,7 +456,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(allParams).build())
                 .build(),
             null,
-            allParams.get(TENANT_ID_FIELD)
+            tenantId
         );
 
         StepListener<MLTaskResponse> planListener = new StepListener<>();
@@ -489,7 +502,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .agentId(reActAgentId)
                     .functionName(FunctionName.AGENT)
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
-                    .tenantId(allParams.get(TENANT_ID_FIELD))
+                    .tenantId(tenantId)
                     .build();
 
                 // Pass hookRegistry to internal agent execution
@@ -599,6 +612,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         conversationId,
                         stepsExecuted + 1,
                         traceNumber,
+                        tenantId,
                         finalListener
                     );
                 }, e -> {
