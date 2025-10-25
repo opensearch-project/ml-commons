@@ -16,6 +16,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
@@ -32,9 +33,6 @@ import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.EXECUTOR_
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_RESPONSIBILITY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
-import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,6 +49,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -285,42 +284,42 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         usePlannerPromptTemplate(allParams);
 
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
         // todo: use chat history instead of completed steps
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory
-            .create(
-                Map.of(MEMORY_ID, memoryId, MEMORY_NAME, apiParams.get(USER_PROMPT_FIELD), APP_TYPE, appType),
-                ActionListener.<ConversationIndexMemory>wrap(memory -> {
-                    memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
-                        List<String> completedSteps = new ArrayList<>();
-                        for (Interaction interaction : interactions) {
-                            String question = interaction.getInput();
-                            String response = interaction.getResponse();
+        // ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory)
+        // memoryFactoryMap.get(memoryType);
 
-                            if (Strings.isNullOrEmpty(response)) {
-                                continue;
-                            }
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+        Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent);
+        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
+            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
+                List<String> completedSteps = new ArrayList<>();
+                for (Interaction interaction : interactions) {
+                    String question = interaction.getInput();
+                    String response = interaction.getResponse();
 
-                            completedSteps.add(question);
-                            completedSteps.add(response);
-                        }
+                    if (Strings.isNullOrEmpty(response)) {
+                        continue;
+                    }
 
-                        if (!completedSteps.isEmpty()) {
-                            addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
-                            usePlannerWithHistoryPromptTemplate(allParams);
-                        }
+                    completedSteps.add(question);
+                    completedSteps.add(response);
+                }
 
-                        setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getConversationId(), listener);
-                    }, e -> {
-                        log.error("Failed to get chat history", e);
-                        listener.onFailure(e);
-                    }));
-                }, listener::onFailure)
-            );
+                if (!completedSteps.isEmpty()) {
+                    addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
+                    usePlannerWithHistoryPromptTemplate(allParams);
+                }
+
+                setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
+            }, e -> {
+                log.error("Failed to get chat history", e);
+                listener.onFailure(e);
+            }));
+        }, listener::onFailure));
     }
 
     private void setToolsAndRunAgent(
@@ -412,7 +411,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
                 saveAndReturnFinalResult(
-                    (ConversationIndexMemory) memory,
+                    memory,
                     parentInteractionId,
                     allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                     allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
@@ -512,7 +511,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     completedSteps.add(String.format("\nStep %d Result: %s\n", stepsExecuted + 1, results.get(STEP_RESULT_FIELD)));
 
                     saveTraceData(
-                        (ConversationIndexMemory) memory,
+                        memory,
                         memory.getType(),
                         stepToExecute,
                         results.get(STEP_RESULT_FIELD),
@@ -636,7 +635,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void saveAndReturnFinalResult(
-        ConversationIndexMemory memory,
+        Memory memory,
         String parentInteractionId,
         String reactAgentMemoryId,
         String reactParentInteractionId,
@@ -651,9 +650,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             updateContent.put(INTERACTIONS_INPUT_FIELD, input);
         }
 
-        memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+        memory.update(parentInteractionId, updateContent, ActionListener.wrap(res -> {
             List<ModelTensors> finalModelTensors = createModelTensors(
-                memory.getConversationId(),
+                memory.getId(),
                 parentInteractionId,
                 reactAgentMemoryId,
                 reactParentInteractionId
