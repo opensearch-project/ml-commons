@@ -5,6 +5,26 @@
 
 package org.opensearch.ml.common.agui;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_CONTENT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_CONTEXT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_FORWARDED_PROPS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_MESSAGES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ROLE;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_STATE;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_THREAD_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOLS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_FORWARDED_PROPS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_STATE;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_USER;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +47,28 @@ public class AGUIInputConverter {
     public static boolean isAGUIInput(String inputJson) {
         try {
             JsonObject jsonObj = JsonParser.parseString(inputJson).getAsJsonObject();
-            return jsonObj.has("threadId") && jsonObj.has("runId") && jsonObj.has("messages") && jsonObj.has("tools");
+            
+            // Check required fields exist
+            if (!jsonObj.has(AGUI_FIELD_THREAD_ID) 
+                || !jsonObj.has(AGUI_FIELD_RUN_ID) 
+                || !jsonObj.has(AGUI_FIELD_MESSAGES) 
+                || !jsonObj.has(AGUI_FIELD_TOOLS)) {
+                return false;
+            }
+            
+            // Validate messages is an array
+            JsonElement messages = jsonObj.get(AGUI_FIELD_MESSAGES);
+            if (!messages.isJsonArray()) {
+                return false;
+            }
+            
+            // Validate tools is an array
+            JsonElement tools = jsonObj.get(AGUI_FIELD_TOOLS);
+            if (!tools.isJsonArray()) {
+                return false;
+            }
+            
+            return true;
         } catch (Exception e) {
             log.debug("Failed to parse input as JSON for AG-UI detection", e);
             return false;
@@ -38,37 +79,37 @@ public class AGUIInputConverter {
         try {
             JsonObject aguiInput = JsonParser.parseString(aguiInputJson).getAsJsonObject();
 
-            String threadId = getStringField(aguiInput, "threadId");
-            String runId = getStringField(aguiInput, "runId");
-            JsonElement state = aguiInput.get("state");
-            JsonElement messages = aguiInput.get("messages");
-            JsonElement tools = aguiInput.get("tools");
-            JsonElement context = aguiInput.get("context");
-            JsonElement forwardedProps = aguiInput.get("forwardedProps");
+            String threadId = getStringField(aguiInput, AGUI_FIELD_THREAD_ID);
+            String runId = getStringField(aguiInput, AGUI_FIELD_RUN_ID);
+            JsonElement state = aguiInput.get(AGUI_FIELD_STATE);
+            JsonElement messages = aguiInput.get(AGUI_FIELD_MESSAGES);
+            JsonElement tools = aguiInput.get(AGUI_FIELD_TOOLS);
+            JsonElement context = aguiInput.get(AGUI_FIELD_CONTEXT);
+            JsonElement forwardedProps = aguiInput.get(AGUI_FIELD_FORWARDED_PROPS);
 
             Map<String, String> parameters = new HashMap<>();
-            parameters.put("agui_thread_id", threadId);
-            parameters.put("agui_run_id", runId);
+            parameters.put(AGUI_PARAM_THREAD_ID, threadId);
+            parameters.put(AGUI_PARAM_RUN_ID, runId);
 
             if (state != null) {
-                parameters.put("agui_state", gson.toJson(state));
+                parameters.put(AGUI_PARAM_STATE, gson.toJson(state));
             }
 
             if (messages != null) {
-                parameters.put("agui_messages", gson.toJson(messages));
+                parameters.put(AGUI_PARAM_MESSAGES, gson.toJson(messages));
                 extractUserQuestion(messages, parameters);
             }
 
             if (tools != null) {
-                parameters.put("agui_tools", gson.toJson(tools));
+                parameters.put(AGUI_PARAM_TOOLS, gson.toJson(tools));
             }
 
             if (context != null) {
-                parameters.put("agui_context", gson.toJson(context));
+                parameters.put(AGUI_PARAM_CONTEXT, gson.toJson(context));
             }
 
             if (forwardedProps != null) {
-                parameters.put("agui_forwarded_props", gson.toJson(forwardedProps));
+                parameters.put(AGUI_PARAM_FORWARDED_PROPS, gson.toJson(forwardedProps));
             }
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
             AgentMLInput agentMLInput = new AgentMLInput(
@@ -93,40 +134,6 @@ public class AGUIInputConverter {
         return element != null && !element.isJsonNull() ? element.getAsString() : null;
     }
 
-    public static JsonObject reconstructAGUIInput(Map<String, String> parameters) {
-        JsonObject aguiInput = new JsonObject();
-
-        try {
-            String threadId = parameters.get("agui_thread_id");
-            String runId = parameters.get("agui_run_id");
-            String stateJson = parameters.get("agui_state");
-            String messagesJson = parameters.get("agui_messages");
-            String toolsJson = parameters.get("agui_tools");
-            String contextJson = parameters.get("agui_context");
-            String forwardedPropsJson = parameters.get("agui_forwarded_props");
-
-            if (threadId != null)
-                aguiInput.addProperty("threadId", threadId);
-            if (runId != null)
-                aguiInput.addProperty("runId", runId);
-            if (stateJson != null)
-                aguiInput.add("state", JsonParser.parseString(stateJson));
-            if (messagesJson != null)
-                aguiInput.add("messages", JsonParser.parseString(messagesJson));
-            if (toolsJson != null)
-                aguiInput.add("tools", JsonParser.parseString(toolsJson));
-            if (contextJson != null)
-                aguiInput.add("context", JsonParser.parseString(contextJson));
-            if (forwardedPropsJson != null)
-                aguiInput.add("forwardedProps", JsonParser.parseString(forwardedPropsJson));
-
-        } catch (Exception e) {
-            log.error("Failed to reconstruct AG-UI input from parameters", e);
-        }
-
-        return aguiInput;
-    }
-
     private static void extractUserQuestion(JsonElement messages, Map<String, String> parameters) {
         if (messages == null || !messages.isJsonArray()) {
             throw new IllegalArgumentException("Invalid AG-UI messages");
@@ -140,12 +147,12 @@ public class AGUIInputConverter {
             for (JsonElement messageElement : messages.getAsJsonArray()) {
                 if (messageElement.isJsonObject()) {
                     JsonObject message = messageElement.getAsJsonObject();
-                    JsonElement roleElement = message.get("role");
-                    JsonElement contentElement = message.get("content");
-                    JsonElement toolCallIdElement = message.get("toolCallId");
+                    JsonElement roleElement = message.get(AGUI_FIELD_ROLE);
+                    JsonElement contentElement = message.get(AGUI_FIELD_CONTENT);
+                    JsonElement toolCallIdElement = message.get(AGUI_FIELD_TOOL_CALL_ID);
 
                     if (roleElement != null
-                        && "user".equals(roleElement.getAsString())
+                        && AGUI_ROLE_USER.equals(roleElement.getAsString())
                         && contentElement != null
                         && !contentElement.isJsonNull()) {
 
@@ -173,7 +180,7 @@ public class AGUIInputConverter {
 
             // Set appropriate parameters based on what was found
             if (toolCallResults != null) {
-                parameters.put("agui_tool_call_results", toolCallResults);
+                parameters.put(AGUI_PARAM_TOOL_CALL_RESULTS, toolCallResults);
                 log.debug("Detected AG-UI tool call results: {}", toolCallResults);
             } else if (lastUserMessage != null) {
                 parameters.put("question", lastUserMessage);

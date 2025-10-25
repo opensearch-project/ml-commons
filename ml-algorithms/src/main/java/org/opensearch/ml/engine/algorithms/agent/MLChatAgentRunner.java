@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -263,7 +266,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling
     ) {
         // Check if this is an AG-UI request with tool call results
-        String aguiToolCallResults = params.get("agui_tool_call_results");
+        String aguiToolCallResults = params.get(AGUI_PARAM_TOOL_CALL_RESULTS);
         if (aguiToolCallResults != null && !aguiToolCallResults.isEmpty()) {
             // Process tool call results from frontend
             processAGUIToolResults(mlAgent, params, listener, memory, sessionId, functionCalling, aguiToolCallResults);
@@ -273,7 +276,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // NEW UNIFIED APPROACH: Always combine frontend and backend tools
 
         // Parse frontend tools if present
-        String aguiTools = params.get("agui_tools");
+        String aguiTools = params.get(AGUI_PARAM_TOOLS);
         List<Map<String, Object>> frontendTools = new ArrayList<>();
         if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
             try {
@@ -1283,7 +1286,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     List<String> interactions = new ArrayList<>();
 
                     // First, add the assistant message(s) with tool_calls
-                    String assistantToolCallMessagesJson = params.get("agui_assistant_tool_call_messages");
+                    String assistantToolCallMessagesJson = params.get(AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES);
                     if (assistantToolCallMessagesJson != null && !assistantToolCallMessagesJson.isEmpty()) {
                         Type listType2 = new TypeToken<List<String>>() {
                         }.getType();
@@ -1310,7 +1313,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     // Parse frontend tools to include in the request
                     // Even though we're processing tool results, Bedrock needs the tool definitions
                     // to validate the toolUse in the assistant message
-                    String aguiTools = params.get("agui_tools");
+                    String aguiTools = params.get(AGUI_PARAM_TOOLS);
                     List<Map<String, Object>> frontendTools = new ArrayList<>();
                     if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
                         try {

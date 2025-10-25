@@ -9,6 +9,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
@@ -48,6 +51,10 @@ import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
@@ -186,7 +193,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         RemoteInferenceInputDataSet inputDataSet =
                             (RemoteInferenceInputDataSet) ((org.opensearch.ml.common.input.execute.agent.AgentMLInput) mlExecuteTaskRequest
                                 .getInput()).getInputDataset();
-                        inputDataSet.getParameters().put("backend_tool_names", new Gson().toJson(backendToolNames));
+                        inputDataSet.getParameters().put(AGUI_PARAM_BACKEND_TOOL_NAMES, new Gson().toJson(backendToolNames));
                         log
                             .info(
                                 "AG-UI: Added {} backend tool names to request for streaming filter: {}",
@@ -359,9 +366,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         // Check if this is AG-UI input format
         String requestBodyJson = content.utf8ToString();
         Input input;
-        if (org.opensearch.ml.common.agui.AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+        if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
             log.info("Detected AG-UI input format for streaming agent: {}", agentId);
-            input = org.opensearch.ml.common.agui.AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
+            input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
         } else {
             input = MLInput.parse(parser, functionName.name());
             AgentMLInput agentInput = (AgentMLInput) input;
@@ -383,7 +390,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
             // Check if this request came from AG-UI by looking for AG-UI specific parameters
-            return inputDataSet.getParameters().containsKey("agui_thread_id") || inputDataSet.getParameters().containsKey("agui_run_id");
+            return inputDataSet.getParameters().containsKey(AGUI_PARAM_THREAD_ID)
+                || inputDataSet.getParameters().containsKey(AGUI_PARAM_RUN_ID);
         }
         return false;
     }
@@ -407,7 +415,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet inputDataSet =
                 (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
 
-            String backendToolNamesJson = inputDataSet.getParameters().get("backend_tool_names");
+            String backendToolNamesJson = inputDataSet.getParameters().get(AGUI_PARAM_BACKEND_TOOL_NAMES);
             if (backendToolNamesJson != null && !backendToolNamesJson.isEmpty()) {
                 try {
                     JsonElement element = JsonParser.parseString(backendToolNamesJson);
@@ -567,23 +575,35 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         String threadId = memoryId != null ? memoryId : "thread_" + System.currentTimeMillis();
         String runId = parentInteractionId != null ? parentInteractionId : "run_" + System.currentTimeMillis();
 
-        // Get required startup events (RUN_STARTED, TEXT_MESSAGE_START if needed)
-        String[] startupEvents = AGUIStreamingEventManager.getRequiredStartEvents(threadId, runId);
-        for (String event : startupEvents) {
-            sseResponse.append("data: ").append(event).append("\n\n");
+        // Send RUN_STARTED event if not already sent
+        String runStartedEvent = AGUIStreamingEventManager.getRunStartedEvent(threadId, runId);
+        if (runStartedEvent != null) {
+            sseResponse.append("data: ").append(runStartedEvent).append("\n\n");
         }
 
-        // Add content event if there's content
+        // If there's text content, send TEXT_MESSAGE_START and content
         if (content != null && !content.isEmpty()) {
+            String textMessageStartEvent = AGUIStreamingEventManager.getTextMessageStartEvent(threadId, runId);
+            if (textMessageStartEvent != null) {
+                sseResponse.append("data: ").append(textMessageStartEvent).append("\n\n");
+            }
+
             String contentEvent = AGUIStreamingEventManager.createTextMessageContentEvent(threadId, runId, content);
             sseResponse.append("data: ").append(contentEvent).append("\n\n");
         }
 
         // Add ending events if this is the last chunk
         if (isLast) {
-            String[] endEvents = AGUIStreamingEventManager.getRequiredEndEvents(threadId, runId);
-            for (String event : endEvents) {
-                sseResponse.append("data: ").append(event).append("\n\n");
+            // End text message if it was started
+            String textMessageEndEvent = AGUIStreamingEventManager.getTextMessageEndEvent(threadId, runId);
+            if (textMessageEndEvent != null) {
+                sseResponse.append("data: ").append(textMessageEndEvent).append("\n\n");
+            }
+
+            // Always send RUN_FINISHED
+            String runFinishedEvent = AGUIStreamingEventManager.getRunFinishedEvent(threadId, runId);
+            if (runFinishedEvent != null) {
+                sseResponse.append("data: ").append(runFinishedEvent).append("\n\n");
             }
         }
 
@@ -717,10 +737,25 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     String threadId = memoryId != null ? memoryId : "thread_" + System.currentTimeMillis();
                     String runId = parentInteractionId != null ? parentInteractionId : "run_" + System.currentTimeMillis();
 
-                    // Get required startup events
-                    String[] startupEvents = AGUIStreamingEventManager.getRequiredStartEvents(threadId, runId);
-                    for (String event : startupEvents) {
-                        sseResponse.append("data: ").append(event).append("\n\n");
+                    // Send RUN_STARTED event if not already sent
+                    String runStartedEvent = AGUIStreamingEventManager.getRunStartedEvent(threadId, runId);
+                    if (runStartedEvent != null) {
+                        sseResponse.append("data: ").append(runStartedEvent).append("\n\n");
+                    }
+
+                    // End any text message that was started before we send tool call events
+                    log.debug("AG-UI: Attempting to get TEXT_MESSAGE_END for threadId={}, runId={}", threadId, runId);
+                    String textMessageEndEvent = AGUIStreamingEventManager.getTextMessageEndEvent(threadId, runId);
+                    if (textMessageEndEvent != null) {
+                        sseResponse.append("data: ").append(textMessageEndEvent).append("\n\n");
+                        log.info("AG-UI: Sent TEXT_MESSAGE_END before tool calls");
+                    } else {
+                        log
+                            .warn(
+                                "AG-UI: TEXT_MESSAGE_END was null - no text message was started for threadId={}, runId={}",
+                                threadId,
+                                runId
+                            );
                     }
 
                     // Generate tool call events for each tool call, filtering out backend tools
@@ -739,37 +774,20 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         frontendToolCallCount++;
 
                         // Generate TOOL_CALL_START event
-                        String toolCallStartEvent = String
-                            .format(
-                                "{\"type\":\"TOOL_CALL_START\",\"toolCallId\":\"%s\",\"toolCallName\":\"%s\",\"timestamp\":%d}",
-                                toolCallId,
-                                toolName,
-                                System.currentTimeMillis()
-                            );
-                        sseResponse.append("data: ").append(toolCallStartEvent).append("\n\n");
+                        sseResponse
+                            .append("data: ")
+                            .append(new ToolCallStartEvent(toolCallId, toolName, null).toJsonString())
+                            .append("\n\n");
                         log.debug("AG-UI: Generated TOOL_CALL_START event for frontend tool: {}", toolName);
 
                         // Generate TOOL_CALL_ARGS event
                         if (toolInput != null && !toolInput.isEmpty()) {
-                            String toolCallArgsEvent = String
-                                .format(
-                                    "{\"type\":\"TOOL_CALL_ARGS\",\"toolCallId\":\"%s\",\"delta\":\"%s\",\"timestamp\":%d}",
-                                    toolCallId,
-                                    escapeJsonString(toolInput),
-                                    System.currentTimeMillis()
-                                );
-                            sseResponse.append("data: ").append(toolCallArgsEvent).append("\n\n");
+                            sseResponse.append("data: ").append(new ToolCallArgsEvent(toolCallId, toolInput).toJsonString()).append("\n\n");
                             log.debug("AG-UI: Generated TOOL_CALL_ARGS event for frontend tool: {}", toolName);
                         }
 
                         // Generate TOOL_CALL_END event
-                        String toolCallEndEvent = String
-                            .format(
-                                "{\"type\":\"TOOL_CALL_END\",\"toolCallId\":\"%s\",\"timestamp\":%d}",
-                                toolCallId,
-                                System.currentTimeMillis()
-                            );
-                        sseResponse.append("data: ").append(toolCallEndEvent).append("\n\n");
+                        sseResponse.append("data: ").append(new ToolCallEndEvent(toolCallId).toJsonString()).append("\n\n");
                         log.debug("AG-UI: Generated TOOL_CALL_END event for frontend tool: {}", toolName);
                     }
 
@@ -786,14 +804,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                             toolCalls.size() - frontendToolCallCount
                         );
 
-                    // For function calls, always add ending events since the frontend takes over tool execution
-                    // The conversation should end here to allow the frontend to execute the tools
-                    String[] endEvents = AGUIStreamingEventManager.getRequiredEndEvents(threadId, runId);
-                    for (String event : endEvents) {
-                        sseResponse.append("data: ").append(event).append("\n\n");
+                    // For function calls, end the run since the frontend takes over tool execution
+                    String runFinishedEvent = AGUIStreamingEventManager.getRunFinishedEvent(threadId, runId);
+                    if (runFinishedEvent != null) {
+                        sseResponse.append("data: ").append(runFinishedEvent).append("\n\n");
                     }
 
-                    log.debug("AG-UI: Added ending events for function call - stream should close");
+                    log.debug("AG-UI: Added RUN_FINISHED event for function call - stream should close");
                     return true;
                 }
             }
@@ -874,12 +891,4 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return false;
     }
 
-    /**
-     * Escape special characters in JSON strings
-     */
-    private String escapeJsonString(String input) {
-        if (input == null)
-            return "";
-        return input.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
-    }
 }
