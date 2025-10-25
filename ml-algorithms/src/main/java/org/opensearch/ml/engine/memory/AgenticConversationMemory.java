@@ -56,7 +56,7 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public class AgenticConversationMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
 
-    public static final String TYPE = "agentic_conversation";
+    public static final String TYPE = "agentic_memory";
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
 
@@ -181,6 +181,23 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             return;
         }
 
+        // Use retry mechanism for AOSS compatibility (high refresh latency)
+        updateWithRetry(messageId, updateContent, updateListener, 0);
+    }
+
+    /**
+     * Update with retry mechanism to handle AOSS refresh latency (up to 10s)
+     * Uses exponential backoff: 500ms, 1s, 2s, 4s, 8s
+     */
+    private void updateWithRetry(
+        String messageId,
+        Map<String, Object> updateContent,
+        ActionListener<UpdateResponse> updateListener,
+        int attemptNumber
+    ) {
+        final int maxRetries = 5;
+        final long baseDelayMs = 500;
+
         // Step 1: Get the existing working memory to retrieve current structured_data
         MLGetMemoryRequest getRequest = MLGetMemoryRequest
             .builder()
@@ -247,8 +264,41 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 updateListener.onFailure(e);
             }));
         }, e -> {
-            log.error("Failed to get existing memory for update", e);
-            updateListener.onFailure(e);
+            // Check if it's a 404 (document not found) and we haven't exceeded max retries
+            boolean isNotFound = e.getMessage() != null && (e.getMessage().contains("404") || e.getMessage().contains("\"found\":false"));
+
+            if (isNotFound && attemptNumber < maxRetries) {
+                // Calculate delay with exponential backoff
+                long delayMs = baseDelayMs * (1L << attemptNumber); // 500ms, 1s, 2s, 4s, 8s
+
+                log
+                    .warn(
+                        "Document not found (attempt {}/{}), retrying after {}ms due to AOSS refresh latency. MessageId: {}",
+                        attemptNumber + 1,
+                        maxRetries,
+                        delayMs,
+                        messageId
+                    );
+
+                // Schedule retry after delay
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    updateListener.onFailure(new RuntimeException("Retry interrupted", ie));
+                    return;
+                }
+
+                // Retry
+                updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1);
+            } else {
+                if (attemptNumber >= maxRetries) {
+                    log.error("Failed to get existing memory after {} retries. MessageId: {}", maxRetries, messageId, e);
+                } else {
+                    log.error("Failed to get existing memory for update. MessageId: {}", messageId, e);
+                }
+                updateListener.onFailure(e);
+            }
         }));
     }
 
@@ -301,9 +351,9 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 String input = (String) structuredData.get("input");
                 String response = (String) structuredData.get("response");
 
-                // Extract timestamps
-                Long createdTimeMs = (Long) sourceMap.get("created_time");
-                Long updatedTimeMs = (Long) sourceMap.get("last_updated_time");
+                // Extract timestamps - handle both Long and Double from OpenSearch
+                Long createdTimeMs = convertToLong(sourceMap.get("created_time"));
+                Long updatedTimeMs = convertToLong(sourceMap.get("last_updated_time"));
 
                 // Parse create_time from structured_data if available
                 String createTimeStr = (String) structuredData.get("create_time");
@@ -563,5 +613,21 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         public void create(String memoryId, String memoryContainerId, ActionListener<AgenticConversationMemory> listener) {
             listener.onResponse(new AgenticConversationMemory(client, memoryId, memoryContainerId));
         }
+    }
+
+    /**
+     * Safely converts a Number object to Long, handling both Long and Double types from OpenSearch
+     */
+    private static Long convertToLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Long) {
+            return (Long) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return null;
     }
 }

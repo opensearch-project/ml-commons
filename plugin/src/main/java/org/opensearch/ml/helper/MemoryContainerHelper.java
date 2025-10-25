@@ -383,10 +383,7 @@ public class MemoryContainerHelper {
 
             // Convert IndexRequest source to Map
             Map<String, Object> documentSource = indexRequest.sourceAsMap();
-
-            RemoteStorageHelper.writeDocument(connectorId, indexName, documentSource, client, ActionListener.wrap(response -> {
-                listener.onResponse(response);
-            }, listener::onFailure));
+            RemoteStorageHelper.writeDocument(connectorId, indexName, documentSource, client, listener);
         } catch (Exception e) {
             log.error("Failed to index data to remote storage", e);
             listener.onFailure(e);
