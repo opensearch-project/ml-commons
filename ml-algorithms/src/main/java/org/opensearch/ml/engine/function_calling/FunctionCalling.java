@@ -35,4 +35,18 @@ public interface FunctionCalling {
      * @return a LLMMessage containing tool results.
      */
     List<LLMMessage> supply(List<Map<String, Object>> toolResults);
+
+    /**
+     * Format AG-UI tool calls into an assistant message in LLM-specific format.
+     * This is used by AG-UI to convert tool calls from AG-UI format (OpenAI-compatible)
+     * to the format expected by the specific LLM (OpenAI, Bedrock, etc.).
+     *
+     * @param toolCallsJson JSON string containing array of tool calls from AG-UI.
+     *                      Each tool call contains:
+     *                      - "id": tool call identifier
+     *                      - "type": typically "function"
+     *                      - "function": object with "name" and "arguments"
+     * @return JSON string representing the assistant message with tool calls in LLM-specific format
+     */
+    String formatAGUIToolCalls(String toolCallsJson);
 }
