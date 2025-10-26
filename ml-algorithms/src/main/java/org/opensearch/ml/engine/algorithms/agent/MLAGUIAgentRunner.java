@@ -5,15 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ARGUMENTS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_CONTENT;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_FUNCTION;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_NAME;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ROLE;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TYPE;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_CONTEXT;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGES;
@@ -160,16 +156,8 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             ModelTensorOutput tensorOutput = (ModelTensorOutput) result;
             // Extract tool calls and text responses from the tensor output
             processTensorOutput(tensorOutput, eventCollector);
-        } else if (result instanceof String) {
-            String resultString = (String) result;
-            // Check if this is a frontend tool call response
-            if (resultString.startsWith("FRONTEND_TOOL_CALL: ")) {
-                log.debug("AG-UI: Detected frontend tool call response, processing...");
-                processFrontendToolCall(resultString, eventCollector);
-            } else {
-                log.debug("AG-UI: String result is not a frontend tool call");
-            }
         }
+
         List<Object> messages = new ArrayList<>();
         String responseText = extractResponseText(result);
         messages.add(Map.of(AGUI_FIELD_ID, messageId, AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT, AGUI_FIELD_CONTENT, responseText));
@@ -226,10 +214,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             Map<String, ?> dataMap = tensor.getDataAsMap();
             if (dataMap != null) {
                 processToolCallsFromDataMap(dataMap, eventCollector);
-            } else if (tensor.getResult() != null) {
-                // Handle text result that might contain tool call information
-                String result = tensor.getResult();
-                processTextResponseForToolCalls(result, eventCollector);
             }
         }
     }
@@ -280,80 +264,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                         );
                 }
             }
-        }
-    }
-
-    private void processFrontendToolCall(String frontendToolCallResponse, AGUIEventCollector eventCollector) {
-        log.debug("AG-UI: Processing frontend tool call response: {}", frontendToolCallResponse);
-        try {
-            // Extract the JSON part after "FRONTEND_TOOL_CALL: "
-            String jsonPart = frontendToolCallResponse.substring("FRONTEND_TOOL_CALL: ".length());
-            log.debug("AG-UI: Extracted JSON part: {}", jsonPart);
-
-            JsonElement element = gson.fromJson(jsonPart, JsonElement.class);
-
-            if (element.isJsonObject()) {
-                JsonObject toolCallObj = element.getAsJsonObject();
-                String toolName = toolCallObj.get("tool").getAsString();
-                String toolInput = toolCallObj.get("input").getAsString();
-
-                log.debug("AG-UI: Processing frontend tool call - tool: {}, input: {}", toolName, toolInput);
-
-                // Generate AG-UI events for the frontend tool call
-                String toolCallId = eventCollector.startToolCall(toolName, null);
-                eventCollector.addToolCallArgs(toolCallId, toolInput);
-                eventCollector.endToolCall(toolCallId);
-            } else {
-                log.warn("AG-UI: JSON element is not an object: {}", element);
-            }
-        } catch (Exception e) {
-            log.error("Failed to process frontend tool call response: {}", frontendToolCallResponse, e);
-        }
-    }
-
-    private void processTextResponseForToolCalls(String result, AGUIEventCollector eventCollector) {
-        // Try to parse JSON response that might contain tool calls
-        try {
-            JsonElement element = gson.fromJson(result, JsonElement.class);
-            if (element.isJsonObject()) {
-                JsonObject obj = element.getAsJsonObject();
-                if (obj.has("tool_calls")) {
-                    JsonElement toolCallsElement = obj.get("tool_calls");
-                    if (toolCallsElement.isJsonArray()) {
-                        for (JsonElement toolCallElement : toolCallsElement.getAsJsonArray()) {
-                            if (toolCallElement.isJsonObject()) {
-                                JsonObject toolCall = toolCallElement.getAsJsonObject();
-                                String toolCallId = getStringField(toolCall, "id");
-                                JsonElement functionElement = toolCall.get("function");
-
-                                if (functionElement != null && functionElement.isJsonObject()) {
-                                    JsonObject function = functionElement.getAsJsonObject();
-                                    String toolName = getStringField(function, "name");
-                                    String arguments = getStringField(function, "arguments");
-
-                                    if (toolCallId != null && toolName != null) {
-                                        eventCollector.startToolCall(toolName, null);
-
-                                        if (arguments != null && !arguments.isEmpty()) {
-                                            eventCollector.addToolCallArgs(toolCallId, arguments);
-                                        }
-
-                                        eventCollector.endToolCall(toolCallId);
-                                        log
-                                            .debug(
-                                                "AG-UI: Generated tool call events from text response for tool={}, id={}",
-                                                toolName,
-                                                toolCallId
-                                            );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // Not a tool call response, just regular text - no special processing needed
         }
     }
 
@@ -415,78 +325,27 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     if (AGUI_ROLE_ASSISTANT.equals(role) && message.has(AGUI_FIELD_TOOL_CALLS)) {
                         toolCallMessageIndices.add(i);
 
-                        // Convert to OpenAI format for interactions
+                        // Extract tool calls from AG-UI message (AG-UI uses OpenAI-compatible format)
                         JsonElement toolCallsElement = message.get(AGUI_FIELD_TOOL_CALLS);
                         if (toolCallsElement != null && toolCallsElement.isJsonArray()) {
-                            List<Map<String, Object>> toolCalls = new ArrayList<>();
-                            for (JsonElement tcElement : toolCallsElement.getAsJsonArray()) {
-                                if (tcElement.isJsonObject()) {
-                                    JsonObject tc = tcElement.getAsJsonObject();
-                                    Map<String, Object> toolCall = new HashMap<>();
+                            // Pass the JSON array directly to FunctionCalling for format conversion
+                            String toolCallsJson = gson.toJson(toolCallsElement);
 
-                                    // OpenAI format: id, type, and function at the same level
-                                    String toolCallId = getStringField(tc, AGUI_FIELD_ID);
-                                    String toolCallType = getStringField(tc, AGUI_FIELD_TYPE);
-
-                                    toolCall.put(AGUI_FIELD_ID, toolCallId);
-                                    toolCall.put(AGUI_FIELD_TYPE, toolCallType != null ? toolCallType : "function");
-
-                                    JsonElement functionElement = tc.get(AGUI_FIELD_FUNCTION);
-                                    if (functionElement != null && functionElement.isJsonObject()) {
-                                        JsonObject func = functionElement.getAsJsonObject();
-                                        Map<String, String> function = new HashMap<>();
-                                        function.put(AGUI_FIELD_NAME, getStringField(func, AGUI_FIELD_NAME));
-                                        function.put(AGUI_FIELD_ARGUMENTS, getStringField(func, AGUI_FIELD_ARGUMENTS));
-                                        toolCall.put(AGUI_FIELD_FUNCTION, function);
-                                    }
-                                    toolCalls.add(toolCall);
-                                }
-                            }
-
-                            // Create assistant message in the appropriate format based on LLM interface
+                            FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
                             String assistantMessage;
-                            boolean isBedrockConverse = llmInterface != null && llmInterface.toLowerCase().contains("bedrock");
 
-                            if (isBedrockConverse) {
-                                // Bedrock format: {"role": "assistant", "content": [{"toolUse": {...}}]}
-                                List<Map<String, Object>> contentBlocks = new ArrayList<>();
-                                for (Map<String, Object> toolCall : toolCalls) {
-                                    Map<String, Object> toolUse = new HashMap<>();
-                                    toolUse.put("toolUseId", toolCall.get("id"));
-
-                                    Map<String, Object> function = (Map<String, Object>) toolCall.get("function");
-                                    if (function != null) {
-                                        toolUse.put("name", function.get("name"));
-
-                                        // Parse arguments JSON string to object
-                                        String argumentsJson = (String) function.get("arguments");
-                                        try {
-                                            Object argumentsObj = gson.fromJson(argumentsJson, Object.class);
-                                            toolUse.put("input", argumentsObj);
-                                        } catch (Exception e) {
-                                            log.warn("AG-UI: Failed to parse tool arguments as JSON: {}", argumentsJson, e);
-                                            toolUse.put("input", Map.of());
-                                        }
-                                    }
-
-                                    contentBlocks.add(Map.of("toolUse", toolUse));
-                                }
-
-                                Map<String, Object> bedrockMsg = new HashMap<>();
-                                bedrockMsg.put(AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT);
-                                bedrockMsg.put(AGUI_FIELD_CONTENT, contentBlocks);
-                                assistantMessage = gson.toJson(bedrockMsg);
+                            if (functionCalling != null) {
+                                // Use FunctionCalling to format the message in the correct LLM format
+                                assistantMessage = functionCalling.formatAGUIToolCalls(toolCallsJson);
+                                log.debug("AG-UI: Formatted assistant message using {}", functionCalling.getClass().getSimpleName());
                             } else {
-                                // OpenAI format: {"role": "assistant", "tool_calls": [...]}
-                                Map<String, Object> assistantMsg = new HashMap<>();
-                                assistantMsg.put(AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT);
-                                assistantMsg.put("tool_calls", toolCalls);
-                                assistantMessage = gson.toJson(assistantMsg);
-                                log.debug("AG-UI: Created OpenAI-format assistant message with {} tool calls", toolCalls.size());
+                                // Fallback to OpenAI format if no FunctionCalling available
+                                assistantMessage = "{\"role\":\"assistant\",\"tool_calls\":" + toolCallsJson + "}";
+                                log.debug("AG-UI: Created OpenAI-format assistant message (fallback)");
                             }
 
                             assistantToolCallMessages.add(assistantMessage);
-                            log.debug("AG-UI: Extracted assistant message with {} tool calls at index {}", toolCalls.size(), i);
+                            log.debug("AG-UI: Extracted assistant message at index {}", i);
                             log.debug("AG-UI: Assistant message JSON: {}", assistantMessage);
                         }
                     }
