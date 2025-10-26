@@ -1014,4 +1014,65 @@ public class AgentUtils {
 
         return tool;
     }
+
+    public static List<Map<String, Object>> parseFrontendTools(String aguiTools) {
+        List<Map<String, Object>> frontendTools = new ArrayList<>();
+        if (aguiTools != null && !aguiTools.isEmpty() && !aguiTools.trim().equals("[]")) {
+            try {
+                Type listType = new TypeToken<List<Map<String, Object>>>() {
+                }.getType();
+                List<Map<String, Object>> parsed = gson.fromJson(aguiTools, listType);
+                if (parsed != null) {
+                    frontendTools.addAll(parsed);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse frontend tools: {}", e.getMessage());
+            }
+        }
+        return frontendTools;
+    }
+
+    public static ModelTensorOutput createFrontendToolCallResponse(String toolCallId, String action, String actionInput) {
+        Map<String, Object> toolCallData = Map
+            .of(
+                "tool_calls",
+                List.of(Map.of("id", toolCallId, "type", "function", "function", Map.of("name", action, "arguments", actionInput)))
+            );
+
+        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(toolCallData).build();
+
+        org.opensearch.ml.common.output.model.ModelTensors modelTensors = org.opensearch.ml.common.output.model.ModelTensors
+            .builder()
+            .mlModelTensors(List.of(responseTensor))
+            .build();
+
+        return ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+    }
+
+    public static Map<String, Tool> wrapFrontendToolsAsToolObjects(List<Map<String, Object>> frontendTools) {
+        Map<String, Tool> wrappedTools = new HashMap<>();
+
+        for (Map<String, Object> frontendTool : frontendTools) {
+            String toolName = (String) frontendTool.get("name");
+            String toolDescription = (String) frontendTool.get("description");
+
+            // Create frontend tool object with source marker
+            Map<String, Object> toolAttributes = new HashMap<>();
+            toolAttributes.put("source", "frontend");
+            toolAttributes.put("tool_definition", frontendTool);
+
+            Object parameters = frontendTool.get("parameters");
+            if (parameters != null) {
+                toolAttributes.put("input_schema", gson.toJson(parameters));
+            } else {
+                Map<String, Object> emptySchema = Map.of("type", "object", "properties", Map.of());
+                toolAttributes.put("input_schema", gson.toJson(emptySchema));
+            }
+
+            Tool frontendToolObj = new AGUIFrontendTool(toolName, toolDescription, toolAttributes);
+            wrappedTools.put(toolName, frontendToolObj);
+        }
+
+        return wrappedTools;
+    }
 }
