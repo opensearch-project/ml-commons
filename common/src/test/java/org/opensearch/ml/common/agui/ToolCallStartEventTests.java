@@ -15,15 +15,16 @@ import java.io.IOException;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+
 public class ToolCallStartEventTests {
 
     @Test
     public void testConstructor() {
         String toolCallId = "call_123";
         String toolCallName = "search_web";
-        
+
         ToolCallStartEvent event = new ToolCallStartEvent(toolCallId, toolCallName, null);
-        
+
         assertNotNull("Event should not be null", event);
         assertEquals("Type should be TOOL_CALL_START", "TOOL_CALL_START", event.getType());
         assertEquals("Tool call ID should match", toolCallId, event.getToolCallId());
@@ -37,9 +38,9 @@ public class ToolCallStartEventTests {
         String toolCallId = "call_123";
         String toolCallName = "search_web";
         String parentMessageId = "msg_456";
-        
+
         ToolCallStartEvent event = new ToolCallStartEvent(toolCallId, toolCallName, parentMessageId);
-        
+
         assertNotNull("Event should not be null", event);
         assertEquals("Tool call ID should match", toolCallId, event.getToolCallId());
         assertEquals("Tool call name should match", toolCallName, event.getToolCallName());
@@ -49,13 +50,13 @@ public class ToolCallStartEventTests {
     @Test
     public void testSerialization() throws IOException {
         ToolCallStartEvent original = new ToolCallStartEvent("call_test", "test_tool", "msg_parent");
-        
+
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
-        
+
         StreamInput input = output.bytes().streamInput();
         ToolCallStartEvent deserialized = new ToolCallStartEvent(input);
-        
+
         assertEquals("Type should match", original.getType(), deserialized.getType());
         assertEquals("Tool call ID should match", original.getToolCallId(), deserialized.getToolCallId());
         assertEquals("Tool call name should match", original.getToolCallName(), deserialized.getToolCallName());
@@ -66,9 +67,9 @@ public class ToolCallStartEventTests {
     @Test
     public void testToXContent() throws IOException {
         ToolCallStartEvent event = new ToolCallStartEvent("call_xcontent", "xcontent_tool", "msg_parent");
-        
+
         String json = event.toJsonString();
-        
+
         assertNotNull("JSON should not be null", json);
         assertTrue("JSON should contain type", json.contains("\"type\":\"TOOL_CALL_START\""));
         assertTrue("JSON should contain toolCallId", json.contains("\"toolCallId\":\"call_xcontent\""));
@@ -80,9 +81,9 @@ public class ToolCallStartEventTests {
     @Test
     public void testToJsonString() {
         ToolCallStartEvent event = new ToolCallStartEvent("call_json", "json_tool", null);
-        
+
         String json = event.toJsonString();
-        
+
         assertNotNull("JSON string should not be null", json);
         assertTrue("JSON should be valid", json.startsWith("{") && json.endsWith("}"));
     }
@@ -92,9 +93,8 @@ public class ToolCallStartEventTests {
         long before = System.currentTimeMillis();
         ToolCallStartEvent event = new ToolCallStartEvent("call_time", "time_tool", null);
         long after = System.currentTimeMillis();
-        
+
         assertNotNull("Timestamp should be set", event.getTimestamp());
-        assertTrue("Timestamp should be in valid range", 
-            event.getTimestamp() >= before && event.getTimestamp() <= after);
+        assertTrue("Timestamp should be in valid range", event.getTimestamp() >= before && event.getTimestamp() <= after);
     }
 }
