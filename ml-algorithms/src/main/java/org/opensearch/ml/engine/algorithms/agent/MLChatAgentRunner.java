@@ -335,7 +335,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.put(PROMPT, newPrompt.get());
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
-        log.debug("ReAct: Starting loop with maxIterations={}, tools count={}", maxIterations, tools.size());
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
@@ -442,20 +441,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             );
 
                         if (isFrontendTool) {
-                            // Frontend tools: generate AG-UI events immediately and return them
-                            log
-                                .info(
-                                    "AG-UI: Detected frontend tool call - generating AG-UI events for: {} with input: {}",
-                                    action,
-                                    actionInput
-                                );
 
                             ModelTensorOutput frontendToolResponse = createFrontendToolCallResponse(toolCallId, action, actionInput);
-
-                            log.debug("AG-UI: Generated ModelTensorOutput with frontend tool call events for tool: {}", action);
-                            log.debug("AG-UI: Bypassing ReAct loop and returning frontend tool calls directly to MLAGUIAgentRunner");
-
-                            // Exit ReAct loop early and return frontend tool calls directly to main listener (MLAGUIAgentRunner)
                             listener.onResponse(frontendToolResponse);
                             return;
                         } else {
@@ -526,8 +513,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     if (!interactions.isEmpty()) {
                         String interactionsValue = ", " + String.join(", ", interactions);
                         tmpParameters.put(INTERACTIONS, interactionsValue);
-                        log.debug("ReAct: Added {} interactions to tmpParameters for next LLM call", interactions.size());
-                        log.info("ReAct: Full INTERACTIONS value: {}", interactionsValue);
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
@@ -563,15 +548,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                         return;
                     }
-                    log
-                        .debug(
-                            "ReAct: Creating prediction request for iteration {}, tmpParameters contains INTERACTIONS: {}",
-                            finalI,
-                            tmpParameters.containsKey(INTERACTIONS)
-                        );
-                    if (tmpParameters.containsKey(INTERACTIONS)) {
-                        log.info("ReAct: Full INTERACTIONS in iteration {}: {}", finalI, tmpParameters.get(INTERACTIONS));
-                    }
+
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
@@ -584,14 +561,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
         }
 
-        log
-            .debug(
-                "ReAct: Creating initial prediction request, tmpParameters contains INTERACTIONS: {}",
-                tmpParameters.containsKey(INTERACTIONS)
-            );
-        if (tmpParameters.containsKey(INTERACTIONS)) {
-            log.info("ReAct: Full INTERACTIONS value being sent to LLM: {}", tmpParameters.get(INTERACTIONS));
-        }
+
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
     }
@@ -672,17 +642,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         String interactionMessage = llmMessages.getFirst().getResponse();
                         interactions.add(interactionMessage);
-                        log
-                            .debug(
-                                "ReAct: Added tool result to interactions (function calling), tool: {}, interactions size: {}",
-                                finalAction,
-                                interactions.size()
-                            );
-                        log
-                            .debug(
-                                "ReAct: Tool result interaction message (first 200 chars): {}",
-                                interactionMessage.length() > 200 ? interactionMessage.substring(0, 200) + "..." : interactionMessage
-                            );
+
                     } else {
                         String interactionMessage = substitute(
                             tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
@@ -690,12 +650,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             INTERACTIONS_PREFIX
                         );
                         interactions.add(interactionMessage);
-                        log
-                            .debug(
-                                "ReAct: Added tool result to interactions (template), tool: {}, interactions size: {}",
-                                finalAction,
-                                interactions.size()
-                            );
                     }
                     nextStepListener.onResponse(r);
                 }, e -> {
@@ -705,7 +659,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         INTERACTIONS_PREFIX
                     );
                     interactions.add(errorInteraction);
-                    log.debug("ReAct: Added tool error to interactions, tool: {}, interactions size: {}", finalAction, interactions.size());
                     nextStepListener
                         .onResponse(
                             String
@@ -944,13 +897,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .build()
                 )
         );
-        log
-            .info(
-                "AG-UI: ReAct loop completing, returning final result. Verbose: {}, cotModelTensors size: {}, finalModelTensors size: {}",
-                verbose,
-                cotModelTensors != null ? cotModelTensors.size() : 0,
-                finalModelTensors != null ? finalModelTensors.size() : 0
-            );
 
         if (verbose) {
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
@@ -1058,7 +1004,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             );
         }, e -> {
             // Even if MCP tools fail, continue with base backend tools
-            log.warn("Failed to get MCP tools, continuing with base backend tools only", e);
 
             Map<String, Tool> backendToolsMap = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
@@ -1131,7 +1076,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String aguiToolCallResults
     ) {
         try {
-            log.debug("AG-UI: Processing tool call results for agent: {}", mlAgent.getName());
 
             // Parse tool call results from frontend
             Type listType = new TypeToken<List<Map<String, String>>>() {
@@ -1166,8 +1110,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }.getType();
                         List<String> assistantMessages = gson.fromJson(assistantToolCallMessagesJson, listType2);
                         interactions.addAll(assistantMessages);
-                    } else {
-                        log.warn("AG-UI: No assistant tool call messages found in params - this may cause OpenAI error");
                     }
 
                     // Then, add the tool result messages
@@ -1180,8 +1122,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     if (!interactions.isEmpty()) {
                         String interactionsValue = ", " + String.join(", ", interactions);
                         updatedParams.put(INTERACTIONS, interactionsValue);
-                    } else {
-                        log.warn("AG-UI: Interactions list is empty, not adding to parameters");
                     }
 
                     // Parse frontend tools to include in the request
@@ -1193,16 +1133,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     // Use unified tools approach to ensure tool definitions are included
                     processUnifiedTools(mlAgent, updatedParams, listener, memory, sessionId, functionCalling, frontendTools);
                 } else {
-                    log.error("AG-UI: No LLM messages generated from tool results");
                     listener.onFailure(new RuntimeException("No LLM messages generated from tool results"));
                 }
             } else {
-                String errorMsg = functionCalling == null ? "No function calling interface available" : "Empty tool results";
-                log.error("AG-UI: Cannot process tool results - {}", errorMsg);
                 listener.onFailure(new RuntimeException("No function calling interface or empty tool results"));
             }
         } catch (Exception e) {
-            log.error("AG-UI: Error processing tool call results", e);
             listener.onFailure(e);
         }
     }

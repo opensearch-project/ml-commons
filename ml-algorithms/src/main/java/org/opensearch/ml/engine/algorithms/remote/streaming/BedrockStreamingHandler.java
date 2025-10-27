@@ -25,6 +25,11 @@ import javax.naming.AuthenticationException;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -93,12 +98,11 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         this.connector = connector;
         this.parameters = parameters;
 
-        // Detect if this is an AG-UI agent by checking for AG-UI specific parameters
         this.isAGUIAgent = parameters != null
             && (parameters.containsKey(AGUI_PARAM_THREAD_ID) || parameters.containsKey(AGUI_PARAM_RUN_ID));
 
         if (isAGUIAgent) {
-            log.debug("BedrockStreamingHandler: Detected AG-UI agent - raw tool use events will be filtered");
+            log.debug("BedrockStreamingHandler: Detected AG-UI agent");
         }
     }
 
@@ -238,6 +242,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 if (isToolUseDetected(event)) {
                     currentState.set(StreamState.TOOL_CALL_DETECTED);
                     extractToolInfo(event, toolName, toolUseId);
+
+                    if (isAGUIAgent) {
+                        List<String> backendToolNames = getBackendToolNames();
+                        if (!backendToolNames.contains(toolName.get())) {
+                            List<BaseEvent> events = List.of(new ToolCallStartEvent(toolUseId.get(), toolName.get(), null));
+                            sendAGUIEvents(events, false, listener);
+                        }
+                    }
                 } else if (isContentDelta(event)) {
                     sendContentResponse(getTextContent(event), false, listener);
                 } else if (isStreamComplete(event)) {
@@ -249,28 +261,46 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             case TOOL_CALL_DETECTED:
                 if (isToolInputDelta(event)) {
                     currentState.set(StreamState.ACCUMULATING_TOOL_INPUT);
-                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                    String inputFragment = getToolInputFragment(event);
+                    accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
 
-                    // Skip streaming raw tool input for AG-UI agents
-                    // The proper AG-UI events will be generated in the completion response
-                    if (!isAGUIAgent) {
-                        sendContentResponse(getToolInputFragment(event), false, listener);
+                    if (isAGUIAgent) {
+                        List<String> backendToolNames = getBackendToolNames();
+                        List<BaseEvent> argsEvents = convertToAGUIEvents(
+                            ToolCallState.ARGS_DELTA,
+                            toolUseId.get(),
+                            toolName.get(),
+                            inputFragment,
+                            backendToolNames
+                        );
+                        if (!argsEvents.isEmpty()) {
+                            sendAGUIEvents(argsEvents, false, listener);
+                        }
                     } else {
-                        log.debug("AG-UI: Suppressing raw tool input start chunk for AG-UI agent");
+                        sendContentResponse(inputFragment, false, listener);
                     }
                 }
                 break;
 
             case ACCUMULATING_TOOL_INPUT:
                 if (isToolInputDelta(event)) {
-                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                    String inputFragment = getToolInputFragment(event);
+                    accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
 
-                    // Skip streaming raw tool input fragments for AG-UI agents
-                    // The proper AG-UI events will be generated in the completion response
-                    if (!isAGUIAgent) {
-                        sendContentResponse(getToolInputFragment(event), false, listener);
+                    if (isAGUIAgent) {
+                        List<String> backendToolNames = getBackendToolNames();
+                        List<BaseEvent> argsEvents = convertToAGUIEvents(
+                            ToolCallState.ARGS_DELTA,
+                            toolUseId.get(),
+                            toolName.get(),
+                            inputFragment,
+                            backendToolNames
+                        );
+                        if (!argsEvents.isEmpty()) {
+                            sendAGUIEvents(argsEvents, false, listener);
+                        }
                     } else {
-                        log.debug("AG-UI: Suppressing raw tool input fragment chunk for AG-UI agent");
+                        sendContentResponse(inputFragment, false, listener);
                     }
                 } else if (isToolInputComplete(event)) {
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
@@ -279,17 +309,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 break;
 
             case WAITING_FOR_TOOL_RESULT:
-                // Don't close stream - wait for tool execution
                 log.debug("Waiting for tool result - keeping stream open");
                 break;
 
             case COMPLETED:
-                // Stream already completed
                 break;
         }
     }
 
-    // TODO: refactor the event type checker methods
     private void extractToolInfo(ConverseStreamOutput event, AtomicReference<String> toolName, AtomicReference<String> toolUseId) {
         ContentBlockStartEvent startEvent = (ContentBlockStartEvent) event;
         if (startEvent.start() != null && startEvent.start().toolUse() != null) {
@@ -337,73 +364,47 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         StreamPredictActionListener<MLTaskResponse, ?> listener
     ) {
         if (isAGUIAgent) {
-            // Check if this is a backend tool or frontend tool
-            boolean isBackendTool = isBackendTool(toolName.get());
+            List<String> backendToolNames = getBackendToolNames();
+            boolean isBackendTool = backendToolNames.contains(toolName.get());
 
             if (isBackendTool) {
-                // Backend tools: use native Bedrock format for proper ReAct processing
                 log.debug("AG-UI: Processing backend tool call '{}' in native Bedrock format", toolName.get());
                 listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
             } else {
-                // Frontend tools: convert to OpenAI format for AG-UI event generation
-                log.debug("AG-UI: Processing frontend tool call '{}' in OpenAI-compatible format", toolName.get());
-                String openAICompatibleResponse = buildOpenAICompatibleToolCall(toolName, toolInput, toolUseId);
-
-                // Send content response for streaming (like OpenAI handler does)
-                sendContentResponse(openAICompatibleResponse, false, listener);
-
-                // Create ModelTensorOutput in OpenAI format for AG-UI processing
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    Map<String, Object> responseData = mapper.readValue(openAICompatibleResponse, Map.class);
-                    ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(responseData).build();
-                    ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-                    ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-                    listener.onResponse(new MLTaskResponse(output));
-
-                    log.debug("AG-UI: Sent frontend tool call in OpenAI-compatible format for AG-UI event processing");
-                } catch (Exception e) {
-                    log.error("AG-UI: Failed to convert frontend tool call to OpenAI format", e);
-                    // Fallback to original Bedrock format
-                    listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
-                }
+                List<BaseEvent> events = List
+                    .of(
+                        new ToolCallEndEvent(toolUseId.get()),
+                        new RunFinishedEvent(parameters.get(AGUI_PARAM_THREAD_ID), parameters.get(AGUI_PARAM_RUN_ID), null)
+                    );
+                sendAGUIEvents(events, true, listener);
             }
         } else {
-            // For non-AG-UI agents, use original Bedrock format
             listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
         }
     }
 
-    private String buildOpenAICompatibleToolCall(
-        AtomicReference<String> toolName,
-        AtomicReference<Map<String, Object>> toolInput,
-        AtomicReference<String> toolUseId
-    ) {
-        // Convert Bedrock tool call to OpenAI-compatible format
-        // This matches the format expected by MLAGUIAgentRunner.processToolCallsFromDataMap()
-
-        ObjectMapper mapper = new ObjectMapper();
-        String argumentsJson;
-        try {
-            argumentsJson = mapper.writeValueAsString(toolInput.get());
-        } catch (Exception e) {
-            argumentsJson = "{}";
+    /**
+     * Get list of backend tool names from parameters.
+     * Backend tools execute server-side and don't need AG-UI events.
+     */
+    private List<String> getBackendToolNames() {
+        if (parameters == null) {
+            return List.of();
         }
 
-        Map<String, Object> function = Map.of("name", toolName.get(), "arguments", argumentsJson);
-
-        Map<String, Object> toolCall = Map.of("id", toolUseId.get(), "type", "function", "function", function);
-
-        Map<String, Object> message = Map.of("tool_calls", List.of(toolCall));
-        Map<String, Object> choice = Map.of("message", message, "finish_reason", "tool_calls");
-
-        Map<String, Object> response = Map.of("choices", List.of(choice));
+        String backendToolNamesJson = parameters.get("backend_tool_names");
+        if (backendToolNamesJson == null || backendToolNamesJson.isEmpty()) {
+            return List.of();
+        }
 
         try {
-            return mapper.writeValueAsString(response);
+            Type listType = new TypeToken<List<String>>() {
+            }.getType();
+            List<String> backendToolNames = new Gson().fromJson(backendToolNamesJson, listType);
+            return backendToolNames != null ? backendToolNames : List.of();
         } catch (Exception e) {
-            log.error("Failed to serialize OpenAI-compatible response", e);
-            return "{}";
+            log.warn("AG-UI: Failed to parse backend tool names", e);
+            return List.of();
         }
     }
 
@@ -412,7 +413,6 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId
     ) {
-        // Original Bedrock format for backward compatibility
         Map<String, Object> wrappedResponse = Map
             .of(
                 "output",
@@ -440,30 +440,6 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
         return new MLTaskResponse(output);
-    }
-
-    private boolean isBackendTool(String toolName) {
-        if (parameters == null) {
-            return false;
-        }
-
-        String backendToolNamesJson = parameters.get("backend_tool_names");
-        if (backendToolNamesJson == null || backendToolNamesJson.isEmpty()) {
-            return false;
-        }
-
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            Type listType = new TypeToken<List<String>>() {
-            }.getType();
-            List<String> backendToolNames = new Gson().fromJson(backendToolNamesJson, listType);
-            boolean isBackend = backendToolNames.contains(toolName);
-            log.debug("AG-UI: Tool '{}' is {} tool (backend tools: {})", toolName, isBackend ? "backend" : "frontend", backendToolNames);
-            return isBackend;
-        } catch (Exception e) {
-            log.warn("AG-UI: Failed to parse backend tool names, assuming tool '{}' is frontend", toolName, e);
-            return false; // Default to frontend tool if parsing fails
-        }
     }
 
     private void accumulateToolInput(
@@ -569,10 +545,6 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private Message buildToolResultMessage(JsonNode toolMessage) {
-        // Convert AG-UI tool message format to Bedrock format
-        // AG-UI format: {"role": "tool", "content": "...", "toolCallId": "..."}
-        // Bedrock format: {"role": "user", "content": [{"toolResult": {"toolUseId": "...", "content": [{"text": "..."}]}}]}
-
         String toolCallId = toolMessage.has("toolCallId") ? toolMessage.get("toolCallId").asText() : "";
         String content = toolMessage.has("content") ? toolMessage.get("content").asText() : "";
 
@@ -585,11 +557,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
         log.debug("AG-UI: Converted tool message to Bedrock format - toolUseId: {}, content length: {}", toolCallId, content.length());
 
-        return Message
-            .builder()
-            .role("user")  // Bedrock requires tool results to have "user" role
-            .content(List.of(toolResultBlock))
-            .build();
+        return Message.builder().role("user").content(List.of(toolResultBlock)).build();
     }
 
     private List<ContentBlock> buildContentBlocks(JsonNode contentArray) {
@@ -699,5 +667,40 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         if (node.isNumber())
             return Document.fromNumber(node.isInt() ? node.asInt() : node.asDouble());
         return Document.fromString(node.toString());
+    }
+
+    @Override
+    public List<BaseEvent> convertToAGUIEvents(
+        ToolCallState toolCallState,
+        String toolCallId,
+        String toolName,
+        String toolArgsDelta,
+        List<String> backendToolNames
+    ) {
+        if (backendToolNames != null && backendToolNames.contains(toolName)) {
+            log.debug("AG-UI: Skipping AG-UI events for backend tool '{}'", toolName);
+            return List.of();
+        }
+
+        switch (toolCallState) {
+            case START:
+                log.debug("AG-UI: Generating TOOL_CALL_START event for frontend tool '{}'", toolName);
+                return List.of(new ToolCallStartEvent(toolCallId, toolName, null));
+
+            case ARGS_DELTA:
+                log
+                    .debug(
+                        "AG-UI: Generating TOOL_CALL_ARGS event with delta length: {}",
+                        toolArgsDelta != null ? toolArgsDelta.length() : 0
+                    );
+                return List.of(new ToolCallArgsEvent(toolCallId, toolArgsDelta));
+
+            case END:
+                log.debug("AG-UI: Generating TOOL_CALL_END event for tool '{}'", toolName);
+                return List.of(new ToolCallEndEvent(toolCallId));
+
+            default:
+                return List.of();
+        }
     }
 }

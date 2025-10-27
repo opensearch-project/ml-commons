@@ -128,8 +128,12 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
             String requestBodyJson = request.contentOrSourceParam().v2().utf8ToString();
             if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
-                log.debug("AG-UI: Detected AG-UI input format for agent: {}", agentId);
-                input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
+                throw new IllegalArgumentException(
+                    "AG-UI agents require streaming execution. "
+                        + "Please use the streaming endpoint: POST /_plugins/_ml/agents/"
+                        + agentId
+                        + "/_execute/stream"
+                );
             } else {
                 input = MLInput.parse(parser, functionName.name());
                 ((AgentMLInput) input).setAgentId(agentId);

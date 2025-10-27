@@ -39,7 +39,7 @@ public class StreamingHandlerFactory {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
-                return createHttpHandler(llmInterface, connector, connectorClientConfig);
+                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
@@ -75,8 +75,9 @@ public class StreamingHandlerFactory {
     private static StreamingHandler createHttpHandler(
         String llmInterface,
         Connector connector,
-        ConnectorClientConfig connectorClientConfig
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters);
     }
 }
