@@ -79,6 +79,18 @@ public class RestMLExecuteAction extends BaseRestHandler {
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(request);
 
+        // Extract context_management query parameter for agent execution
+        String uri = request.getHttpRequest().uri();
+        if (uri.startsWith(ML_BASE_URI + "/agents/")) {
+            String contextManagementName = request.param("context_management");
+            // Store context management name in the agent input
+            if (contextManagementName != null && !contextManagementName.trim().isEmpty()) {
+                if (mlExecuteTaskRequest.getInput() instanceof AgentMLInput) {
+                    ((AgentMLInput) mlExecuteTaskRequest.getInput()).setContextManagementName(contextManagementName);
+                }
+            }
+        }
+
         return channel -> client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, new ActionListener<>() {
             @Override
             public void onResponse(MLExecuteTaskResponse response) {
