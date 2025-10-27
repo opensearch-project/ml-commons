@@ -50,6 +50,7 @@ import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.agent.AgentInput;
 import org.opensearch.ml.common.agent.AgentInputProcessor;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -217,9 +218,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 );
                                         }
 
-                                        if (agentMLInput.hasStandardInput()) {
-                                            processStandardInput(agentMLInput, mlAgent);
-                                        }
+                                        processAgentInput(agentMLInput, mlAgent);
 
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
@@ -727,11 +726,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * This method handles the conversion from AgentInput to parameters that can be used
      * by the existing agent execution logic.
      */
-    private void processStandardInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+    private void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        // If legacy question input is provided, parse to new standard input
+        if (agentMLInput.getInputDataset() != null) {
+            RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+            if (!remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
+                throw new IllegalArgumentException("Question not found in parameters.");
+            }
+
+            AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
+            agentMLInput.setAgentInput(standardInput);
+        }
+
         try {
             AgentInputProcessor.validateInput(agentMLInput.getAgentInput());
             // Extract the question text for prompt template and memory storage
-            String questionText = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+            String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
             ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
 
             // create input dataset if it doesn't exist
@@ -743,7 +753,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
             Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput());
             // set question to questionText for memory
-            parameters.put(QUESTION, questionText);
+            parameters.put(QUESTION, question);
             remoteDataSet.getParameters().putAll(parameters);
         } catch (Exception e) {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);

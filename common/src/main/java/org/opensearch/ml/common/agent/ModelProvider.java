@@ -83,19 +83,19 @@ public abstract class ModelProvider {
         }
 
         InputType inputType = agentInput.getInputType();
-        switch (inputType) {
-            case TEXT:
-                return mapTextInput((String) agentInput.getInput());
-            case CONTENT_BLOCKS:
+        return switch (inputType) {
+            case TEXT -> mapTextInput((String) agentInput.getInput());
+            case CONTENT_BLOCKS -> {
                 @SuppressWarnings("unchecked")
                 List<ContentBlock> blocks = (List<ContentBlock>) agentInput.getInput();
-                return mapContentBlocks(blocks);
-            case MESSAGES:
+                yield mapContentBlocks(blocks);
+            }
+            case MESSAGES -> {
                 @SuppressWarnings("unchecked")
                 List<Message> messages = (List<Message>) agentInput.getInput();
-                return mapMessages(messages);
-            default:
-                throw new IllegalArgumentException("Unsupported input type: " + inputType);
-        }
+                yield mapMessages(messages);
+            }
+            default -> throw new IllegalArgumentException("Unsupported input type: " + inputType);
+        };
     }
 }
