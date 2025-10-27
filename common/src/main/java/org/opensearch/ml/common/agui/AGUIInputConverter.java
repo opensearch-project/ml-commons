@@ -24,6 +24,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_USER;
+import static org.opensearch.ml.common.utils.StringUtils.getStringField;
 
 import java.util.HashMap;
 import java.util.List;
@@ -122,11 +123,6 @@ public class AGUIInputConverter {
             log.error("Failed to convert AG-UI input to ML-Commons format", e);
             throw new IllegalArgumentException("Invalid AG-UI input format", e);
         }
-    }
-
-    private static String getStringField(JsonObject obj, String fieldName) {
-        JsonElement element = obj.get(fieldName);
-        return element != null && !element.isJsonNull() ? element.getAsString() : null;
     }
 
     private static void extractUserQuestion(JsonElement messages, Map<String, String> parameters) {

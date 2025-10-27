@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
@@ -18,6 +19,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.ml.common.agui.BaseEvent;
+import org.opensearch.ml.common.agui.RunFinishedEvent;
+import org.opensearch.ml.common.agui.ToolCallArgsEvent;
+import org.opensearch.ml.common.agui.ToolCallEndEvent;
+import org.opensearch.ml.common.agui.ToolCallStartEvent;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.exception.MLException;
@@ -28,6 +34,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
@@ -45,16 +53,25 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     private final Connector connector;
     private OkHttpClient okHttpClient;
     private String llmInterface;
+    private Map<String, String> parameters;
 
     public HttpStreamingHandler(String llmInterface, Connector connector, ConnectorClientConfig connectorClientConfig) {
+        this(llmInterface, connector, connectorClientConfig, null);
+    }
+
+    public HttpStreamingHandler(
+        String llmInterface,
+        Connector connector,
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters
+    ) {
         this.connector = connector;
         this.llmInterface = llmInterface;
+        this.parameters = parameters;
 
-        // Get connector client configuration
         Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
         Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
 
-        // Initialize OkHttp client for SSE
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 this.okHttpClient = new OkHttpClient.Builder()
@@ -118,12 +135,11 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             this.llmInterface = llmInterface;
             this.isStreamClosed = new AtomicBoolean(false);
 
-            // Detect if this is an AG-UI agent by checking for AG-UI specific parameters
             this.isAGUIAgent = parameters != null
                 && (parameters.containsKey(AGUI_PARAM_THREAD_ID) || parameters.containsKey(AGUI_PARAM_RUN_ID));
 
             if (isAGUIAgent) {
-                log.debug("HttpStreamingHandler: Detected AG-UI agent - raw function call chunks will be filtered");
+                log.debug("HttpStreamingHandler: Detected AG-UI agent");
             }
         }
 
@@ -218,7 +234,6 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         }
 
         private void processStreamChunk(Map<String, Object> dataMap) {
-            // Handle stop finish reason
             String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
             if ("stop".equals(finishReason)) {
                 agentExecutionInProgress = false;
@@ -226,28 +241,21 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                 return;
             }
 
-            // Process content
             String content = extractPath(dataMap, "$.choices[0].delta.content");
             if (content != null && !content.isEmpty()) {
                 sendContentResponse(content, false, streamActionListener);
             }
 
-            // Process tool call
             List<?> toolCalls = extractPath(dataMap, "$.choices[0].delta.tool_calls");
             if (toolCalls != null) {
-                // Always accumulate tool call data for completion response
-                accumulateFunctionCall(toolCalls);
-
-                // For AG-UI agents, skip streaming the raw tool call chunks
-                // The proper AG-UI events will be generated in the completion response
-                if (!isAGUIAgent) {
-                    sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
+                if (isAGUIAgent) {
+                    processAGUIToolCalls(toolCalls);
                 } else {
-                    log.debug("AG-UI: Suppressing raw tool call chunk for AG-UI agent");
+                    accumulateFunctionCall(toolCalls);
+                    sendContentResponse(StringUtils.toJson(toolCalls), false, streamActionListener);
                 }
             }
 
-            // Handle tool_calls finish reason
             if ("tool_calls".equals(finishReason) && functionCallInProgress) {
                 completeToolCall();
             }
@@ -263,15 +271,33 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         private void completeToolCall() {
             agentExecutionInProgress = true;
-            String completeFunctionCall = buildCompleteFunctionCallResponse();
 
-            // Send to client and agent
-            sendContentResponse(completeFunctionCall, false, streamActionListener);
-            Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
-            ModelTensorOutput output = createModelTensorOutput(response);
-            streamActionListener.onResponse(new MLTaskResponse(output));
+            if (isAGUIAgent) {
+                List<String> backendToolNames = getBackendToolNames();
+                boolean isBackendTool = backendToolNames.contains(accumulatedToolName);
 
-            // Reset state
+                if (isBackendTool) {
+                    String completeFunctionCall = buildCompleteFunctionCallResponse();
+                    sendContentResponse(completeFunctionCall, false, streamActionListener);
+                    Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+                    ModelTensorOutput output = createModelTensorOutput(response);
+                    streamActionListener.onResponse(new MLTaskResponse(output));
+                } else {
+                    List<BaseEvent> events = List
+                        .of(
+                            new ToolCallEndEvent(accumulatedToolCallId),
+                            new RunFinishedEvent(parameters.get(AGUI_PARAM_THREAD_ID), parameters.get(AGUI_PARAM_RUN_ID), null)
+                        );
+                    sendAGUIEvents(events, true, streamActionListener);
+                }
+            } else {
+                String completeFunctionCall = buildCompleteFunctionCallResponse();
+                sendContentResponse(completeFunctionCall, false, streamActionListener);
+                Map<String, Object> response = gson.fromJson(completeFunctionCall, Map.class);
+                ModelTensorOutput output = createModelTensorOutput(response);
+                streamActionListener.onResponse(new MLTaskResponse(output));
+            }
+
             functionCallInProgress = false;
         }
 
@@ -291,12 +317,59 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             return ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
         }
 
+        private void processAGUIToolCalls(List<?> toolCalls) {
+            functionCallInProgress = true;
+            List<String> backendToolNames = getBackendToolNames();
+
+            for (Object toolCall : toolCalls) {
+                Map<String, Object> tcMap = (Map<String, Object>) toolCall;
+
+                if (tcMap.containsKey("id")) {
+                    String toolCallId = (String) tcMap.get("id");
+                    if (accumulatedToolCallId == null) {
+                        accumulatedToolCallId = toolCallId;
+                    }
+                }
+
+                if (tcMap.containsKey("function")) {
+                    Map<String, Object> func = (Map<String, Object>) tcMap.get("function");
+
+                    if (func.containsKey("name")) {
+                        String toolName = (String) func.get("name");
+                        if (accumulatedToolName == null) {
+                            accumulatedToolName = toolName;
+
+                            if (!backendToolNames.contains(toolName)) {
+                                List<BaseEvent> events = List.of(new ToolCallStartEvent(accumulatedToolCallId, toolName, null));
+                                sendAGUIEvents(events, false, streamActionListener);
+                            }
+                        }
+                    }
+
+                    if (func.containsKey("arguments")) {
+                        String argsDelta = (String) func.get("arguments");
+                        accumulatedArguments += argsDelta;
+
+                        List<BaseEvent> argsEvents = convertToAGUIEvents(
+                            ToolCallState.ARGS_DELTA,
+                            accumulatedToolCallId,
+                            accumulatedToolName,
+                            argsDelta,
+                            backendToolNames
+                        );
+                        if (!argsEvents.isEmpty()) {
+                            sendAGUIEvents(argsEvents, false, streamActionListener);
+                        }
+                    }
+                }
+            }
+        }
+
         private void accumulateFunctionCall(List<?> toolCalls) {
             functionCallInProgress = true;
             for (Object toolCall : toolCalls) {
                 Map<String, Object> tcMap = (Map<String, Object>) toolCall;
 
-                // Extract ID and name from first chunk
                 if (tcMap.containsKey("id")) {
                     accumulatedToolCallId = (String) tcMap.get("id");
                 }
@@ -310,6 +383,65 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
                     }
                 }
             }
+        }
+    }
+
+    @Override
+    public List<BaseEvent> convertToAGUIEvents(
+        ToolCallState toolCallState,
+        String toolCallId,
+        String toolName,
+        String toolArgsDelta,
+        List<String> backendToolNames
+    ) {
+        if (backendToolNames != null && backendToolNames.contains(toolName)) {
+            log.debug("AG-UI: Skipping AG-UI events for backend tool '{}'", toolName);
+            return List.of();
+        }
+
+        switch (toolCallState) {
+            case START:
+                log.debug("AG-UI: Generating TOOL_CALL_START event for frontend tool '{}'", toolName);
+                return List.of(new ToolCallStartEvent(toolCallId, toolName, null));
+
+            case ARGS_DELTA:
+                log
+                    .debug(
+                        "AG-UI: Generating TOOL_CALL_ARGS event with delta length: {}",
+                        toolArgsDelta != null ? toolArgsDelta.length() : 0
+                    );
+                return List.of(new ToolCallArgsEvent(toolCallId, toolArgsDelta));
+
+            case END:
+                log.debug("AG-UI: Generating TOOL_CALL_END event for tool '{}'", toolName);
+                return List.of(new ToolCallEndEvent(toolCallId));
+
+            default:
+                return List.of();
+        }
+    }
+
+    private List<String> getBackendToolNames() {
+        if (parameters == null) {
+            log.debug("AG-UI: parameters is null, returning empty backend tool names list");
+            return List.of();
+        }
+
+        String backendToolNamesJson = parameters.get("backend_tool_names");
+        if (backendToolNamesJson == null || backendToolNamesJson.isEmpty()) {
+            log.debug("AG-UI: backend_tool_names parameter not found or empty");
+            return List.of();
+        }
+
+        try {
+            Type listType = new TypeToken<List<String>>() {
+            }.getType();
+            List<String> backendToolNames = new Gson().fromJson(backendToolNamesJson, listType);
+            log.debug("AG-UI: Loaded {} backend tool names: {}", backendToolNames != null ? backendToolNames.size() : 0, backendToolNames);
+            return backendToolNames != null ? backendToolNames : List.of();
+        } catch (Exception e) {
+            log.warn("AG-UI: Failed to parse backend tool names", e);
+            return List.of();
         }
     }
 }
