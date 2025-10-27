@@ -561,7 +561,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
         }
 
-
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
     }

@@ -14,8 +14,6 @@ import org.junit.Test;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 
-import com.google.gson.JsonObject;
-
 public class AGUIInputConverterTest {
 
     @Test
@@ -245,8 +243,6 @@ public class AGUIInputConverterTest {
             templateDataSet.getParameters().containsKey("agui_messages")
         );
     }
-
-
 
     @Test
     public void testConvertFromAGUIInput_WithContext() {
