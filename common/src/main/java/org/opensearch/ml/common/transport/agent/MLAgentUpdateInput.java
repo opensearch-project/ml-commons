@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -256,7 +257,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                                 llmModelId = parser.text();
                                 break;
                             case LLM_PARAMETERS_FIELD:
-                                llmParameters = parser.mapStrings();
+                                llmParameters = getParameterMap(parser.map());
                                 break;
                             default:
                                 parser.skipChildren();
@@ -272,7 +273,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                     }
                     break;
                 case PARAMETERS_FIELD:
-                    parameters = parser.mapStrings();
+                    parameters = getParameterMap(parser.map());
                     break;
                 case MEMORY_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
