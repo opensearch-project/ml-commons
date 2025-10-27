@@ -20,6 +20,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.utils.StringUtils;
 
@@ -47,6 +48,14 @@ public class AgentMLInput extends MLInput {
     @Setter
     private Boolean isAsync;
 
+    @Getter
+    @Setter
+    private HookRegistry hookRegistry;
+
+    @Getter
+    @Setter
+    private String contextManagementName;
+
     @Builder(builderMethodName = "AgentMLInputBuilder")
     public AgentMLInput(String agentId, String tenantId, FunctionName functionName, MLInputDataset inputDataset) {
         this(agentId, tenantId, functionName, inputDataset, false);
@@ -72,6 +81,7 @@ public class AgentMLInput extends MLInput {
         if (streamOutputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             out.writeOptionalBoolean(isAsync);
         }
+        // Note: contextManagementName and hookRegistry are not serialized as they are runtime-only fields
     }
 
     public AgentMLInput(StreamInput in) throws IOException {
