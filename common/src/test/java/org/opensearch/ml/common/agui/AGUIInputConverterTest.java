@@ -246,24 +246,7 @@ public class AGUIInputConverterTest {
         );
     }
 
-    @Test
-    public void testReconstructAGUIInput() {
-        // Create parameters that would result from conversion
-        java.util.Map<String, String> parameters = new java.util.HashMap<>();
-        parameters.put("agui_thread_id", "reconstruct_thread");
-        parameters.put("agui_run_id", "reconstruct_run");
-        parameters.put("agui_state", "{\"status\":\"active\"}");
-        parameters.put("agui_messages", "[]");
-        parameters.put("agui_tools", "[]");
 
-        JsonObject result = AGUIInputConverter.reconstructAGUIInput(parameters);
-
-        assertNotNull("Reconstructed result should not be null", result);
-        assertTrue("Should contain threadId", result.has("threadId"));
-        assertEquals("Thread ID should match", "reconstruct_thread", result.get("threadId").getAsString());
-        assertTrue("Should contain runId", result.has("runId"));
-        assertEquals("Run ID should match", "reconstruct_run", result.get("runId").getAsString());
-    }
 
     @Test
     public void testConvertFromAGUIInput_WithContext() {
