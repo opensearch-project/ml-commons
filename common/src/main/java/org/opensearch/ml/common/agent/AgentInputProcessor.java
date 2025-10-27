@@ -142,10 +142,7 @@ public class AgentInputProcessor {
      * This provides the text that will be used in prompt templates that reference $parameters.question.
      */
     public static String extractQuestionText(AgentInput agentInput) {
-        if (agentInput == null || agentInput.getInput() == null) {
-            throw new IllegalArgumentException("AgentInput and its input field cannot be null");
-        }
-
+        validateInput(agentInput);
         return switch (agentInput.getInputType()) {
             case TEXT -> (String) agentInput.getInput();
             case CONTENT_BLOCKS -> {
@@ -160,10 +157,7 @@ public class AgentInputProcessor {
                 List<Message> messages = (List<Message>) agentInput.getInput();
                 yield extractTextFromMessages(messages);
             }
-            default -> {
-                log.warn("Unknown input type: {}, cannot extract question text", agentInput.getInputType());
-                yield null;
-            }
+            default -> throw new IllegalArgumentException("Unsupported input type: " + agentInput.getInputType());
         };
     }
 

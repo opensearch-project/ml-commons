@@ -18,6 +18,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.ToolUtils;
 
 /**
  * Model provider for Bedrock Converse API.
@@ -159,6 +160,10 @@ public class BedrockConverseModelProvider extends ModelProvider {
         Map<String, String> parameters = new HashMap<>();
         String messagesString = buildMessagesArray(messages);
         parameters.put("body", messagesString);
+        // todo: Merge function calling code into this class
+        // body is added to no_escape_params as the json constructed is a sequence of objects and not a valid json
+        // it becomes valid as REQUEST_BODY_TEMPLATE wraps this in an array
+        parameters.put(ToolUtils.NO_ESCAPE_PARAMS, "_chat_history,_tools,_interactions,tool_configs,body");
         return parameters;
     }
 

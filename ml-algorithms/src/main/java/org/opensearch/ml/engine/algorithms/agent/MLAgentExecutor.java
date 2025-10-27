@@ -220,7 +220,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
                                         processAgentInput(agentMLInput, mlAgent);
 
-                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
+                                            .getInputDataset();
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
@@ -739,7 +740,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
 
         try {
-            AgentInputProcessor.validateInput(agentMLInput.getAgentInput());
             // Extract the question text for prompt template and memory storage
             String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
             ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
