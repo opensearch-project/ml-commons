@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.tool;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +42,6 @@ public class MLToolExecutorTest {
     private Client client;
     @Mock
     private SdkClient sdkClient;
-    private Settings settings;
     @Mock
     private ClusterService clusterService;
     @Mock
@@ -175,5 +175,31 @@ public class MLToolExecutorTest {
         Assert.assertThrows(IllegalArgumentException.class, () -> {
             mlToolExecutor.execute(toolMLInput, actionListener);
         });
+    }
+
+    @Test
+    public void test_ImmutableEmptyParametersMap() {
+        Map<String, String> immutableEmptyMap = Collections.emptyMap();
+
+        when(toolMLInput.getToolName()).thenReturn("TestTool");
+        when(toolMLInput.getInputDataset()).thenReturn(inputDataSet);
+        when(inputDataSet.getParameters()).thenReturn(immutableEmptyMap);
+        when(toolFactory.create(any())).thenReturn(tool);
+        when(tool.validate(any())).thenReturn(true);
+
+        Mockito.doAnswer(invocation -> {
+            Map<String, String> params = invocation.getArgument(0);
+            // Tool tries to modify parameters, should not throw exception
+            params.put("test_key", "test_value");
+            ActionListener<Object> listener = invocation.getArgument(1);
+            listener.onResponse("test result");
+            return null;
+        }).when(tool).run(any(), any());
+
+        mlToolExecutor.execute(toolMLInput, actionListener);
+
+        Mockito.verify(actionListener).onResponse(outputCaptor.capture());
+        Output output = outputCaptor.getValue();
+        Assert.assertTrue(output instanceof ModelTensorOutput);
     }
 }
