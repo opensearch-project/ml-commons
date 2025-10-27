@@ -5,8 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
+import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.agui.BaseEvent;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 
 /**
@@ -21,4 +23,20 @@ public interface StreamingHandler {
     );
 
     void handleError(Throwable error, StreamPredictActionListener<MLTaskResponse, ?> listener);
+
+    default List<BaseEvent> convertToAGUIEvents(
+        ToolCallState toolCallState,
+        String toolCallId,
+        String toolName,
+        String toolArgsDelta,
+        List<String> backendToolNames
+    ) {
+        return List.of();
+    }
+
+    enum ToolCallState {
+        START,
+        ARGS_DELTA,
+        END
+    }
 }

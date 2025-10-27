@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_CONTENT;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_ROLE;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_FIELD_TOOL_CALL_ID;
@@ -17,6 +16,7 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_R
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_ASSISTANT;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_TOOL;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_ROLE_USER;
+import static org.opensearch.ml.common.utils.StringUtils.getStringField;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_MESSAGE_PREFIX;
@@ -37,8 +37,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -88,9 +86,6 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, TransportChannel channel) {
-        AGUIEventCollector eventCollector = new AGUIEventCollector();
-        eventCollector.startRun();
-
         try {
             String llmInterface = params.get(LLM_INTERFACE);
             if (llmInterface == null && mlAgent.getParameters() != null) {
@@ -116,154 +111,12 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 encryptor
             );
 
-            String messageId = eventCollector.startTextMessage(AGUI_ROLE_ASSISTANT);
-            ActionListener<Object> aguiListener = ActionListener.wrap(result -> {
-                try {
-                    processAgentResult(result, eventCollector, messageId);
-                    eventCollector.endTextMessage(messageId);
-                    eventCollector.finishRun(result);
-
-                    String eventsJson = eventCollector.getEventsAsJson();
-                    listener.onResponse(eventsJson);
-                } catch (Exception e) {
-                    log.error("Error processing AG-UI events", e);
-                    listener.onFailure(e);
-                }
-            }, error -> {
-                log.error("Error in underlying agent execution", error);
-                eventCollector.finishRun(null);
-                listener.onFailure(error);
-            });
-
-            conversationalRunner.run(mlAgent, params, aguiListener, channel);
+            // Execute with streaming - events are generated in RestMLExecuteStreamAction
+            conversationalRunner.run(mlAgent, params, listener, channel);
 
         } catch (Exception e) {
             log.error("Error starting AG-UI agent execution", e);
-            eventCollector.finishRun(null);
             listener.onFailure(e);
-        }
-    }
-
-    private void processAgentResult(Object result, AGUIEventCollector eventCollector, String messageId) {
-        log
-            .info(
-                "AG-UI: processAgentResult called with result type: {}, result: {}",
-                result != null ? result.getClass().getSimpleName() : "null",
-                result
-            );
-
-        if (result instanceof ModelTensorOutput) {
-            ModelTensorOutput tensorOutput = (ModelTensorOutput) result;
-            // Extract tool calls and text responses from the tensor output
-            processTensorOutput(tensorOutput, eventCollector);
-        }
-
-        List<Object> messages = new ArrayList<>();
-        String responseText = extractResponseText(result);
-        messages.add(Map.of(AGUI_FIELD_ID, messageId, AGUI_FIELD_ROLE, AGUI_ROLE_ASSISTANT, AGUI_FIELD_CONTENT, responseText));
-        eventCollector.addMessagesSnapshot(messages);
-    }
-
-    private String extractResponseText(Object result) {
-        if (result instanceof ModelTensorOutput) {
-            ModelTensorOutput tensorOutput = (ModelTensorOutput) result;
-            if (tensorOutput.getMlModelOutputs() != null) {
-                for (var modelTensors : tensorOutput.getMlModelOutputs()) {
-                    if (modelTensors.getMlModelTensors() != null) {
-                        for (var tensor : modelTensors.getMlModelTensors()) {
-                            if ("response".equals(tensor.getName())) {
-                                if (tensor.getDataAsMap() != null && tensor.getDataAsMap().containsKey("response")) {
-                                    Object responseValue = tensor.getDataAsMap().get("response");
-                                    return responseValue != null ? responseValue.toString() : "";
-                                }
-                                if (tensor.getResult() != null) {
-                                    return tensor.getResult();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else if (result instanceof String) {
-            return (String) result;
-        }
-
-        return result != null ? result.toString() : "";
-    }
-
-    private void processTensorOutput(ModelTensorOutput tensorOutput, AGUIEventCollector eventCollector) {
-        log
-            .info(
-                "AG-UI: processTensorOutput called with {} model outputs",
-                tensorOutput.getMlModelOutputs() != null ? tensorOutput.getMlModelOutputs().size() : 0
-            );
-
-        if (tensorOutput.getMlModelOutputs() != null) {
-            tensorOutput.getMlModelOutputs().forEach(modelTensors -> {
-                if (modelTensors.getMlModelTensors() != null) {
-                    modelTensors.getMlModelTensors().forEach(tensor -> { processModelTensor(tensor, eventCollector); });
-                }
-            });
-        }
-    }
-
-    private void processModelTensor(ModelTensor tensor, AGUIEventCollector eventCollector) {
-        String tensorName = tensor.getName();
-        if ("response".equals(tensorName)) {
-            // Check if tensor has dataAsMap (structured response with tool calls)
-            Map<String, ?> dataMap = tensor.getDataAsMap();
-            if (dataMap != null) {
-                processToolCallsFromDataMap(dataMap, eventCollector);
-            }
-        }
-    }
-
-    private void processToolCallsFromDataMap(Map<String, ?> dataMap, AGUIEventCollector eventCollector) {
-        // Look for tool_calls in the structured response
-        Object toolCallsObj = dataMap.get("tool_calls");
-        log
-            .info(
-                "AG-UI: toolCallsObj type: {}, value: {}",
-                toolCallsObj != null ? toolCallsObj.getClass().getSimpleName() : "null",
-                toolCallsObj
-            );
-        if (toolCallsObj instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) toolCallsObj;
-
-            for (Map<String, Object> toolCall : toolCalls) {
-                String toolCallId = (String) toolCall.get("id");
-                String toolName = null;
-                String arguments = null;
-
-                // Extract tool name and arguments from function object
-                Object functionObj = toolCall.get("function");
-                if (functionObj instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> function = (Map<String, Object>) functionObj;
-                    toolName = (String) function.get("name");
-                    arguments = (String) function.get("arguments");
-                }
-
-                if (toolCallId != null && toolName != null) {
-                    // Generate AG-UI tool call events
-                    String generatedToolCallId = eventCollector.startToolCall(toolName, null);
-
-                    if (arguments != null && !arguments.isEmpty()) {
-                        eventCollector.addToolCallArgs(generatedToolCallId, arguments);
-                    }
-
-                    eventCollector.endToolCall(generatedToolCallId);
-
-                    log
-                        .info(
-                            "AG-UI: Successfully generated tool call events for tool={}, originalId={}, generatedId={}",
-                            toolName,
-                            toolCallId,
-                            generatedToolCallId
-                        );
-                }
-            }
         }
     }
 
@@ -556,10 +409,4 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             log.error("Failed to process AG-UI context", e);
         }
     }
-
-    private String getStringField(JsonObject obj, String fieldName) {
-        JsonElement element = obj.get(fieldName);
-        return element != null && !element.isJsonNull() ? element.getAsString() : null;
-    }
-
 }

@@ -54,7 +54,6 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.output.AGUIOutput;
 import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -541,21 +540,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
-                log
-                    .debug(
-                        "Agent type: '{}', AG_UI name: '{}', isAGUIEventsOutput: {}",
-                        agentType,
-                        MLAgentType.AG_UI.name(),
-                        isAGUIEventsOutput(output)
-                    );
-                if (MLAgentType.AG_UI.name().equals(agentType) && isAGUIEventsOutput(output)) {
-                    log.debug("Using raw AG-UI output for agent type: {}", agentType);
-                    listener.onResponse(createRawAGUIOutput(output));
-                } else {
-                    log.debug("Using standard model tensor output for agent type: {}", agentType);
-                    processOutput(output, modelTensors);
-                    listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
-                }
+                processOutput(output, modelTensors);
+                listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
             } else {
                 listener.onResponse(null);
             }
@@ -580,19 +566,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
         return ActionListener.wrap(output -> {
             if (output != null) {
-                if (MLAgentType.AG_UI.name().equals(agentType) && isAGUIEventsOutput(output)) {
-                    Output rawAGUIOutput = createRawAGUIOutput(output);
-                    if (rawAGUIOutput instanceof AGUIOutput) {
-                        AGUIOutput aguiOutput = (AGUIOutput) rawAGUIOutput;
-                        agentResponse.put("events", aguiOutput.getEvents());
-                    } else {
-                        processOutput(output, modelTensors);
-                        agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
-                    }
-                } else {
-                    processOutput(output, modelTensors);
-                    agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
-                }
+                processOutput(output, modelTensors);
+                agentResponse.put(INFERENCE_RESULT_FIELD, outputs);
             } else {
                 agentResponse.put(ERROR_MESSAGE, "No output found from agent execution");
             }
@@ -718,53 +693,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 ? (String) output
                 : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
 
-            // Check if this is AG-UI events JSON (starts with '[' and contains AG-UI event types)
-            if (result.startsWith("[") && (result.contains("RUN_STARTED") || result.contains("RUN_FINISHED"))) {
-                modelTensors.add(ModelTensor.builder().name("ag_ui_events").result(result).build());
-            } else {
-                modelTensors.add(ModelTensor.builder().name("response").result(result).build());
-            }
+            modelTensors.add(ModelTensor.builder().name("response").result(result).build());
         }
-    }
-
-    private boolean isAGUIEventsOutput(Object output) {
-        if (output instanceof String) {
-            String result = (String) output;
-            return result.startsWith("[")
-                && (result.contains("RUN_STARTED")
-                    || result.contains("RUN_FINISHED")
-                    || result.contains("TEXT_MESSAGE_START")
-                    || result.contains("MESSAGES_SNAPSHOT"));
-        }
-        return false;
-    }
-
-    private Output createRawAGUIOutput(Object output) {
-        if (output instanceof String) {
-            String eventsJson = (String) output;
-            log.debug("Creating raw AG-UI output from events JSON: {}", eventsJson);
-
-            try {
-                Gson gson = new Gson();
-                List<Object> events = gson.fromJson(eventsJson, List.class);
-                AGUIOutput aguiOutput = AGUIOutput.builder().events(events).build();
-                log.debug("Successfully created AGUIOutput with {} events", events.size());
-                return aguiOutput;
-            } catch (Exception e) {
-                log.error("Failed to parse AG-UI events as array, returning empty array", e);
-                return AGUIOutput.builder().events(new ArrayList<>()).build();
-            }
-        }
-
-        List<ModelTensors> outputs = new ArrayList<>();
-        List<ModelTensor> modelTensors = new ArrayList<>();
-        outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
-        try {
-            processOutput(output, modelTensors);
-        } catch (PrivilegedActionException e) {
-            log.error("Failed to process AG-UI output fallback", e);
-        }
-        return ModelTensorOutput.builder().mlModelOutputs(outputs).build();
     }
 
     public void indexMLTask(MLTask mlTask, ActionListener<IndexResponse> listener) {
