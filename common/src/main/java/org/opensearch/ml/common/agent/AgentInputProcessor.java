@@ -172,15 +172,12 @@ public class AgentInputProcessor {
         }
 
         StringBuilder textBuilder = new StringBuilder();
-        textBuilder.append("[Content-Block]");
         for (ContentBlock block : blocks) {
             if (block.getType() == ContentType.TEXT) {
                 String text = block.getText();
                 if (text != null && !text.trim().isEmpty()) {
-                    if (!textBuilder.isEmpty()) {
-                        textBuilder.append(" ");
-                    }
                     textBuilder.append(text.trim());
+                    textBuilder.append("\n");
                 }
             }
         }
