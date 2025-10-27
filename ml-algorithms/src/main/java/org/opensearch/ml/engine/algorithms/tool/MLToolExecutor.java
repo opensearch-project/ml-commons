@@ -83,13 +83,14 @@ public class MLToolExecutor implements Executable {
         }
 
         try {
-            Tool tool = toolFactory.create(new HashMap<>(parameters));
-            if (!tool.validate(parameters)) {
+            Map<String, String> mutableParams = new HashMap<>(parameters);
+            Tool tool = toolFactory.create(mutableParams);
+            if (!tool.validate(mutableParams)) {
                 listener.onFailure(new IllegalArgumentException("Invalid parameters for tool: " + toolName));
                 return;
             }
 
-            tool.run(parameters, ActionListener.wrap(result -> {
+            tool.run(mutableParams, ActionListener.wrap(result -> {
                 List<ModelTensor> modelTensors = new ArrayList<>();
                 processOutput(result, modelTensors);
                 ModelTensors tensors = ModelTensors.builder().mlModelTensors(modelTensors).build();
