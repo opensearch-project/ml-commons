@@ -210,7 +210,7 @@ public class MLAgentExecutorTest {
             listener.onResponse(modelTensor);
             return null;
         }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         Mockito.when(metadata.hasIndex(Mockito.anyString())).thenReturn(false);
 
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
@@ -284,7 +284,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -320,7 +320,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -358,7 +358,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -392,7 +392,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Gson gson = new Gson();
@@ -410,7 +410,7 @@ public class MLAgentExecutorTest {
             listener.onResponse("response");
             return null;
         }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
             // Extract the ActionListener argument from the method invocation
@@ -463,7 +463,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -510,7 +510,7 @@ public class MLAgentExecutorTest {
         Map<String, String> params = new HashMap<>();
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -526,7 +526,7 @@ public class MLAgentExecutorTest {
         params.put(REGENERATE_INTERACTION_ID, "foo");
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -599,7 +599,7 @@ public class MLAgentExecutorTest {
         params.put(REGENERATE_INTERACTION_ID, interactionId);
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
         Mockito.verify(client, times(1)).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
@@ -653,7 +653,7 @@ public class MLAgentExecutorTest {
         params.put(REGENERATE_INTERACTION_ID, "bar-interaction");
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
         Mockito.verify(client, times(1)).execute(Mockito.eq(GetInteractionAction.INSTANCE), Mockito.any(), Mockito.any());
@@ -668,7 +668,7 @@ public class MLAgentExecutorTest {
     @Test
     public void test_CreateFlowAgent() {
         MLAgent mlAgent = MLAgent.builder().name("test_agent").type("flow").build();
-        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent);
+        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent, Mockito.any());
         Assert.assertTrue(mlAgentRunner instanceof MLFlowAgentRunner);
     }
 
@@ -676,14 +676,14 @@ public class MLAgentExecutorTest {
     public void test_CreateChatAgent() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLAgent mlAgent = MLAgent.builder().name("test_agent").type(MLAgentType.CONVERSATIONAL.name()).llm(llmSpec).build();
-        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent);
+        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent, Mockito.any());
         Assert.assertTrue(mlAgentRunner instanceof MLChatAgentRunner);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void test_InvalidAgent_ThrowsException() {
         MLAgent mlAgent = MLAgent.builder().name("test_agent").type("illegal").build();
-        mlAgentExecutor.getAgentRunner(mlAgent);
+        mlAgentExecutor.getAgentRunner(mlAgent, Mockito.any());
     }
 
     @Test
@@ -693,7 +693,7 @@ public class MLAgentExecutorTest {
             listener.onFailure(new RuntimeException());
             return null;
         }).when(client).get(Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
@@ -709,7 +709,7 @@ public class MLAgentExecutorTest {
             listener.onResponse(getResponse);
             return null;
         }).when(client).get(Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
@@ -723,7 +723,7 @@ public class MLAgentExecutorTest {
             listener.onFailure(new RuntimeException());
             return null;
         }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         Map<String, String> params = new HashMap<>();
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
@@ -748,7 +748,7 @@ public class MLAgentExecutorTest {
             listener.onResponse(memory);
             return null;
         }).when(mockMemoryFactory).create(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         Map<String, String> params = new HashMap<>();
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
@@ -766,7 +766,7 @@ public class MLAgentExecutorTest {
             listener.onFailure(new RuntimeException());
             return null;
         }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(getAgentMLInput(), agentActionListener);
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
@@ -798,7 +798,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).index(any(), any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
 
@@ -835,7 +835,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).index(any(), any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
 
@@ -906,7 +906,7 @@ public class MLAgentExecutorTest {
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         // Mock the agent runner
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledMcp).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledMcp).getAgentRunner(Mockito.any(), Mockito.any());
 
         // Execute the agent
         mlAgentExecutorWithDisabledMcp.execute(getAgentMLInput(), agentActionListener);
@@ -989,7 +989,7 @@ public class MLAgentExecutorTest {
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
         // Mock the agent runner
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithEnabledSearch).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithEnabledSearch).getAgentRunner(Mockito.any(), Mockito.any());
 
         // Mock successful execution
         ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
@@ -1110,7 +1110,7 @@ public class MLAgentExecutorTest {
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
         // Verify memory factory was called with null question and existing memory_id
@@ -1149,7 +1149,7 @@ public class MLAgentExecutorTest {
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
         // Verify failure was propagated to listener
@@ -1186,7 +1186,7 @@ public class MLAgentExecutorTest {
         RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
         AgentMLInput agentMLInput = new AgentMLInput("test", null, FunctionName.AGENT, dataset);
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
         mlAgentExecutor.execute(agentMLInput, agentActionListener);
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
@@ -1216,7 +1216,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         Map<String, String> params = new HashMap<>();
         params.put(QUESTION, "test question");
@@ -1264,7 +1264,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         Map<String, String> params = new HashMap<>();
         params.put(QUESTION, "test question");
@@ -1304,7 +1304,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         Map<String, String> params = new HashMap<>();
         params.put(MEMORY_ID, "memoryId");
@@ -1376,7 +1376,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
@@ -1415,7 +1415,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
@@ -1453,7 +1453,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memoryManager).updateInteraction(Mockito.any(), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         Map<String, String> params = new HashMap<>();
         params.put(MEMORY_ID, "memoryId");
@@ -1493,7 +1493,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(memoryManager).updateInteraction(Mockito.any(), Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         Map<String, String> params = new HashMap<>();
         params.put(MEMORY_ID, "memoryId");
@@ -1534,7 +1534,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
@@ -1571,7 +1571,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
@@ -1608,7 +1608,7 @@ public class MLAgentExecutorTest {
             return null;
         }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
 
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any(), Mockito.any());
 
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
