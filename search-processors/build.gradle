@@ -27,6 +27,7 @@ repositories {
     mavenLocal()
 }
 
+
 dependencies {
     implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
