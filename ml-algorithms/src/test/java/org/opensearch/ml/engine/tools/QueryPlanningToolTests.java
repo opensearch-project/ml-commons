@@ -19,7 +19,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_NAME_FIELD;
@@ -37,6 +39,7 @@ import static org.opensearch.ml.engine.tools.QueryPlanningTool.USER_SEARCH_TEMPL
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -58,7 +61,9 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.script.StoredScriptSource;
 import org.opensearch.transport.client.AdminClient;
 import org.opensearch.transport.client.Client;
@@ -1381,6 +1386,115 @@ public class QueryPlanningToolTests {
         // Should contain the default template selection prompts - check for more specific content
         assertTrue(firstCallParams.get("system_prompt").contains("template"));
         assertTrue(firstCallParams.get("user_prompt").contains("INPUTS"));
+    }
+
+    // Test 1: Create tool from factory, get parser, test parser behavior directly
+    @SneakyThrows
+    @Test
+    public void testFactoryCreatedTool_DefaultExtractJsonParser() {
+        // Create tool using factory and verify the output parser is correctly configured
+        Map<String, Object> params = Map.of(MODEL_ID_FIELD, "test_model_id");
+        QueryPlanningTool tool = QueryPlanningTool.Factory.getInstance().create(params);
+
+        // Verify the output parser was created
+        assertNotNull("Output parser should be created by factory", tool.getOutputParser());
+
+        // Test the parser directly with different inputs
+        Parser outputParser = tool.getOutputParser();
+
+        // Test case 1: Extract JSON object from text
+        Object parsedResult1 = outputParser.parse("Here is your query: {\"query\":{\"match\":{\"title\":\"test\"}}}");
+        String resultWithText = parsedResult1 instanceof String ? (String) parsedResult1 : gson.toJson(parsedResult1);
+        assertEquals("{\"query\":{\"match\":{\"title\":\"test\"}}}", resultWithText);
+
+        // Test case 2: Extract pure JSON
+        Object parsedResult2 = outputParser.parse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+        String resultPureJson = parsedResult2 instanceof String ? (String) parsedResult2 : gson.toJson(parsedResult2);
+        assertEquals("{\"query\":{\"match\":{\"title\":\"test\"}}}", resultPureJson);
+
+        // Test case 3: No valid JSON - should return default template
+        Object parsedResult3 = outputParser.parse("No JSON here at all");
+        String resultNoJson = parsedResult3 instanceof String ? (String) parsedResult3 : gson.toJson(parsedResult3);
+        assertEquals(DEFAULT_SEARCH_TEMPLATE, resultNoJson);
+    }
+
+    // Test 2: Create tool from factory with custom processors, verify both default and custom processors work
+    @SneakyThrows
+    @Test
+    public void testFactoryCreatedTool_WithCustomProcessors() {
+        // Create tool using factory with custom output_processors (set_field)
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ID_FIELD, "test_model_id");
+
+        // Add custom processor configuration
+        List<Map<String, Object>> outputProcessors = new ArrayList<>();
+        Map<String, Object> setFieldConfig = new HashMap<>();
+        setFieldConfig.put("type", "set_field");
+        setFieldConfig.put("path", "$.metadata");
+        setFieldConfig.put("value", Map.of("source", "query_planner_tool"));
+        outputProcessors.add(setFieldConfig);
+        params.put("output_processors", outputProcessors);
+
+        QueryPlanningTool tool = QueryPlanningTool.Factory.getInstance().create(params);
+
+        // Verify the output parser was created
+        assertNotNull("Output parser should be created by factory", tool.getOutputParser());
+
+        // Test the parser - it should use BOTH default extract_json AND custom set_field processors
+        Parser outputParser = tool.getOutputParser();
+
+        // Test: Extract JSON from text (default extract_json) + add metadata field (custom set_field)
+        String inputWithText = "Here is your query: {\"query\":{\"match\":{\"title\":\"test\"}}}";
+        Object parsedResult = outputParser.parse(inputWithText);
+        String result = parsedResult instanceof String ? (String) parsedResult : gson.toJson(parsedResult);
+
+        // Verify both processors worked: extract_json extracted JSON, set_field added metadata
+        String expectedResult = "{\"query\":{\"match\":{\"title\":\"test\"}},\"metadata\":{\"source\":\"query_planner_tool\"}}";
+        assertEquals("Parser should extract JSON and add metadata field", expectedResult, result);
+    }
+
+    // Test 3: Create tool with mocked queryGenerationTool, manually set extract_json processor, run end-to-end
+    @SneakyThrows
+    @Test
+    public void testQueryPlanningTool_WithMockedMLModelTool_EndToEnd() {
+        mockSampleDoc();
+        mockGetIndexMapping();
+
+        // Mock the queryGenerationTool (MLModelTool) to return JSON embedded in text
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("Here is your query: {\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        // Create tool using constructor with the mocked queryGenerationTool
+        QueryPlanningTool tool = new QueryPlanningTool(LLM_GENERATED_TYPE_FIELD, queryGenerationTool, client, null);
+
+        // Create extract_json processor config (same as in factory)
+        Map<String, Object> extractJsonConfig = new HashMap<>();
+        extractJsonConfig.put("type", "extract_json");
+        extractJsonConfig.put("extract_type", "object");
+        extractJsonConfig.put("default", DEFAULT_SEARCH_TEMPLATE);
+
+        // Set the parser on the tool
+        tool.setOutputParser(ToolParser.createProcessingParser(null, List.of(extractJsonConfig)));
+
+        // Run the tool end-to-end - the output parser will return a Map, not String
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        ActionListener<Object> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        Map<String, String> runParams = new HashMap<>();
+        runParams.put(QUESTION_FIELD, "test query");
+        runParams.put(INDEX_NAME_FIELD, "testIndex");
+        tool.run(runParams, listener);
+
+        // Trigger the async index mapping response
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        // Verify the JSON was extracted correctly by the parser
+        Object resultObj = future.get();
+        String result = resultObj instanceof String ? (String) resultObj : gson.toJson(resultObj);
+        assertEquals("{\"query\":{\"match\":{\"title\":\"test\"}}}", result);
     }
 
 }
