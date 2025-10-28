@@ -113,6 +113,7 @@ public class CommonValue {
     public static final String CLIENT_CONFIG_FIELD = "client_config";
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
+    public static final String CONNECTOR_ACTION_FIELD = "connector_action";
 
     // MCP Constants
     public static final String MCP_TOOL_NAME_FIELD = "name";

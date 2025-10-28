@@ -128,6 +128,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 .searchSourceBuilder(input.getSearchSourceBuilder())
                 .tenantId(tenantId)
                 .build();
+            // TODO: add search pipeline support in SearchDataObjectRequest
+            // if (memoryConfig.getSearchPipeline() != null) {
+            // searchDataObjecRequest.pipeline(memoryConfig.getSearchPipeline());
+            // }
 
             // Execute search
             ActionListener<SearchResponse> searchResponseActionListener = ActionListener.wrap(response -> {
@@ -141,7 +145,13 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 log.error("Search execution failed", e);
                 actionListener.onFailure(new OpenSearchException("Search execution failed: " + e.getMessage(), e));
             });
-            memoryContainerHelper.searchData(container.getConfiguration(), searchDataObjecRequest, searchResponseActionListener);
+
+            if (memoryConfig.getRemoteStore() == null) {
+                memoryContainerHelper.searchData(container.getConfiguration(), searchDataObjecRequest, searchResponseActionListener);
+            } else {
+                String query = input.getSearchSourceBuilder().toString();
+                memoryContainerHelper.searchDataFromRemoteStorage(memoryConfig, indexName, query, searchResponseActionListener);
+            }
 
         } catch (Exception e) {
             log.error("Failed to build search request", e);

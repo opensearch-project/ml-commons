@@ -19,6 +19,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.RemoteStore;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.transport.client.Client;
 
@@ -37,7 +38,8 @@ public final class MemoryContainerPipelineHelper {
     /**
      * Creates an ingest pipeline and long-term memory index.
      * <p>
-     * If embedding is configured, creates a text embedding pipeline first,
+     * If a pre-existing ingest pipeline is configured, uses that pipeline directly.
+     * Otherwise, if embedding is configured, creates a text embedding pipeline first,
      * then creates the long-term index with the pipeline attached.
      * If no embedding is configured, creates the index without a pipeline.
      *
@@ -55,7 +57,13 @@ public final class MemoryContainerPipelineHelper {
         ActionListener<Boolean> listener
     ) {
         try {
-            if (config.getEmbeddingModelType() != null) {
+            // Check if user provided a pre-existing ingest pipeline at configuration level
+            if (config.getIngestPipeline() != null && !config.getIngestPipeline().isEmpty()) {
+                log.info("Using pre-existing ingest pipeline from configuration: {}", config.getIngestPipeline());
+                // Use the user-provided pipeline directly
+                indicesHandler.createLongTermMemoryIndex(config.getIngestPipeline(), indexName, config, listener);
+            } else if (config.getEmbeddingModelType() != null) {
+                // Auto-create pipeline if embedding model is configured
                 String pipelineName = indexName + "-embedding";
 
                 createTextEmbeddingPipeline(pipelineName, config, client, ActionListener.wrap(success -> {
@@ -225,6 +233,133 @@ public final class MemoryContainerPipelineHelper {
         } else {
             log.debug("History index disabled, skipping creation");
             listener.onResponse(true);
+        }
+    }
+
+    /**
+     * Creates an ingest pipeline in remote storage and long-term memory index.
+     * <p>
+     * If a pre-existing ingest pipeline is configured in remote_store, uses that pipeline directly.
+     * Otherwise, if embedding is configured, creates a text embedding pipeline in the remote cluster first,
+     * then creates the long-term index with the pipeline attached.
+     * If no embedding is configured, creates the index without a pipeline.
+     *
+     * @param connectorId     The connector ID for remote storage
+     * @param indexName       The long-term memory index name
+     * @param config          The memory configuration
+     * @param indicesHandler  The ML indices handler
+     * @param client          The OpenSearch client
+     * @param listener        Action listener that receives true on success, or error on failure
+     */
+    public static void createRemoteLongTermMemoryIngestPipeline(
+        String connectorId,
+        String indexName,
+        MemoryConfiguration config,
+        MLIndicesHandler indicesHandler,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
+        try {
+            RemoteStore remoteStore = config.getRemoteStore();
+
+            // Check if user provided a pre-existing ingest pipeline in remote_store
+            if (remoteStore.getIngestPipeline() != null && !remoteStore.getIngestPipeline().isEmpty()) {
+                log.info("Using pre-existing ingest pipeline from remote_store: {}", remoteStore.getIngestPipeline());
+                // Use the user-provided pipeline directly
+                org.opensearch.ml.helper.RemoteStorageHelper
+                    .createRemoteLongTermMemoryIndexWithIngestAndSearchPipeline(
+                        connectorId,
+                        indexName,
+                        remoteStore.getIngestPipeline(),
+                        remoteStore.getSearchPipeline(),
+                        config,
+                        indicesHandler,
+                        client,
+                        listener
+                    );
+            } else if (remoteStore.getEmbeddingModelType() != null) {
+                // Auto-create pipeline if embedding model is configured
+                String pipelineName = indexName + "-embedding";
+
+                createRemoteTextEmbeddingPipeline(connectorId, pipelineName, config, client, ActionListener.wrap(success -> {
+                    log.info("Successfully created remote text embedding pipeline: {}", pipelineName);
+                    // Now create the remote long-term memory index with the pipeline
+                    org.opensearch.ml.helper.RemoteStorageHelper
+                        .createRemoteLongTermMemoryIndexWithPipeline(
+                            connectorId,
+                            indexName,
+                            pipelineName,
+                            config,
+                            indicesHandler,
+                            client,
+                            listener
+                        );
+                }, e -> {
+                    log.error("Failed to create remote text embedding pipeline '{}'", pipelineName, e);
+                    listener.onFailure(e);
+                }));
+            } else {
+                // No embedding configured, create index without pipeline
+                org.opensearch.ml.helper.RemoteStorageHelper
+                    .createRemoteLongTermMemoryIndex(connectorId, indexName, config, indicesHandler, client, listener);
+            }
+        } catch (Exception e) {
+            log.error("Failed to create remote long-term memory infrastructure for index: {}", indexName, e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Creates a text embedding pipeline in remote storage for memory container.
+     * <p>
+     * Creates a pipeline with the appropriate embedding processor in the remote cluster.
+     * Uses the remote embedding model ID if specified in remote_store configuration,
+     * otherwise falls back to the local embedding model ID.
+     *
+     * @param connectorId   The connector ID for remote storage
+     * @param pipelineName  The pipeline name
+     * @param config        The memory configuration
+     * @param client        The OpenSearch client
+     * @param listener      Action listener that receives true on success, or error on failure
+     */
+    public static void createRemoteTextEmbeddingPipeline(
+        String connectorId,
+        String pipelineName,
+        MemoryConfiguration config,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
+        try {
+            RemoteStore remoteStore = config.getRemoteStore();
+            String processorName = remoteStore.getEmbeddingModelType() == org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING
+                ? "text_embedding"
+                : "sparse_encoding";
+
+            String embeddingModelId = remoteStore.getEmbeddingModelId();
+
+            XContentBuilder builder = XContentFactory
+                .jsonBuilder()
+                .startObject()
+                .field("description", "Agentic Memory Text embedding pipeline")
+                .startArray("processors")
+                .startObject()
+                .startObject(processorName)
+                .field("model_id", embeddingModelId)
+                .startObject("field_map")
+                .field(MEMORY_FIELD, MEMORY_EMBEDDING_FIELD)
+                .endObject()
+                .endObject()
+                .endObject()
+                .endArray()
+                .endObject();
+
+            String pipelineBody = builder.toString();
+
+            // Use RemoteStorageHelper to create the pipeline in remote storage
+            org.opensearch.ml.helper.RemoteStorageHelper.createRemotePipeline(connectorId, pipelineName, pipelineBody, client, listener);
+        } catch (IOException e) {
+            log.error("Failed to build remote pipeline configuration for '{}'", pipelineName, e);
+            listener.onFailure(e);
         }
     }
 }

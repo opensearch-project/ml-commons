@@ -25,6 +25,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.RemoteStore;
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.log4j.Log4j2;
@@ -180,5 +181,132 @@ public class MemorySearchQueryBuilder {
         }
 
         return boolQuery;
+    }
+
+    /**
+     * Builds a fact search query for AOSS with neural search support
+     * Similar to buildFactSearchQuery but returns a JSON string for remote execution
+     *
+     * @param strategy The memory strategy containing namespace information
+     * @param fact The fact to search for
+     * @param namespace The namespace map for filtering
+     * @param ownerId The owner ID for filtering
+     * @param memoryConfig The memory storage configuration
+     * @param memoryContainerId The memory container ID to filter by
+     * @param maxInferSize Maximum number of results to return
+     * @return JSON string with the search query
+     */
+    public static String buildFactSearchQueryForAoss(
+        MemoryStrategy strategy,
+        String fact,
+        Map<String, String> namespace,
+        String ownerId,
+        MemoryConfiguration memoryConfig,
+        String memoryContainerId,
+        int maxInferSize
+    ) {
+        StringBuilder queryBuilder = new StringBuilder();
+        queryBuilder.append("{\"size\":").append(maxInferSize).append(",\"query\":{\"bool\":{\"filter\":[");
+
+        // Add filter conditions
+        boolean firstFilter = true;
+        for (String key : strategy.getNamespace()) {
+            if (!namespace.containsKey(key)) {
+                throw new IllegalArgumentException("Namespace does not contain key: " + key);
+            }
+            if (!firstFilter) {
+                queryBuilder.append(",");
+            }
+            queryBuilder
+                .append("{\"term\":{\"")
+                .append(NAMESPACE_FIELD)
+                .append(".")
+                .append(key)
+                .append("\":\"")
+                .append(StringEscapeUtils.escapeJson(namespace.get(key)))
+                .append("\"}}");
+            firstFilter = false;
+        }
+
+        if (ownerId != null) {
+            if (!firstFilter) {
+                queryBuilder.append(",");
+            }
+            queryBuilder
+                .append("{\"term\":{\"")
+                .append(OWNER_ID_FIELD)
+                .append("\":\"")
+                .append(StringEscapeUtils.escapeJson(ownerId))
+                .append("\"}}");
+            firstFilter = false;
+        }
+
+        if (!firstFilter) {
+            queryBuilder.append(",");
+        }
+        queryBuilder.append("{\"term\":{\"").append(NAMESPACE_SIZE_FIELD).append("\":").append(strategy.getNamespace().size()).append("}}");
+
+        // Filter by strategy_id to prevent cross-strategy interference (sufficient for uniqueness)
+        queryBuilder
+            .append(",{\"term\":{\"")
+            .append(STRATEGY_ID_FIELD)
+            .append("\":\"")
+            .append(StringEscapeUtils.escapeJson(strategy.getId()))
+            .append("\"}}");
+
+        // Filter by memory_container_id to prevent cross-container access when containers share the same index prefix
+        if (memoryContainerId != null && !memoryContainerId.isBlank()) {
+            queryBuilder
+                .append(",{\"term\":{\"")
+                .append(MEMORY_CONTAINER_ID_FIELD)
+                .append("\":\"")
+                .append(StringEscapeUtils.escapeJson(memoryContainerId))
+                .append("\"}}");
+        }
+
+        queryBuilder.append("],\"must\":[");
+
+        RemoteStore remoteStore = memoryConfig.getRemoteStore();
+        // Add the search query based on embedding type
+        if (remoteStore != null && remoteStore.getEmbeddingModelId() != null) {
+            // Determine which embedding model ID to use
+            String embeddingModelId = remoteStore.getEmbeddingModelId();
+
+            if (remoteStore.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+                // Neural search for dense embeddings
+                queryBuilder
+                    .append("{\"neural\":{\"")
+                    .append(MEMORY_EMBEDDING_FIELD)
+                    .append("\":{\"query_text\":\"")
+                    .append(StringEscapeUtils.escapeJson(fact))
+                    .append("\",\"model_id\":\"")
+                    .append(StringEscapeUtils.escapeJson(embeddingModelId))
+                    .append("\"}}}");
+            } else if (remoteStore.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+                // Neural sparse search for sparse embeddings
+                queryBuilder
+                    .append("{\"neural_sparse\":{\"")
+                    .append(MEMORY_EMBEDDING_FIELD)
+                    .append("\":{\"query_text\":\"")
+                    .append(StringEscapeUtils.escapeJson(fact))
+                    .append("\",\"model_id\":\"")
+                    .append(StringEscapeUtils.escapeJson(embeddingModelId))
+                    .append("\"}}}");
+            } else {
+                throw new IllegalStateException("Unsupported embedding model type: " + memoryConfig.getEmbeddingModelType());
+            }
+        } else {
+            // Fallback to match query if no embedding configured
+            queryBuilder
+                .append("{\"match\":{\"")
+                .append(MEMORY_FIELD)
+                .append("\":\"")
+                .append(StringEscapeUtils.escapeJson(fact))
+                .append("\"}}");
+        }
+
+        queryBuilder.append("]}}}");
+
+        return queryBuilder.toString();
     }
 }

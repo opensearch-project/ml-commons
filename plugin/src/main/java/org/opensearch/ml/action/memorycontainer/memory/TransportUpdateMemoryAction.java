@@ -129,8 +129,11 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
                 Map<String, Object> newDoc = constructNewDoc(updateRequest.getMlUpdateMemoryInput(), memoryType, originalDoc);
                 IndexRequest indexRequest = new IndexRequest(memoryIndexName).id(memoryId).source(newDoc);
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, actionListener);
-
+                if (container.getConfiguration().getRemoteStore() == null) {
+                    memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, actionListener);
+                } else {
+                    memoryContainerHelper.updateDataToRemoteStorage(container.getConfiguration(), indexRequest, actionListener);
+                }
             }, actionListener::onFailure);
             memoryContainerHelper.getData(container.getConfiguration(), getRequest, getResponseActionListener);
 

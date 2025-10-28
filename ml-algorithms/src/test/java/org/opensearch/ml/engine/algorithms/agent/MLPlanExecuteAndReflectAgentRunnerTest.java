@@ -49,10 +49,10 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -153,7 +153,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             ActionListener<List<Interaction>> listener = invocation.getArgument(0);
             listener.onResponse(generateInteractions());
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), anyInt());
+        }).when(conversationIndexMemory).getMessages(anyInt(), memoryInteractionCapture.capture());
 
         // Setup memory manager
         doAnswer(invocation -> {
@@ -370,7 +370,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("executor_message_history_limit", "3");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
-        verify(conversationIndexMemory).getMessages(any(), eq(5));
+        verify(conversationIndexMemory).getMessages(eq(5), any());
 
         ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
         verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());

@@ -113,7 +113,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 String.format("Agent name cannot be empty or exceed max length of %d characters", MLAgent.AGENT_NAME_MAX_LENGTH)
             );
         }
-        validateMLAgentType(type);
+        MLAgentType.from(type);
         if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }

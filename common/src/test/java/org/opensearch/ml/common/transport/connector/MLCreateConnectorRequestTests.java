@@ -48,6 +48,7 @@ public class MLCreateConnectorRequestTests {
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(
             actionType,
+            null,
             method,
             url,
             headers,

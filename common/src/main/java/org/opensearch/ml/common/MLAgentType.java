@@ -21,7 +21,7 @@ public enum MLAgentType {
         try {
             return MLAgentType.valueOf(value.toUpperCase(Locale.ROOT));
         } catch (Exception e) {
-            throw new IllegalArgumentException("Wrong Agent type");
+            throw new IllegalArgumentException(value + " is not a valid Agent Type");
         }
     }
 }

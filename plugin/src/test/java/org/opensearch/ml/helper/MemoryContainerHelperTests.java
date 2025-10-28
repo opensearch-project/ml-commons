@@ -723,4 +723,129 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
             SearchResponse.Clusters.EMPTY
         );
     }
+
+    public void testConvertBulkRequestToNDJSON_IndexRequest() throws Exception {
+        BulkRequest bulkRequest = new BulkRequest();
+
+        // Add index request with ID
+        IndexRequest indexRequest1 = new IndexRequest("test-index").id("doc1").source("{\"field\":\"value1\"}");
+        bulkRequest.add(indexRequest1);
+
+        // Add index request without ID
+        IndexRequest indexRequest2 = new IndexRequest("test-index").source("{\"field\":\"value2\"}");
+        bulkRequest.add(indexRequest2);
+
+        String ndjson = invokeConvertBulkRequestToNDJSON(bulkRequest);
+
+        // Verify the NDJSON format
+        String[] lines = ndjson.split("\n");
+        assertEquals(4, lines.length); // 2 requests * 2 lines each
+
+        // First request with ID
+        assertTrue(lines[0].contains("\"index\""));
+        assertTrue(lines[0].contains("\"_index\":\"test-index\""));
+        assertTrue(lines[0].contains("\"_id\":\"doc1\""));
+        assertEquals("{\"field\":\"value1\"}", lines[1]);
+
+        // Second request without ID
+        assertTrue(lines[2].contains("\"index\""));
+        assertTrue(lines[2].contains("\"_index\":\"test-index\""));
+        assertFalse(lines[2].contains("\"_id\""));
+        assertEquals("{\"field\":\"value2\"}", lines[3]);
+    }
+
+    public void testConvertBulkRequestToNDJSON_UpdateRequest() throws Exception {
+        BulkRequest bulkRequest = new BulkRequest();
+
+        // Add update request with doc
+        UpdateRequest updateRequest = new UpdateRequest("test-index", "doc1").doc("{\"field\":\"updated_value\"}");
+        bulkRequest.add(updateRequest);
+
+        String ndjson = invokeConvertBulkRequestToNDJSON(bulkRequest);
+
+        // Verify the NDJSON format
+        String[] lines = ndjson.split("\n");
+        assertEquals(2, lines.length);
+
+        assertTrue(lines[0].contains("\"update\""));
+        assertTrue(lines[0].contains("\"_index\":\"test-index\""));
+        assertTrue(lines[0].contains("\"_id\":\"doc1\""));
+        assertTrue(lines[1].contains("\"doc\""));
+        assertTrue(lines[1].contains("\"field\":\"updated_value\""));
+    }
+
+    public void testConvertBulkRequestToNDJSON_DeleteRequest() throws Exception {
+        BulkRequest bulkRequest = new BulkRequest();
+
+        // Add delete request
+        DeleteRequest deleteRequest = new DeleteRequest("test-index", "doc1");
+        bulkRequest.add(deleteRequest);
+
+        String ndjson = invokeConvertBulkRequestToNDJSON(bulkRequest);
+
+        // Verify the NDJSON format
+        String[] lines = ndjson.split("\n");
+        assertEquals(1, lines.length); // Delete only has action line, no document line
+
+        assertTrue(lines[0].contains("\"delete\""));
+        assertTrue(lines[0].contains("\"_index\":\"test-index\""));
+        assertTrue(lines[0].contains("\"_id\":\"doc1\""));
+    }
+
+    public void testConvertBulkRequestToNDJSON_MixedRequests() throws Exception {
+        BulkRequest bulkRequest = new BulkRequest();
+
+        // Add different types of requests
+        bulkRequest.add(new IndexRequest("test-index").id("doc1").source("{\"field\":\"value1\"}"));
+        bulkRequest.add(new UpdateRequest("test-index", "doc2").doc("{\"field\":\"updated\"}"));
+        bulkRequest.add(new DeleteRequest("test-index", "doc3"));
+
+        String ndjson = invokeConvertBulkRequestToNDJSON(bulkRequest);
+
+        // Verify the NDJSON format
+        String[] lines = ndjson.split("\n");
+        assertEquals(5, lines.length); // index(2) + update(2) + delete(1)
+
+        // Index request
+        assertTrue(lines[0].contains("\"index\""));
+        assertEquals("{\"field\":\"value1\"}", lines[1]);
+
+        // Update request
+        assertTrue(lines[2].contains("\"update\""));
+        assertTrue(lines[3].contains("\"doc\""));
+
+        // Delete request
+        assertTrue(lines[4].contains("\"delete\""));
+    }
+
+    public void testConvertBulkRequestToNDJSON_RealWorldExample() throws Exception {
+        BulkRequest bulkRequest = new BulkRequest();
+
+        // Real-world example similar to memory container bulk write
+        String docJson =
+            "{\"created_time\":1760760969707,\"memory\":\"Bob likes swimming.\",\"last_updated_time\":1760760969707,\"namespace_size\":1,\"owner_id\":\"admin\",\"namespace\":{\"user_id\":\"bob\"},\"strategy_id\":\"semantic_9766b0fe\",\"strategy_type\":\"SEMANTIC\",\"memory_container_id\":\"B4DU85kBZsSZwpNve_T0\",\"tags\":{\"topic\":\"personal info\"}}";
+
+        IndexRequest indexRequest = new IndexRequest("demo2-memory-long-term").source(docJson);
+        bulkRequest.add(indexRequest);
+
+        String ndjson = invokeConvertBulkRequestToNDJSON(bulkRequest);
+
+        // Verify it's valid NDJSON
+        String[] lines = ndjson.split("\n");
+        assertEquals(2, lines.length);
+
+        assertTrue(lines[0].contains("\"index\""));
+        assertTrue(lines[0].contains("\"_index\":\"demo2-memory-long-term\""));
+        assertEquals(docJson, lines[1]);
+
+        // Verify the entire NDJSON is valid using StringUtils
+        assertTrue(org.opensearch.ml.common.utils.StringUtils.isJsonOrNdjson(ndjson));
+    }
+
+    // Helper method to invoke private convertBulkRequestToNDJSON method
+    private String invokeConvertBulkRequestToNDJSON(BulkRequest bulkRequest) throws Exception {
+        java.lang.reflect.Method method = MemoryContainerHelper.class.getDeclaredMethod("convertBulkRequestToNDJSON", BulkRequest.class);
+        method.setAccessible(true);
+        return (String) method.invoke(helper, bulkRequest);
+    }
 }

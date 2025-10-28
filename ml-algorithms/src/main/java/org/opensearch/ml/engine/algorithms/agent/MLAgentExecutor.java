@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -46,6 +47,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -54,6 +56,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -61,7 +64,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
@@ -243,70 +245,79 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
                                         if (memorySpec != null
                                             && memorySpec.getType() != null
-                                            && memoryFactoryMap.containsKey(memorySpec.getType())
+                                            && memoryFactoryMap.containsKey(MLMemoryType.from(memorySpec.getType()).name())
                                             && (memoryId == null || parentInteractionId == null)) {
-                                            ConversationIndexMemory.Factory conversationIndexMemoryFactory =
-                                                (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
-                                            conversationIndexMemoryFactory
-                                                .create(question, memoryId, appType, ActionListener.wrap(memory -> {
-                                                    inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
-                                                    // get question for regenerate
-                                                    if (regenerateInteractionId != null) {
-                                                        log.info("Regenerate for existing interaction {}", regenerateInteractionId);
-                                                        client
-                                                            .execute(
-                                                                GetInteractionAction.INSTANCE,
-                                                                new GetInteractionRequest(regenerateInteractionId),
-                                                                ActionListener.wrap(interactionRes -> {
-                                                                    inputDataSet
-                                                                        .getParameters()
-                                                                        .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
-                                                                    saveRootInteractionAndExecute(
-                                                                        listener,
-                                                                        memory,
-                                                                        inputDataSet,
-                                                                        mlTask,
-                                                                        isAsync,
-                                                                        outputs,
-                                                                        modelTensors,
-                                                                        mlAgent,
-                                                                        channel
-                                                                    );
-                                                                }, e -> {
-                                                                    log.error("Failed to get existing interaction for regeneration", e);
-                                                                    listener.onFailure(e);
-                                                                })
-                                                            );
-                                                    } else {
-                                                        saveRootInteractionAndExecute(
-                                                            listener,
-                                                            memory,
-                                                            inputDataSet,
-                                                            mlTask,
-                                                            isAsync,
-                                                            outputs,
-                                                            modelTensors,
-                                                            mlAgent,
-                                                            channel
+                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap
+                                                .get(MLMemoryType.from(memorySpec.getType()).name());
+
+                                            Map<String, Object> memoryParams = createMemoryParams(question, memoryId, appType, mlAgent);
+                                            memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
+                                                inputDataSet.getParameters().put(MEMORY_ID, memory.getId());
+                                                // get question for regenerate
+                                                if (regenerateInteractionId != null) {
+                                                    log.info("Regenerate for existing interaction {}", regenerateInteractionId);
+                                                    client
+                                                        .execute(
+                                                            GetInteractionAction.INSTANCE,
+                                                            new GetInteractionRequest(regenerateInteractionId),
+                                                            ActionListener.wrap(interactionRes -> {
+                                                                inputDataSet
+                                                                    .getParameters()
+                                                                    .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
+                                                                saveRootInteractionAndExecute(
+                                                                    listener,
+                                                                    memory,
+                                                                    inputDataSet,
+                                                                    mlTask,
+                                                                    isAsync,
+                                                                    outputs,
+                                                                    modelTensors,
+                                                                    mlAgent,
+                                                                    channel
+                                                                );
+                                                            }, e -> {
+                                                                log.error("Failed to get existing interaction for regeneration", e);
+                                                                listener.onFailure(e);
+                                                            })
                                                         );
-                                                    }
-                                                }, ex -> {
-                                                    log.error("Failed to read conversation memory", ex);
-                                                    listener.onFailure(ex);
-                                                }));
+                                                } else {
+                                                    saveRootInteractionAndExecute(
+                                                        listener,
+                                                        memory,
+                                                        inputDataSet,
+                                                        mlTask,
+                                                        isAsync,
+                                                        outputs,
+                                                        modelTensors,
+                                                        mlAgent,
+                                                        channel
+                                                    );
+                                                }
+                                            }, ex -> {
+                                                log.error("Failed to read conversation memory", ex);
+                                                listener.onFailure(ex);
+                                            }));
                                         } else {
                                             // For existing conversations, create memory instance using factory
                                             if (memorySpec != null && memorySpec.getType() != null) {
+                                                String memoryType = MLMemoryType.from(memorySpec.getType()).name();
+                                                Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+
                                                 ConversationIndexMemory.Factory factory = (ConversationIndexMemory.Factory) memoryFactoryMap
                                                     .get(memorySpec.getType());
-                                                if (factory != null) {
+                                                if (memoryFactory != null) {
                                                     // memoryId exists, so create returns an object with existing memory, therefore name can
                                                     // be null
-                                                    factory
+                                                    Map<String, Object> memoryParams = createMemoryParams(
+                                                        question,
+                                                        memoryId,
+                                                        appType,
+                                                        mlAgent
+                                                    );
+
+                                                    memoryFactory
                                                         .create(
-                                                            null,
-                                                            memoryId,
-                                                            appType,
+                                                            memoryParams,
                                                             ActionListener
                                                                 .wrap(
                                                                     createdMemory -> executeAgent(
@@ -377,7 +388,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      */
     private void saveRootInteractionAndExecute(
         ActionListener<Output> listener,
-        ConversationIndexMemory memory,
+        Memory memory,
         RemoteInferenceInputDataSet inputDataSet,
         MLTask mlTask,
         boolean isAsync,
@@ -396,7 +407,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             .question(question)
             .response("")
             .finalAnswer(true)
-            .sessionId(memory.getConversationId())
+            .sessionId(memory.getId())
             .build();
         memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
             log.info("Created parent interaction ID: {}", interaction.getId());
@@ -404,7 +415,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // only delete previous interaction when new interaction created
             if (regenerateInteractionId != null) {
                 memory
-                    .getMemoryManager()
                     .deleteInteractionAndTrace(
                         regenerateInteractionId,
                         ActionListener
@@ -413,7 +423,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     inputDataSet,
                                     mlTask,
                                     isAsync,
-                                    memory.getConversationId(),
+                                    memory.getId(),
                                     mlAgent,
                                     outputs,
                                     modelTensors,
@@ -428,18 +438,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             )
                     );
             } else {
-                executeAgent(
-                    inputDataSet,
-                    mlTask,
-                    isAsync,
-                    memory.getConversationId(),
-                    mlAgent,
-                    outputs,
-                    modelTensors,
-                    listener,
-                    memory,
-                    channel
-                );
+                executeAgent(inputDataSet, mlTask, isAsync, memory.getId(), mlAgent, outputs, modelTensors, listener, memory, channel);
             }
         }, ex -> {
             log.error("Failed to create parent interaction", ex);
@@ -456,7 +455,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
-        ConversationIndexMemory memory,
+        Memory memory,
         TransportChannel channel
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
@@ -536,7 +535,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         String agentType,
         String parentInteractionId,
-        ConversationIndexMemory memory
+        Memory memory
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
@@ -559,6 +558,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String parentInteractionId,
         ConversationIndexMemory memory,
         String agentType
+        Memory memory
     ) {
         String taskId = mlTask.getTaskId();
         Map<String, Object> agentResponse = new HashMap<>();
@@ -725,15 +725,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    private void updateInteractionWithFailure(String interactionId, ConversationIndexMemory memory, String errorMessage) {
+    private void updateInteractionWithFailure(String interactionId, Memory memory, String errorMessage) {
         if (interactionId != null && memory != null) {
             String failureMessage = "Agent execution failed: " + errorMessage;
             Map<String, Object> updateContent = new HashMap<>();
             updateContent.put(RESPONSE_FIELD, failureMessage);
 
             memory
-                .getMemoryManager()
-                .updateInteraction(
+                .update(
                     interactionId,
                     updateContent,
                     ActionListener

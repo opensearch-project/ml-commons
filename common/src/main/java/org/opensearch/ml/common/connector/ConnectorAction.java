@@ -8,6 +8,7 @@ package org.opensearch.ml.common.connector;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +34,7 @@ import lombok.Getter;
 public class ConnectorAction implements ToXContentObject, Writeable {
 
     public static final String ACTION_TYPE_FIELD = "action_type";
+    public static final String NAME_FIELD = "name";
     public static final String METHOD_FIELD = "method";
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
@@ -52,6 +54,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
 
     private ActionType actionType;
+    private String name;
     private String method;
     private String url;
     private Map<String, String> headers;
@@ -62,6 +65,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     @Builder(toBuilder = true)
     public ConnectorAction(
         ActionType actionType,
+        String name,
         String method,
         String url,
         Map<String, String> headers,
@@ -78,7 +82,11 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't be null");
         }
+        if (name != null && ActionType.isValidAction(name)) {
+            throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
+        }
         this.actionType = actionType;
+        this.name = name;
         this.method = method;
         this.url = url;
         this.headers = headers;
@@ -97,6 +105,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.requestBody = input.readOptionalString();
         this.preProcessFunction = input.readOptionalString();
         this.postProcessFunction = input.readOptionalString();
+        this.name = input.readOptionalString();// TODO: add version check
     }
 
     @Override
@@ -113,6 +122,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         out.writeOptionalString(requestBody);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
+        out.writeOptionalString(name); // TODO: add version check
     }
 
     @Override
@@ -139,6 +149,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (postProcessFunction != null) {
             builder.field(ACTION_POST_PROCESS_FUNCTION, postProcessFunction);
         }
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
         return builder.endObject();
     }
 
@@ -149,6 +162,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     public static ConnectorAction parse(XContentParser parser) throws IOException {
         ActionType actionType = null;
+        String name = null;
         String method = null;
         String url = null;
         Map<String, String> headers = null;
@@ -164,6 +178,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case ACTION_TYPE_FIELD:
                     actionType = ActionType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case NAME_FIELD:
+                    name = parser.text();
                     break;
                 case METHOD_FIELD:
                     method = parser.text();
@@ -191,6 +208,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return ConnectorAction
             .builder()
             .actionType(actionType)
+            .name(name)
             .method(method)
             .url(url)
             .headers(headers)
