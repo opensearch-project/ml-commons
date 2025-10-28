@@ -995,4 +995,54 @@ public class MLAgentUpdateInputTest {
         assertEquals(input.getLastUpdateTime(), parsedInput.getLastUpdateTime());
         assertEquals(input.getTenantId(), parsedInput.getTenantId());
     }
+
+    @Test
+    public void testParseWithMcpConnectors() throws Exception {
+        String inputStr = """
+            {
+              "agent_id": "test-agent-id",
+              "name": "test-agent",
+              "parameters": {
+                "_llm_interface": "openai/v1/chat/completions",
+                "mcp_connectors": [
+                  {
+                    "mcp_connector_id": "test-connector-id",
+                    "tool_filters": ["^get_alerts$", "^list_.*$"]
+                  }
+                ]
+              }
+            }
+            """;
+        testParseFromJsonString(inputStr, parsedInput -> {
+            assertEquals("test-agent", parsedInput.getName());
+            assertNotNull(parsedInput.getParameters());
+            assertEquals("openai/v1/chat/completions", parsedInput.getParameters().get("_llm_interface"));
+            assertTrue(parsedInput.getParameters().containsKey("mcp_connectors"));
+            String mcpConnectorsJson = parsedInput.getParameters().get("mcp_connectors");
+            assertTrue(mcpConnectorsJson.contains("test-connector-id"));
+            assertTrue(mcpConnectorsJson.contains("tool_filters"));
+        });
+    }
+
+    @Test
+    public void testParseWithMcpConnectorsMinimal() throws Exception {
+        String inputStr = """
+            {
+              "agent_id": "test-agent-id",
+              "parameters": {
+                "mcp_connectors": [
+                  {
+                    "mcp_connector_id": "connector-123"
+                  }
+                ]
+              }
+            }
+            """;
+        testParseFromJsonString(inputStr, parsedInput -> {
+            assertNotNull(parsedInput.getParameters());
+            assertTrue(parsedInput.getParameters().containsKey("mcp_connectors"));
+            String mcpConnectorsJson = parsedInput.getParameters().get("mcp_connectors");
+            assertTrue(mcpConnectorsJson.contains("connector-123"));
+        });
+    }
 }
