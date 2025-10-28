@@ -20,8 +20,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
-import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SEARCH_TEMPLATE;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_NAME_FIELD;
@@ -1415,7 +1415,7 @@ public class QueryPlanningToolTests {
         // Test case 3: No valid JSON - should return default template
         Object parsedResult3 = outputParser.parse("No JSON here at all");
         String resultNoJson = parsedResult3 instanceof String ? (String) parsedResult3 : gson.toJson(parsedResult3);
-        assertEquals(DEFAULT_SEARCH_TEMPLATE, resultNoJson);
+        assertEquals(DEFAULT_QUERY, resultNoJson);
     }
 
     // Test 2: Create tool from factory with custom processors, verify both default and custom processors work
@@ -1474,7 +1474,7 @@ public class QueryPlanningToolTests {
         Map<String, Object> extractJsonConfig = new HashMap<>();
         extractJsonConfig.put("type", "extract_json");
         extractJsonConfig.put("extract_type", "object");
-        extractJsonConfig.put("default", DEFAULT_SEARCH_TEMPLATE);
+        extractJsonConfig.put("default", DEFAULT_QUERY);
 
         // Set the parser on the tool
         tool.setOutputParser(ToolParser.createProcessingParser(null, List.of(extractJsonConfig)));

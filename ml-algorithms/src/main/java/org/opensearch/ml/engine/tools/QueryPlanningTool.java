@@ -472,7 +472,7 @@ public class QueryPlanningTool implements WithModelTool {
             Map<String, Object> extractJsonConfig = new HashMap<>();
             extractJsonConfig.put("type", "extract_json");
             extractJsonConfig.put("extract_type", "object"); // Extract JSON objects only
-            extractJsonConfig.put("default", DEFAULT_SEARCH_TEMPLATE); // Return default search template if no JSON found
+            extractJsonConfig.put("default", DEFAULT_QUERY); // Return default match all query if no JSON found
 
             // Combine: default extract_json first, then any custom processors
             List<Map<String, Object>> combinedProcessorConfigs = new ArrayList<>();
