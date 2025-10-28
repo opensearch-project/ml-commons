@@ -44,10 +44,12 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -67,6 +69,9 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     @Mock
     NamedXContentRegistry xContentRegistry;
+
+    @Mock
+    ResourceSharingClient resourceSharingClient;
 
     @Mock
     private ActionListener<Boolean> actionListener;
@@ -101,6 +106,8 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
     }
 
     public void setupModelGroup(String owner, String access, List<String> backendRoles) throws IOException {
@@ -455,6 +462,29 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
+    }
+
+    public void test_ShouldUseResourceAuthz_FeatureEnabled() {
+        // arrange
+        when(resourceSharingClient.isFeatureEnabledForType(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)).thenReturn(true);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
+
+        // act + assert
+        assertTrue(ModelAccessControlHelper.shouldUseResourceAuthz(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE));
+
+        // cleanup to avoid side-effects on other tests
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+    }
+
+    public void test_ShouldUseResourceAuthz_FeatureDisabled_And_ClientNull() {
+        // Case 1: client present but feature disabled
+        when(resourceSharingClient.isFeatureEnabledForType(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE)).thenReturn(false);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
+        assertFalse(ModelAccessControlHelper.shouldUseResourceAuthz(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE));
+
+        // Case 2: client is null
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+        assertFalse(ModelAccessControlHelper.shouldUseResourceAuthz(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE));
     }
 
     private GetResponse modelGroupBuilder(List<String> backendRoles, String access, String owner) throws IOException {

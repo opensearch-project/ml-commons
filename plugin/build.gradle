@@ -213,7 +213,7 @@ tasks.named("check").configure { dependsOn(integTest) }
 
 // Enable Security if -Dsecurity=true or -Dhttps=true
 def securityEnabled = System.getProperty("security", "false") == "true" ||
-        System.getProperty("https", "false")   == "true"
+        System.getProperty("https", "false") == "true"
 
 integTest {
     dependsOn "bundlePlugin"
@@ -321,7 +321,7 @@ def configureClusterPlugins(cluster, jobSchedZip, securityZip, securityEnabled) 
         plugin(project.tasks.bundlePlugin.archiveFile)
 
         if (securityEnabled) {
-            nodes.each { node ->
+            cluster.nodes.each { node ->
                 node.extraConfigFile("kirk.pem",       file("build/resources/test/kirk.pem"))
                 node.extraConfigFile("kirk-key.pem",   file("build/resources/test/kirk-key.pem"))
                 node.extraConfigFile("esnode.pem",     file("build/resources/test/esnode.pem"))
