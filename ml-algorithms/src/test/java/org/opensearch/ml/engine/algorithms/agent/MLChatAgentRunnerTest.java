@@ -1171,4 +1171,96 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(result.containsKey(AgentUtils.RESPONSE_FORMAT_INSTRUCTION));
         Assert.assertTrue(result.containsKey(AgentUtils.TOOL_RESPONSE));
     }
+
+    @Test
+    public void testVerboseFilterWithSpecificFields() {
+        // Create an MLAgent and run with verbose_filter
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+        params.put("verbose", "true");
+        params.put("verbose_filter", "firstTool");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        // Capture the response
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(agentActionListener).onResponse(responseCaptor.capture());
+
+        Object capturedResponse = responseCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+
+        // Count response fields across all outputs
+        int responseFieldCount = 0;
+        for (ModelTensors output : modelTensorOutput.getMlModelOutputs()) {
+            for (ModelTensor tensor : output.getMlModelTensors()) {
+                if ("response".equals(tensor.getName())) {
+                    responseFieldCount++;
+                }
+            }
+        }
+
+        // Verify there is more than one response field
+        assertEquals(2, responseFieldCount);
+    }
+
+    @Test
+    public void testVerboseFilterWithInvalidPath() {
+        // Create an MLAgent and run with invalid verbose_filter
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+        params.put("verbose", "true");
+        params.put("verbose_filter", "RandomTool");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        // Should still work but filter nothing
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(agentActionListener).onResponse(responseCaptor.capture());
+
+        Object capturedResponse = responseCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+        int responseFieldCount = 0;
+        for (ModelTensors output : modelTensorOutput.getMlModelOutputs()) {
+            for (ModelTensor tensor : output.getMlModelTensors()) {
+                if ("response".equals(tensor.getName())) {
+                    responseFieldCount++;
+                }
+            }
+        }
+
+        assertEquals(1, responseFieldCount);
+    }
+
+    @Test
+    public void testVerboseFilterWithoutVerbose() {
+        // Create an MLAgent and run with verbose_filter but verbose=false
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+        params.put("verbose", "false");
+
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        // verbose_filter should be ignored when verbose=false
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(agentActionListener).onResponse(responseCaptor.capture());
+
+        Object capturedResponse = responseCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+        int responseFieldCount = 0;
+        for (ModelTensors output : modelTensorOutput.getMlModelOutputs()) {
+            for (ModelTensor tensor : output.getMlModelTensors()) {
+                if ("response".equals(tensor.getName())) {
+                    responseFieldCount++;
+                }
+            }
+        }
+
+        assertEquals(1, responseFieldCount);
+    }
 }

@@ -154,6 +154,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
 
+    public static final String EXECUTOR_VERBOSE = "executor_verbose";
+    public static final String EXECUTOR_VERBOSE_FILTER = "executor_verbose_filter";
+
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
         Settings settings,
@@ -435,6 +438,15 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
                     );
 
+                // Pass through verbose and verbose_filter if provided
+                if (allParams.containsKey(EXECUTOR_VERBOSE)) {
+                    reactParams.put(AgentUtils.VERBOSE, allParams.get(EXECUTOR_VERBOSE));
+                }
+
+                if (allParams.containsKey(EXECUTOR_VERBOSE_FILTER)) {
+                    reactParams.put(MLChatAgentRunner.VERBOSE_FILTER, allParams.get(EXECUTOR_VERBOSE_FILTER));
+                }
+
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
                     .agentId(reActAgentId)
@@ -449,8 +461,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     // Navigate through the structure to get the response
                     Map<String, String> results = new HashMap<>();
+                    List<String> allResponses = new ArrayList<>();
 
-                    // Process tensors in a single stream
+                    // Process tensors to collect all responses
                     reactResult.getMlModelOutputs().stream().flatMap(output -> output.getMlModelTensors().stream()).forEach(tensor -> {
                         switch (tensor.getName()) {
                             case MEMORY_ID_FIELD:
@@ -459,13 +472,34 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             case PARENT_INTERACTION_ID_FIELD:
                                 results.put(PARENT_INTERACTION_ID_FIELD, tensor.getResult());
                                 break;
-                            default:
-                                Map<String, ?> dataMap = tensor.getDataAsMap();
-                                if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
-                                    results.put(STEP_RESULT_FIELD, (String) dataMap.get(RESPONSE_FIELD));
+                            case RESPONSE_FIELD:
+                                if (tensor.getResult() != null) {
+                                    allResponses.add(tensor.getResult());
+                                } else {
+                                    Map<String, ?> dataMap = tensor.getDataAsMap();
+                                    if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
+                                        allResponses.add((String) dataMap.get(RESPONSE_FIELD));
+                                    }
                                 }
                         }
                     });
+
+                    if (!allResponses.isEmpty()) {
+                        StringBuilder stepResult = new StringBuilder();
+                        stepResult.append(allResponses.getLast());
+                        if (allResponses.size() > 1) {
+                            stepResult.append("\n\n<step-traces>");
+                        }
+
+                        for (int i = 0; i < allResponses.size() - 1; i++) {
+                            stepResult.append("\n\n").append(allResponses.get(i));
+                            if (i == allResponses.size() - 2) {
+                                stepResult.append("\n</step-traces>");
+                            }
+                        }
+
+                        results.put(STEP_RESULT_FIELD, stepResult.toString());
+                    }
 
                     if (!results.containsKey(STEP_RESULT_FIELD)) {
                         throw new IllegalStateException("No valid response found in ReAct agent output");
@@ -502,8 +536,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
                     }
 
-                    completedSteps.add(String.format("\nStep %d: %s\n", stepsExecuted + 1, stepToExecute));
-                    completedSteps.add(String.format("\nStep %d Result: %s\n", stepsExecuted + 1, results.get(STEP_RESULT_FIELD)));
+                    completedSteps.add(String.format("\n<step-%d>\n%s\n</step-%d>\n", stepsExecuted + 1, stepToExecute, stepsExecuted + 1));
+                    completedSteps
+                        .add(
+                            String
+                                .format(
+                                    "\n<step-%d-result>\n%s\n</step-%d-result>\n",
+                                    stepsExecuted + 1,
+                                    results.get(STEP_RESULT_FIELD),
+                                    stepsExecuted + 1
+                                )
+                        );
 
                     saveTraceData(
                         (ConversationIndexMemory) memory,

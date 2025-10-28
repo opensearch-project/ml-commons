@@ -122,6 +122,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String VERBOSE_FILTER = "verbose_filter";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
@@ -300,6 +301,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
         boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
         boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
+        List<String> traceFilter = parseTraceFilter(tmpParameters.get(VERBOSE_FILTER));
 
         // Create root interaction.
         ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
@@ -379,13 +381,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     lastActionInput.set(actionInput);
                     lastToolSelectionResponse.set(thoughtResponse);
 
-                    traceTensors
-                        .add(
-                            ModelTensors
-                                .builder()
-                                .mlModelTensors(List.of(ModelTensor.builder().name("response").result(thoughtResponse).build()))
-                                .build()
-                        );
+                    if (shouldIncludeInTrace("LLM", traceFilter)) {
+                        traceTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(List.of(ModelTensor.builder().name("response").result(thoughtResponse).build()))
+                                    .build()
+                            );
+                    }
 
                     saveTraceData(
                         conversationIndexMemory,
@@ -487,18 +491,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
                     streamingWrapper.sendToolResponse(outputToOutputString(output), sessionId, parentInteractionId);
-                    traceTensors
-                        .add(
-                            ModelTensors
-                                .builder()
-                                .mlModelTensors(
-                                    Collections
-                                        .singletonList(
-                                            ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build()
-                                        )
-                                )
-                                .build()
-                        );
+                    if (shouldIncludeInTrace(lastAction.get(), traceFilter)) {
+                        traceTensors
+                            .add(
+                                ModelTensors
+                                    .builder()
+                                    .mlModelTensors(
+                                        Collections
+                                            .singletonList(
+                                                ModelTensor.builder().name("response").result(sessionMsgAnswerBuilder.toString()).build()
+                                            )
+                                    )
+                                    .build()
+                            );
+                    }
 
                     if (finalI == maxIterations - 1) {
                         handleMaxIterationsReached(
@@ -840,6 +846,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);
         tmpParameters.putIfAbsent(TOOL_RESPONSE, PromptTemplate.PROMPT_TEMPLATE_TOOL_RESPONSE);
         return tmpParameters;
+    }
+
+    private static List<String> parseTraceFilter(String traceFilterParam) {
+        if (traceFilterParam == null || traceFilterParam.trim().isEmpty()) {
+            return null;
+        }
+        return List.of(traceFilterParam.split(","));
+    }
+
+    private static boolean shouldIncludeInTrace(String toolName, List<String> traceFilter) {
+        if (traceFilter == null) {
+            return true;
+        }
+
+        return traceFilter.contains(toolName);
     }
 
     public static void returnFinalResponse(
