@@ -33,6 +33,9 @@ public class ToolMLInput extends MLInput {
     @Setter
     private String toolName;
 
+    @Getter
+    private Map<String, Object> originalParameters;
+
     public ToolMLInput(StreamInput in) throws IOException {
         super(in);
         this.toolName = in.readString();
@@ -66,7 +69,9 @@ public class ToolMLInput extends MLInput {
                     toolName = parser.text();
                     break;
                 case PARAMETERS_FIELD:
-                    Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
+                    Map<String, Object> rawParams = parser.map();
+                    originalParameters = rawParams;
+                    Map<String, String> parameters = StringUtils.getParameterMap(rawParams);
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
                 default:

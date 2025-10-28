@@ -415,7 +415,53 @@ public class ListIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && !parameters.isEmpty();
+        if (parameters == null || parameters.isEmpty()) {
+            return false;
+        }
+
+        // Validate question length
+        String question = parameters.get("question");
+        if (question != null && question.length() > 10000) {
+            throw new IllegalArgumentException("question length cannot exceed 10000 characters");
+        }
+
+        return true;
+    }
+
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate question must be String
+        Object questionObj = parameters.get("question");
+        if (questionObj != null && !(questionObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("question must be a String type, but got %s", questionObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate indices must be ArrayList
+        Object indicesObj = parameters.get("indices");
+        if (indicesObj != null && !(indicesObj instanceof ArrayList)) {
+            throw new IllegalArgumentException(
+                String.format("indices must be an Array type, but got %s", indicesObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate local must be Boolean
+        Object localObj = parameters.get("local");
+        if (localObj != null && !(localObj instanceof Boolean)) {
+            throw new IllegalArgumentException(
+                String.format("local must be a Boolean type, but got %s", localObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate page_size must be Integer
+        Object pageSizeObj = parameters.get("page_size");
+        if (pageSizeObj != null && !(pageSizeObj instanceof Integer)) {
+            throw new IllegalArgumentException(
+                String.format("page_size must be an Integer type, but got %s", pageSizeObj.getClass().getSimpleName())
+            );
+        }
+        return true;
     }
 
     /**

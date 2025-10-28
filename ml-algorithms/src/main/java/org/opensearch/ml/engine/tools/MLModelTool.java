@@ -148,6 +148,26 @@ public class MLModelTool implements WithModelTool {
         return parameters != null && !parameters.isEmpty();
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate prompt must be String
+        Object promptObj = parameters.get("prompt");
+        if (promptObj != null && !(promptObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("prompt must be a String type, but got %s", promptObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate response_field must be String
+        Object responseFieldObj = parameters.get(RESPONSE_FIELD);
+        if (responseFieldObj != null && !(responseFieldObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", RESPONSE_FIELD, responseFieldObj.getClass().getSimpleName())
+            );
+        }
+        return true;
+    }
+
     public static class Factory implements WithModelTool.Factory<MLModelTool> {
         private Client client;
 

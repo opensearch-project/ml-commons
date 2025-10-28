@@ -131,6 +131,18 @@ public class SearchIndexTool implements Tool {
         return true;
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate input must be String
+        Object inputObj = parameters.get(INPUT_FIELD);
+        if (inputObj != null && !(inputObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", INPUT_FIELD, inputObj.getClass().getSimpleName())
+            );
+        }
+        return true;
+    }
+
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);

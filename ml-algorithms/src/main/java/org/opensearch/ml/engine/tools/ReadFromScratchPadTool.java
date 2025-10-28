@@ -84,6 +84,18 @@ public class ReadFromScratchPadTool implements Tool {
         return true;
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate persistent_notes must be String
+        Object persistentNotesObj = parameters.get(PERSISTENT_NOTES_KEY);
+        if (persistentNotesObj != null && !(persistentNotesObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", PERSISTENT_NOTES_KEY, persistentNotesObj.getClass().getSimpleName())
+            );
+        }
+        return true;
+    }
+
     /**
      * Executes the ReadFromScratchPadTool.
      * This tool retrieves notes from the persistent scratchpad for the current conversation.

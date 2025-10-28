@@ -395,6 +395,91 @@ public class QueryPlanningTool implements WithModelTool {
             || !parameters.containsKey(INDEX_NAME_FIELD)) {
             return false;
         }
+
+        // Validate question length
+        String question = parameters.get(QUESTION_FIELD);
+        if (question != null && question.length() > 10000) {
+            throw new IllegalArgumentException("question length cannot exceed 10000 characters");
+        }
+        return true;
+    }
+
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate response_filter must be String
+        Object responseFilterObj = parameters.get("response_filter");
+        if (responseFilterObj != null && !(responseFilterObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("response_filter must be a String type, but got %s", responseFilterObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate generation_type must be String
+        Object generationTypeObj = parameters.get(GENERATION_TYPE_FIELD);
+        if (generationTypeObj != null && !(generationTypeObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", GENERATION_TYPE_FIELD, generationTypeObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate query_planner_system_prompt must be String
+        Object queryPlannerSystemPromptObj = parameters.get(QUERY_PLANNER_SYSTEM_PROMPT_FIELD);
+        if (queryPlannerSystemPromptObj != null && !(queryPlannerSystemPromptObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String
+                    .format(
+                        "%s must be a String type, but got %s",
+                        QUERY_PLANNER_SYSTEM_PROMPT_FIELD,
+                        queryPlannerSystemPromptObj.getClass().getSimpleName()
+                    )
+            );
+        }
+
+        // Validate query_planner_user_prompt must be String
+        Object queryPlannerUserPromptObj = parameters.get(QUERY_PLANNER_USER_PROMPT_FIELD);
+        if (queryPlannerUserPromptObj != null && !(queryPlannerUserPromptObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String
+                    .format(
+                        "%s must be a String type, but got %s",
+                        QUERY_PLANNER_USER_PROMPT_FIELD,
+                        queryPlannerUserPromptObj.getClass().getSimpleName()
+                    )
+            );
+        }
+
+        // Validate search_templates must be Array
+        Object searchTemplatesObj = parameters.get(SEARCH_TEMPLATES_FIELD);
+        if (searchTemplatesObj != null && !(searchTemplatesObj instanceof Array)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be an Array type, but got %s", SEARCH_TEMPLATES_FIELD, searchTemplatesObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate question must be String
+        Object questionObj = parameters.get(QUESTION_FIELD);
+        if (questionObj != null && !(questionObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", QUESTION_FIELD, questionObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate index_name must be String
+        Object indexNameObj = parameters.get(INDEX_NAME_FIELD);
+        if (indexNameObj != null && !(indexNameObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", INDEX_NAME_FIELD, indexNameObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate embedding_model_id must be String
+        Object embeddingModelIdObj = parameters.get("embedding_model_id");
+        if (embeddingModelIdObj != null && !(embeddingModelIdObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("embedding_model_id must be a String type, but got %s", embeddingModelIdObj.getClass().getSimpleName())
+            );
+        }
+
         return true;
     }
 

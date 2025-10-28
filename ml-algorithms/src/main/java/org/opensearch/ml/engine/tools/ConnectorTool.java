@@ -100,6 +100,18 @@ public class ConnectorTool implements Tool {
         return parameters != null && !parameters.isEmpty();
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate response_filter must be String
+        Object responseFilterObj = parameters.get("response_filter");
+        if (responseFilterObj != null && !(responseFilterObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("response_filter must be a String type, but got %s", responseFilterObj.getClass().getSimpleName())
+            );
+        }
+        return true;
+    }
+
     public static class Factory implements Tool.Factory<ConnectorTool> {
         public static final String TYPE = "ConnectorTool";
         public static final String DEFAULT_DESCRIPTION = "Invokes external service. Required: 'connector_id'. Returns: service response.";
