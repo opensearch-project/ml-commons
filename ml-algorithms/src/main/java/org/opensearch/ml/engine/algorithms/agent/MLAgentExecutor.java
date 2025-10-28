@@ -496,7 +496,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     outputs,
                     modelTensors,
                     parentInteractionId,
-                    memory
+                    memory,
+                    mlAgent.getType()
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
                 try {
@@ -555,6 +556,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String parentInteractionId,
+        ConversationIndexMemory memory,
+        String agentType
         Memory memory
     ) {
         String taskId = mlTask.getTaskId();
@@ -652,6 +655,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     sdkClient,
                     encryptor
                 );
+            case AG_UI:
+                return new MLAGUIAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
         }
@@ -678,6 +692,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             String result = output instanceof String
                 ? (String) output
                 : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+
             modelTensors.add(ModelTensor.builder().name("response").result(result).build());
         }
     }

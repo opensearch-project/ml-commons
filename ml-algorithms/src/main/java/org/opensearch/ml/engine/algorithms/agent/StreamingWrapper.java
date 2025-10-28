@@ -34,7 +34,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class StreamingWrapper {
     private final TransportChannel channel;
-    private final boolean isStreaming;
+    private boolean isStreaming;
     private Client client;
 
     public StreamingWrapper(TransportChannel channel, org.opensearch.transport.client.Client client) {
