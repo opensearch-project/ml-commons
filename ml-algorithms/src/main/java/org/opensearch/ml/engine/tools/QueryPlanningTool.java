@@ -253,6 +253,7 @@ public class QueryPlanningTool implements WithModelTool {
                         try {
                             String queryString = (String) r;
                             if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
+                                log.debug("Model failed to generate the DSL query, returning the Default match all query");
                                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                                 String defaultQueryString = substitutor.replace(DEFAULT_QUERY);
                                 listener.onResponse((T) defaultQueryString);
