@@ -85,6 +85,26 @@ public class WriteToScratchPadTool implements Tool {
         return parameters != null && parameters.containsKey(NOTES_KEY);
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate notes must be String
+        Object notesObj = parameters.get(NOTES_KEY);
+        if (notesObj != null && !(notesObj instanceof Boolean)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", NOTES_KEY, notesObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate return_history must be Boolean
+        Object returnHistoryObj = parameters.get(RETURN_HISTORY_KEY);
+        if (returnHistoryObj != null && !(returnHistoryObj instanceof Boolean)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a Boolean type, but got %s", RETURN_HISTORY_KEY, returnHistoryObj.getClass().getSimpleName())
+            );
+        }
+        return true;
+    }
+
     /**
      * Executes the WriteToScratchPadTool.
      * This tool saves notes to the persistent scratchpad for the current conversation.

@@ -100,6 +100,11 @@ public class McpStreamableHttpTool implements WithModelTool {
         return true;
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        return true;
+    }
+
     public static class Factory implements WithModelTool.Factory<McpStreamableHttpTool> {
         private static Factory INSTANCE;
 

@@ -113,6 +113,11 @@ public class IndexInsightTool implements Tool {
         return true;
     }
 
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        return true;
+    }
+
     public static class Factory implements Tool.Factory<IndexInsightTool> {
         private Client client;
 

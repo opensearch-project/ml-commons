@@ -117,6 +117,28 @@ public class AgentTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
+        if (parameters == null || parameters.isEmpty()) {
+            return false;
+        }
+
+        // Validate question length
+        String question = parameters.get("question");
+        if (question != null && question.length() > 10000) {
+            throw new IllegalArgumentException("question length cannot exceed 10000 characters");
+        }
+
+        return true;
+    }
+
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate question must be String
+        Object questionObj = parameters.get("question");
+        if (questionObj != null && !(questionObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("question must be a String type, but got %s", questionObj.getClass().getSimpleName())
+            );
+        }
         return true;
     }
 

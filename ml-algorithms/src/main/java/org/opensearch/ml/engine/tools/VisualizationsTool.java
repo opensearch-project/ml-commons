@@ -43,6 +43,9 @@ public class VisualizationsTool implements Tool {
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
     public static final String STRICT_FIELD = "strict";
+    public static final String INPUT_FIELD = "input";
+    public static final String INDEX_FIELD = "index";
+    public static final String SIZE_FIELD = "size";
 
     /**
      * default number of visualizations returned
@@ -93,7 +96,7 @@ public class VisualizationsTool implements Tool {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
             boolQueryBuilder.must().add(QueryBuilders.termQuery("type", SAVED_OBJECT_TYPE));
-            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get("input")));
+            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get(INPUT_FIELD)));
 
             SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource().query(boolQueryBuilder);
             searchSourceBuilder.from(0).size(size);
@@ -146,10 +149,47 @@ public class VisualizationsTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null
-            && !parameters.isEmpty()
-            && !Strings.isNullOrEmpty(parameters.get("input"))
-            && parameters.containsKey("input");
+        if (parameters == null
+            || parameters.isEmpty()
+            || Strings.isNullOrEmpty(parameters.get(INPUT_FIELD))
+            || !parameters.containsKey(INPUT_FIELD)) {
+            return false;
+        }
+
+        // Validate input length
+        String input = parameters.get(INPUT_FIELD);
+        if (input != null && input.length() > 10000) {
+            throw new IllegalArgumentException("input length cannot exceed 10000 characters");
+        }
+        return true;
+    }
+
+    @Override
+    public boolean validateParameterTypes(Map<String, Object> parameters) {
+        // Validate input must be String
+        Object inputObj = parameters.get(INPUT_FIELD);
+        if (inputObj != null && !(inputObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", INPUT_FIELD, inputObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate index must be String
+        Object indexObj = parameters.get(INDEX_FIELD);
+        if (indexObj != null && !(indexObj instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be a String type, but got %s", INDEX_FIELD, indexObj.getClass().getSimpleName())
+            );
+        }
+
+        // Validate size must be Integer
+        Object sizeObj = parameters.get(SIZE_FIELD);
+        if (sizeObj != null && !(sizeObj instanceof Integer)) {
+            throw new IllegalArgumentException(
+                String.format("%s must be an Integer type, but got %s", SIZE_FIELD, sizeObj.getClass().getSimpleName())
+            );
+        }
+        return true;
     }
 
     public static class Factory implements Tool.Factory<VisualizationsTool> {
@@ -176,8 +216,8 @@ public class VisualizationsTool implements Tool {
 
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
-            String index = params.get("index") == null ? ".kibana" : (String) params.get("index");
-            String sizeStr = params.get("size") == null ? "3" : (String) params.get("size");
+            String index = params.get(INDEX_FIELD) == null ? ".kibana" : (String) params.get(INDEX_FIELD);
+            String sizeStr = params.get(SIZE_FIELD) == null ? "3" : (String) params.get(SIZE_FIELD);
             int size;
             try {
                 size = Integer.parseInt(sizeStr);
