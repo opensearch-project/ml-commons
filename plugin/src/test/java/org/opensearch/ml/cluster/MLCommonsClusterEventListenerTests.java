@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 
 import java.util.Collections;
@@ -82,24 +83,11 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         listener.clusterChanged(event);
 
         verify(mlTaskManager).indexStatsCollectorJob(true);
-        verify(mlTaskManager, never()).startTaskPollingJob();
-    }
-
-    public void testClusterChanged_WithV31DataNode_TaskPollingIndexExists() {
-        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
-        setupClusterState(dataNode, true);
-
-        when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(false);
-
-        listener.clusterChanged(event);
-
-        verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
-        verify(mlTaskManager).startTaskPollingJob();
     }
 
     public void testClusterChanged_WithPreV31DataNode_NoJobsStarted() {
         DiscoveryNode dataNode = createDataNode(Version.V_3_0_0);
-        setupClusterState(dataNode, true);
+        setupClusterState(dataNode, false);
 
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
@@ -107,12 +95,11 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         listener.clusterChanged(event);
 
         verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
-        verify(mlTaskManager, never()).startTaskPollingJob();
     }
 
     public void testClusterChanged_WithPostV31DataNode_JobsStarted() {
         DiscoveryNode dataNode = createDataNode(Version.V_3_2_0);
-        setupClusterState(dataNode, true);
+        setupClusterState(dataNode, false);
 
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
@@ -120,7 +107,18 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         listener.clusterChanged(event);
 
         verify(mlTaskManager).indexStatsCollectorJob(true);
-        verify(mlTaskManager).startTaskPollingJob();
+    }
+
+    public void testClusterChanged_IndexAlreadyPresent_JobNotStarted() {
+        DiscoveryNode dataNode = createDataNode(Version.V_3_1_0);
+        setupClusterState(dataNode, true);
+
+        when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()).thenReturn(true);
+
+        listener.clusterChanged(event);
+
+        verify(mlTaskManager, never()).indexStatsCollectorJob(anyBoolean());
     }
 
     private DiscoveryNode createDataNode(Version version) {
@@ -134,7 +132,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         );
     }
 
-    private void setupClusterState(DiscoveryNode node, boolean hasTaskPollingIndex) {
+    private void setupClusterState(DiscoveryNode node, boolean hasMLJobsIndex) {
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node).build();
 
         when(event.state()).thenReturn(clusterState);
@@ -143,7 +141,7 @@ public class MLCommonsClusterEventListenerTests extends OpenSearchTestCase {
         when(clusterState.nodes()).thenReturn(nodes);
         when(clusterState.getMetadata()).thenReturn(metadata);
         when(clusterService.state()).thenReturn(clusterState);
-        when(metadata.hasIndex(TASK_POLLING_JOB_INDEX)).thenReturn(hasTaskPollingIndex);
+        when(metadata.hasIndex(ML_JOBS_INDEX)).thenReturn(hasMLJobsIndex);
         when(metadata.settings()).thenReturn(org.opensearch.common.settings.Settings.EMPTY);
     }
 }
