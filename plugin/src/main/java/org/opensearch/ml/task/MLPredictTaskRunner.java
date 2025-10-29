@@ -155,7 +155,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
     }
 
-    private TransportResponseHandler<MLTaskResponse> getResponseStreamHandler(TransportChannel channel) {
+    @Override
+    protected TransportResponseHandler<MLTaskResponse> getResponseStreamHandler(MLPredictionTaskRequest request) {
+        TransportChannel channel = request.getStreamingChannel();
         return new StreamTransportResponseHandler<MLTaskResponse>() {
             @Override
             public void handleStreamResponse(StreamTransportResponse<MLTaskResponse> streamResponse) {
@@ -228,7 +230,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     request.setDispatchTask(false);
                     // Check if this is a streaming request
                     if (isStreamingRequest(request)) {
-                        TransportChannel channel = request.getStreamingChannel();
                         log.debug("Using streaming transport for request {}", request.getRequestID());
                         transportService
                             .sendRequest(
@@ -236,7 +237,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 getTransportStreamActionName(),
                                 request,
                                 TransportRequestOptions.builder().withType(TransportRequestOptions.Type.STREAM).build(),
-                                getResponseStreamHandler(channel)
+                                getResponseStreamHandler(request)
                             );
                     } else {
                         transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
@@ -364,17 +365,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, tenantId, listener, channel);
     }
 
-    private boolean isStreamingRequest(MLPredictionTaskRequest request) {
-        try {
-            if (request.getMlInput() != null && request.getMlInput().getInputDataset() instanceof RemoteInferenceInputDataSet) {
-                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
-                Map<String, String> parameters = inputDataSet.getParameters();
-                return parameters != null && "true".equals(parameters.get("stream"));
-            }
-        } catch (Exception e) {
-            log.debug("Failed to check streaming parameter, defaulting to non-streaming", e);
-        }
-        return false;
+    @Override
+    protected boolean isStreamingRequest(MLPredictionTaskRequest request) {
+        return request.getStreamingChannel() != null;
     }
 
     private void executePredictionByInputDataType(

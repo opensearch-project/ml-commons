@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,25 +29,24 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.index.IndexResponse;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryDecision;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
-import org.opensearch.ml.helper.MemoryEmbeddingHelper;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.transport.client.Client;
 
 public class MemoryOperationsServiceTests {
 
     @Mock
     private Client client;
-
-    @Mock
-    private MemoryEmbeddingHelper memoryEmbeddingHelper;
 
     @Mock
     private ActionListener<List<MemoryResult>> operationsListener;
@@ -56,10 +56,30 @@ public class MemoryOperationsServiceTests {
 
     private MemoryOperationsService memoryOperationsService;
 
+    private MemoryConfiguration memoryConfig;
+    private Map<String, String> namespace;
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
+    MemoryStrategy strategy;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memoryOperationsService = new MemoryOperationsService(client, memoryEmbeddingHelper);
+        memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
+
+        memoryConfig = MemoryConfiguration
+            .builder()
+            .llmId("llm-123")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .embeddingModelId("embedding-123")
+            .dimension(512)
+            .maxInferSize(5)
+            .disableHistory(true)
+            .build();
+        namespace = new HashMap<>();
+        namespace.put("session_id", "session-123");
+
+        strategy = MemoryStrategy.builder().type(MemoryStrategyType.SEMANTIC).enabled(true).id("strategy-123").build();
     }
 
     @Test
@@ -69,9 +89,9 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null; // User is final, use null instead of mock
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         verify(operationsListener).onResponse(any(List.class));
     }
@@ -93,8 +113,8 @@ public class MemoryOperationsServiceTests {
         tags.put("key1", "value1");
         when(input.getTags()).thenReturn(tags);
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(false);
 
         // Mock bulk response
         BulkResponse bulkResponse = mock(BulkResponse.class);
@@ -105,52 +125,14 @@ public class MemoryOperationsServiceTests {
         when(bulkItemResponse.getId()).thenReturn("generated-id-123");
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
-        verify(client).bulk(any(), any());
-    }
-
-    @Test
-    public void testBulkIndexMemoriesWithResults_EmptyRequests() {
-        List<IndexRequest> indexRequests = Arrays.asList();
-        List<MemoryInfo> memoryInfos = Arrays.asList();
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-
-        memoryOperationsService.bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, responseListener);
-
-        verify(responseListener).onFailure(any(IllegalStateException.class));
-    }
-
-    @Test
-    public void testBulkIndexMemoriesWithResults_SuccessfulIndexing() {
-        IndexRequest indexRequest = mock(IndexRequest.class);
-        List<IndexRequest> indexRequests = Arrays.asList(indexRequest);
-
-        MemoryInfo memoryInfo = new MemoryInfo(null, "Test content", null, true);
-        List<MemoryInfo> memoryInfos = Arrays.asList(memoryInfo);
-
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-
-        // Mock index response
-        IndexResponse indexResponse = mock(IndexResponse.class);
-        when(indexResponse.getId()).thenReturn("generated-id-123");
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            listener.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        memoryOperationsService.bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, responseListener);
-
-        verify(client).index(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
     }
 
     @Test
@@ -170,7 +152,8 @@ public class MemoryOperationsServiceTests {
         List<IndexRequest> indexRequests = new ArrayList<>();
         List<MemoryInfo> memoryInfos = new ArrayList<>();
 
-        memoryOperationsService.createFactMemoriesFromList(facts, input, indexName, sessionId, user, now, indexRequests, memoryInfos);
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos, "container-123");
 
         // Verify that requests and infos were populated
         assert indexRequests.size() == 2;
@@ -190,22 +173,22 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null;
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(false);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(false);
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
@@ -221,22 +204,22 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null;
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(false);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(false);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(false);
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[0]);
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(memoryContainerHelper, times(2)).bulkIngestData(any(), any(), any());
         verify(operationsListener).onResponse(any(List.class));
     }
 
@@ -252,9 +235,9 @@ public class MemoryOperationsServiceTests {
         String sessionId = "session-123";
         User user = null;
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         // Verify that NONE events result in an empty response list (no operations to execute)
         ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
@@ -293,7 +276,7 @@ public class MemoryOperationsServiceTests {
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         when(bulkResponse.hasFailures()).thenReturn(false);
@@ -304,12 +287,12 @@ public class MemoryOperationsServiceTests {
         when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { addItem });
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onResponse(bulkResponse);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
         // Verify that only ADD, UPDATE, DELETE are included in results (not NONE)
         ArgumentCaptor<List<MemoryResult>> resultsCaptor = ArgumentCaptor.forClass(List.class);
@@ -338,19 +321,19 @@ public class MemoryOperationsServiceTests {
         MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
         Exception bulkException = new RuntimeException("Bulk operation failed");
 
         doAnswer(invocation -> {
-            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
             listener.onFailure(bulkException);
             return null;
-        }).when(client).bulk(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
-        verify(client).bulk(any(), any());
+        verify(memoryContainerHelper).bulkIngestData(any(), any(), any());
         verify(operationsListener).onFailure(bulkException);
     }
 
@@ -368,8 +351,8 @@ public class MemoryOperationsServiceTests {
         when(input.getAgentId()).thenReturn("agent-123");
         when(input.getTags()).thenReturn(new HashMap<>());
 
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.isSemanticStorageEnabled()).thenReturn(true);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
 
         BulkResponse bulkResponse = mock(BulkResponse.class);
         BulkItemResponse bulkItemResponse = mock(BulkItemResponse.class);
@@ -385,40 +368,231 @@ public class MemoryOperationsServiceTests {
             return null;
         }).when(client).bulk(any(), any());
 
-        List<Object> embeddings = Arrays.asList(new float[] { 0.1f, 0.2f, 0.3f });
-        doAnswer(invocation -> {
-            ActionListener<List<Object>> listener = invocation.getArgument(2);
-            listener.onResponse(embeddings);
-            return null;
-        }).when(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), any(), any());
-
-        memoryOperationsService.executeMemoryOperations(decisions, indexName, sessionId, user, input, storageConfig, operationsListener);
-
-        verify(memoryEmbeddingHelper).generateEmbeddingsForMultipleTexts(any(), any(), any());
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
     }
 
     @Test
-    public void testBulkIndexMemoriesWithResults_IndexingFailure() {
-        IndexRequest indexRequest = mock(IndexRequest.class);
-        List<IndexRequest> indexRequests = Arrays.asList(indexRequest);
+    public void testExecuteMemoryOperations_HistoryDisabled() {
+        // Test that history records are not created when history is disabled
+        MemoryDecision addDecision = mock(MemoryDecision.class);
+        when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
+        when(addDecision.getText()).thenReturn("New fact");
 
-        MemoryInfo memoryInfo = new MemoryInfo(null, "Test content", null, true);
-        List<MemoryInfo> memoryInfos = Arrays.asList(memoryInfo);
+        List<MemoryDecision> decisions = Arrays.asList(addDecision);
+        User user = null;
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getAgentId()).thenReturn("agent-123");
+        when(input.getTags()).thenReturn(new HashMap<>());
 
-        String sessionId = "session-123";
-        String indexName = "memory-index";
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
+        when(storageConfig.getLongMemoryIndexName()).thenReturn("long-term-index");
 
-        Exception indexException = new RuntimeException("Index failed");
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(false);
+        BulkItemResponse item = mock(BulkItemResponse.class);
+        when(item.isFailed()).thenReturn(false);
+        when(item.getId()).thenReturn("memory-123");
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { item });
 
         doAnswer(invocation -> {
-            ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            listener.onFailure(indexException);
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkResponse);
             return null;
-        }).when(client).index(any(), any());
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
 
-        memoryOperationsService.bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, responseListener);
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
 
-        verify(client).index(any(), any());
-        verify(responseListener).onFailure(indexException);
+        // Should only call bulkIngestData once (for long-term memory, not history)
+        verify(memoryContainerHelper, times(1)).bulkIngestData(any(), any(), any());
     }
+
+    @Test
+    public void testExecuteMemoryOperations_UserPreferenceStrategy() {
+        // Test that USER_PREFERENCE strategy type maps correctly
+        MemoryStrategy userPrefStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.USER_PREFERENCE)
+            .enabled(true)
+            .id("pref-strategy")
+            .build();
+
+        MemoryDecision addDecision = mock(MemoryDecision.class);
+        when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
+        when(addDecision.getText()).thenReturn("User prefers dark mode");
+
+        List<MemoryDecision> decisions = Arrays.asList(addDecision);
+        User user = null;
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getAgentId()).thenReturn("agent-123");
+        when(input.getTags()).thenReturn(new HashMap<>());
+        when(input.getOwnerId()).thenReturn("user-123");
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
+        when(storageConfig.getLongMemoryIndexName()).thenReturn("long-term-index");
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(false);
+        BulkItemResponse item = mock(BulkItemResponse.class);
+        when(item.isFailed()).thenReturn(false);
+        when(item.getId()).thenReturn("memory-123");
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { item });
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
+
+        memoryOperationsService
+            .executeMemoryOperations(decisions, storageConfig, namespace, user, input, userPrefStrategy, operationsListener);
+
+        verify(operationsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExecuteMemoryOperations_SummaryStrategy() {
+        // Test that SUMMARY strategy type maps correctly
+        MemoryStrategy summaryStrategy = MemoryStrategy
+            .builder()
+            .type(MemoryStrategyType.SUMMARY)
+            .enabled(true)
+            .id("summary-strategy")
+            .build();
+
+        MemoryDecision addDecision = mock(MemoryDecision.class);
+        when(addDecision.getEvent()).thenReturn(MemoryEvent.ADD);
+        when(addDecision.getText()).thenReturn("Summary of conversation");
+
+        List<MemoryDecision> decisions = Arrays.asList(addDecision);
+        User user = null;
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getAgentId()).thenReturn("agent-123");
+        when(input.getTags()).thenReturn(new HashMap<>());
+        when(input.getOwnerId()).thenReturn("user-123");
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
+        when(storageConfig.getLongMemoryIndexName()).thenReturn("long-term-index");
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(false);
+        BulkItemResponse item = mock(BulkItemResponse.class);
+        when(item.isFailed()).thenReturn(false);
+        when(item.getId()).thenReturn("memory-123");
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { item });
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
+
+        memoryOperationsService
+            .executeMemoryOperations(decisions, storageConfig, namespace, user, input, summaryStrategy, operationsListener);
+
+        verify(operationsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testExecuteMemoryOperations_WithFailedBulkItems() {
+        // Test handling of partially failed bulk operations
+        MemoryDecision addDecision1 = mock(MemoryDecision.class);
+        when(addDecision1.getEvent()).thenReturn(MemoryEvent.ADD);
+        when(addDecision1.getText()).thenReturn("Fact 1");
+
+        MemoryDecision addDecision2 = mock(MemoryDecision.class);
+        when(addDecision2.getEvent()).thenReturn(MemoryEvent.ADD);
+        when(addDecision2.getText()).thenReturn("Fact 2");
+
+        List<MemoryDecision> decisions = Arrays.asList(addDecision1, addDecision2);
+        User user = null;
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getAgentId()).thenReturn("agent-123");
+        when(input.getTags()).thenReturn(new HashMap<>());
+        when(input.getOwnerId()).thenReturn("user-123");
+
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
+        when(storageConfig.isDisableHistory()).thenReturn(true);
+        when(storageConfig.getLongMemoryIndexName()).thenReturn("long-term-index");
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        when(bulkResponse.hasFailures()).thenReturn(true);
+
+        BulkItemResponse successItem = mock(BulkItemResponse.class);
+        when(successItem.isFailed()).thenReturn(false);
+        when(successItem.getId()).thenReturn("success-id");
+
+        BulkItemResponse failedItem = mock(BulkItemResponse.class);
+        when(failedItem.isFailed()).thenReturn(true);
+        when(failedItem.getFailureMessage()).thenReturn("Index operation failed");
+
+        when(bulkResponse.getItems()).thenReturn(new BulkItemResponse[] { successItem, failedItem });
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(memoryContainerHelper).bulkIngestData(any(), any(), any());
+
+        memoryOperationsService.executeMemoryOperations(decisions, storageConfig, namespace, user, input, strategy, operationsListener);
+
+        // Should complete with results despite partial failures
+        verify(operationsListener).onResponse(any(List.class));
+    }
+
+    @Test
+    public void testCreateFactMemoriesFromList_WithEmptyList() {
+        List<String> facts = Arrays.asList();
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        String indexName = "memory-index";
+        User user = null;
+        List<IndexRequest> indexRequests = new ArrayList<>();
+        List<MemoryInfo> memoryInfos = new ArrayList<>();
+
+        memoryOperationsService
+            .createFactMemoriesFromList(facts, indexName, input, namespace, user, strategy, indexRequests, memoryInfos, "container-123");
+
+        // Should not create any requests or infos for empty list
+        assertTrue(indexRequests.isEmpty());
+        assertTrue(memoryInfos.isEmpty());
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_WithMemoryContainerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+        when(input.getTags()).thenReturn(Map.of("tag1", "value1"));
+
+        Map<String, String> strategyNamespace = Map.of("session_id", "session-123");
+        Exception exception = new RuntimeException("Test error");
+        String memoryContainerId = "container-123";
+
+        Map<String, Object> result = memoryOperationsService
+            .createErrorMemoryHistory(strategyNamespace, input, exception, memoryContainerId);
+
+        assertEquals(memoryContainerId, result.get("memory_container_id"));
+        assertEquals(strategyNamespace, result.get("namespace"));
+        assertEquals(Map.of("tag1", "value1"), result.get("tags"));
+        assertTrue(result.containsKey("error"));
+        assertTrue(result.containsKey("created_time"));
+    }
+
+    @Test
+    public void testCreateErrorMemoryHistory_WithNullMemoryContainerId() {
+        MLAddMemoriesInput input = mock(MLAddMemoriesInput.class);
+        when(input.getOwnerId()).thenReturn("owner-123");
+        when(input.getTags()).thenReturn(null);
+
+        Exception exception = new RuntimeException("Test error");
+
+        Map<String, Object> result = memoryOperationsService.createErrorMemoryHistory(null, input, exception, null);
+
+        // Should not contain memory_container_id when it's null
+        assertTrue(!result.containsKey("memory_container_id"));
+        assertTrue(result.containsKey("error"));
+        assertTrue(result.containsKey("created_time"));
+    }
+
 }

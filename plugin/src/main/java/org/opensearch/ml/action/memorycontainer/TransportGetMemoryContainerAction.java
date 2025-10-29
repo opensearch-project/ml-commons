@@ -33,6 +33,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetAc
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerGetResponse;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -43,8 +44,6 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -60,6 +59,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
     final ClusterService clusterService;
     final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    final MemoryContainerHelper memoryContainerHelper;
 
     @Inject
     public TransportGetMemoryContainerAction(
@@ -70,7 +70,8 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MemoryContainerHelper memoryContainerHelper
     ) {
         super(MLMemoryContainerGetAction.NAME, transportService, actionFilters, MLMemoryContainerGetRequest::new);
         this.client = client;
@@ -79,6 +80,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
         this.clusterService = clusterService;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.memoryContainerHelper = memoryContainerHelper;
     }
 
     @Override
@@ -115,7 +117,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
                 .whenComplete((r, throwable) -> handleResponse(r, throwable, memoryContainerId, tenantId, user, wrappedListener));
         } catch (Exception e) {
             log.error("Failed to get ML memory container {}", memoryContainerId, e);
-            actionListener.onFailure(e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -146,7 +148,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
             wrappedListener.onFailure(new OpenSearchStatusException("Failed to find memory container index", RestStatus.NOT_FOUND));
         } else {
             log.error("Failed to get ML memory container {}", memoryContainerId, cause);
-            wrappedListener.onFailure(cause);
+            wrappedListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -196,7 +198,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
         ActionListener<MLMemoryContainerGetResponse> wrappedListener
     ) {
         // Check if user has access based on owner field
-        boolean hasAccess = checkMemoryContainerAccess(user, mlMemoryContainer);
+        boolean hasAccess = memoryContainerHelper.checkMemoryContainerAccess(user, mlMemoryContainer);
 
         if (!hasAccess) {
             wrappedListener
@@ -211,29 +213,4 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
         }
     }
 
-    @VisibleForTesting
-    boolean checkMemoryContainerAccess(User user, MLMemoryContainer mlMemoryContainer) {
-        // If security is disabled (user is null), allow access
-        if (user == null) {
-            return true;
-        }
-
-        // If user is admin (has all_access role), allow access
-        if (user.getRoles() != null && user.getRoles().contains("all_access")) {
-            return true;
-        }
-
-        // Check if user is the owner
-        User owner = mlMemoryContainer.getOwner();
-        if (owner != null && owner.getName() != null && owner.getName().equals(user.getName())) {
-            return true;
-        }
-
-        // Check if user has matching backend roles
-        if (owner != null && owner.getBackendRoles() != null && user.getBackendRoles() != null) {
-            return owner.getBackendRoles().stream().anyMatch(role -> user.getBackendRoles().contains(role));
-        }
-
-        return false;
-    }
 }

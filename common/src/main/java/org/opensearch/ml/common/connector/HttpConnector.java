@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
@@ -26,6 +27,7 @@ import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
@@ -56,6 +58,8 @@ public class HttpConnector extends AbstractConnector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
+    // TODO: move the AgentUtils class from algorithm module to common module
+    public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
 
     // TODO: add RequestConfig like request time out,
 
@@ -377,14 +381,14 @@ public class HttpConnector extends AbstractConnector {
         }
 
         String llmInterface = parameters.get("_llm_interface");
-        if (llmInterface.isBlank()) {
+        if (StringUtils.isBlank(llmInterface)) {
             return false;
         }
 
         llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
         llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
         switch (llmInterface) {
-            case "openai/v1/chat/completions":
+            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
                 return true;
             default:
                 return false;

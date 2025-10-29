@@ -5,18 +5,24 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
+
+import java.time.Instant;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
@@ -76,6 +82,7 @@ public class TransportDeleteMemoryAction extends HandledTransportAction<ActionRe
 
         MLDeleteMemoryRequest deleteRequest = MLDeleteMemoryRequest.fromActionRequest(request);
         String memoryContainerId = deleteRequest.getMemoryContainerId();
+        MemoryType memoryType = deleteRequest.getMemoryType();
         String memoryId = deleteRequest.getMemoryId();
 
         // Get memory container to validate access and get memory index name
@@ -94,21 +101,44 @@ public class TransportDeleteMemoryAction extends HandledTransportAction<ActionRe
             }
 
             // Validate and get memory index name
-            if (!memoryContainerHelper.validateMemoryIndexExists(container, "delete", actionListener)) {
+            String memoryIndexName = memoryContainerHelper.getMemoryIndexName(container, memoryType);
+            if (memoryIndexName == null) {
+                actionListener.onFailure(new OpenSearchStatusException("Memory index not found", RestStatus.NOT_FOUND));
                 return;
             }
-            String memoryIndexName = memoryContainerHelper.getMemoryIndexName(container);
 
-            // Delete the memory document
-            DeleteRequest deleteMemoryRequest = new DeleteRequest(memoryIndexName, memoryId);
+            // check memory permission
+            GetRequest getRequest = new GetRequest(memoryIndexName, memoryId);
+            ActionListener<GetResponse> getResponseActionListener = ActionListener.wrap(getResponse -> {
+                if (!getResponse.isExists()) {
+                    actionListener.onFailure(new OpenSearchStatusException("Memory not found", RestStatus.NOT_FOUND));
+                    return;
+                }
+                String ownerId = (String) getResponse.getSourceAsMap().get(OWNER_ID_FIELD);
+                if (!memoryContainerHelper.checkMemoryAccess(user, ownerId)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException("User doesn't have permissions to delete this memory", RestStatus.FORBIDDEN)
+                        );
+                    return;
+                }
 
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.delete(deleteMemoryRequest, ActionListener.runBefore(actionListener, context::restore));
-            } catch (Exception e) {
-                log.error("Failed to delete memory {} from container {}", memoryId, memoryContainerId, e);
-                actionListener.onFailure(e);
-            }
+                // Log the deletion event
+                log
+                    .info(
+                        "Delete memory - Event: MEMORY_DELETED, Memory ID: {}, Memory Type: {}, Container ID: {}, User: {}, Timestamp: {}",
+                        memoryId,
+                        memoryType,
+                        memoryContainerId,
+                        user != null ? user.getName() : "unknown",
+                        Instant.now()
+                    );
 
+                // Delete the memory document
+                DeleteRequest deleteMemoryRequest = new DeleteRequest(memoryIndexName, memoryId);
+                memoryContainerHelper.deleteData(container.getConfiguration(), deleteMemoryRequest, actionListener);
+            }, actionListener::onFailure);
+            memoryContainerHelper.getData(container.getConfiguration(), getRequest, getResponseActionListener);
         }, actionListener::onFailure));
     }
 }

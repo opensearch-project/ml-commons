@@ -45,7 +45,6 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
@@ -82,7 +81,7 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isRemoteInferenceEnabled());
         assertTrue(setting.isAgentFrameworkEnabled());
         assertTrue(setting.isLocalModelEnabled());
-        assertTrue(setting.isConnectorPrivateIpEnabled().get());
+        assertTrue(setting.isConnectorPrivateIpEnabled());
         assertTrue(setting.isControllerEnabled());
         assertTrue(setting.isOfflineBatchIngestionEnabled());
         assertTrue(setting.isOfflineBatchInferenceEnabled());
@@ -92,7 +91,6 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isMetricCollectionEnabled());
         assertTrue(setting.isStaticMetricCollectionEnabled());
         assertTrue(setting.isMcpConnectorEnabled());
-        assertTrue(setting.isAgenticSearchEnabled());
         assertTrue(setting.isAgenticMemoryEnabled());
         assertTrue(setting.isStreamEnabled());
     }
@@ -124,7 +122,7 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isRemoteInferenceEnabled());
         assertFalse(setting.isAgentFrameworkEnabled());
         assertFalse(setting.isLocalModelEnabled());
-        assertFalse(setting.isConnectorPrivateIpEnabled().get());
+        assertFalse(setting.isConnectorPrivateIpEnabled());
         assertFalse(setting.isControllerEnabled());
         assertFalse(setting.isOfflineBatchIngestionEnabled());
         assertFalse(setting.isOfflineBatchInferenceEnabled());
@@ -134,7 +132,6 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isMetricCollectionEnabled());
         assertFalse(setting.isStaticMetricCollectionEnabled());
         assertFalse(setting.isMcpConnectorEnabled());
-        assertFalse(setting.isAgenticSearchEnabled());
         assertFalse(setting.isAgenticMemoryEnabled());
         assertFalse(setting.isStreamEnabled());
     }
@@ -158,7 +155,7 @@ public class MLFeatureEnabledSettingTests {
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
 
         // Should be disabled by default
-        assertFalse(setting.isAgenticMemoryEnabled());
+        assertTrue(setting.isAgenticMemoryEnabled());
     }
 
     @Test

@@ -351,6 +351,20 @@ public class HttpConnectorTest {
     }
 
     @Test
+    public void parseResponse_MapResponse() throws IOException {
+        HttpConnector connector = createHttpConnector();
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("key1", "value1");
+        responseMap.put("key2", "value2");
+        List<ModelTensor> modelTensors = new ArrayList<>();
+
+        connector.parseResponse(responseMap, modelTensors, false);
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(responseMap, modelTensors.get(0).getDataAsMap());
+    }
+
+    @Test
     public void fillNullParameters() {
         HttpConnector connector = createHttpConnector();
         Map<String, String> parameters = new HashMap<>();
@@ -486,6 +500,35 @@ public class HttpConnectorTest {
 
         HttpConnector connector = new HttpConnector("http", parser);
         Assert.assertEquals("test_tenant", connector.getTenantId());
+    }
+
+    @Test
+    public void testParseResponse_MapResponse() throws IOException {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, Object> responseMap = new HashMap<>();
+        responseMap.put("result", "success");
+        responseMap.put("data", Arrays.asList("item1", "item2"));
+
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        connector.parseResponse(responseMap, modelTensors, false);
+
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(responseMap, modelTensors.get(0).getDataAsMap());
+    }
+
+    @Test
+    public void testParseResponse_NonStringNonMapResponse() throws IOException {
+        HttpConnector connector = createHttpConnector();
+
+        Integer numericResponse = 42;
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        connector.parseResponse(numericResponse, modelTensors, false);
+
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(42, modelTensors.get(0).getDataAsMap().get("response"));
     }
 
 }

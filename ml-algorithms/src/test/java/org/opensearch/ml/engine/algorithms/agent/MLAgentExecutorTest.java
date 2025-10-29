@@ -12,8 +12,6 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
@@ -180,13 +178,11 @@ public class MLAgentExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENTIC_SEARCH_ENABLED)));
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
 
         // Mock MLFeatureEnabledSetting
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         settings = Settings.builder().build();
         mlAgentExecutor = Mockito
@@ -271,7 +267,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -307,7 +303,7 @@ public class MLAgentExecutorTest {
             ActionListener<List<ModelTensor>> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -345,7 +341,7 @@ public class MLAgentExecutorTest {
             ActionListener<List<ModelTensors>> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -379,7 +375,7 @@ public class MLAgentExecutorTest {
             ActionListener<List<String>> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -413,7 +409,7 @@ public class MLAgentExecutorTest {
             ActionListener<String> listener = invocation.getArgument(2);
             listener.onResponse("response");
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -451,7 +447,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensorOutput> listener = invocation.getArgument(2);
             listener.onResponse(modelTensorOutput);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
             // Extract the ActionListener argument from the method invocation
@@ -485,7 +481,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -850,91 +846,6 @@ public class MLAgentExecutorTest {
     }
 
     @Test
-    public void test_query_planning_agentic_search_disabled() throws IOException {
-        // Create an MLAgent with QueryPlanningTool
-        MLAgent mlAgentWithQueryPlanning = new MLAgent(
-            "test",
-            MLAgentType.FLOW.name(),
-            "test",
-            new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List
-                .of(
-                    new MLToolSpec(
-                        "QueryPlanningTool",
-                        "QueryPlanningTool",
-                        "QueryPlanningTool",
-                        Collections.emptyMap(),
-                        Collections.emptyMap(),
-                        false,
-                        Collections.emptyMap(),
-                        null,
-                        null
-                    )
-                ),
-            Map.of("test", "test"),
-            new MLMemorySpec("memoryType", "123", 0),
-            Instant.EPOCH,
-            Instant.EPOCH,
-            "test",
-            false,
-            null
-        );
-
-        // Create GetResponse with the MLAgent that has QueryPlanningTool
-        XContentBuilder content = mlAgentWithQueryPlanning.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
-        BytesReference bytesReference = BytesReference.bytes(content);
-        GetResult getResult = new GetResult("indexName", "test-agent-id", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse agentGetResponse = new GetResponse(getResult);
-
-        // Create a new MLAgentExecutor with agentic search disabled
-        MLFeatureEnabledSetting disabledSearchSetting = Mockito.mock(MLFeatureEnabledSetting.class);
-        when(disabledSearchSetting.isMultiTenancyEnabled()).thenReturn(false);
-        when(disabledSearchSetting.isMcpConnectorEnabled()).thenReturn(true);
-        when(disabledSearchSetting.isAgenticSearchEnabled()).thenReturn(false);
-
-        MLAgentExecutor mlAgentExecutorWithDisabledSearch = Mockito
-            .spy(
-                new MLAgentExecutor(
-                    client,
-                    sdkClient,
-                    settings,
-                    clusterService,
-                    xContentRegistry,
-                    toolFactories,
-                    memoryMap,
-                    disabledSearchSetting,
-                    null
-                )
-            );
-
-        // Mock the agent get response
-        Mockito.doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(agentGetResponse);
-            return null;
-        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
-
-        // Mock the memory factory to trigger the executeAgent path
-        Mockito.doAnswer(invocation -> {
-            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
-            listener.onResponse(memory);
-            return null;
-        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
-
-        // Mock the agent runner
-        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutorWithDisabledSearch).getAgentRunner(Mockito.any());
-
-        // Execute the agent
-        mlAgentExecutorWithDisabledSearch.execute(getAgentMLInput(), agentActionListener);
-
-        // Verify that the execution fails with the correct error message
-        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
-        Exception exception = exceptionCaptor.getValue();
-        Assert.assertTrue(exception instanceof OpenSearchException);
-        Assert.assertEquals(exception.getMessage(), ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE);
-    }
-
-    @Test
     public void test_mcp_connector_requires_mcp_connector_enabled() throws IOException {
         // Create an MLAgent with MCP connectors in parameters
         Map<String, String> parameters = new HashMap<>();
@@ -965,7 +876,6 @@ public class MLAgentExecutorTest {
         MLFeatureEnabledSetting disabledMcpSetting = Mockito.mock(MLFeatureEnabledSetting.class);
         when(disabledMcpSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(disabledMcpSetting.isMcpConnectorEnabled()).thenReturn(false);
-        when(disabledMcpSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         MLAgentExecutor mlAgentExecutorWithDisabledMcp = Mockito
             .spy(
@@ -1049,7 +959,6 @@ public class MLAgentExecutorTest {
         MLFeatureEnabledSetting enabledSearchSetting = Mockito.mock(MLFeatureEnabledSetting.class);
         when(enabledSearchSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(enabledSearchSetting.isMcpConnectorEnabled()).thenReturn(true);
-        when(enabledSearchSetting.isAgenticSearchEnabled()).thenReturn(true);
 
         MLAgentExecutor mlAgentExecutorWithEnabledSearch = Mockito
             .spy(
@@ -1088,7 +997,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         // Execute the agent
         mlAgentExecutorWithEnabledSearch.execute(getAgentMLInput(), agentActionListener);
@@ -1179,7 +1088,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1218,7 +1127,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(testException);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1292,7 +1201,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onResponse(modelTensor);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1380,7 +1289,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(testException);
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1523,7 +1432,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Test failure"));
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1563,7 +1472,7 @@ public class MLAgentExecutorTest {
             ActionListener<ModelTensor> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Test failure"));
             return null;
-        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 
         GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
         Mockito.doAnswer(invocation -> {
@@ -1669,5 +1578,44 @@ public class MLAgentExecutorTest {
         mlAgentExecutor.execute(input, agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+    }
+
+    @Test
+    public void test_AgentRunnerException() throws IOException {
+        // Reset mocks to ensure clean state
+        Mockito.reset(mlAgentRunner);
+
+        RuntimeException testException = new RuntimeException("Agent runner threw exception");
+        Mockito.doThrow(testException).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(GetRequest.class), Mockito.any(ActionListener.class));
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onResponse(memory);
+            return null;
+        }).when(mockMemoryFactory).create(Mockito.eq(null), Mockito.eq("memoryId"), Mockito.any(), Mockito.any());
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task-123", 1, 0, 2, true);
+        Mockito.doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlAgentExecutor).indexMLTask(Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput output = (MLTaskOutput) objectCaptor.getValue();
+        Assert.assertEquals("task-123", output.getTaskId());
     }
 }

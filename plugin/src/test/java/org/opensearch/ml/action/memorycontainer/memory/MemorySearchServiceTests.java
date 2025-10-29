@@ -8,25 +8,41 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.utils.TestHelper.createTestContent;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
+import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.memorycontainer.PayloadType;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
+import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.transport.client.Client;
 
 public class MemorySearchServiceTests {
@@ -35,24 +51,60 @@ public class MemorySearchServiceTests {
     private Client client;
 
     @Mock
+    private MemoryContainerHelper memoryContainerHelper;
+
+    @Mock
     private ActionListener<List<FactSearchResult>> listener;
 
+    MLAddMemoriesInput input;
+    MemoryStrategy strategy;
+
     private MemorySearchService memorySearchService;
+
+    private String sessionId;
+    private MemoryConfiguration memoryConfig;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        memorySearchService = new MemorySearchService(client);
+        memorySearchService = new MemorySearchService(memoryContainerHelper);
+        sessionId = "session-123";
+        List<MessageInput> messages = new ArrayList<>();
+        messages.add(MessageInput.builder().role("user").content(createTestContent("hello, I'm bob. I like swimming")).build());
+        input = spy(
+            MLAddMemoriesInput
+                .builder()
+                .namespace(Map.of(SESSION_ID_FIELD, sessionId))
+                .payloadType(PayloadType.CONVERSATIONAL)
+                .memoryContainerId("container-123")
+                .infer(true)
+                .messages(messages)
+                .build()
+        );
+        strategy = spy(
+            MemoryStrategy.builder().id("strategy-123").type(MemoryStrategyType.SEMANTIC).namespace(List.of(SESSION_ID_FIELD)).build()
+        );
+
+        memoryConfig = spy(
+            MemoryConfiguration
+                .builder()
+                .llmId("llm-id")
+                .embeddingModelId("embedding-model-id")
+                .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+                .dimension(512)
+                .maxInferSize(5)
+                .strategies(List.of(strategy))
+                .build()
+        );
     }
 
     @Test
     public void testSearchSimilarFactsForSession_EmptyFacts() {
         List<String> facts = Arrays.asList();
-        String sessionId = "session-123";
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }
@@ -62,9 +114,10 @@ public class MemorySearchServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         String sessionId = null;
         String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        when(input.getNamespace()).thenReturn(Map.of());
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }
@@ -72,214 +125,64 @@ public class MemorySearchServiceTests {
     @Test
     public void testSearchSimilarFactsForSession_SearchFailure() {
         List<String> facts = Arrays.asList("User name is John");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(5);
-
         Exception searchException = new RuntimeException("Search failed");
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
             searchListener.onFailure(searchException);
             return null;
-        }).when(client).search(any(), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
-        verify(client).search(any(), any());
+        verify(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
     }
 
     @Test
-    public void testSearchSimilarFactsForSession_SuccessfulSearch() {
-        List<String> facts = Arrays.asList("User name is John");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(5);
-
-        // Mock search response with empty results
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        when(searchResponse.getHits()).thenReturn(null);
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
-            searchListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
-
-        verify(client).search(any(), any());
-        verify(listener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testSearchSimilarFactsForSession_NullStorageConfig() {
-        List<String> facts = Arrays.asList("User name is John");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = null;
-
-        // Mock search response with empty results
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        when(searchResponse.getHits()).thenReturn(null);
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
-            searchListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
-
-        verify(client).search(any(), any());
-        verify(listener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testSearchSimilarFactsForSession_MultipleFacts() {
-        List<String> facts = Arrays.asList("User name is John", "User age is 25", "User city is Seattle");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(2);
-
-        // Mock search response with empty results
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        when(searchResponse.getHits()).thenReturn(null);
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
-            searchListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
-
-        // Should be called 2 times (limited by maxInferSize)
-        verify(client, times(2)).search(any(), any());
-        verify(listener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testSearchSimilarFactsForSession_WithMaxInferSizeLimit() {
-        List<String> facts = Arrays.asList("Fact1", "Fact2", "Fact3", "Fact4", "Fact5");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(3);
+    public void testSearchSimilarFactsForSession_WithMaxInferSizeLimit() throws IOException {
+        List<String> facts = Arrays.asList("Fact1", "Fact2", "Fact3");
 
         SearchResponse searchResponse = mock(SearchResponse.class);
-        when(searchResponse.getHits()).thenReturn(null);
+        XContentBuilder sourceContent = XContentBuilder
+            .builder(XContentType.JSON.xContent())
+            .startObject()
+            .field(MEMORY_FIELD, "test memory")
+            .endObject();
+        SearchHit h1 = new SearchHit(1);
+        h1.sourceRef(BytesReference.bytes(sourceContent));
+
+        SearchHits hits = new SearchHits(new SearchHit[] { h1 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        when(searchResponse.getHits()).thenReturn(hits);
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
             searchListener.onResponse(searchResponse);
             return null;
-        }).when(client).search(any(), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
 
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
-        verify(client, times(3)).search(any(), any()); // Limited by maxInferSize
-        verify(listener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testSearchSimilarFactsForSession_DefaultMaxInferSize() {
-        List<String> facts = Arrays.asList("User name is John");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(null); // Test default value
-
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        when(searchResponse.getHits()).thenReturn(null);
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
-            searchListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
-
-        verify(client).search(any(), any());
-        verify(listener).onResponse(any(List.class));
-    }
-
-    @Test
-    public void testSearchSimilarFactsForSession_QueryBuildException() {
-        List<String> facts = Arrays.asList("Test fact");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(5);
-
-        // Mock client to throw exception
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("Search failed"));
-            return null;
-        }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
-
-        // The method continues processing even when individual searches fail, so it returns empty results
+        verify(memoryContainerHelper, times(3)).searchData(any(), any(SearchDataObjectRequest.class), any()); // Limited by maxInferSize
         verify(listener).onResponse(any(List.class));
     }
 
     @Test
     public void testSearchSimilarFactsForSession_EmptySessionId() {
         List<String> facts = Arrays.asList("Test fact");
-        String sessionId = null;
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
+        when(input.getNamespace()).thenReturn(Map.of());
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, memoryConfig, listener);
 
         verify(listener).onResponse(any(List.class));
     }
 
     @Test
-    public void testSearchSimilarFactsForSession_WithSearchHits() {
-        List<String> facts = Arrays.asList("User name is John");
-        String sessionId = "session-123";
-        String indexName = "memory-index";
-        MemoryStorageConfig storageConfig = mock(MemoryStorageConfig.class);
-        when(storageConfig.getMaxInferSize()).thenReturn(5);
+    public void testSearchSimilarFactsForSession_EmptyFactsList() {
+        List<String> facts = Arrays.asList();
+        MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
 
-        // Mock search response with actual hits
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        Map<String, Object> sourceMap = new HashMap<>();
-        sourceMap.put("memory", "User name is Jane");
+        memorySearchService.searchSimilarFactsForSession(strategy, input, facts, storageConfig, listener);
 
-        org.opensearch.search.SearchHit hit;
-        try {
-            hit = new org.opensearch.search.SearchHit(0, "hit-1", null, null)
-                .sourceRef(BytesReference.bytes(XContentFactory.jsonBuilder().map(sourceMap)));
-            hit.score(0.9f);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        org.opensearch.search.SearchHits searchHits = new org.opensearch.search.SearchHits(
-            new org.opensearch.search.SearchHit[] { hit },
-            null,
-            1.0f
-        );
-
-        when(searchResponse.getHits()).thenReturn(searchHits);
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> searchListener = invocation.getArgument(1);
-            searchListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        memorySearchService.searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, listener);
-
-        verify(client).search(any(), any());
         verify(listener).onResponse(any(List.class));
     }
+
 }

@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 
@@ -52,7 +51,6 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
-import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -71,7 +69,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
-import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
@@ -80,6 +77,7 @@ import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -143,7 +141,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     }
 
     @Override
-    public void execute(Input input, ActionListener<Output> listener) {
+    public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) {
         if (!(input instanceof AgentMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }
@@ -271,7 +269,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         isAsync,
                                                                         outputs,
                                                                         modelTensors,
-                                                                        mlAgent
+                                                                        mlAgent,
+                                                                        channel
                                                                     );
                                                                 }, e -> {
                                                                     log.error("Failed to get existing interaction for regeneration", e);
@@ -287,7 +286,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                             isAsync,
                                                             outputs,
                                                             modelTensors,
-                                                            mlAgent
+                                                            mlAgent,
+                                                            channel
                                                         );
                                                     }
                                                 }, ex -> {
@@ -318,7 +318,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         outputs,
                                                                         modelTensors,
                                                                         listener,
-                                                                        createdMemory
+                                                                        createdMemory,
+                                                                        channel
                                                                     ),
                                                                     ex -> {
                                                                         log.error("Failed to find memory with memory_id: {}", memoryId, ex);
@@ -329,7 +330,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     return;
                                                 }
                                             }
-
                                             executeAgent(
                                                 inputDataSet,
                                                 mlTask,
@@ -339,7 +339,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 outputs,
                                                 modelTensors,
                                                 listener,
-                                                null
+                                                null,
+                                                channel
                                             );
                                         }
                                     } catch (Exception e) {
@@ -382,7 +383,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         boolean isAsync,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
-        MLAgent mlAgent
+        MLAgent mlAgent,
+        TransportChannel channel
     ) {
         String appType = mlAgent.getAppType();
         String question = inputDataSet.getParameters().get(QUESTION);
@@ -416,7 +418,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     outputs,
                                     modelTensors,
                                     listener,
-                                    memory
+                                    memory,
+                                    channel
                                 ),
                                 e -> {
                                     log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
@@ -425,7 +428,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             )
                     );
             } else {
-                executeAgent(inputDataSet, mlTask, isAsync, memory.getConversationId(), mlAgent, outputs, modelTensors, listener, memory);
+                executeAgent(
+                    inputDataSet,
+                    mlTask,
+                    isAsync,
+                    memory.getConversationId(),
+                    mlAgent,
+                    outputs,
+                    modelTensors,
+                    listener,
+                    memory,
+                    channel
+                );
             }
         }, ex -> {
             log.error("Failed to create parent interaction", ex);
@@ -442,22 +456,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener,
-        ConversationIndexMemory memory
+        ConversationIndexMemory memory,
+        TransportChannel channel
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
-        }
-        List<MLToolSpec> tools = mlAgent.getTools();
-        if (tools != null) {
-            for (MLToolSpec tool : tools) {
-                if (tool.getType().equals(QueryPlanningTool.TYPE) && !mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
-                    listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
-                    return;
-                }
-            }
         }
 
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
@@ -494,7 +500,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     memory
                 );
                 inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
-                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+                try {
+                    mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+                } catch (Exception e) {
+                    log.error("Failed to run agent", e);
+                    agentActionListener.onFailure(e);
+                }
             }, e -> {
                 log.error("Failed to create task for agent async execution", e);
                 listener.onFailure(e);
@@ -508,7 +519,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 parentInteractionId,
                 memory
             );
-            mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+            try {
+                mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
+            } catch (Exception e) {
+                log.error("Failed to run agent", e);
+                agentActionListener.onFailure(e);
+            }
         }
     }
 

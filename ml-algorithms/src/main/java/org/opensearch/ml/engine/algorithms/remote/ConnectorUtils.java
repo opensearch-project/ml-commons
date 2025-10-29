@@ -50,6 +50,7 @@ import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
 import com.jayway.jsonpath.JsonPath;
@@ -168,6 +169,9 @@ public class ConnectorUtils {
     }
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
+        if (inputData.getParameters() == null) {
+            return;
+        }
         Map<String, String> newParameters = new HashMap<>();
         String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
         Set<String> noEscapParamSet = new HashSet<>();
@@ -252,11 +256,33 @@ public class ConnectorUtils {
         boolean scriptReturnModelTensor = postProcessFunction != null
             && processedResponse.isPresent()
             && org.opensearch.ml.common.utils.StringUtils.isJson(response);
-        if (responseFilter == null) {
-            connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
+
+        // Apply output processor chain if configured
+        Object processedOutput;
+        // Apply output processor chain if configured
+        List<Map<String, Object>> processorConfigs = ProcessorChain.extractProcessorConfigs(parameters);
+        if (!processorConfigs.isEmpty()) {
+            ProcessorChain processorChain = new ProcessorChain(processorConfigs);
+
+            if (responseFilter != null) {
+                // Apply filter first, then processor chain
+                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
+                processedOutput = processorChain.process(filteredResponse);
+            } else {
+                // Apply processor chain to whole response
+                processedOutput = processorChain.process(response);
+            }
+
+            // Handle the processed output
+            connector.parseResponse(processedOutput, modelTensors, scriptReturnModelTensor);
         } else {
-            Object filteredResponse = JsonPath.parse(response).read(parameters.get(RESPONSE_FILTER_FIELD));
-            connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+            // Original flow without processor chain
+            if (responseFilter == null) {
+                connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
+            } else {
+                Object filteredResponse = JsonPath.parse(response).read(responseFilter);
+                connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
+            }
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
     }
@@ -360,7 +386,7 @@ public class ConnectorUtils {
         return builder.build();
     }
 
-    public static Request buildOKHttpRequestPOST(String action, Connector connector, Map<String, String> parameters, String payload) {
+    public static Request buildOKHttpStreamingRequest(String action, Connector connector, Map<String, String> parameters, String payload) {
         okhttp3.RequestBody requestBody;
         if (payload != null) {
             requestBody = okhttp3.RequestBody.create(payload, MediaType.parse("application/json; charset=utf-8"));
@@ -369,6 +395,18 @@ public class ConnectorUtils {
         }
 
         String endpoint = connector.getActionEndpoint(action, parameters);
+        URI uri;
+        try {
+            uri = URI.create(endpoint);
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+                e
+            );
+        }
         Request.Builder requestBuilder = new Request.Builder();
         Map<String, String> headers = connector.getDecryptedHeaders();
         if (headers != null) {
@@ -376,6 +414,8 @@ public class ConnectorUtils {
                 requestBuilder.addHeader(key, headers.get(key));
             }
         }
+
+        // Add SSE-specific headers
         requestBuilder.addHeader("Accept-Encoding", "");
         requestBuilder.addHeader("Accept", "text/event-stream");
         requestBuilder.addHeader("Cache-Control", "no-cache");

@@ -18,7 +18,7 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -28,33 +28,28 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
+import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeAsyncClient;
-import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
-import software.amazon.awssdk.services.bedrockruntime.model.ContentBlockDeltaEvent;
-import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamRequest;
-import software.amazon.awssdk.services.bedrockruntime.model.ConverseStreamResponseHandler;
-import software.amazon.awssdk.services.bedrockruntime.model.Message;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
@@ -78,22 +73,18 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private MLGuard mlGuard;
 
-    private SdkAsyncHttpClient httpClient;
-
-    private BedrockRuntimeAsyncClient bedrockRuntimeAsyncClient;
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     @Setter
     @Getter
     private StreamTransportService streamTransportService;
 
+    @Setter
+    private boolean connectorPrivateIpEnabled;
+
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
-        Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
-        this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
-        this.bedrockRuntimeAsyncClient = null;
     }
 
     @Override
@@ -140,7 +131,8 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
+            AccessController
+                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute {} in aws connector: {}", action, exception.getMessage(), exception);
             actionListener.onFailure(exception);
@@ -160,71 +152,17 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         StreamPredictActionListener<MLTaskResponse, ?> actionListener
     ) {
         try {
-            AtomicBoolean isStreamClosed = new AtomicBoolean(false);
             String llmInterface = parameters.get(LLM_INTERFACE);
             llmInterface = llmInterface.trim().toLowerCase(Locale.ROOT);
             llmInterface = StringEscapeUtils.unescapeJava(llmInterface);
             validateLLMInterface(llmInterface);
 
-            ConverseStreamRequest request = ConverseStreamRequest
-                .builder()
-                .modelId(parameters.get("model"))
-                .messages(Message.builder().role("user").content(ContentBlock.builder().text(parameters.get("inputs")).build()).build())
-                .build();
-
-            ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder().onResponse(response -> {
-                // Handle initial response
-                log.debug("Initial converse stream response: {}", response);
-            }).onError(error -> {
-                // Handle errors
-                log.error("Converse stream error: {}", error.getMessage());
-                actionListener.onFailure(new MLException("Error from remote service: " + error.getMessage(), error));
-            }).onComplete(() -> {
-                // Handle completion
-                log.debug("Converse stream complete");
-                sendCompletionResponse(isStreamClosed, actionListener);
-            }).subscriber(event -> {
-                log.debug("Converse stream event: {}", event);
-                switch (event.sdkEventType()) {
-                    case CONTENT_BLOCK_DELTA:
-                        ContentBlockDeltaEvent contentEvent = (ContentBlockDeltaEvent) event;
-                        String chunk = contentEvent.delta().text();
-                        sendContentResponse(chunk, false, actionListener);
-                        break;
-                    default:
-                        // Ignore the other event types for now.
-                        break;
-                }
-            }).build();
-            if (bedrockRuntimeAsyncClient == null) {
-                bedrockRuntimeAsyncClient = buildBedrockRuntimeAsyncClient(httpClient);
-            }
-            bedrockRuntimeAsyncClient.converseStream(request, handler);
+            StreamingHandler handler = StreamingHandlerFactory.createHandler(llmInterface, connector, getHttpClient(), null);
+            handler.startStream(action, parameters, payload, actionListener);
         } catch (Exception e) {
             log.error("Failed to execute streaming", e);
             actionListener.onFailure(new MLException("Fail to execute streaming", e));
         }
-    }
-
-    private BedrockRuntimeAsyncClient buildBedrockRuntimeAsyncClient(SdkAsyncHttpClient sdkAsyncHttpClient) {
-        AwsCredentialsProvider awsCredentialsProvider;
-        if (connector.getSessionToken() != null) {
-            AwsSessionCredentials credentials = AwsSessionCredentials
-                .create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken());
-            awsCredentialsProvider = StaticCredentialsProvider.create(credentials);
-        } else {
-            awsCredentialsProvider = StaticCredentialsProvider
-                .create(
-                    software.amazon.awssdk.auth.credentials.AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey())
-                );
-        }
-
-        return BedrockRuntimeAsyncClient
-            .builder()
-            .region(Region.of(connector.getRegion()))
-            .credentialsProvider(awsCredentialsProvider)
-            .httpClient(sdkAsyncHttpClient)
-            .build();
     }
 
     private SdkHttpFullRequest signRequest(SdkHttpFullRequest request) {
@@ -242,7 +180,22 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 break;
             default:
-                throw new MLException(String.format("Unsupported llm interface: %s", llmInterface));
+                throw new IllegalArgumentException(String.format("Unsupported llm interface: %s", llmInterface));
         }
+    }
+
+    @VisibleForTesting
+    protected SdkAsyncHttpClient getHttpClient() {
+        if (httpClientRef.get() == null) {
+            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+            Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            this.httpClientRef
+                .compareAndSet(
+                    null,
+                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
+                );
+        }
+        return httpClientRef.get();
     }
 }

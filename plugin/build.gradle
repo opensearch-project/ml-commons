@@ -3,9 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+
+import org.opensearch.gradle.testclusters.OpenSearchCluster
+
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSession
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.security.GeneralSecurityException
+import java.security.cert.X509Certificate
 import java.util.concurrent.Callable
 import org.opensearch.gradle.test.RestIntegTestTask
 import org.opensearch.gradle.testclusters.StandaloneRestIntegTestTask
+
+import java.util.concurrent.TimeUnit
+import java.util.function.Predicate
+import java.util.stream.Collectors
 
 plugins {
     id 'java'
@@ -13,11 +30,7 @@ plugins {
     id "io.freefair.lombok"
     id 'jacoco'
     id 'java-library'
-}
-
-ext {
-    opensearchVersion = "${opensearch_version}"
-    isSnapshot = "true" == System.getProperty("build.snapshot", "true")
+    id 'de.undercouch.download' version '5.6.0'
 }
 
 apply plugin: 'opensearch.opensearchplugin'
@@ -29,6 +42,24 @@ ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
     noticeFile = rootProject.file('NOTICE')
+
+    opensearchVersion = "${opensearch_version}"
+    isSnapshot = "true" == System.getProperty("build.snapshot", "true")
+
+    runIntegTestWithSecurityPlugin= System.getProperty("security", "false") == "true" || System.getProperty("https", "false")   == "true"
+    if (runIntegTestWithSecurityPlugin) {
+        ['esnode.pem', 'esnode-key.pem', 'kirk.pem', 'kirk-key.pem', 'root-ca.pem', 'sample.pem', 'test-kirk.jks'].forEach { file ->
+            File local = getLayout().getBuildDirectory().file(file).get().getAsFile()
+            download.run {
+                src "https://raw.githubusercontent.com/opensearch-project/security/refs/heads/main/bwc-test/src/test/resources/security/" + file
+                dest local
+                overwrite false
+            }
+            processTestResources {
+                from(local)
+            }
+        }
+    }
 }
 
 java {
@@ -44,11 +75,12 @@ opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
     classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
-    extendedPlugins = ['opensearch-job-scheduler']
+    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true']
 }
 
 configurations {
     zipArchive
+    opensearchPlugin
 }
 
 dependencies {
@@ -58,18 +90,22 @@ dependencies {
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
-    implementation group: 'software.amazon.awssdk', name: 's3', version: "2.30.18"
-    implementation group: 'software.amazon.awssdk', name: 'regions', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "${versions.aws}"
+    implementation group: 'software.amazon.awssdk', name: 's3', version: "${versions.aws}"
+    implementation group: 'software.amazon.awssdk', name: 'regions', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: "${versions.aws}"
 
-    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: "2.30.18"
+    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: "${versions.aws}"
 
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
+    compileOnly group: 'org.opensearch', name:'opensearch-security-spi', version:"${opensearch_build}"
+    opensearchPlugin "org.opensearch.plugin:opensearch-job-scheduler:${opensearch_build}@zip"
+    opensearchPlugin "org.opensearch.plugin:opensearch-security:${opensearch_build}@zip"
+
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     // Multi-tenant SDK Client
@@ -85,10 +121,10 @@ dependencies {
     implementation group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: "${versions.commonslang}"
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:${versions.log4j}"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.15.1'
-    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     implementation ('com.jayway.jsonpath:json-path:2.9.0') {
         exclude group: 'net.minidev', module: 'json-smart'
     }
@@ -127,10 +163,11 @@ publishing {
             mavenCentral()
             maven { url "https://ci.opensearch.org/ci/dbc/snapshots/lucene/" }
             name = "Snapshots"
-            url = "https://central.sonatype.com/repository/maven-snapshots/"
-            credentials {
-                username "$System.env.SONATYPE_USERNAME"
-                password "$System.env.SONATYPE_PASSWORD"
+            url = System.getenv("MAVEN_SNAPSHOTS_S3_REPO")
+            credentials(AwsCredentials) {
+                accessKey = System.getenv("AWS_ACCESS_KEY_ID")
+                secretKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+                sessionToken = System.getenv("AWS_SESSION_TOKEN")
             }
         }
     }
@@ -173,6 +210,10 @@ task integTest(type: RestIntegTestTask) {
     classpath = sourceSets.test.runtimeClasspath
 }
 tasks.named("check").configure { dependsOn(integTest) }
+
+// Enable Security if -Dsecurity=true or -Dhttps=true
+def securityEnabled = System.getProperty("security", "false") == "true" ||
+        System.getProperty("https", "false") == "true"
 
 integTest {
     dependsOn "bundlePlugin"
@@ -217,7 +258,7 @@ integTest {
         // There seems to be an issue when running multi node run or integ tasks with unicast_hosts
         // not being written, the waitForAllConditions ensures it's written
         getClusters().forEach { cluster ->
-            cluster.waitForAllConditions()
+            waitForClusterSetup(cluster, securityEnabled)
         }
     }
 
@@ -232,38 +273,85 @@ integTest {
     testLogging.showStandardStreams = true
 }
 
-testClusters.integTest {
-    testDistribution = "ARCHIVE"
-    // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1
-    if (_numNodes > 1) numberOfNodes = _numNodes
-    // When running integration tests it doesn't forward the --debug-jvm to the cluster anymore
-    // i.e. we have to use a custom property to flag when we want to debug elasticsearch JVM
-    // since we also support multi node integration tests we increase debugPort per node
-    if (System.getProperty("cluster.debug") != null) {
-        def debugPort = 5005
-        nodes.forEach { node ->
-            node.jvmArgs("-agentlib:jdwp=transport=dt_socket,server=n,suspend=y,address=*:${debugPort}")
-            debugPort += 1
-        }
-    }
-    plugin(project.tasks.bundlePlugin.archiveFile)
-    plugin(provider(new Callable<RegularFile>(){
+// Resolve plugin zips
+ext.resolvePluginFile = { pluginId ->
+    return new Callable<RegularFile>() {
         @Override
         RegularFile call() throws Exception {
             return new RegularFile() {
                 @Override
                 File getAsFile() {
-                    return configurations.zipArchive.asFileTree.getSingleFile()
+                    return configurations.opensearchPlugin.resolvedConfiguration.resolvedArtifacts
+                            .find { ResolvedArtifact f -> f.name.startsWith(pluginId) }
+                            .file
                 }
             }
         }
-    }))
+    }
+}
 
-    nodes.each { node ->
-        def plugins = node.plugins
-        def firstPlugin = plugins.get(0)
-        plugins.remove(0)
-        plugins.add(firstPlugin)
+def jobSchedulerFile  = resolvePluginFile("opensearch-job-scheduler")
+def securityPluginFile = resolvePluginFile("opensearch-security")
+
+// Single authoritative cluster definition
+testClusters.integTest {
+    testDistribution = "ARCHIVE"
+    if (_numNodes > 1) numberOfNodes = _numNodes
+    configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)
+}
+
+def configureClusterPlugins(cluster, jobSchedZip, securityZip, securityEnabled) {
+    // Enable attachable debugging if requested (prefer 'opensearch.debug'; also accept legacy 'cluster.debug')
+    if (System.getProperty("opensearch.debug") != null || System.getProperty("cluster.debug") != null) {
+        def debugPort = 5005
+        cluster.nodes.each { node ->
+            // server=y (listen), suspend=n (don’t block startup)
+            node.jvmArgs "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${debugPort}"
+            debugPort++
+        }
+    }
+
+    cluster.with {
+        // Install dependency plugins FIRST to avoid the reordering hack
+        plugin(provider(jobSchedZip))
+        if (securityEnabled) {
+            plugin(provider(securityZip))
+        }
+        // Install the plugin under test LAST
+        plugin(project.tasks.bundlePlugin.archiveFile)
+
+        if (securityEnabled) {
+            cluster.nodes.each { node ->
+                node.extraConfigFile("kirk.pem",       file("build/resources/test/kirk.pem"))
+                node.extraConfigFile("kirk-key.pem",   file("build/resources/test/kirk-key.pem"))
+                node.extraConfigFile("esnode.pem",     file("build/resources/test/esnode.pem"))
+                node.extraConfigFile("esnode-key.pem", file("build/resources/test/esnode-key.pem"))
+                node.extraConfigFile("root-ca.pem",    file("build/resources/test/root-ca.pem"))
+
+                node.setting "plugins.security.ssl.transport.pemcert_filepath",        "esnode.pem"
+                node.setting "plugins.security.ssl.transport.pemkey_filepath",         "esnode-key.pem"
+                node.setting "plugins.security.ssl.transport.pemtrustedcas_filepath",  "root-ca.pem"
+                node.setting "plugins.security.ssl.transport.enforce_hostname_verification", "false"
+
+                node.setting "plugins.security.ssl.http.enabled",                      "true"
+                node.setting "plugins.security.ssl.http.pemcert_filepath",             "esnode.pem"
+                node.setting "plugins.security.ssl.http.pemkey_filepath",              "esnode-key.pem"
+                node.setting "plugins.security.ssl.http.pemtrustedcas_filepath",       "root-ca.pem"
+
+                node.setting "plugins.security.allow_unsafe_democertificates",         "true"
+                node.setting "plugins.security.allow_default_init_securityindex",      "true"
+                node.setting "plugins.security.authcz.admin_dn",                       "\n - CN=kirk,OU=client,O=client,L=test,C=de"
+                node.setting "plugins.security.audit.type",                            "internal_opensearch"
+                node.setting "plugins.security.enable_snapshot_restore_privilege",     "true"
+                node.setting "plugins.security.check_snapshot_restore_write_privileges","true"
+                node.setting "plugins.security.restapi.roles_enabled",                 "[\"all_access\", \"security_rest_api_access\"]"
+                node.setting "plugins.security.system_indices.enabled",                "true"
+                if (System.getProperty("resource_sharing.enabled") == "true") {
+                    node.setting "plugins.security.experimental.resource_sharing.enabled", "true"
+                    node.setting("plugins.security.experimental.resource_sharing.protected_types", "[\"ml-model-group\"]")
+                }
+            }
+        }
     }
 }
 
@@ -314,6 +402,135 @@ run {
     useCluster testClusters.integTest
 }
 
+// Re-write WaitForHttpResource with updated code to support security plugin use case
+class WaitForClusterYellow {
+
+    private URL url
+    private String username
+    private String password
+    Set<Integer> validResponseCodes = Collections.singleton(200)
+
+    WaitForClusterYellow(String protocol, String host, int numberOfNodes) throws MalformedURLException {
+        this(new URL(protocol + "://" + host + "/_cluster/health?wait_for_nodes=>=" + numberOfNodes + "&wait_for_status=yellow"))
+    }
+
+    WaitForClusterYellow(URL url) {
+        this.url = url
+    }
+
+    boolean wait(int durationInMs) throws GeneralSecurityException, InterruptedException, IOException {
+        final long waitUntil = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(durationInMs)
+        final long sleep = 100
+
+        IOException failure = null
+        while (true) {
+            try {
+                checkResource()
+                return true
+            } catch (IOException e) {
+                failure = e
+            }
+            if (System.nanoTime() < waitUntil) {
+                Thread.sleep(sleep)
+            } else {
+                throw failure
+            }
+        }
+    }
+
+    void setUsername(String username) {
+        this.username = username
+    }
+
+    void setPassword(String password) {
+        this.password = password
+    }
+
+    void checkResource() throws IOException {
+        final HttpURLConnection connection = buildConnection()
+        connection.connect()
+        final Integer response = connection.getResponseCode()
+        if (validResponseCodes.contains(response)) {
+            return
+        } else {
+            throw new IOException(response + " " + connection.getResponseMessage())
+        }
+    }
+
+    HttpURLConnection buildConnection() throws IOException {
+        final HttpURLConnection connection = (HttpURLConnection) this.@url.openConnection()
+
+        if (connection instanceof HttpsURLConnection) {
+            TrustManager[] trustAllCerts = [new X509TrustManager() {
+                X509Certificate[] getAcceptedIssuers() {
+                    return null
+                }
+
+                void checkClientTrusted(X509Certificate[] certs, String authType) {
+                }
+
+                void checkServerTrusted(X509Certificate[] certs, String authType) {
+                }
+            }
+            ] as TrustManager[]
+            SSLContext sc = SSLContext.getInstance("SSL")
+            sc.init(null, trustAllCerts, new java.security.SecureRandom())
+            connection.setSSLSocketFactory(sc.getSocketFactory())
+            // Create all-trusting host name verifier
+            HostnameVerifier allHostsValid = new HostnameVerifier() {
+                boolean verify(String hostname, SSLSession session) {
+                    return true
+                }
+            }
+            // Install the all-trusting host verifier
+            connection.setHostnameVerifier(allHostsValid)
+        }
+
+        configureBasicAuth(connection)
+        connection.setRequestMethod("GET")
+        return connection
+    }
+
+    void configureBasicAuth(HttpURLConnection connection) {
+        if (username != null) {
+            if (password == null) {
+                throw new IllegalStateException("Basic Auth user [" + username + "] has been set, but no password has been configured")
+            }
+            connection.setRequestProperty(
+                    "Authorization",
+                    "Basic " + Base64.getEncoder().encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8))
+            )
+        }
+    }
+
+}
+
+def waitForClusterSetup(OpenSearchCluster cluster, Boolean securityEnabled) {
+    cluster.@waitConditions.clear()
+    String unicastUris = cluster.nodes.stream().flatMap { node ->
+        node.getAllTransportPortURI().stream()
+    }.collect(Collectors.joining("\n"))
+    cluster.nodes.forEach { node ->
+        try {
+            Files.write(node.getConfigDir().resolve("unicast_hosts.txt"), unicastUris.getBytes(StandardCharsets.UTF_8))
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Failed to write configuation files for " + this, e)
+        }
+    }
+
+    Predicate pred = {
+        String protocol = securityEnabled ? "https" : "http"
+        String host = System.getProperty("tests.cluster", cluster.getFirstNode().getHttpSocketURI())
+        WaitForClusterYellow wait = new WaitForClusterYellow(protocol, host, cluster.nodes.size())
+        wait.setUsername(System.getProperty("user", "admin"))
+        wait.setPassword(System.getProperty("password", "admin"))
+        return wait.wait(180000)
+    }
+
+    cluster.@waitConditions.put("cluster health yellow", pred)
+    cluster.waitForAllConditions()
+}
+
 task release(type: Copy, group: 'build') {
     dependsOn allprojects*.tasks.build
     from(zipTree(project.tasks.bundlePlugin.outputs.files.getSingleFile()))
@@ -353,6 +570,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTaskDispatcher',
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
         'org.opensearch.ml.task.MLExecuteTaskRunner',
+        'org.opensearch.ml.task.MLExecuteTaskRunner.*',
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
         'org.opensearch.ml.breaker.DiskCircuitBreaker',
         'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory',
@@ -375,12 +593,10 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.utils.ParseUtils',
         'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
         'org.opensearch.ml.jobs.processors.MLJobProcessor',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*',
         'org.opensearch.ml.rest.RestMLPredictionStreamAction',
-        'org.opensearch.ml.rest.RestMLPredictionStreamAction.*'
+        'org.opensearch.ml.rest.RestMLPredictionStreamAction.*',
+        'org.opensearch.ml.rest.RestMLExecuteStreamAction',
+        'org.opensearch.ml.rest.RestMLExecuteStreamAction.*',
 ]
 
 jacocoTestCoverageVerification {
@@ -415,7 +631,7 @@ configurations.all {
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
-    resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
+    resolutionStrategy.force 'org.apache.commons:commons-text:1.14.0'
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.httpcomponents:httpcore:4.4.15'
     resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
@@ -456,6 +672,15 @@ configurations.all {
     resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3'
     resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.18.3'
     resolutionStrategy.force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
+    resolutionStrategy.force "io.netty:netty-codec-http:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-codec-http2:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-codec:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-transport:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-common:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-buffer:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-handler:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-resolver:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-transport-native-unix-common:${versions.netty}"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

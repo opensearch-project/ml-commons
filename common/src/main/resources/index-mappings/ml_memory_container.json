@@ -23,14 +23,11 @@
       "type": "date",
       "format": "strict_date_time||epoch_millis"
     },
-    "memory_storage_config": {
+    "configuration": {
       "type": "object",
       "properties": {
-        "memory_index_name": {
+        "index_prefix": {
           "type": "keyword"
-        },
-        "semantic_storage_enabled": {
-          "type": "boolean"
         },
         "embedding_model_type": {
           "type": "keyword"
@@ -38,21 +35,58 @@
         "embedding_model_id": {
           "type": "keyword"
         },
-        "llm_model_id": {
+        "embedding_dimension": {
+          "type": "integer"
+        },
+        "llm_id": {
           "type": "keyword"
         },
-        "dimension": {
-          "type": "integer"
+        "disable_history": {
+          "type": "boolean"
         },
-        "max_recent_messages": {
-          "type": "integer"
+        "disable_session": {
+          "type": "boolean"
+        },
+        "use_system_index": {
+          "type": "boolean"
         },
         "max_infer_size": {
           "type": "integer"
+        },
+        "strategies": {
+          "type": "nested",
+          "properties": {
+            "id": {
+              "type": "keyword"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "keyword"
+            },
+            "namespace": {
+              "type": "keyword"
+            },
+            "configuration": {
+              "type": "flat_object"
+            }
+          }
+        },
+        "index_settings": {
+          "type": "flat_object"
         }
       }
     },
     "owner": USER_MAPPING_PLACEHOLDER,
+    "backend_roles": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword"
+        }
+      }
+    },
     "tenant_id": {
       "type": "keyword"
     }

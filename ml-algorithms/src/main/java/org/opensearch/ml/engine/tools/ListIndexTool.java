@@ -54,11 +54,11 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -103,22 +103,13 @@ public class ListIndexTool implements Tool {
     @Setter
     private Parser<?, ?> inputParser;
     @Setter
-    private Parser<?, ?> outputParser;
+    private Parser outputParser;
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
     public ListIndexTool(Client client, ClusterService clusterService) {
         this.client = client;
         this.clusterService = clusterService;
-
-        outputParser = new Parser<>() {
-            @Override
-            public Object parse(Object o) {
-                @SuppressWarnings("unchecked")
-                List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
-                return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-            }
-        };
 
         this.attributes = new HashMap<>();
         attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
@@ -167,8 +158,8 @@ public class ListIndexTool implements Tool {
                         );
                 }
                 @SuppressWarnings("unchecked")
-                T response = (T) sb.toString();
-                listener.onResponse(response);
+                T output = (T) sb.toString();
+                listener.onResponse((T) (outputParser != null ? outputParser.parse(output) : output));
             }, listener::onFailure));
 
             fetchClusterInfoAndPages(
@@ -463,8 +454,10 @@ public class ListIndexTool implements Tool {
         }
 
         @Override
-        public ListIndexTool create(Map<String, Object> map) {
-            return new ListIndexTool(client, clusterService);
+        public ListIndexTool create(Map<String, Object> params) {
+            ListIndexTool tool = new ListIndexTool(client, clusterService);
+            tool.setOutputParser(ToolParser.createFromToolParams(params));
+            return tool;
         }
 
         @Override

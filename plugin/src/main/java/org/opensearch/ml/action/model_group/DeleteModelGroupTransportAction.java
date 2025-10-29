@@ -6,7 +6,9 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
 import org.opensearch.ExceptionsHelper;
@@ -93,7 +95,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+
+            // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
+            if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
+                checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
+            } else {
+                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            }
         }
     }
 
@@ -105,6 +113,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 mlFeatureEnabledSetting,
                 tenantId,
                 modelGroupId,
+                MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
                 ActionListener

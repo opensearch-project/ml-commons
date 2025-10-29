@@ -35,6 +35,7 @@ public class ToolUtils {
     public static final String TOOL_OUTPUT_FILTERS_FIELD = "output_filter";
     public static final String TOOL_REQUIRED_PARAMS = "required_parameters";
     public static final String NO_ESCAPE_PARAMS = "no_escape_params";
+    public static final String TOOL_OUTPUT_KEY = "output";
 
     /**
      * Extracts required parameters based on tool attributes specification.
@@ -215,4 +216,37 @@ public class ToolUtils {
         return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
     }
 
+    /**
+     * Converts various types of tool output into a standardized ModelTensor format.
+     * The conversion logic depends on the type of input:
+     * <ul>
+     *     <li>For Map inputs: wrap the Map with "output" as key</li>
+     *     <li>For List inputs: wraps the list in a map with "output" as the key</li>
+     *     <li>For other types: converts to JSON string and attempts to parse as map, and wrap in "output"
+     *         if parsing fails, wraps the original output in a map with "output" as the key</li>
+     * </ul>
+     *
+     * @param output    The output object to be converted. Can be a Map, List, or any other object
+     * @param outputKey The key/name to be assigned to the resulting ModelTensor
+     * @return A ModelTensor containing the formatted output data
+     */
+    public static ModelTensor convertOutputToModelTensor(Object output, String outputKey) {
+        ModelTensor modelTensor;
+        if (output instanceof Map || output instanceof List) {
+            Map<String, Object> resultMap = new HashMap<>();
+            resultMap.put(TOOL_OUTPUT_KEY, output);
+            modelTensor = ModelTensor.builder().name(outputKey).dataAsMap(resultMap).build();
+        } else {
+            String outputJson = StringUtils.toJson(output);
+            Map<String, Object> resultMap;
+            if (StringUtils.isJson(outputJson)) {
+                resultMap = StringUtils.fromJsonWithWrappingKey(outputJson, TOOL_OUTPUT_KEY);
+            } else {
+                resultMap = new HashMap<>();
+                resultMap.put(TOOL_OUTPUT_KEY, output);
+            }
+            modelTensor = ModelTensor.builder().name(outputKey).dataAsMap(resultMap).build();
+        }
+        return modelTensor;
+    }
 }

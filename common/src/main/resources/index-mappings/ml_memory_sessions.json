@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "owner_id": {
+      "type": "keyword"
+    },
+    "memory_container_id": {
+      "type": "keyword"
+    },
+    "summary": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "flat_object"
+    },
+    "agents": {
+      "type": "flat_object"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "additional_info": {
+      "type": "flat_object"
+    },
+    "namespace": {
+      "type": "flat_object"
+    },
+    "namespace_size": {
+      "type": "integer"
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

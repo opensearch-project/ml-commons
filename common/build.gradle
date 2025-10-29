@@ -22,7 +22,9 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
 
-    compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    compileOnly group: 'org.opensearch', name:'opensearch-security-spi', version:"${opensearch_build}"
+
+    compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.14.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     compileOnly group: 'org.json', name: 'json', version: '20231013'
     testImplementation group: 'org.json', name: 'json', version: '20231013'
@@ -43,6 +45,10 @@ dependencies {
     compileOnly group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     // Multi-tenant SDK Client
     compileOnly "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
+    compileOnly (group: 'software.amazon.awssdk', name: 'netty-nio-client', version: "${versions.aws}") {
+        exclude(group: 'org.reactivestreams', module: 'reactive-streams')
+        exclude(group: 'org.slf4j', module: 'slf4j-api')
+    }
 }
 
 lombok {
@@ -107,10 +113,11 @@ publishing {
         }
         maven {
             name = "Snapshots" //  optional target repository name
-            url = "https://central.sonatype.com/repository/maven-snapshots/"
-            credentials {
-                username "$System.env.SONATYPE_USERNAME"
-                password "$System.env.SONATYPE_PASSWORD"
+            url = System.getenv("MAVEN_SNAPSHOTS_S3_REPO")
+            credentials(AwsCredentials) {
+                accessKey = System.getenv("AWS_ACCESS_KEY_ID")
+                secretKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+                sessionToken = System.getenv("AWS_SESSION_TOKEN")
             }
         }
     }

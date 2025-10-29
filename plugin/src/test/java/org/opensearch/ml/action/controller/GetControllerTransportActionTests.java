@@ -119,10 +119,10 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         }).when(mlModelManager).getModel(eq("testModelId"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareControllerGetResponse();
         doAnswer(invocation -> {
@@ -157,10 +157,10 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testGetControllerWithModelAccessControlNoPermission() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -174,10 +174,10 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testGetControllerWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
@@ -78,7 +77,6 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_METRIC_COLLECTION_ENABLED,
                             ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                             ML_COMMONS_EXECUTE_TOOL_ENABLED,
-                            ML_COMMONS_AGENTIC_SEARCH_ENABLED,
                             ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                             ML_COMMONS_MCP_CONNECTOR_ENABLED,
                             ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
@@ -127,16 +125,16 @@ public class MLFeatureEnabledSettingTests {
     @Test
     public void testToolExecuteSettings() {
         // Test initial values
-        assertFalse(mlFeatureEnabledSetting.isToolExecuteEnabled());
+        assertTrue(mlFeatureEnabledSetting.isToolExecuteEnabled());
 
         // Simulate settings change
-        Settings newSettings = Settings.builder().put(ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey(), true).build();
+        Settings newSettings = Settings.builder().put(ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey(), false).build();
 
         // Update settings through cluster service
         when(clusterService.getSettings()).thenReturn(newSettings);
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, newSettings);
 
         // Verify updated values
-        assertTrue(mlFeatureEnabledSetting.isToolExecuteEnabled());
+        assertFalse(mlFeatureEnabledSetting.isToolExecuteEnabled());
     }
 }

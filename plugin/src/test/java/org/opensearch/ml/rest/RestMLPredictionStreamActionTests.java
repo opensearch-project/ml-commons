@@ -11,6 +11,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
@@ -25,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -34,6 +36,9 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.threadpool.TestThreadPool;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLPredictionStreamActionTests {
 
@@ -41,6 +46,8 @@ public class RestMLPredictionStreamActionTests {
     private MLModelManager modelManager;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private ClusterService clusterService;
+    private NodeClient client;
+    private ThreadPool threadPool;
 
     @Before
     public void setUp() {
@@ -48,6 +55,8 @@ public class RestMLPredictionStreamActionTests {
         modelManager = mock(MLModelManager.class);
         mlFeatureEnabledSetting = mock(MLFeatureEnabledSetting.class);
         clusterService = mock(ClusterService.class);
+        threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
+        client = spy(new NodeClient(Settings.EMPTY, threadPool));
         restAction = new RestMLPredictionStreamAction(modelManager, mlFeatureEnabledSetting, clusterService);
     }
 
@@ -126,7 +135,7 @@ public class RestMLPredictionStreamActionTests {
         }).when(modelManager).getModel(org.mockito.ArgumentMatchers.eq("test-model"), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
 
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict/stream");
-        assertNotNull(restAction.prepareRequest(request, null));
+        assertNotNull(restAction.prepareRequest(request, client));
     }
 
     @Test

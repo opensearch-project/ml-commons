@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.UPDATE_MEMORY_PATH;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
@@ -18,6 +19,7 @@ import java.util.List;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryInput;
@@ -75,6 +77,8 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
         }
 
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
 
         XContentParser parser = request.contentParser();
@@ -84,6 +88,7 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
         return MLUpdateMemoryRequest
             .builder()
             .memoryContainerId(memoryContainerId)
+            .memoryType(memoryType)
             .memoryId(memoryId)
             .mlUpdateMemoryInput(mlUpdateMemoryInput)
             .build();
