@@ -295,7 +295,7 @@ public class ModelAccessControlHelper {
      */
     public static boolean shouldUseResourceAuthz(String resourceType) {
         var client = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-        return client != null && client.isFeatureEnabledForType(resourceType);
+        return client != null;
     }
 
     public boolean skipModelAccessControl(User user) {
