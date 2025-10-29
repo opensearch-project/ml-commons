@@ -18,6 +18,7 @@ import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_TEMPLATE_SELECTION_USER_PROMPT;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +36,12 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.ToolUtils;
+import org.opensearch.ml.engine.processor.ProcessorChain;
+import org.opensearch.ml.engine.tools.parser.ToolParser;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -122,6 +126,10 @@ public class QueryPlanningTool implements WithModelTool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
     private final Client client;
+
+    @Setter
+    @Getter
+    private Parser outputParser;
 
     public QueryPlanningTool(String generationType, MLModelTool queryGenerationTool, Client client, String searchTemplates) {
         this.generationType = generationType;
@@ -245,11 +253,12 @@ public class QueryPlanningTool implements WithModelTool {
                         try {
                             String queryString = (String) r;
                             if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
+                                log.debug("Model failed to generate the DSL query, returning the Default match all query");
                                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                                 String defaultQueryString = substitutor.replace(DEFAULT_QUERY);
                                 listener.onResponse((T) defaultQueryString);
                             } else {
-                                listener.onResponse((T) queryString);
+                                listener.onResponse((T) (outputParser != null ? outputParser.parse(queryString) : queryString));
                             }
                         } catch (Exception e) {
                             IllegalArgumentException parsingException = new IllegalArgumentException(
@@ -410,11 +419,11 @@ public class QueryPlanningTool implements WithModelTool {
         }
 
         @Override
-        public QueryPlanningTool create(Map<String, Object> map) {
+        public QueryPlanningTool create(Map<String, Object> params) {
 
-            MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(map);
+            MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(params);
 
-            String type = (String) map.get(GENERATION_TYPE_FIELD);
+            String type = (String) params.get(GENERATION_TYPE_FIELD);
 
             // defaulted to llmGenerated
             if (type == null || type.isEmpty()) {
@@ -431,17 +440,48 @@ public class QueryPlanningTool implements WithModelTool {
             // Parse search templates if generation type is user_templates
             String searchTemplates = null;
             if (USER_SEARCH_TEMPLATES_TYPE_FIELD.equals(type)) {
-                if (!map.containsKey(SEARCH_TEMPLATES_FIELD)) {
+                if (!params.containsKey(SEARCH_TEMPLATES_FIELD)) {
                     throw new IllegalArgumentException("search_templates field is required when generation_type is 'user_templates'");
                 } else {
                     // array is parsed as a json string
-                    String searchTemplatesJson = (String) map.get(SEARCH_TEMPLATES_FIELD);
+                    String searchTemplatesJson = (String) params.get(SEARCH_TEMPLATES_FIELD);
                     validateSearchTemplates(searchTemplatesJson);
                     searchTemplates = gson.toJson(searchTemplatesJson);
                 }
             }
 
-            return new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates);
+            QueryPlanningTool queryPlanningTool = new QueryPlanningTool(type, queryGenerationTool, client, searchTemplates);
+
+            // Create parser with default extract_json processor + any custom processors
+            queryPlanningTool.setOutputParser(createParserWithDefaultExtractJson(params));
+
+            return queryPlanningTool;
+        }
+
+        /**
+         * Create a parser with a default extract_json processor prepended to any custom processors.
+         * This ensures that JSON is extracted from the LLM response before applying any custom processing.
+         * 
+         * @param params Tool parameters that may contain custom output_processors
+         * @return Parser with extract_json as first processor, followed by any custom processors
+         */
+        private Parser createParserWithDefaultExtractJson(Map<String, Object> params) {
+            // Extract any existing custom processors from params
+            List<Map<String, Object>> customProcessorConfigs = ProcessorChain.extractProcessorConfigs(params);
+
+            // Create the default extract_json processor config
+            Map<String, Object> extractJsonConfig = new HashMap<>();
+            extractJsonConfig.put("type", "extract_json");
+            extractJsonConfig.put("extract_type", "object"); // Extract JSON objects only
+            extractJsonConfig.put("default", DEFAULT_QUERY); // Return default match all query if no JSON found
+
+            // Combine: default extract_json first, then any custom processors
+            List<Map<String, Object>> combinedProcessorConfigs = new ArrayList<>();
+            combinedProcessorConfigs.add(extractJsonConfig);
+            combinedProcessorConfigs.addAll(customProcessorConfigs);
+
+            // Create parser using the combined processor configs
+            return ToolParser.createProcessingParser(null, combinedProcessorConfigs);
         }
 
         private void validateSearchTemplates(Object searchTemplatesObj) {
