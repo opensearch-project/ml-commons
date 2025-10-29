@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -675,6 +676,34 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
         assertEquals(1, secondModelTensorList.size());
         assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testParseTensorDataMap() {
+        // Test with response only
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", "test response");
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+
+        String result = mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(tensor);
+        assertEquals("test response", result);
+
+        // Test with additional info
+        Map<String, Object> additionalInfo = new HashMap<>();
+        additionalInfo.put("trace1", "content1");
+        additionalInfo.put("trace2", "content2");
+        dataMap.put("additional_info", additionalInfo);
+
+        result = mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(tensor);
+        assertTrue(result.contains("test response"));
+        assertTrue(result.contains("<step-traces>"));
+        assertTrue(result.contains("<trace1>\ncontent1\n</trace1>"));
+        assertTrue(result.contains("<trace2>\ncontent2\n</trace2>"));
+        assertTrue(result.contains("</step-traces>"));
+
+        // Test with null dataMap
+        ModelTensor nullTensor = ModelTensor.builder().build();
+        assertNull(mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(nullTensor));
     }
 
     @Test
