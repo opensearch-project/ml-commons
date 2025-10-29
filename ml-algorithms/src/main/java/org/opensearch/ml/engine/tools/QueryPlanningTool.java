@@ -36,11 +36,8 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
-<<<<<<< HEAD
-import org.opensearch.ml.common.spi.tools.Parser;
-=======
 import org.opensearch.ingest.ConfigurationUtils;
->>>>>>> d0d23bbbc (Address comments)
+import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.ToolUtils;
