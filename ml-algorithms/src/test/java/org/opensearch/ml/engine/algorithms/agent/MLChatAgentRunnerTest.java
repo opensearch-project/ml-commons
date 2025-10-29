@@ -1424,12 +1424,7 @@ public class MLChatAgentRunnerTest {
                             .asList(
                                 ModelTensors
                                     .builder()
-                                    .mlModelTensors(
-                                        Arrays
-                                            .asList(
-                                                ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "Valid summary text")).build()
-                                            )
-                                    )
+                                    .mlModelTensors(Arrays.asList(ModelTensor.builder().result("Valid summary text").build()))
                                     .build()
                             )
                     )
