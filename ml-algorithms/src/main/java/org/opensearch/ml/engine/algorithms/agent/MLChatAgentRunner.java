@@ -1119,17 +1119,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         try {
             String outputString = outputToOutputString(response.getOutput());
             if (outputString != null && !outputString.trim().isEmpty()) {
-                try {
-                    Map<String, Object> dataMap = gson.fromJson(outputString, Map.class);
-                    if (dataMap.containsKey("response")) {
-                        String summary = String.valueOf(dataMap.get("response"));
-                        if (summary != null && !summary.trim().isEmpty() && !"null".equals(summary)) {
-                            return summary.trim();
-                        }
-                    }
-                } catch (Exception jsonException) {
-                    return outputString.trim();
-                }
+                return outputString.trim();
             }
             return null;
         } catch (Exception e) {

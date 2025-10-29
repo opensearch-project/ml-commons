@@ -288,6 +288,16 @@ public class ModelAccessControlHelper {
         }
     }
 
+    /**
+     * Checks whether to utilize new ResourceAuthz
+     * @param resourceType for which to decide whether to use resource authz
+     * @return true if the resource-sharing feature is enabled, false otherwise.
+     */
+    public static boolean shouldUseResourceAuthz(String resourceType) {
+        var client = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+        return client != null;
+    }
+
     public boolean skipModelAccessControl(User user) {
         // Case 1: user == null when 1. Security is disabled. 2. When user is super-admin
         // Case 2: If Security is enabled and filter is disabled, proceed with search as
