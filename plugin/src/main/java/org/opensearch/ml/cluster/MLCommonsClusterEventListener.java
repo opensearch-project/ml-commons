@@ -91,11 +91,13 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
          */
         for (DiscoveryNode node : state.nodes()) {
             if (node.isDataNode() && node.getVersion().onOrAfter(Version.V_3_1_0)) {
-                if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
-                        && !clusterService.state().getMetadata().hasIndex(ML_JOBS_INDEX) && !this.startedStatsJob) {
-                        mlTaskManager.indexStatsCollectorJob(true);
-                        // using this variable in case if same node has a cluster state change event and the state is not updated yet
-                        this.startedStatsJob = true;
+                if (mlFeatureEnabledSetting.isMetricCollectionEnabled()
+                    && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
+                    && !clusterService.state().getMetadata().hasIndex(ML_JOBS_INDEX)
+                    && !this.startedStatsJob) {
+                    mlTaskManager.indexStatsCollectorJob(true);
+                    // using this variable in case if same node has a cluster state change event and the state is not updated yet
+                    this.startedStatsJob = true;
                 }
 
                 break;
