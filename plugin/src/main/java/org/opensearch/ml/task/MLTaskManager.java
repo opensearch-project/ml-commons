@@ -577,6 +577,10 @@ public class MLTaskManager implements SettingsChangeListener {
     }
 
     public void indexStatsCollectorJob(boolean enabled) {
+        if (this.statsCollectorJobStarted && enabled) {
+            return;
+        }
+
         try {
             MLJobParameter jobParameter = new MLJobParameter(
                 MLJobType.STATS_COLLECTOR.name(),
@@ -593,7 +597,7 @@ public class MLTaskManager implements SettingsChangeListener {
                 .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
                 .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-            indexJob(indexRequest, MLJobType.STATS_COLLECTOR, () -> {});
+            indexJob(indexRequest, MLJobType.STATS_COLLECTOR, () -> this.statsCollectorJobStarted = enabled);
         } catch (IOException e) {
             log.error("Failed to index stats collection job", e);
         }
