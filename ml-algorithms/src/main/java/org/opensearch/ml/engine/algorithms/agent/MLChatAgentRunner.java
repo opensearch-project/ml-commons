@@ -126,7 +126,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
-    public static final String SUMMARIZE_WHEN_MAX_ITERATION = "summarize_when_max_iteration";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
@@ -898,9 +897,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         LLMSpec llmSpec,
         String tenantId
     ) {
-        boolean shouldSummarize = Boolean.parseBoolean(parameters.getOrDefault(SUMMARIZE_WHEN_MAX_ITERATION, "false"));
-
-        if (shouldSummarize && !traceTensors.isEmpty()) {
             generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
                 String summaryResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
                 sendTraditionalMaxIterationsResponse(
@@ -922,25 +918,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 listener.onFailure(e);
                 cleanUpResource(tools);
             }));
-        } else {
-            String response = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
-                ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
-                : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
-            sendTraditionalMaxIterationsResponse(
-                sessionId,
-                listener,
-                question,
-                parentInteractionId,
-                verbose,
-                traceDisabled,
-                traceTensors,
-                conversationIndexMemory,
-                traceNumber,
-                additionalInfo,
-                response,
-                tools
-            );
-        }
     }
 
     private void sendTraditionalMaxIterationsResponse(
