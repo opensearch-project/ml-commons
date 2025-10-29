@@ -1,6 +1,6 @@
 ## Version 3.3.2 Release Notes
 
-Compatible with OpenSearch and OpenSearch Dashboards version 3.3.2
+Compatible with OpenSearch 3.3.2 and OpenSearch Dashboards 3.3.0
 
 ### Features
 * Nova mme support ([#4368](https://github.com/opensearch-project/ml-commons/pull/4368))
