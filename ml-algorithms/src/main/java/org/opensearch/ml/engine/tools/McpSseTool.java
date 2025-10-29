@@ -99,11 +99,6 @@ public class McpSseTool implements WithModelTool {
         return true;
     }
 
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        return true;
-    }
-
     public static class Factory implements WithModelTool.Factory<McpSseTool> {
         private static Factory INSTANCE;
 

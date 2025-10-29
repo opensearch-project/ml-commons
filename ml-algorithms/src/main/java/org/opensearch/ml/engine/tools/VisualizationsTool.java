@@ -21,6 +21,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -58,6 +59,10 @@ public class VisualizationsTool implements Tool {
         + "\"required\":[\"input\"],"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+    public static final int DEFAULT_MAX_INPUT_LENGTH = 10000;
+    public static final String MAX_INPUT_LENGTH_FIELD = "max_input_length";
+    private int maxInputLength = DEFAULT_MAX_INPUT_LENGTH;
+
     @Setter
     @Getter
     private String description = DEFAULT_DESCRIPTION;
@@ -158,36 +163,8 @@ public class VisualizationsTool implements Tool {
 
         // Validate input length
         String input = parameters.get(INPUT_FIELD);
-        if (input != null && input.length() > 10000) {
-            throw new IllegalArgumentException("input length cannot exceed 10000 characters");
-        }
-        return true;
-    }
-
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        // Validate input must be String
-        Object inputObj = parameters.get(INPUT_FIELD);
-        if (inputObj != null && !(inputObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("%s must be a String type, but got %s", INPUT_FIELD, inputObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate index must be String
-        Object indexObj = parameters.get(INDEX_FIELD);
-        if (indexObj != null && !(indexObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("%s must be a String type, but got %s", INDEX_FIELD, indexObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate size must be Integer
-        Object sizeObj = parameters.get(SIZE_FIELD);
-        if (sizeObj != null && !(sizeObj instanceof Integer)) {
-            throw new IllegalArgumentException(
-                String.format("%s must be an Integer type, but got %s", SIZE_FIELD, sizeObj.getClass().getSimpleName())
-            );
+        if (input != null && input.length() > maxInputLength) {
+            throw new IllegalArgumentException("input length cannot exceed " + maxInputLength + " characters");
         }
         return true;
     }
@@ -216,6 +193,9 @@ public class VisualizationsTool implements Tool {
 
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, INPUT_FIELD);
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, INDEX_FIELD);
+            ConfigurationUtils.readIntProperty(TYPE, null, params, SIZE_FIELD, 3);
             String index = params.get(INDEX_FIELD) == null ? ".kibana" : (String) params.get(INDEX_FIELD);
             String sizeStr = params.get(SIZE_FIELD) == null ? "3" : (String) params.get(SIZE_FIELD);
             int size;

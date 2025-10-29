@@ -24,6 +24,7 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -55,6 +56,9 @@ public class IndexMappingTool implements Tool {
         + "\"required\":[\"index\"],"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
+    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
+    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
+    private int maxQuestionLength = DEFAULT_MAX_QUESTION_LENGTH;
 
     @Setter
     @Getter
@@ -181,38 +185,10 @@ public class IndexMappingTool implements Tool {
 
         // Validate question length
         String question = parameters.get("question");
-        if (question != null && question.length() > 10000) {
-            throw new IllegalArgumentException("question length cannot exceed 10000 characters");
+        if (question != null && question.length() > maxQuestionLength) {
+            throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
         }
 
-        return true;
-    }
-
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        // Validate question must be String
-        Object questionObj = parameters.get("question");
-        if (questionObj != null && !(questionObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("question must be a String type, but got %s", questionObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate index must be ArrayList
-        Object indexObj = parameters.get("index");
-        if (indexObj != null && !(indexObj instanceof ArrayList)) {
-            throw new IllegalArgumentException(
-                String.format("index must be an Array type, but got %s", indexObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate local must be Boolean
-        Object localObj = parameters.get("local");
-        if (localObj != null && !(localObj instanceof Boolean)) {
-            throw new IllegalArgumentException(
-                String.format("local must be a Boolean type, but got %s", localObj.getClass().getSimpleName())
-            );
-        }
         return true;
     }
 
@@ -250,8 +226,14 @@ public class IndexMappingTool implements Tool {
 
         @Override
         public IndexMappingTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, "question");
+            ConfigurationUtils.readOptionalList(TYPE, null, params, "index");
+            ConfigurationUtils.readBooleanProperty(TYPE, null, params, "local", false);
+
             IndexMappingTool indexMappingTool = new IndexMappingTool(client);
             indexMappingTool.setOutputParser(ToolParser.createFromToolParams(params));
+            indexMappingTool.maxQuestionLength = ConfigurationUtils
+                .readIntProperty(TYPE, null, params, MAX_QUESTION_LENGTH_FIELD, DEFAULT_MAX_QUESTION_LENGTH);
             return indexMappingTool;
         }
 

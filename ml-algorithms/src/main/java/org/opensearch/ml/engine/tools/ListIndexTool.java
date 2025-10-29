@@ -54,6 +54,7 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -86,6 +87,9 @@ public class ListIndexTool implements Tool {
         + "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
+    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
+    private int maxQuestionLength = DEFAULT_MAX_QUESTION_LENGTH;
 
     @Setter
     @Getter
@@ -421,45 +425,8 @@ public class ListIndexTool implements Tool {
 
         // Validate question length
         String question = parameters.get("question");
-        if (question != null && question.length() > 10000) {
-            throw new IllegalArgumentException("question length cannot exceed 10000 characters");
-        }
-
-        return true;
-    }
-
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        // Validate question must be String
-        Object questionObj = parameters.get("question");
-        if (questionObj != null && !(questionObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("question must be a String type, but got %s", questionObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate indices must be ArrayList
-        Object indicesObj = parameters.get("indices");
-        if (indicesObj != null && !(indicesObj instanceof ArrayList)) {
-            throw new IllegalArgumentException(
-                String.format("indices must be an Array type, but got %s", indicesObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate local must be Boolean
-        Object localObj = parameters.get("local");
-        if (localObj != null && !(localObj instanceof Boolean)) {
-            throw new IllegalArgumentException(
-                String.format("local must be a Boolean type, but got %s", localObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate page_size must be Integer
-        Object pageSizeObj = parameters.get("page_size");
-        if (pageSizeObj != null && !(pageSizeObj instanceof Integer)) {
-            throw new IllegalArgumentException(
-                String.format("page_size must be an Integer type, but got %s", pageSizeObj.getClass().getSimpleName())
-            );
+        if (question != null && question.length() > maxQuestionLength) {
+            throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
         }
         return true;
     }
@@ -501,8 +468,15 @@ public class ListIndexTool implements Tool {
 
         @Override
         public ListIndexTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, "question");
+            ConfigurationUtils.readOptionalList(TYPE, null, params, "indices");
+            ConfigurationUtils.readBooleanProperty(TYPE, null, params, "local", false);
+            ConfigurationUtils.readIntProperty(TYPE, null, params, "page_size", 100);
+
             ListIndexTool tool = new ListIndexTool(client, clusterService);
             tool.setOutputParser(ToolParser.createFromToolParams(params));
+            tool.maxQuestionLength = ConfigurationUtils
+                .readIntProperty(TYPE, null, params, MAX_QUESTION_LENGTH_FIELD, DEFAULT_MAX_QUESTION_LENGTH);
             return tool;
         }
 

@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -148,26 +149,6 @@ public class MLModelTool implements WithModelTool {
         return parameters != null && !parameters.isEmpty();
     }
 
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        // Validate prompt must be String
-        Object promptObj = parameters.get("prompt");
-        if (promptObj != null && !(promptObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("prompt must be a String type, but got %s", promptObj.getClass().getSimpleName())
-            );
-        }
-
-        // Validate response_field must be String
-        Object responseFieldObj = parameters.get(RESPONSE_FIELD);
-        if (responseFieldObj != null && !(responseFieldObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("%s must be a String type, but got %s", RESPONSE_FIELD, responseFieldObj.getClass().getSimpleName())
-            );
-        }
-        return true;
-    }
-
     public static class Factory implements WithModelTool.Factory<MLModelTool> {
         private Client client;
 
@@ -192,6 +173,8 @@ public class MLModelTool implements WithModelTool {
 
         @Override
         public MLModelTool create(Map<String, Object> map) {
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, map, "prompt");
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, map, "response_field");
             String modelId = (String) map.get(MODEL_ID_FIELD);
             String responseField = (String) map.getOrDefault(RESPONSE_FIELD, DEFAULT_RESPONSE_FIELD);
 

@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -127,18 +128,6 @@ public class SearchIndexTool implements Tool {
         if (!validRequest) {
             log.error("SearchIndexTool's two parameter: index and query are required!");
             return false;
-        }
-        return true;
-    }
-
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        // Validate input must be String
-        Object inputObj = parameters.get(INPUT_FIELD);
-        if (inputObj != null && !(inputObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("%s must be a String type, but got %s", INPUT_FIELD, inputObj.getClass().getSimpleName())
-            );
         }
         return true;
     }
@@ -308,6 +297,7 @@ public class SearchIndexTool implements Tool {
 
         @Override
         public SearchIndexTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, INPUT_FIELD);
             SearchIndexTool tool = new SearchIndexTool(client, xContentRegistry);
             // Enhance the output parser with processors if configured
             tool.setOutputParser(ToolParser.createFromToolParams(params));

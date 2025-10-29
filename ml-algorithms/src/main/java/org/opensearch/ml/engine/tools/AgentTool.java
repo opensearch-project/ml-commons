@@ -11,6 +11,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -36,6 +37,9 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(AgentTool.TYPE)
 public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
+    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
+    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
+    private int maxQuestionLength = DEFAULT_MAX_QUESTION_LENGTH;
     private final Client client;
 
     @Setter
@@ -123,21 +127,8 @@ public class AgentTool implements Tool {
 
         // Validate question length
         String question = parameters.get("question");
-        if (question != null && question.length() > 10000) {
-            throw new IllegalArgumentException("question length cannot exceed 10000 characters");
-        }
-
-        return true;
-    }
-
-    @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        // Validate question must be String
-        Object questionObj = parameters.get("question");
-        if (questionObj != null && !(questionObj instanceof String)) {
-            throw new IllegalArgumentException(
-                String.format("question must be a String type, but got %s", questionObj.getClass().getSimpleName())
-            );
+        if (question != null && question.length() > maxQuestionLength) {
+            throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
         }
         return true;
     }
@@ -166,8 +157,11 @@ public class AgentTool implements Tool {
 
         @Override
         public AgentTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, "question");
             AgentTool agentTool = new AgentTool(client, (String) params.get("agent_id"));
             agentTool.setOutputParser(ToolParser.createFromToolParams(params));
+            agentTool.maxQuestionLength = ConfigurationUtils
+                .readIntProperty(TYPE, null, params, MAX_QUESTION_LENGTH_FIELD, DEFAULT_MAX_QUESTION_LENGTH);
             return agentTool;
         }
 
