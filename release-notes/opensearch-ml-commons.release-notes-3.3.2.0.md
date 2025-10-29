@@ -3,7 +3,6 @@
 Compatible with OpenSearch and OpenSearch Dashboards version 3.3.2
 
 ### Features
-* [Agentic Search] Add extract JSON processor in Query Planning Tool ([#4356](https://github.com/opensearch-project/ml-commons/pull/4356))
 * Nova mme support ([#4368](https://github.com/opensearch-project/ml-commons/pull/4368))
 
 ### Enhancements
@@ -13,6 +12,7 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.2
 * Add refresh policy; add checkpoint id field ([#4305](https://github.com/opensearch-project/ml-commons/pull/4305))
 
 ### Bug Fixes
+* [Agentic Search] Add extract JSON processor in Query Planning Tool ([#4356](https://github.com/opensearch-project/ml-commons/pull/4356))
 * Add name validation to index prefix ([#4332](https://github.com/opensearch-project/ml-commons/pull/4332))
 * Fix CVE-2025-58057 ([#4338](https://github.com/opensearch-project/ml-commons/pull/4338))
 * Fix unsupported operation exception in execute tool API ([#4325](https://github.com/opensearch-project/ml-commons/pull/4325))
