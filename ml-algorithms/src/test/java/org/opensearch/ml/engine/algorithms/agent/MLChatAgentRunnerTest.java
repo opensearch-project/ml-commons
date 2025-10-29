@@ -1115,7 +1115,10 @@ public class MLChatAgentRunnerTest {
         // Verify the response contains summary message
         String response = (String) agentOutput.get(0).getDataAsMap().get("response");
         assertTrue(
-            response.startsWith("Agent reached maximum iterations (1) without completing the task. Here's a summary of the steps taken:")
+            response
+                .startsWith(
+                    "Agent reached maximum iterations (1) without completing the task. Here's a summary of the steps completed so far:"
+                )
         );
         assertTrue(response.contains("Summary: Analysis step was attempted"));
     }
