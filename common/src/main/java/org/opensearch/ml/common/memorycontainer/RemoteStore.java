@@ -20,6 +20,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.Connector;
 
 import lombok.Builder;
 import lombok.Data;
@@ -33,6 +34,7 @@ import lombok.EqualsAndHashCode;
 public class RemoteStore implements ToXContentObject, Writeable {
 
     public static final String TYPE_FIELD = "type";
+    public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String ENDPOINT_FIELD = "endpoint";
     public static final String PARAMETERS_FIELD = "parameters";
@@ -42,6 +44,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
     public static final String SEARCH_PIPELINE_FIELD = "search_pipeline";
 
     private RemoteStoreType type;
+    private Connector connector;
     private String connectorId;
     private FunctionName embeddingModelType;
     private String embeddingModelId;
@@ -62,6 +65,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
     @Builder
     public RemoteStore(
         RemoteStoreType type,
+        Connector connector,
         String connectorId,
         FunctionName embeddingModelType,
         String embeddingModelId,
@@ -77,6 +81,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
             throw new IllegalArgumentException("Invalid remote store type");
         }
         this.type = type;
+        this.connector = connector;
         this.connectorId = connectorId;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
@@ -91,6 +96,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
 
     public RemoteStore(StreamInput input) throws IOException {
         this.type = input.readEnum(RemoteStoreType.class);
+        if (input.readBoolean()) {
+            this.connector = Connector.fromStream(input);
+        }
         this.connectorId = input.readOptionalString();
         if (input.readOptionalBoolean()) {
             this.embeddingModelType = input.readEnum(FunctionName.class);
@@ -118,6 +126,12 @@ public class RemoteStore implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeEnum(type);
+        if (connector != null) {
+            out.writeBoolean(true);
+            connector.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalString(connectorId);
         if (embeddingModelType != null) {
             out.writeBoolean(true);
@@ -156,6 +170,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
         if (type != null) {
             builder.field(TYPE_FIELD, type);
         }
+        if (connector != null) {
+            builder.field(CONNECTOR_FIELD, connector);
+        }
         if (connectorId != null) {
             builder.field(CONNECTOR_ID_FIELD, connectorId);
         }
@@ -190,6 +207,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
 
     public static RemoteStore parse(XContentParser parser) throws IOException {
         RemoteStoreType type = null;
+        Connector connector = null;
         String connectorId = null;
         FunctionName embeddingModelType = null;
         String embeddingModelId = null;
@@ -209,6 +227,9 @@ public class RemoteStore implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case TYPE_FIELD:
                     type = RemoteStoreType.fromString(parser.text());
+                    break;
+                case CONNECTOR_FIELD:
+                    connector = Connector.createConnector(parser);
                     break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
@@ -249,6 +270,7 @@ public class RemoteStore implements ToXContentObject, Writeable {
         return RemoteStore
             .builder()
             .type(type)
+            .connector(connector)
             .connectorId(connectorId)
             .embeddingModelType(embeddingModelType)
             .embeddingModelId(embeddingModelId)

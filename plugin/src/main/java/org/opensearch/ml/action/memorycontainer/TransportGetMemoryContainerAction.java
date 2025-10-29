@@ -169,6 +169,13 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLMemoryContainer mlMemoryContainer = MLMemoryContainer.parse(parser);
 
+                    if (mlMemoryContainer != null
+                        && mlMemoryContainer.getConfiguration() != null
+                        && mlMemoryContainer.getConfiguration().getRemoteStore() != null
+                        && mlMemoryContainer.getConfiguration().getRemoteStore().getConnector() != null) {
+                        mlMemoryContainer.getConfiguration().getRemoteStore().getConnector().removeCredential();
+                    }
+
                     if (TenantAwareHelper
                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlMemoryContainer.getTenantId(), wrappedListener)) {
                         validateMemoryContainerAccess(user, memoryContainerId, mlMemoryContainer, wrappedListener);
