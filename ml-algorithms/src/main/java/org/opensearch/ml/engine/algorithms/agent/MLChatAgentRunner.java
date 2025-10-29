@@ -974,27 +974,43 @@ public class MLChatAgentRunner implements MLAgentRunner {
         LLMSpec llmSpec,
         String tenantId
     ) {
-            generateLLMSummary(traceTensors, llmSpec, tenantId, ActionListener.wrap(summary -> {
-                String summaryResponse = String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary);
-                sendTraditionalMaxIterationsResponse(
-                    sessionId,
-                    listener,
-                    question,
-                    parentInteractionId,
-                    verbose,
-                    traceDisabled,
-                    traceTensors,
-                    conversationIndexMemory,
-                    traceNumber,
-                    additionalInfo,
-                    summaryResponse,
-                    tools
-                );
-            }, e -> {
-                log.error("Failed to generate LLM summary", e);
-                listener.onFailure(e);
-                cleanUpResource(tools);
-            }));
+        ActionListener<String> responseListener = ActionListener.wrap(response -> {
+            sendTraditionalMaxIterationsResponse(
+                sessionId,
+                listener,
+                question,
+                parentInteractionId,
+                verbose,
+                traceDisabled,
+                traceTensors,
+                conversationIndexMemory,
+                traceNumber,
+                additionalInfo,
+                response,
+                tools
+            );
+        }, listener::onFailure);
+
+        generateLLMSummary(
+            traceTensors,
+            llmSpec,
+            tenantId,
+            ActionListener
+                .wrap(
+                    summary -> responseListener
+                        .onResponse(String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary)),
+                    e -> {
+                        log.error("Failed to generate LLM summary, using fallback strategy", e);
+                        String fallbackResponse = (lastThought.get() != null
+                            && !lastThought.get().isEmpty()
+                            && !"null".equals(lastThought.get()))
+                                ? String
+                                    .format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+                                : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+                        responseListener.onResponse(fallbackResponse);
+                    }
+                )
+        );
     }
 
     private void sendTraditionalMaxIterationsResponse(
