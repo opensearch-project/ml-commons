@@ -58,7 +58,35 @@
             "type": {
               "type": "keyword"
             },
+            "endpoint": {
+              "type": "keyword"
+            },
+            "parameters": {
+              "type": "flat_object"
+            },
+            "credential": {
+              "type": "flat_object"
+            },
+            "connector": CONNECTOR_MAPPING_PLACEHOLDER,
             "connector_id": {
+              "type": "keyword"
+            },
+            "embedding_model_id": {
+              "type": "keyword"
+            },
+            "embedding_model_type": {
+              "type": "keyword"
+            },
+            "embedding_dimension": {
+              "type": "integer"
+            },
+            "embedding_model": {
+              "type": "flat_object"
+            },
+            "ingest_pipeline": {
+              "type": "keyword"
+            },
+            "search_pipeline": {
               "type": "keyword"
             }
           }
