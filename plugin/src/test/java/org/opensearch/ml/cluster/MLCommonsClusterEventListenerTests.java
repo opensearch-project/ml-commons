@@ -11,7 +11,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
-import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 
 import java.util.Collections;
 
