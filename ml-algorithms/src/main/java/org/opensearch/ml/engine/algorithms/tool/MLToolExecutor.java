@@ -14,7 +14,6 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
@@ -129,52 +128,6 @@ public class MLToolExecutor implements Executable {
         } else {
             String result = output instanceof String ? (String) output : StringUtils.toJson(output);
             modelTensors.add(ModelTensor.builder().name("response").result(result).build());
-        }
-    }
-
-    private void validateParameterTypes(String toolName, Map<String, String> parameters, Tool.Factory toolFactory) {
-        try {
-            for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                String paramName = entry.getKey();
-                String paramValue = entry.getValue();
-
-                if (!isValidParameterValue(paramName, paramValue)) {
-                    throw new IllegalArgumentException(
-                        "Invalid parameter value for '" + paramName + "' in tool '" + toolName + "': " + paramValue
-                    );
-                }
-            }
-        } catch (Exception e) {
-            log.error("Could not validate parameter types for tool: " + toolName, e);
-            if (e instanceof IllegalArgumentException) {
-                throw e;
-            }
-        }
-    }
-
-    private boolean isValidParameterValue(String paramName, String paramValue) {
-        if (paramValue == null || paramValue.trim().isEmpty()) {
-            return false;
-        }
-
-        try {
-            Map<String, Object> testConfig = new HashMap<>();
-            testConfig.put(paramName, paramValue);
-
-            if (paramValue.matches("^-?\\d+$")) {
-                ConfigurationUtils.readIntProperty("tool", "test", testConfig, paramName, 0);
-            } else if ("true".equalsIgnoreCase(paramValue) || "false".equalsIgnoreCase(paramValue)) {
-                ConfigurationUtils.readBooleanProperty("tool", "test", testConfig, paramName, false);
-            } else if (paramValue.matches("^-?\\d*\\.\\d+$")) {
-                ConfigurationUtils.readDoubleProperty("tool", "test", testConfig, paramName);
-            } else if (paramValue.startsWith("[") && paramValue.endsWith("]")) {
-                ConfigurationUtils.readOptionalList("tool", "test", testConfig, paramName);
-            } else if (paramValue.startsWith("{") && paramValue.endsWith("}")) {
-                ConfigurationUtils.readOptionalMap("tool", "test", testConfig, paramName);
-            }
-            return true;
-        } catch (Exception e) {
-            return false;
         }
     }
 }
