@@ -27,12 +27,18 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.agent.AgentModelService;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLAgentModelSpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -80,7 +86,47 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);// TODO: check access
         MLRegisterAgentRequest registerAgentRequest = MLRegisterAgentRequest.fromActionRequest(request);
         MLAgent mlAgent = registerAgentRequest.getMlAgent();
+
+        // Check if this agent needs model creation
+        if (mlAgent.getModel() != null) {
+            createModelAndRegisterAgent(mlAgent, listener);
+            return;
+        }
+
         registerAgent(mlAgent, listener);
+    }
+
+    private void createModelAndRegisterAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
+        try {
+            MLRegisterModelInput modelInput = AgentModelService.createModelFromSpec(mlAgent.getModel());
+            MLRegisterModelRequest modelRequest = new MLRegisterModelRequest(modelInput);
+
+            client.execute(MLRegisterModelAction.INSTANCE, modelRequest, ActionListener.wrap(modelResponse -> {
+                String modelId = modelResponse.getModelId();
+
+                Map<String, String> parameters = new HashMap<>();
+                if (mlAgent.getParameters() != null) {
+                    parameters.putAll(mlAgent.getParameters());
+                }
+
+                String llmInterface = AgentModelService.inferLLMInterface(mlAgent.getModel().getModelProvider());
+                if (llmInterface != null) {
+                    parameters.put(LLM_INTERFACE, llmInterface);
+                }
+
+                LLMSpec llmSpec = LLMSpec.builder().modelId(modelId).parameters(mlAgent.getModel().getModelParameters()).build();
+
+                // Remove credentials and model parameters as it is stored in the model document and LLMSpec respectively
+                MLAgentModelSpec modelSpec = mlAgent.getModel();
+                modelSpec.setModelParameters(null);
+                modelSpec.setCredential(null);
+                // ToDo: store model details within agent to prevent creating a new model document
+                MLAgent agent = mlAgent.toBuilder().llm(llmSpec).model(modelSpec).parameters(parameters).build();
+                registerAgent(agent, listener);
+            }, listener::onFailure));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
