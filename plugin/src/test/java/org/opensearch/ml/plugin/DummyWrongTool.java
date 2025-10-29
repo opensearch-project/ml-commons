@@ -68,11 +68,6 @@ public class DummyWrongTool implements Tool {
     }
 
     @Override
-    public boolean validateParameterTypes(Map<String, Object> parameters) {
-        return true;
-    }
-
-    @Override
     public void setAttributes(Map<String, Object> attributes) {
         this.attributes = Collections.emptyMap();
     }

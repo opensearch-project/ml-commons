@@ -84,13 +84,6 @@ public interface Tool {
     boolean validate(Map<String, String> parameters);
 
     /**
-     * Validate original parameter types before string conversion.
-     * @param originalParameters original parameters with their types
-     * @return true if the parameter types are valid
-     */
-    boolean validateParameterTypes(Map<String, Object> originalParameters);
-
-    /**
      * Check if should end the whole CoT immediately.
      * For example, if some critical error detected like high memory pressure,
      * the tool may end the whole CoT process by returning true.
