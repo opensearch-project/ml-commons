@@ -128,7 +128,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
-    private static final String MAX_ITERATIONS_SUMMARY_MESSAGE = MAX_ITERATIONS_MESSAGE + ". Here's a summary of the steps taken:\n\n%s";
+    private static final String MAX_ITERATIONS_SUMMARY_MESSAGE = MAX_ITERATIONS_MESSAGE
+        + ". Here's a summary of the steps completed so far:\n\n%s";
 
     private Client client;
     private Settings settings;
@@ -1084,11 +1085,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
             );
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
                 String summary = extractSummaryFromResponse(response);
-                if (summary != null) {
-                    listener.onResponse(summary);
-                } else {
+                if (summary == null) {
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
+                    return;
                 }
+                listener.onResponse(summary);
             }, listener::onFailure));
         } catch (Exception e) {
             listener.onFailure(e);
