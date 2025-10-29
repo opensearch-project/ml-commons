@@ -51,8 +51,12 @@ import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.agent.AgentInput;
+import org.opensearch.ml.common.agent.AgentInputProcessor;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.ModelProvider;
+import org.opensearch.ml.common.agent.ModelProviderFactory;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -144,16 +148,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     @Override
     public void execute(Input input, ActionListener<Output> listener, TransportChannel channel) {
-        if (!(input instanceof AgentMLInput)) {
+        if (!(input instanceof AgentMLInput agentMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }
-        AgentMLInput agentMLInput = (AgentMLInput) input;
         String agentId = agentMLInput.getAgentId();
         String tenantId = agentMLInput.getTenantId();
         Boolean isAsync = agentMLInput.getIsAsync();
 
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-        if (inputDataSet == null || inputDataSet.getParameters() == null) {
+        if (agentMLInput.getInputDataset() == null && !agentMLInput.hasStandardInput()) {
             throw new IllegalArgumentException("Agent input data can not be empty.");
         }
 
@@ -215,6 +217,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     )
                                                 );
                                         }
+
+                                        processAgentInput(agentMLInput, mlAgent);
+
+                                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
+                                            .getInputDataset();
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
@@ -726,6 +733,45 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             e -> log.warn("Failed to update interaction {} with failure message", interactionId, e)
                         )
                 );
+        }
+    }
+
+    /**
+     * Processes standardized input if present in AgentMLInput.
+     * This method handles the conversion from AgentInput to parameters that can be used
+     * by the existing agent execution logic.
+     */
+    private void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        // If legacy question input is provided, parse to new standard input
+        if (agentMLInput.getInputDataset() != null) {
+            RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+            if (!remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
+                throw new IllegalArgumentException("Question not found in parameters.");
+            }
+
+            AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
+            agentMLInput.setAgentInput(standardInput);
+        }
+
+        try {
+            // Extract the question text for prompt template and memory storage
+            String question = AgentInputProcessor.extractQuestionText(agentMLInput.getAgentInput());
+            ModelProvider modelProvider = ModelProviderFactory.getProvider(mlAgent.getModel().getModelProvider());
+
+            // create input dataset if it doesn't exist
+            if (agentMLInput.getInputDataset() == null) {
+                agentMLInput.setInputDataset(new RemoteInferenceInputDataSet(new HashMap<>()));
+            }
+
+            // Set parameters to processed params
+            RemoteInferenceInputDataSet remoteDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
+            Map<String, String> parameters = modelProvider.mapAgentInput(agentMLInput.getAgentInput());
+            // set question to questionText for memory
+            parameters.put(QUESTION, question);
+            remoteDataSet.getParameters().putAll(parameters);
+        } catch (Exception e) {
+            log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
+            throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
         }
     }
 }
