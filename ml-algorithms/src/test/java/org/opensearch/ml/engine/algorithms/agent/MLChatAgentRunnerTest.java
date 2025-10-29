@@ -1101,8 +1101,6 @@ public class MLChatAgentRunnerTest {
 
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put(MLChatAgentRunner.SUMMARIZE_WHEN_MAX_ITERATION, "true");
-
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify response is captured
@@ -1124,7 +1122,7 @@ public class MLChatAgentRunnerTest {
 
     @Test
     public void testMaxIterationsWithSummaryDisabled() {
-        // Create LLM spec with max_iteration = 1 and summary disabled
+        // Create LLM spec with max_iteration = 1
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
         final MLAgent mlAgent = MLAgent
@@ -1138,15 +1136,16 @@ public class MLChatAgentRunnerTest {
 
         // Reset client mock for this test
         Mockito.reset(client);
-        // Mock LLM response that doesn't contain final_answer
-        Mockito
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "I need to use the tool", "action", FIRST_TOOL)))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+        // First call: LLM response without final_answer to trigger max iterations
+        // Second call: Summary LLM fails
+        Mockito.doAnswer(getLLMAnswer(ImmutableMap.of("thought", "I need to use the tool", "action", FIRST_TOOL))).doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("LLM summary generation failed"));
+            return null;
+        }).when(client).execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
 
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put(MLChatAgentRunner.SUMMARIZE_WHEN_MAX_ITERATION, "false");
 
         mlChatAgentRunner.run(mlAgent, params, agentActionListener);
 
@@ -1159,7 +1158,7 @@ public class MLChatAgentRunnerTest {
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
         assertEquals(1, agentOutput.size());
 
-        // Verify the response contains traditional max iterations message
+        // Verify the response uses fallback strategy with last thought
         String response = (String) agentOutput.get(0).getDataAsMap().get("response");
         assertEquals("Agent reached maximum iterations (1) without completing the task. Last thought: I need to use the tool", response);
     }
