@@ -38,7 +38,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -50,6 +53,7 @@ import org.opensearch.transport.client.Client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.gson.Gson;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -57,6 +61,7 @@ import lombok.extern.log4j.Log4j2;
 public class RestActionUtils {
 
     private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
+    private static final Gson gson = new Gson();
 
     public static final String SECURITY_AUTHCZ_ADMIN_DN = "plugins.security.authcz.admin_dn";
 
@@ -80,6 +85,12 @@ public class RestActionUtils {
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
 
     public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
+
+    // Header names for MCP request passthrough
+    private static final String HEADER_FAS_ACCESS_KEY = "x-amzn-fas-accesskey";
+    private static final String HEADER_FAS_SECRET_KEY = "x-amzn-fas-secretkey";
+    private static final String HEADER_FAS_SESSION_TOKEN = "x-amzn-fas-sessiontoken";
+    private static final String HEADER_DATASOURCES = "x-amzn-datasources";
 
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
@@ -334,5 +345,42 @@ public class RestActionUtils {
             methodName = methodName.contains("_") ? methodName.split("_")[1] : methodName;
         }
         return methodName;
+    }
+
+    /**
+     * Adds MCP (Model Context Protocol) request headers from the REST request to the agent input.
+     * Extracts FAS credentials and datasources headers and adds them to the agent's input dataset parameters.
+     *
+     * @param request RestRequest containing the MCP headers
+     * @param agentInput AgentMLInput to add the headers to
+     */
+    public static void addMcpRequestHeaders(RestRequest request, AgentMLInput agentInput) {
+        java.util.Map<String, String> headers = new java.util.HashMap<>();
+        String accessKey = request.header(HEADER_FAS_ACCESS_KEY);
+        if (accessKey != null && !accessKey.isEmpty()) {
+            headers.put(HEADER_FAS_ACCESS_KEY, accessKey);
+        }
+        String secretKey = request.header(HEADER_FAS_SECRET_KEY);
+        if (secretKey != null && !secretKey.isEmpty()) {
+            headers.put(HEADER_FAS_SECRET_KEY, secretKey);
+        }
+        String sessionToken = request.header(HEADER_FAS_SESSION_TOKEN);
+        if (sessionToken != null && !sessionToken.isEmpty()) {
+            headers.put(HEADER_FAS_SESSION_TOKEN, sessionToken);
+        }
+        String datasources = request.header(HEADER_DATASOURCES);
+        if (datasources != null && !datasources.isEmpty()) {
+            headers.put(HEADER_DATASOURCES, datasources);
+        }
+        if (!headers.isEmpty()) {
+            String headersJson = gson.toJson(headers);
+            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+            if (inputDataSet != null && inputDataSet.getParameters() != null) {
+                inputDataSet.getParameters().put(CommonValue.MCP_REQUEST_HEADERS, headersJson);
+                log.debug("Added MCP request headers to agent input parameters with keys: {}", headers.keySet());
+            } else {
+                log.warn("Cannot add MCP request headers: input dataset or parameters is null");
+            }
+        }
     }
 }

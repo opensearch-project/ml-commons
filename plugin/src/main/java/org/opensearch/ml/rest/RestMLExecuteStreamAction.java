@@ -14,6 +14,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
+import static org.opensearch.ml.utils.RestActionUtils.addMcpRequestHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
@@ -326,6 +327,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         agentInput.setIsAsync(async);
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
         inputDataSet.getParameters().put("stream", String.valueOf(true));
+        addMcpRequestHeaders(request, agentInput);
         return new MLExecuteTaskRequest(functionName, input);
     }
 
@@ -441,4 +443,5 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
         };
     }
+
 }

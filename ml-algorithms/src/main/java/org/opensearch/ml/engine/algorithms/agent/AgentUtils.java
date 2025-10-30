@@ -69,6 +69,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -143,6 +144,27 @@ public class AgentUtils {
     public static final String DEFAULT_DATETIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
     public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
     private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
+
+    public static Map<String, String> extractRequestHeaders(Map<String, String> parameters) {
+        if (parameters == null) {
+            return Collections.emptyMap();
+        }
+
+        String headersJson = parameters.get(CommonValue.MCP_REQUEST_HEADERS);
+        if (headersJson == null || headersJson.trim().isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        try {
+            Type mapType = new TypeToken<Map<String, String>>() {
+            }.getType();
+            Map<String, String> headers = gson.fromJson(headersJson, mapType);
+            return headers != null ? headers : Collections.emptyMap();
+        } catch (Exception e) {
+            log.warn("Failed to parse request headers from JSON: {}", headersJson, e);
+            return Collections.emptyMap();
+        }
+    }
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -679,6 +701,7 @@ public class AgentUtils {
 
     public static void getMcpToolSpecs(
         MLAgent mlAgent,
+        Map<String, String> params,
         Client client,
         SdkClient sdkClient,
         Encryptor encryptor,
@@ -697,6 +720,8 @@ public class AgentUtils {
         }.getType();
         List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
 
+        Map<String, String> requestHeaders = extractRequestHeaders(params);
+
         // Use AtomicInteger to track completion of all async operations
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
         List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
@@ -706,43 +731,52 @@ public class AgentUtils {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
 
-            getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
-                List<MLToolSpec> filteredTools;
-                if (toolFilters == null || toolFilters.isEmpty()) {
-                    filteredTools = mcpToolspecs;
-                } else {
-                    filteredTools = new ArrayList<>();
-                    List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
+            getMCPToolSpecsFromConnector(
+                connectorId,
+                tenantId,
+                requestHeaders,
+                sdkClient,
+                client,
+                encryptor,
+                ActionListener.wrap(mcpToolspecs -> {
+                    List<MLToolSpec> filteredTools;
+                    if (toolFilters == null || toolFilters.isEmpty()) {
+                        filteredTools = mcpToolspecs;
+                    } else {
+                        filteredTools = new ArrayList<>();
+                        List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
 
-                    for (MLToolSpec toolSpec : mcpToolspecs) {
-                        for (Pattern pattern : compiledPatterns) {
-                            if (pattern.matcher(toolSpec.getName()).matches()) {
-                                filteredTools.add(toolSpec);
-                                break;
+                        for (MLToolSpec toolSpec : mcpToolspecs) {
+                            for (Pattern pattern : compiledPatterns) {
+                                if (pattern.matcher(toolSpec.getName()).matches()) {
+                                    filteredTools.add(toolSpec);
+                                    break;
+                                }
                             }
                         }
                     }
-                }
 
-                finalToolSpecs.addAll(filteredTools);
+                    finalToolSpecs.addAll(filteredTools);
 
-                // If this is the last connector, send the final response
-                if (remainingConnectors.decrementAndGet() == 0) {
-                    finalListener.onResponse(finalToolSpecs);
-                }
-            }, e -> {
-                log.error("Error processing connector: " + connectorId, e);
-                // Even on error, we need to check if this is the last connector
-                if (remainingConnectors.decrementAndGet() == 0) {
-                    finalListener.onResponse(finalToolSpecs);
-                }
-            }));
+                    // If this is the last connector, send the final response
+                    if (remainingConnectors.decrementAndGet() == 0) {
+                        finalListener.onResponse(finalToolSpecs);
+                    }
+                }, e -> {
+                    log.error("Error processing connector: " + connectorId, e);
+                    // Even on error, we need to check if this is the last connector
+                    if (remainingConnectors.decrementAndGet() == 0) {
+                        finalListener.onResponse(finalToolSpecs);
+                    }
+                })
+            );
         }
     }
 
     private static void getMCPToolSpecsFromConnector(
         String connectorId,
         String tenantId,
+        Map<String, String> requestHeaders,
         SdkClient sdkClient,
         Client client,
         Encryptor encryptor,
@@ -761,14 +795,14 @@ public class AgentUtils {
                 if (connector instanceof McpConnector) {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
-                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs(requestHeaders);
                     toolListener.onResponse(mcpToolSpecs);
                     return;
                 }
                 if (connector instanceof McpStreamableHttpConnector) {
                     McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
-                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                    mcpToolSpecs = connectorExecutor.getMcpToolSpecs(requestHeaders);
                     toolListener.onResponse(mcpToolSpecs);
                     return;
                 }

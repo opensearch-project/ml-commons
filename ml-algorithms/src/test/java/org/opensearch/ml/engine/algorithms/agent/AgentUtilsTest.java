@@ -2000,4 +2000,147 @@ public class AgentUtilsTest extends MLStaticMockBase {
         doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
+
+    @Test
+    public void testExtractRequestHeaders_WithValidHeaders() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters
+            .put(
+                org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS,
+                "{\"Authorization\":\"Bearer token123\",\"Content-Type\":\"application/json\"}"
+            );
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+
+        assertEquals(2, result.size());
+        assertEquals("Bearer token123", result.get("Authorization"));
+        assertEquals("application/json", result.get("Content-Type"));
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithNullParameters() {
+        Map<String, String> result = AgentUtils.extractRequestHeaders(null);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithEmptyHeadersJson() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "");
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithNullHeadersJson() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, null);
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithWhitespaceHeadersJson() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "   ");
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithInvalidJson() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "{invalid json}");
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithEmptyJsonObject() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "{}");
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testMergeHeaders_BothNonEmpty() {
+        Map<String, String> staticHeaders = new HashMap<>();
+        staticHeaders.put("X-Static-Header", "static-value");
+        staticHeaders.put("Authorization", "Bearer static-token");
+
+        Map<String, String> requestHeaders = new HashMap<>();
+        requestHeaders.put("X-Request-Header", "request-value");
+        requestHeaders.put("Authorization", "Bearer request-token");
+
+        Map<String, String> result = AgentUtils.mergeHeaders(staticHeaders, requestHeaders);
+
+        assertEquals(3, result.size());
+        assertEquals("static-value", result.get("X-Static-Header"));
+        assertEquals("request-value", result.get("X-Request-Header"));
+        assertEquals("Bearer request-token", result.get("Authorization")); // Request headers override static
+    }
+
+    @Test
+    public void testMergeHeaders_OnlyStaticHeaders() {
+        Map<String, String> staticHeaders = new HashMap<>();
+        staticHeaders.put("X-Static-Header", "static-value");
+
+        Map<String, String> result = AgentUtils.mergeHeaders(staticHeaders, null);
+
+        assertEquals(1, result.size());
+        assertEquals("static-value", result.get("X-Static-Header"));
+    }
+
+    @Test
+    public void testMergeHeaders_OnlyRequestHeaders() {
+        Map<String, String> requestHeaders = new HashMap<>();
+        requestHeaders.put("X-Request-Header", "request-value");
+
+        Map<String, String> result = AgentUtils.mergeHeaders(null, requestHeaders);
+
+        assertEquals(1, result.size());
+        assertEquals("request-value", result.get("X-Request-Header"));
+    }
+
+    @Test
+    public void testMergeHeaders_BothNull() {
+        Map<String, String> result = AgentUtils.mergeHeaders(null, null);
+
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testMergeHeaders_BothEmpty() {
+        Map<String, String> result = AgentUtils.mergeHeaders(new HashMap<>(), new HashMap<>());
+
+        assertEquals(0, result.size());
+    }
+
+    @Test
+    public void testMergeHeaders_EmptyStaticNonEmptyRequest() {
+        Map<String, String> requestHeaders = new HashMap<>();
+        requestHeaders.put("X-Request-Header", "request-value");
+
+        Map<String, String> result = AgentUtils.mergeHeaders(new HashMap<>(), requestHeaders);
+
+        assertEquals(1, result.size());
+        assertEquals("request-value", result.get("X-Request-Header"));
+    }
 }
