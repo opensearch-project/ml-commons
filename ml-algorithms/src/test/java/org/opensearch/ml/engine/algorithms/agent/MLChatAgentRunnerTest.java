@@ -921,11 +921,19 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec))
             .build();
 
-        // Mock LLM response that doesn't contain final_answer to force max iterations
-        Mockito
-            .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "", "action", FIRST_TOOL)))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+        // Reset client mock for this test
+        Mockito.reset(client);
+        // First call: LLM response without final_answer to force max iterations
+        // Second call: Summary LLM response
+        Mockito.doAnswer(getLLMAnswer(ImmutableMap.of("thought", "", "action", FIRST_TOOL))).doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor.builder().result("The agent attempted to use the first tool").build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            MLTaskResponse mlTaskResponse = MLTaskResponse.builder().output(mlModelTensorOutput).build();
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
 
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
@@ -941,9 +949,15 @@ public class MLChatAgentRunnerTest {
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
         assertEquals(1, agentOutput.size());
 
-        // Verify the response contains max iterations message
+        // Verify the response contains max iterations message with summary
         String response = (String) agentOutput.get(0).getDataAsMap().get("response");
-        assertEquals("Agent reached maximum iterations (1) without completing the task", response);
+        assertTrue(
+            response
+                .startsWith(
+                    "Agent reached maximum iterations (1) without completing the task. Here's a summary of the steps completed so far:"
+                )
+        );
+        assertTrue(response.contains("The agent attempted to use the first tool"));
     }
 
     @Test
@@ -960,9 +974,17 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec))
             .build();
 
-        // Mock LLM response with valid thought
+        // Reset client mock for this test
+        Mockito.reset(client);
+        // First call: LLM response with valid thought to trigger max iterations
+        // Second call: Summary LLM fails to trigger fallback
         Mockito
             .doAnswer(getLLMAnswer(ImmutableMap.of("thought", "I need to use the first tool", "action", FIRST_TOOL)))
+            .doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                listener.onFailure(new RuntimeException("LLM summary generation failed"));
+                return null;
+            })
             .when(client)
             .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
 
@@ -980,7 +1002,7 @@ public class MLChatAgentRunnerTest {
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
         assertEquals(1, agentOutput.size());
 
-        // Verify the response contains the last valid thought instead of max iterations message
+        // Verify the response contains the last valid thought (fallback when summary fails)
         String response = (String) agentOutput.get(0).getDataAsMap().get("response");
         assertEquals(
             "Agent reached maximum iterations (1) without completing the task. Last thought: I need to use the first tool",
