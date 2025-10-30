@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.cluster;
 
-import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
 import java.util.List;
@@ -39,6 +39,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     private final MLModelAutoReDeployer mlModelAutoReDeployer;
     private final Client client;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private boolean startedStatsJob;
 
     public MLCommonsClusterEventListener(
         ClusterService clusterService,
@@ -90,12 +91,13 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
          */
         for (DiscoveryNode node : state.nodes()) {
             if (node.isDataNode() && node.getVersion().onOrAfter(Version.V_3_1_0)) {
-                if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()) {
+                if (mlFeatureEnabledSetting.isMetricCollectionEnabled()
+                    && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()
+                    && !clusterService.state().getMetadata().hasIndex(ML_JOBS_INDEX)
+                    && !this.startedStatsJob) {
                     mlTaskManager.indexStatsCollectorJob(true);
-                }
-
-                if (clusterService.state().getMetadata().hasIndex(TASK_POLLING_JOB_INDEX)) {
-                    mlTaskManager.startTaskPollingJob();
+                    // using this variable in case if same node has a cluster state change event and the state is not updated yet
+                    this.startedStatsJob = true;
                 }
 
                 break;
