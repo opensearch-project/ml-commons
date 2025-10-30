@@ -746,15 +746,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         if (mlAgent.getModel() == null) {
             return;
         }
+
         // If legacy question input is provided, parse to new standard input
         if (agentMLInput.getInputDataset() != null) {
             RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
-            if (!remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
-                throw new IllegalArgumentException("Question not found in parameters.");
+            if (remoteInferenceInputDataSet.getParameters().containsKey(QUESTION)) {
+                AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
+                agentMLInput.setAgentInput(standardInput);
             }
-
-            AgentInput standardInput = new AgentInput(remoteInferenceInputDataSet.getParameters().get(QUESTION));
-            agentMLInput.setAgentInput(standardInput);
         }
 
         try {
