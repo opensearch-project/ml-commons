@@ -354,7 +354,7 @@ public class InteractionsIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the interaction doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(interactionId))) {
-                    throw new ResourceNotFoundException("Message [" + interactionId + "] not found");
+                    throw new ResourceNotFoundException("Message ID not found");
                 }
                 Interaction interaction = Interaction.fromMap(interactionId, getResponse.getSourceAsMap());
                 // checks if the user has permission to access the conversation that the interaction belongs to
