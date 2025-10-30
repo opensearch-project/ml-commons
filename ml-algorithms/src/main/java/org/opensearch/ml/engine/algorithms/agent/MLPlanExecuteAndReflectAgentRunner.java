@@ -393,7 +393,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             return;
         }
         MLPredictionTaskRequest request;
-
+        // Planner agent doesn't use INTERACTIONS for now, reusing the INTERACTIONS to pass over
+        // completedSteps to context management.
+        // TODO should refactor the completed steps as message array format, similar to chat agent.
         if (hookRegistry != null) {
             Map<String, String> afterHookParams = new HashMap<>();
             afterHookParams.putAll(allParams);
