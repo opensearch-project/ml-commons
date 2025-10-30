@@ -14,6 +14,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
+import static org.opensearch.ml.utils.RestActionUtils.addMcpRequestHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -128,6 +129,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
             ((AgentMLInput) input).setAgentId(agentId);
             ((AgentMLInput) input).setTenantId(tenantId);
             ((AgentMLInput) input).setIsAsync(async);
+            addMcpRequestHeaders(request, (AgentMLInput) input);
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
                 throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);
@@ -171,4 +173,5 @@ public class RestMLExecuteAction extends BaseRestHandler {
     private boolean isClientError(Exception e) {
         return e instanceof IllegalArgumentException || e instanceof IllegalAccessException;
     }
+
 }

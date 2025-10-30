@@ -340,7 +340,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         };
 
         // Fetch MCP tools and handle both success and failure cases
-        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+        getMcpToolSpecs(mlAgent, allParams, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
             toolSpecs.addAll(mcpTools);
             processTools.accept(toolSpecs);
         }, e -> {
