@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -678,6 +679,42 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testParseTensorDataMap() {
+        // Test with response only
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", "test response");
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+
+        String result = mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(tensor);
+        assertEquals("test response", result);
+
+        // Test with additional info
+        Map<String, Object> additionalInfo = new HashMap<>();
+        additionalInfo.put("trace1", "content1");
+        additionalInfo.put("trace2", "content2");
+        dataMap.put("additional_info", additionalInfo);
+
+        result = mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(tensor);
+        assertTrue(result.contains("test response"));
+        assertTrue(result.contains("<step-traces>"));
+        assertTrue(result.contains("<trace1>\ncontent1\n</trace1>"));
+        assertTrue(result.contains("<trace2>\ncontent2\n</trace2>"));
+        assertTrue(result.contains("</step-traces>"));
+
+        // Test with null dataMap
+        ModelTensor nullTensor = ModelTensor.builder().build();
+        assertNull(mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(nullTensor));
+
+        // No response field
+        Map<String, Object> noResponseMap = new HashMap<>();
+        noResponseMap.put("additional_info", additionalInfo);
+        ModelTensor noResponseTensor = ModelTensor.builder().dataAsMap(noResponseMap).build();
+        result = mlPlanExecuteAndReflectAgentRunner.parseTensorDataMap(noResponseTensor);
+        assertTrue(result.contains("<step-traces>"));
+        assertFalse(result.contains("test response"));
+    }
+
+    @Test
     public void testUpdateTaskWithExecutorAgentInfo() {
         MLAgent mlAgent = createMLAgentWithTools();
         String taskId = "test-task-id";
@@ -764,5 +801,58 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
             mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
         }
+    }
+
+    @Test
+    public void testExecutionWithNullStepResult() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Setup LLM response for planning phase - returns steps to execute
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor
+                .builder()
+                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
+                .build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        // Setup executor response with tensor that has null dataMap - this will hit line 465
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor memoryIdTensor = ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result("test_memory_id").build();
+            ModelTensor parentIdTensor = ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result("test_parent_id").build();
+            // This tensor will return null from parseTensorDataMap, hitting the stepResult != null check
+            ModelTensor nullDataTensor = ModelTensor.builder().name("other").build();
+            ModelTensors modelTensors = ModelTensors
+                .builder()
+                .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, nullDataTensor))
+                .build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
+
+        // Capture the exception in the listener
+        doAnswer(invocation -> {
+            Exception e = invocation.getArgument(0);
+            assertTrue(e instanceof IllegalStateException);
+            assertEquals("No valid response found in ReAct agent output", e.getMessage());
+            return null;
+        }).when(agentActionListener).onFailure(any());
+
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that onFailure was called with the expected exception
+        verify(agentActionListener).onFailure(any(IllegalStateException.class));
     }
 }
