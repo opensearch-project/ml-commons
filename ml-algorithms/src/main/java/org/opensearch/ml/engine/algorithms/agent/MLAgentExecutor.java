@@ -742,6 +742,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      * by the existing agent execution logic.
      */
     private void processAgentInput(AgentMLInput agentMLInput, MLAgent mlAgent) {
+        // old style agent registration
+        if (mlAgent.getModel() == null) {
+            return;
+        }
         // If legacy question input is provided, parse to new standard input
         if (agentMLInput.getInputDataset() != null) {
             RemoteInferenceInputDataSet remoteInferenceInputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();

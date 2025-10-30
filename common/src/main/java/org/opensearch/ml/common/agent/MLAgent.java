@@ -136,7 +136,7 @@ public class MLAgent implements ToXContentObject, Writeable {
             );
         }
         MLAgentType.from(type);
-        if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
+        if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null && model == null) {
             throw new IllegalArgumentException("We need model information for the conversational agent type");
         }
         Set<String> toolNames = new HashSet<>();
