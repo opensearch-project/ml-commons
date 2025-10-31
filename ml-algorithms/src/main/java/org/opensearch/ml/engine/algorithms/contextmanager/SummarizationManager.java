@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
 import static org.opensearch.ml.common.FunctionName.REMOTE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,7 +52,7 @@ public class SummarizationManager implements ContextManager {
     private static final double DEFAULT_SUMMARY_RATIO = 0.3;
     private static final int DEFAULT_PRESERVE_RECENT_MESSAGES = 10;
     private static final String DEFAULT_SUMMARIZATION_PROMPT =
-        "You are a tool interactions summarization agent. Summarize the provided tool interactions concisely while preserving key information and context.";
+        "You are a interactions summarization agent. Summarize the provided interactions concisely while preserving key information and context.";
 
     protected double summaryRatio;
     protected int preserveRecentMessages;
@@ -150,7 +151,7 @@ public class SummarizationManager implements ContextManager {
         // Get model ID
         String modelId = summarizationModelId;
         if (modelId == null) {
-            Map<String, Object> parameters = context.getParameters();
+            Map<String, String> parameters = context.getParameters();
             if (parameters != null) {
                 modelId = (String) parameters.get("_llm_model_id");
             }
@@ -163,7 +164,7 @@ public class SummarizationManager implements ContextManager {
 
         // Prepare summarization parameters
         Map<String, String> summarizationParameters = new HashMap<>();
-        summarizationParameters.put("prompt", StringUtils.toJson(String.join("\n", messagesToSummarize)));
+        summarizationParameters.put("prompt", "Help summarize the following" + StringUtils.toJson(String.join(",", messagesToSummarize)));
         summarizationParameters.put("system_prompt", summarizationSystemPrompt);
 
         executeSummarization(context, modelId, summarizationParameters, messagesToSummarizeCount, remainingMessages, toolInteractions);
@@ -193,7 +194,6 @@ public class SummarizationManager implements ContextManager {
                     String summary = extractSummaryFromResponse(response);
                     processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalToolInteractions);
                 } catch (Exception e) {
-                    log.error("Failed to process summarization response", e);
                     // Fallback to default behavior
                     processSummarizationResult(
                         context,
@@ -204,7 +204,6 @@ public class SummarizationManager implements ContextManager {
                     );
                 }
             }, e -> {
-                log.error("Summarization prediction failed", e);
                 // Fallback to default behavior
                 processSummarizationResult(
                     context,
@@ -218,7 +217,6 @@ public class SummarizationManager implements ContextManager {
             client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
 
         } catch (Exception e) {
-            log.error("Failed to execute summarization", e);
             // Fallback to default behavior
             processSummarizationResult(
                 context,
@@ -262,12 +260,12 @@ public class SummarizationManager implements ContextManager {
             context.setToolInteractions(updatedToolInteractions);
 
             // Update parameters
-            Map<String, Object> parameters = context.getParameters();
+            Map<String, String> parameters = context.getParameters();
             if (parameters == null) {
                 parameters = new HashMap<>();
-                context.setParameters(parameters);
             }
-            parameters.put("_interactions", ", " + String.join(", ", updatedInteractions));
+            parameters.put(INTERACTIONS, ", " + String.join(", ", updatedInteractions));
+            context.setParameters(parameters);
 
             log
                 .info(
@@ -294,12 +292,6 @@ public class SummarizationManager implements ContextManager {
                         Map<String, ?> dataAsMap = tensors.get(0).getDataAsMap();
                         // TODO need to parse LLM response output, maybe reused how filtered output from chatAgentRunner
                         return StringUtils.toJson(dataAsMap);
-                        // if (dataAsMap.containsKey("response")) {
-                        // return dataAsMap.get("response").toString();
-                        // }
-                        // if (dataAsMap.containsKey("result")) {
-                        // return dataAsMap.get("result").toString();
-                        // }
                     }
                 }
             }

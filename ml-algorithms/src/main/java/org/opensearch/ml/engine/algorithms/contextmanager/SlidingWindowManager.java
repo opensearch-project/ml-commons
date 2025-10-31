@@ -116,7 +116,7 @@ public class SlidingWindowManager implements ContextManager {
         context.setToolInteractions(updatedToolInteractions);
 
         // Update the _interactions parameter with smaller size of updated interactions
-        Map<String, Object> parameters = context.getParameters();
+        Map<String, String> parameters = context.getParameters();
         if (parameters == null) {
             parameters = new HashMap<>();
             context.setParameters(parameters);

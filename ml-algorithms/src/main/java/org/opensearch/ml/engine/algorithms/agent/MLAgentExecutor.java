@@ -665,7 +665,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     toolFactories,
                     memoryFactoryMap,
                     sdkClient,
-                    encryptor
+                    encryptor,
+                    hookRegistry
                 );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
