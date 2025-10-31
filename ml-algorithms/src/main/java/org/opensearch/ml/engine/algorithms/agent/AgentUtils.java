@@ -1001,7 +1001,10 @@ public class AgentUtils {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
         Map<String, Object> toolParams = new HashMap<>();
-        toolParams.putAll(executeParams);
+        // Parse JSON strings back to original type since we need to validate each parameter type when creating tool
+        for (Map.Entry<String, String> entry : executeParams.entrySet()) {
+            toolParams.put(entry.getKey(), parseValue(entry.getValue()));
+        }
         Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
         if (runtimeResources != null) {
             toolParams.putAll(runtimeResources);
@@ -1018,5 +1021,33 @@ public class AgentUtils {
         }
 
         return tool;
+    }
+
+    private static Object parseValue(String value) {
+        if (value == null || "null".equals(value)) {
+            return null;
+        }
+        String v = value.trim();
+
+        // Try JSON array
+        if (v.startsWith("[") && v.endsWith("]")) {
+            try {
+                return gson.fromJson(v, List.class);
+            } catch (Exception e) {
+                return value;
+            }
+        }
+
+        // Try boolean
+        if ("true".equalsIgnoreCase(v) || "false".equalsIgnoreCase(v)) {
+            return Boolean.parseBoolean(v);
+        }
+
+        // Try integer
+        try {
+            return Integer.parseInt(v);
+        } catch (NumberFormatException e) {
+            return value;
+        }
     }
 }
