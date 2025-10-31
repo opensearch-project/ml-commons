@@ -65,7 +65,7 @@ public class ContextManagerContext {
      * Additional parameters for context processing
      */
     @Builder.Default
-    private Map<String, Object> parameters = new HashMap<>();
+    private Map<String, String> parameters = new HashMap<>();
 
     /**
      * Get the total token count for the current context.
@@ -174,7 +174,7 @@ public class ContextManagerContext {
      * @param key the parameter key
      * @param value the parameter value
      */
-    public void setParameter(String key, Object value) {
+    public void setParameter(String key, String value) {
         if (parameters == null) {
             parameters = new HashMap<>();
         }
