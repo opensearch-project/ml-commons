@@ -282,6 +282,12 @@ public interface RemoteConnectorExecutor {
                 String parentInteractionId = parameters.get("parent_interaction_id");
                 // TODO: find a better way to differentiate agent and predict request
                 boolean isAgentRequest = (memoryId != null || parentInteractionId != null);
+                getLogger()
+                    .info(
+                        "RemoteConnectorExecutor: Creating StreamPredictActionListener - isAgentRequest={}, agentListener={}",
+                        isAgentRequest,
+                        agentListener != null ? "present" : "null"
+                    );
                 StreamPredictActionListener<MLTaskResponse, ?> streamListener = new StreamPredictActionListener<>(
                     channel,
                     isAgentRequest ? agentListener : null,
