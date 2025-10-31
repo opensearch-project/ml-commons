@@ -28,7 +28,7 @@ public class ToolsOutputTruncateManager implements ContextManager {
     private static final String MAX_OUTPUT_LENGTH_KEY = "max_output_length";
 
     // Default values
-    private static final int DEFAULT_MAX_OUTPUT_LENGTH = 2000;
+    private static final int DEFAULT_MAX_OUTPUT_LENGTH = 40000;
 
     private int maxOutputLength;
     private List<ActivationRule> activationRules;
@@ -76,7 +76,7 @@ public class ToolsOutputTruncateManager implements ContextManager {
     @Override
     public void execute(ContextManagerContext context) {
         // Process current tool output from parameters
-        Map<String, Object> parameters = context.getParameters();
+        Map<String, String> parameters = context.getParameters();
         if (parameters == null) {
             log.debug("No parameters available for tool output truncation");
             return;

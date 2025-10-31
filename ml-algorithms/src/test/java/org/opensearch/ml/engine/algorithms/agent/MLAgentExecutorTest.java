@@ -668,7 +668,7 @@ public class MLAgentExecutorTest {
     @Test
     public void test_CreateFlowAgent() {
         MLAgent mlAgent = MLAgent.builder().name("test_agent").type("flow").build();
-        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent, Mockito.any());
+        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent, null);
         Assert.assertTrue(mlAgentRunner instanceof MLFlowAgentRunner);
     }
 
@@ -676,7 +676,7 @@ public class MLAgentExecutorTest {
     public void test_CreateChatAgent() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLAgent mlAgent = MLAgent.builder().name("test_agent").type(MLAgentType.CONVERSATIONAL.name()).llm(llmSpec).build();
-        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent, Mockito.any());
+        MLAgentRunner mlAgentRunner = mlAgentExecutor.getAgentRunner(mlAgent, null);
         Assert.assertTrue(mlAgentRunner instanceof MLChatAgentRunner);
     }
 
