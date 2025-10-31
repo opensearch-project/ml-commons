@@ -149,7 +149,12 @@ public class AgentMLInput extends MLInput {
                     break;
                 case PARAMETERS_FIELD:
                     // Legacy format - parse parameters into RemoteInferenceInputDataSet
-                    Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
+                    Map<String, Object> parameterObjs = parser.map();
+                    Map<String, String> parameters = StringUtils.getParameterMap(parameterObjs);
+                    // Extract context_management from parameters
+                    if (parameterObjs.containsKey("context_management")) {
+                        contextManagementName = (String) parameterObjs.get("context_management");
+                    }
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
                 case INPUT_FIELD:

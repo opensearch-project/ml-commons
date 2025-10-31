@@ -369,10 +369,6 @@ public class HttpConnector extends AbstractConnector {
                     payload = jsonObject.toString();
                 }
             }
-            // Log payload for debugging
-
-            log.info("=== PAYLOAD DEBUG === Action: {} | Payload: {}", action, payload);
-
             return (T) payload;
         }
         return (T) parameters.get("http_body");
