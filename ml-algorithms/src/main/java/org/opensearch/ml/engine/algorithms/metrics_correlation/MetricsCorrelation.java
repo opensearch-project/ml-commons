@@ -81,13 +81,13 @@ import lombok.extern.log4j.Log4j2;
 public class MetricsCorrelation extends DLModelExecute {
 
     private static final int AWAIT_BUSY_THRESHOLD = 1000;
-    public static final String MODEL_CONTENT_HASH = "4d7e4ede2293d3611def0f9fc4065852cb7f6841bc7df7d6bfc16562ae4f6743";
+    public static final String MODEL_CONTENT_HASH = "76d1edc959ba87a3b7e78f7cb131bf4a707d7c95336ea8ac6d14a4fd9f29b52f";
     private Client client;
     private final Settings settings;
     private final ClusterService clusterService;
     // As metrics correlation is an experimental feature we are marking the version
     // as 1.0.0b1
-    public static final String MCORR_ML_VERSION = "1.0.0b1";
+    public static final String MCORR_ML_VERSION = "1.0.0b2";
     // This is python based model which is developed in house.
     public static final String MODEL_TYPE = "in-house";
     // This is the opensearch release artifact url for the model
@@ -95,7 +95,7 @@ public class MetricsCorrelation extends DLModelExecute {
     // version from the settings to pull
     // up the most updated model version.
     public static final String MCORR_MODEL_URL =
-        "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b1/torch_script/metrics_correlation-1.0.0b1-torch_script.zip";
+        "https://dwgefbhaqiibu.cloudfront.net/ml-models/amazon/metrics_correlation/1.0.0b2/torch_script/metrics_correlation-1.0.0b2-torch_script.zip";
 
     public MetricsCorrelation(Client client, Settings settings, ClusterService clusterService) {
         this.client = client;
