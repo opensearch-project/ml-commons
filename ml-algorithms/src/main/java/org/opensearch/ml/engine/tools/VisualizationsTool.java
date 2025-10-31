@@ -204,7 +204,9 @@ public class VisualizationsTool implements Tool {
             } catch (NumberFormatException ignored) {
                 size = DEFAULT_SIZE;
             }
-            return VisualizationsTool.builder().client(client).index(index).size(size).build();
+            VisualizationsTool tool = VisualizationsTool.builder().client(client).index(index).size(size).build();
+            tool.maxInputLength = ConfigurationUtils.readIntProperty(TYPE, null, params, MAX_INPUT_LENGTH_FIELD, DEFAULT_MAX_INPUT_LENGTH);
+            return tool;
         }
 
         @Override
