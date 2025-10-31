@@ -468,7 +468,7 @@ public class ListIndexTool implements Tool {
 
         @Override
         public ListIndexTool create(Map<String, Object> params) {
-            ConfigurationUtils.readStringProperty(TYPE, null, params, "question");
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "question");
             ConfigurationUtils.readOptionalList(TYPE, null, params, "indices");
             ConfigurationUtils.readBooleanProperty(TYPE, null, params, "local", false);
             ConfigurationUtils.readIntProperty(TYPE, null, params, "page_size", 100);

@@ -226,7 +226,7 @@ public class IndexMappingTool implements Tool {
 
         @Override
         public IndexMappingTool create(Map<String, Object> params) {
-            ConfigurationUtils.readStringProperty(TYPE, null, params, "question");
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "question");
             ConfigurationUtils.readOptionalList(TYPE, null, params, "index");
             ConfigurationUtils.readBooleanProperty(TYPE, null, params, "local", false);
 
