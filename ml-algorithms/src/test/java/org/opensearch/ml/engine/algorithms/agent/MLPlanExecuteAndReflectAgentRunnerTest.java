@@ -135,6 +135,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         // memory
         mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10);
+        when(memoryMap.get(ConversationIndexMemory.TYPE)).thenReturn(memoryFactory);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         when(conversationIndexMemory.getConversationId()).thenReturn("test_memory_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
@@ -170,7 +171,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             toolFactories,
             memoryMap,
             sdkClient,
-            encryptor
+            encryptor,
+            null
         );
 
         // Setup tools

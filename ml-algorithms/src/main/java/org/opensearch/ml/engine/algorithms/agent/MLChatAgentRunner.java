@@ -62,9 +62,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
-import org.opensearch.ml.common.hooks.EnhancedPostToolEvent;
 import org.opensearch.ml.common.hooks.HookRegistry;
-import org.opensearch.ml.common.hooks.PreLLMEvent;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -73,6 +71,7 @@ import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -541,11 +540,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         return;
                     }
                     // Emit PRE_LLM hook event
-                    List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
-                    emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory);
-
-                    ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
-                    streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
+                    if (hookRegistry != null) {
+                        List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
+                        ContextManagerContext contextAfterEvent = AgentContextUtil
+                            .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
+                        ActionRequest request = streamingWrapper.createPredictionRequest(llm, contextAfterEvent.getParameters(), tenantId);
+                        streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
+                    } else {
+                        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+                        streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
+                    }
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
@@ -559,10 +563,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Emit PRE_LLM hook event for initial LLM call
         List<MLToolSpec> initialToolSpecs = new ArrayList<>(toolSpecMap.values());
         tmpParameters.put("_llm_model_id", llm.getModelId());
-        emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory);
+        if (hookRegistry != null) {
+            ContextManagerContext contextAfterEvent = AgentContextUtil
+                .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
+            ActionRequest request = streamingWrapper.createPredictionRequest(llm, contextAfterEvent.getParameters(), tenantId);
+            streamingWrapper.executeRequest(request, firstListener);
+        } else {
+            ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+            streamingWrapper.executeRequest(request, firstListener);
+        }
 
-        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
-        streamingWrapper.executeRequest(request, firstListener);
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
@@ -640,7 +650,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                         // Emit POST_TOOL hook event after tool execution and process current tool output
                         List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        String outputResponseAfterHook = emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null).toString();
+                        String outputResponseAfterHook = AgentContextUtil
+                            .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry)
+                            .toString();
 
                         List<Map<String, Object>> toolResults = List
                             .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
@@ -650,7 +662,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     } else {
                         // Emit POST_TOOL hook event for non-function calling path
                         List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        Object processedOutput = emitPostToolHook(r, tmpParameters, postToolSpecs, null);
+                        Object processedOutput = AgentContextUtil.emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
                         interactions
                             .add(
                                 substitute(
@@ -972,242 +984,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             listener.onResponse(true);
         } else {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
-        }
-    }
-
-    /**
-     * Build ContextManagerContext for current tool output
-     */
-    private static ContextManagerContext buildContextManagerContextForToolOutput(
-        Object toolOutput,
-        Map<String, String> parameters,
-        List<MLToolSpec> toolSpecs,
-        Memory memory
-    ) {
-        ContextManagerContext.ContextManagerContextBuilder builder = ContextManagerContext.builder();
-
-        // Set system prompt
-        String systemPrompt = parameters.get(SYSTEM_PROMPT_FIELD);
-        if (systemPrompt != null) {
-            builder.systemPrompt(systemPrompt);
-        }
-
-        // Set user prompt
-        String userPrompt = parameters.get(MLAgentExecutor.QUESTION);
-        if (userPrompt != null) {
-            builder.userPrompt(userPrompt);
-        }
-
-        // Set tool configurations
-        if (toolSpecs != null) {
-            builder.toolConfigs(toolSpecs);
-        }
-
-        // Set current tool output as parameter for context managers to process
-        Map<String, Object> contextParameters = new HashMap<>();
-        contextParameters.putAll(parameters);
-        contextParameters.put("_current_tool_output", toolOutput);
-        builder.parameters(contextParameters);
-
-        return builder.build();
-    }
-
-    /**
-     * Extract processed tool output from context
-     */
-    private static Object extractProcessedToolOutput(ContextManagerContext context) {
-        if (context.getParameters() != null) {
-            return context.getParameters().get("_current_tool_output");
-        }
-        return null;
-    }
-
-    /**
-     * Build ContextManagerContext from current agent execution state
-     */
-    private ContextManagerContext buildContextManagerContext(
-        Map<String, String> parameters,
-        List<String> interactions,
-        List<MLToolSpec> toolSpecs,
-        Memory memory
-    ) {
-        ContextManagerContext.ContextManagerContextBuilder builder = ContextManagerContext.builder();
-
-        // Set system prompt
-        String systemPrompt = parameters.get(SYSTEM_PROMPT_FIELD);
-        if (systemPrompt != null) {
-            builder.systemPrompt(systemPrompt);
-        }
-
-        // Set user prompt
-        String userPrompt = parameters.get(MLAgentExecutor.QUESTION);
-        if (userPrompt != null) {
-            builder.userPrompt(userPrompt);
-        }
-
-        // Set chat history from memory
-        if (memory instanceof ConversationIndexMemory) {
-            // For now, we'll use the chat history that's already been processed
-            // In a more complete implementation, we might want to fetch fresh history
-            String chatHistory = parameters.get(CHAT_HISTORY);
-            if (chatHistory != null) {
-                // Convert chat history string back to interactions
-                // This is a simplified approach - in practice, you might want to store
-                // the original interactions list
-                List<Interaction> chatHistoryList = new ArrayList<>();
-                // For now, we'll leave this empty and rely on the existing chat history processing
-                builder.chatHistory(chatHistoryList);
-            }
-        }
-
-        // Set tool configurations
-        if (toolSpecs != null) {
-            builder.toolConfigs(toolSpecs);
-        }
-
-        // Set tool interactions
-        List<Map<String, Object>> toolInteractions = new ArrayList<>();
-        if (interactions != null) {
-            for (String interaction : interactions) {
-                Map<String, Object> toolInteraction = new HashMap<>();
-                toolInteraction.put("output", interaction);
-                toolInteractions.add(toolInteraction);
-            }
-        }
-        builder.toolInteractions(toolInteractions);
-
-        // Set additional parameters
-        Map<String, Object> contextParameters = new HashMap<>();
-        contextParameters.putAll(parameters);
-        builder.parameters(contextParameters);
-
-        return builder.build();
-    }
-
-    /**
-     * Emit POST_TOOL hook event and process current tool output
-     */
-    private static Object emitPostToolHook(Object toolOutput, Map<String, String> parameters, List<MLToolSpec> toolSpecs, Memory memory) {
-        log.info("MLChatAgentRunner.emitPostToolHook() called with hookRegistry: {}", hookRegistry != null ? "present" : "null");
-        if (hookRegistry != null) {
-            try {
-                // Create context with current tool output
-                ContextManagerContext context = buildContextManagerContextForToolOutput(toolOutput, parameters, toolSpecs, memory);
-                EnhancedPostToolEvent event = new EnhancedPostToolEvent(null, null, context, new HashMap<>());
-                log
-                    .info(
-                        "Emitting POST_TOOL hook event with context containing {} tool interactions",
-                        context.getToolInteractions() != null ? context.getToolInteractions().size() : 0
-                    );
-                hookRegistry.emit(event);
-
-                // Extract processed tool output from context
-                Object processedOutput = extractProcessedToolOutput(context);
-                log
-                    .info(
-                        "POST_TOOL hook processing completed. Original output length: {}, Processed output length: {}",
-                        String.valueOf(toolOutput).length(),
-                        processedOutput != null ? String.valueOf(processedOutput).length() : "null"
-                    );
-                return processedOutput != null ? processedOutput : toolOutput;
-            } catch (Exception e) {
-                log.error("Failed to emit POST_TOOL hook event", e);
-                return toolOutput; // Return original output on error
-            }
-        }
-        log.warn("No hook registry available, returning original tool output");
-        return toolOutput; // Return original output if no hook registry
-    }
-
-    /**
-     * Emit PRE_LLM hook event and update context
-     */
-    private void emitPreLLMHook(Map<String, String> parameters, List<String> interactions, List<MLToolSpec> toolSpecs, Memory memory) {
-        if (hookRegistry != null) {
-            try {
-
-                ContextManagerContext context = buildContextManagerContext(parameters, interactions, toolSpecs, memory);
-                PreLLMEvent event = new PreLLMEvent(context, new HashMap<>());
-                hookRegistry.emit(event);
-
-                // Update parameters with any changes made by context managers
-                updateParametersFromContext(parameters, context);
-                log.debug("Emitted PRE_LLM hook event and updated context");
-            } catch (Exception e) {
-                log.error("Failed to emit PRE_LLM hook event", e);
-                // Continue execution even if hook fails
-            }
-        }
-    }
-
-    /**
-     * Update interactions list with processed results from context
-     */
-    private void updateInteractionsFromContext(List<String> interactions, ContextManagerContext context) {
-        if (context.getToolInteractions() != null) {
-            interactions.clear();
-            for (Map<String, Object> toolInteraction : context.getToolInteractions()) {
-                Object output = toolInteraction.get("output");
-                if (output instanceof String) {
-                    interactions.add((String) output);
-                }
-            }
-        }
-    }
-
-    /**
-     * Update parameters from transformed context
-     */
-    private void updateParametersFromContext(Map<String, String> parameters, ContextManagerContext context) {
-        // Update system prompt if changed
-        if (context.getSystemPrompt() != null) {
-            parameters.put(SYSTEM_PROMPT_FIELD, context.getSystemPrompt());
-        }
-
-        // Update user prompt if changed
-        if (context.getUserPrompt() != null) {
-            parameters.put(MLAgentExecutor.QUESTION, context.getUserPrompt());
-        }
-
-        // Update chat history if changed
-        if (context.getChatHistory() != null && !context.getChatHistory().isEmpty()) {
-            // Convert interactions back to chat history string
-            // TODO this need more consideration with memory index
-            // StringBuilder chatHistoryBuilder = new StringBuilder();
-            // String chatHistoryPrefix = parameters.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
-            // chatHistoryBuilder.append(chatHistoryPrefix);
-            //
-            // for (Interaction interaction : context.getChatHistory()) {
-            // if (interaction.getInput() != null && interaction.getResponse() != null) {
-            // chatHistoryBuilder.append("Human: ").append(interaction.getInput()).append("\n");
-            // chatHistoryBuilder.append("Assistant: ").append(interaction.getResponse()).append("\n");
-            // }
-            // }
-            // parameters.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-        }
-
-        // Update tool interactions if changed by context management
-        if (context.getToolInteractions() != null && !context.getToolInteractions().isEmpty()) {
-            List<String> updatedInteractions = new ArrayList<>();
-            for (Map<String, Object> toolInteraction : context.getToolInteractions()) {
-                Object output = toolInteraction.get("output");
-                if (output instanceof String) {
-                    updatedInteractions.add((String) output);
-                }
-            }
-            if (!updatedInteractions.isEmpty()) {
-                // Update the _interactions parameter with processed tool outputs
-                parameters.put(INTERACTIONS, ", " + String.join(", ", updatedInteractions));
-            }
-        }
-
-        // Update any additional parameters
-        if (context.getParameters() != null) {
-            for (Map.Entry<String, Object> entry : context.getParameters().entrySet()) {
-                if (entry.getValue() instanceof String) {
-                    parameters.put(entry.getKey(), (String) entry.getValue());
-                }
-            }
         }
     }
 
