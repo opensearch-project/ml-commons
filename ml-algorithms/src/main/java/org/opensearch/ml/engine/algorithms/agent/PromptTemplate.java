@@ -28,9 +28,9 @@ public class PromptTemplate {
         + "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
-        + "Objective: ${parameters."
+        + "Objective: ```${parameters."
         + USER_PROMPT_FIELD
-        + "} \n\nRemember: Respond only in JSON format following the required schema.";
+        + "}``` \n\nRemember: Respond only in JSON format following the required schema.";
 
     public static final String DEFAULT_REFLECT_PROMPT_TEMPLATE = "${parameters."
         + DEFAULT_PROMPT_TOOLS_FIELD
@@ -41,10 +41,10 @@ public class PromptTemplate {
         + "Objective: ```${parameters."
         + USER_PROMPT_FIELD
         + "}```\n\n"
-        + "Original plan:\n[${parameters."
+        + "Previous plan:\n[${parameters."
         + STEPS_FIELD
         + "}] \n\n"
-        + "You have currently executed the following steps from the original plan: \n[${parameters."
+        + "You have currently executed the following steps: \n[${parameters."
         + COMPLETED_STEPS_FIELD
         + "}] \n\n"
         + "${parameters."

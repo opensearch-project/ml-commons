@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
@@ -442,9 +443,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                 results.put(PARENT_INTERACTION_ID_FIELD, tensor.getResult());
                                 break;
                             default:
-                                Map<String, ?> dataMap = tensor.getDataAsMap();
-                                if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
-                                    results.put(STEP_RESULT_FIELD, (String) dataMap.get(RESPONSE_FIELD));
+                                String stepResult = parseTensorDataMap(tensor);
+                                if (stepResult != null) {
+                                    results.put(STEP_RESULT_FIELD, stepResult);
                                 }
                         }
                     });
@@ -484,8 +485,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
                     }
 
-                    completedSteps.add(String.format("\nStep %d: %s\n", stepsExecuted + 1, stepToExecute));
-                    completedSteps.add(String.format("\nStep %d Result: %s\n", stepsExecuted + 1, results.get(STEP_RESULT_FIELD)));
+                    completedSteps.add(String.format("\n<step-%d>\n%s\n</step-%d>\n", stepsExecuted + 1, stepToExecute, stepsExecuted + 1));
+                    completedSteps
+                        .add(
+                            String
+                                .format(
+                                    "\n<step-%d-result>\n%s\n</step-%d-result>\n",
+                                    stepsExecuted + 1,
+                                    results.get(STEP_RESULT_FIELD),
+                                    stepsExecuted + 1
+                                )
+                        );
 
                     saveTraceData(
                         (ConversationIndexMemory) memory,
@@ -524,6 +534,39 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         });
 
         client.execute(MLPredictionTaskAction.INSTANCE, request, planListener);
+    }
+
+    @VisibleForTesting
+    String parseTensorDataMap(ModelTensor tensor) {
+        Map<String, ?> dataMap = tensor.getDataAsMap();
+        if (dataMap == null) {
+            return null;
+        }
+
+        StringBuilder stepResult = new StringBuilder();
+        if (dataMap.containsKey(RESPONSE_FIELD)) {
+            stepResult.append((String) dataMap.get(RESPONSE_FIELD));
+        }
+
+        if (dataMap.containsKey(INTERACTIONS_ADDITIONAL_INFO_FIELD)) {
+            stepResult.append("\n<step-traces>\n");
+            ((Map<String, Object>) dataMap.get(INTERACTIONS_ADDITIONAL_INFO_FIELD))
+                .forEach(
+                    (key, value) -> stepResult
+                        .append("<")
+                        .append(key)
+                        .append(">")
+                        .append("\n")
+                        .append(value)
+                        .append("\n")
+                        .append("</")
+                        .append(key)
+                        .append(">")
+                );
+            stepResult.append("\n</step-traces>\n");
+        }
+
+        return stepResult.toString();
     }
 
     @VisibleForTesting
