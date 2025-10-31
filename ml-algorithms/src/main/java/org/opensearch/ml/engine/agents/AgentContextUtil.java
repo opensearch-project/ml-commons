@@ -14,7 +14,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
-import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.hooks.EnhancedPostToolEvent;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.hooks.PreLLMEvent;
@@ -89,10 +88,7 @@ public class AgentContextUtil {
 
         if (memory instanceof ConversationIndexMemory) {
             String chatHistory = parameters.get(CHAT_HISTORY);
-            if (chatHistory != null) {
-                List<Interaction> chatHistoryList = new ArrayList<>();
-                builder.chatHistory(chatHistoryList);
-            }
+            // TODO to add chatHistory into context, currently there is no context manager working on chat_history
         }
 
         if (toolSpecs != null) {
@@ -125,6 +121,10 @@ public class AgentContextUtil {
     ) {
         if (hookRegistry != null) {
             try {
+                if (toolOutput == null) {
+                    log.warn("Tool output is null, skipping POST_TOOL hook");
+                    return null;
+                }
                 ContextManagerContext context = buildContextManagerContextForToolOutput(
                     StringUtils.toJson(toolOutput),
                     parameters,
@@ -151,19 +151,17 @@ public class AgentContextUtil {
         Memory memory,
         HookRegistry hookRegistry
     ) {
-        if (hookRegistry != null) {
-            try {
-                ContextManagerContext context = buildContextManagerContext(parameters, interactions, toolSpecs, memory);
-                PreLLMEvent event = new PreLLMEvent(context, new HashMap<>());
-                hookRegistry.emit(event);
-                log.debug("Emitted PRE_LLM hook event and updated context");
-                return context;
+        ContextManagerContext context = buildContextManagerContext(parameters, interactions, toolSpecs, memory);
+        try {
+            PreLLMEvent event = new PreLLMEvent(context, new HashMap<>());
+            hookRegistry.emit(event);
+            log.debug("Emitted PRE_LLM hook event and updated context");
+            return context;
 
-            } catch (Exception e) {
-                log.error("Failed to emit PRE_LLM hook event", e);
-            }
+        } catch (Exception e) {
+            log.error("Failed to emit PRE_LLM hook event", e);
+            return context;
         }
-        return null;
     }
 
     public static void updateParametersFromContext(Map<String, String> parameters, ContextManagerContext context) {
