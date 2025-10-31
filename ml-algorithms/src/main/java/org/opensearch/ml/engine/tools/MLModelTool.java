@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -172,6 +173,8 @@ public class MLModelTool implements WithModelTool {
 
         @Override
         public MLModelTool create(Map<String, Object> map) {
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, map, "prompt");
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, map, "response_field");
             String modelId = (String) map.get(MODEL_ID_FIELD);
             String responseField = (String) map.getOrDefault(RESPONSE_FIELD, DEFAULT_RESPONSE_FIELD);
 

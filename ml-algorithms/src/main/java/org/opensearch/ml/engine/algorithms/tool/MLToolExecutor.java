@@ -84,7 +84,9 @@ public class MLToolExecutor implements Executable {
 
         try {
             Map<String, String> mutableParams = new HashMap<>(parameters);
-            Tool tool = toolFactory.create(mutableParams);
+            Map<String, Object> originalParams = toolMLInput.getOriginalParameters();
+            Tool tool = toolFactory.create(originalParams);
+
             if (!tool.validate(mutableParams)) {
                 listener.onFailure(new IllegalArgumentException("Invalid parameters for tool: " + toolName));
                 return;
