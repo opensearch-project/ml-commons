@@ -150,8 +150,10 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
             .withContent(new BytesArray(""), null)
             .build();
 
-        executeRestChannelConsumer(request);
-        verifyErrorResponse("Parse error: empty body");
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMCPStatelessStreamingAction.prepareRequest(request, client);
+        });
+        assertTrue(exception.getMessage().contains("Request body cannot be null or empty"));
     }
 
     @Test
@@ -162,54 +164,66 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
             .withContent(null, null)
             .build();
 
-        executeRestChannelConsumer(request);
-        verifyErrorResponse("Parse error: empty body");
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMCPStatelessStreamingAction.prepareRequest(request, client);
+        });
+        assertTrue(exception.getMessage().contains("Request body cannot be null or empty"));
     }
 
     @Test
     public void test_prepareRequest_invalidJson() throws Exception {
-        // Mock the transport action to return an error response
-        doAnswer(invocation -> {
-            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
-            Map<String, Object> errorMap = new HashMap<>();
-            errorMap.put(ID_FIELD, null);
-            errorMap.put(ERROR_CODE_FIELD, -32700);
-            errorMap.put(MESSAGE_FIELD, "Parse error: invalid json");
-            listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
-            return null;
-        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
-
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
             .withContent(new BytesArray("invalid json"), null)
             .build();
 
-        executeRestChannelConsumer(request);
-        verifyErrorResponse("Parse error: invalid json");
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMCPStatelessStreamingAction.prepareRequest(request, client);
+        });
+        assertTrue(exception.getMessage().contains("Failed to parse JSON-RPC message"));
     }
 
     @Test
-    public void test_prepareRequest_malformedJsonRpc() throws Exception {
-        // Mock the transport action to return an error response
-        doAnswer(invocation -> {
-            ActionListener<MLMcpServerResponse> listener = invocation.getArgument(2);
-            Map<String, Object> errorMap = new HashMap<>();
-            errorMap.put(ID_FIELD, 1);
-            errorMap.put(ERROR_CODE_FIELD, -32700);
-            errorMap.put(MESSAGE_FIELD, "Parse error: malformed JSON-RPC");
-            listener.onResponse(new MLMcpServerResponse(false, null, errorMap));
-            return null;
-        }).when(client).execute(eq(MLMcpServerAction.INSTANCE), any(), any());
-
+    public void test_prepareRequest_invalidJsonRpcVersion() throws Exception {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
-            .withContent(new BytesArray("{\"jsonrpc\":\"1.0\",\"id\":1}"), null)
+            .withContent(new BytesArray("{\"jsonrpc\":\"1.0\",\"id\":1,\"method\":\"ping\"}"), null)
             .build();
 
-        executeRestChannelConsumer(request);
-        verifyErrorResponse("Parse error: malformed JSON-RPC");
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMCPStatelessStreamingAction.prepareRequest(request, client);
+        });
+        assertTrue(exception.getMessage().contains("Invalid jsonrpc version"));
+    }
+
+    @Test
+    public void test_prepareRequest_invalidMethod() throws Exception {
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"invalid_method\"}"), null)
+            .build();
+
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMCPStatelessStreamingAction.prepareRequest(request, client);
+        });
+        assertTrue(exception.getMessage().contains("Invalid MCP method"));
+    }
+
+    @Test
+    public void test_prepareRequest_invalidIdWithSpecialCharacters() throws Exception {
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.POST)
+            .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":\"<script>alert()</script>\",\"method\":\"ping\"}"), null)
+            .build();
+
+        Exception exception = expectThrows(IllegalArgumentException.class, () -> {
+            restMCPStatelessStreamingAction.prepareRequest(request, client);
+        });
+        assertTrue(exception.getMessage().contains("can only contain"));
     }
 
     @Test
@@ -224,7 +238,7 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
-            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"method\":\"test\",\"params\":{}}"), null)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"params\":{}}"), null)
             .build();
 
         executeRestChannelConsumer(request);
@@ -247,7 +261,7 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
-            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}"), null)
             .build();
 
         executeRestChannelConsumer(request);
@@ -274,7 +288,7 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
-            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"), null)
             .build();
 
         executeRestChannelConsumer(request);
@@ -293,7 +307,7 @@ public class RestMcpServerActionTests extends OpenSearchTestCase {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(RestRequest.Method.POST)
             .withPath(RestMcpServerAction.MCP_SERVER_ENDPOINT)
-            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}"), null)
+            .withContent(new BytesArray("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{}}"), null)
             .build();
 
         executeRestChannelConsumer(request);

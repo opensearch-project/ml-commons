@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
 import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
-import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_SERVER_NOT_READY_ERROR;
 import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 
@@ -68,7 +67,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_mcpServerDisabled() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
-        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\"}");
+        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{}}");
 
         action.doExecute(task, request, listener);
 
@@ -79,7 +78,7 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     public void test_doExecute_transportProviderNotReady() {
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
         when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(null);
-        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\"}");
+        MLMcpServerRequest request = new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
 
         action.doExecute(task, request, listener);
 
@@ -95,21 +94,31 @@ public class TransportMcpServerActionTests extends OpenSearchTestCase {
     }
 
     public void test_doExecute_invalidJsonRpcMessage() {
-        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        when(mcpStatelessServerHolder.getMcpStatelessServerTransportProvider()).thenReturn(transportProvider);
-        MLMcpServerRequest request = new MLMcpServerRequest("invalid json");
+        // Validation now happens during MLMcpServerRequest construction
+        // This test verifies that invalid JSON throws IllegalArgumentException
+        expectThrows(IllegalArgumentException.class, () -> { new MLMcpServerRequest("invalid json"); });
+    }
 
-        action.doExecute(task, request, listener);
+    public void test_doExecute_invalidJsonRpcVersion() {
+        // Validation now happens during MLMcpServerRequest construction
+        expectThrows(
+            IllegalArgumentException.class,
+            () -> { new MLMcpServerRequest("{\"jsonrpc\":\"1.0\",\"id\":1,\"method\":\"ping\"}"); }
+        );
+    }
 
-        ArgumentCaptor<MLMcpServerResponse> responseCaptor = ArgumentCaptor.forClass(MLMcpServerResponse.class);
-        verify(listener).onResponse(responseCaptor.capture());
-        
-        MLMcpServerResponse response = responseCaptor.getValue();
-        assertFalse(response.getAcknowledgedResponse());
-        assertNull(response.getMcpResponse());
-        assertNotNull(response.getError());
-        assertEquals(JSON_RPC_PARSE_ERROR, response.getError().get(ERROR_CODE_FIELD));
-        assertTrue(response.getError().get(MESSAGE_FIELD).toString().contains("Parse error"));
+    public void test_doExecute_invalidMethod() {
+        // Validation now happens during MLMcpServerRequest construction
+        expectThrows(IllegalArgumentException.class, () -> {
+            new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"invalid_method\"}");
+        });
+    }
+
+    public void test_doExecute_invalidIdWithSpecialCharacters() {
+        // Validation now happens during MLMcpServerRequest construction
+        expectThrows(IllegalArgumentException.class, () -> {
+            new MLMcpServerRequest("{\"jsonrpc\":\"2.0\",\"id\":\"<script>alert()</script>\",\"method\":\"ping\"}");
+        });
     }
 
     public void test_doExecute_jsonRpcNotification() {

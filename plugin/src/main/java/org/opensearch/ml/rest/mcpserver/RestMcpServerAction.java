@@ -8,7 +8,6 @@ package org.opensearch.ml.rest.mcpserver;
 import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
 import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
-import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
 import static org.opensearch.rest.RestRequest.Method.GET;
@@ -69,54 +68,38 @@ public class RestMcpServerAction extends BaseRestHandler {
             return channel -> { channel.sendResponse(new BytesRestResponse(RestStatus.METHOD_NOT_ALLOWED, "", BytesArray.EMPTY)); };
         }
 
+        final String requestBody = request.content() != null ? request.content().utf8ToString() : null;
+        MLMcpServerRequest mcpRequest = new MLMcpServerRequest(requestBody);
+
         return channel -> {
-            try {
-                if (request.content() == null) {
-                    sendErrorResponse(channel, null, JSON_RPC_PARSE_ERROR, "Parse error: empty body");
-                    return;
-                }
-                final String requestBody = request.content().utf8ToString();
-                if (requestBody == null || requestBody.isBlank()) {
-                    sendErrorResponse(channel, null, JSON_RPC_PARSE_ERROR, "Parse error: empty body");
-                    return;
-                }
-
-                // Create request and call transport action
-                MLMcpServerRequest mcpRequest = new MLMcpServerRequest(requestBody);
-
-                client.execute(MLMcpServerAction.INSTANCE, mcpRequest, new ActionListener<MLMcpServerResponse>() {
-                    @Override
-                    public void onResponse(MLMcpServerResponse response) {
-                        try {
-                            if (response.getError() != null) {
-                                // Handle error response
-                                Map<String, Object> errorMap = response.getError();
-                                Object id = errorMap.get(ID_FIELD);
-                                int code = (Integer) errorMap.get(ERROR_CODE_FIELD);
-                                String message = (String) errorMap.get(MESSAGE_FIELD);
-                                sendErrorResponse(channel, id, code, message);
-                            } else if (response.getMcpResponse() != null) {
-                                channel.sendResponse(new BytesRestResponse(RestStatus.OK, "application/json", response.getMcpResponse()));
-                            } else {
-                                channel.sendResponse(new BytesRestResponse(RestStatus.ACCEPTED, "", BytesArray.EMPTY));
-                            }
-                        } catch (Exception e) {
-                            log.error("Failed to send response", e);
-                            sendErrorResponse(channel, null, JSON_RPC_INTERNAL_ERROR, "Failed to send response");
+            client.execute(MLMcpServerAction.INSTANCE, mcpRequest, new ActionListener<MLMcpServerResponse>() {
+                @Override
+                public void onResponse(MLMcpServerResponse response) {
+                    try {
+                        if (response.getError() != null) {
+                            // Handle error response
+                            Map<String, Object> errorMap = response.getError();
+                            Object id = errorMap.get(ID_FIELD);
+                            int code = (Integer) errorMap.get(ERROR_CODE_FIELD);
+                            String message = (String) errorMap.get(MESSAGE_FIELD);
+                            sendErrorResponse(channel, id, code, message);
+                        } else if (response.getMcpResponse() != null) {
+                            channel.sendResponse(new BytesRestResponse(RestStatus.OK, "application/json", response.getMcpResponse()));
+                        } else {
+                            channel.sendResponse(new BytesRestResponse(RestStatus.ACCEPTED, "", BytesArray.EMPTY));
                         }
+                    } catch (Exception e) {
+                        log.error("Failed to send response", e);
+                        sendErrorResponse(channel, null, JSON_RPC_INTERNAL_ERROR, "Failed to send response");
                     }
+                }
 
-                    @Override
-                    public void onFailure(Exception e) {
-                        log.error("Failed to handle MCP request", e);
-                        sendErrorResponse(channel, null, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + e.getMessage());
-                    }
-                });
-
-            } catch (Exception e) {
-                log.error("Failed to handle MCP request", e);
-                sendErrorResponse(channel, null, JSON_RPC_INTERNAL_ERROR, "Internal server error");
-            }
+                @Override
+                public void onFailure(Exception e) {
+                    log.error("Failed to handle MCP request", e);
+                    sendErrorResponse(channel, null, JSON_RPC_INTERNAL_ERROR, "Internal server error: " + e.getMessage());
+                }
+            });
         };
     }
 
