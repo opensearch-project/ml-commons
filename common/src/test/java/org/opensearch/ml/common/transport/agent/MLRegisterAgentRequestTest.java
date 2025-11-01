@@ -294,6 +294,75 @@ public class MLRegisterAgentRequestTest {
         assertNull(exception);
     }
 
+    @Test
+    public void validate_ContextManagementTemplateName_NullValue() {
+        // Test null template name - this should pass validation since null is acceptable
+        MLAgent agentWithNullName = MLAgent.builder().name("test_agent").type("flow").contextManagementName(null).build();
+
+        MLRegisterAgentRequest request = new MLRegisterAgentRequest(agentWithNullName);
+        ActionRequestValidationException exception = request.validate();
+
+        assertNull(exception);
+    }
+
+    @Test
+    public void validate_ContextManagementTemplateName_Null() {
+        // Test null template name validation
+        MLAgent agentWithNullName = MLAgent.builder().name("test_agent").type("flow").contextManagementName(null).build();
+
+        MLRegisterAgentRequest request = new MLRegisterAgentRequest(agentWithNullName);
+        ActionRequestValidationException exception = request.validate();
+
+        // This should pass since null is handled differently than empty
+        assertNull(exception);
+    }
+
+    @Test
+    public void validate_InlineContextManagement_NullHooks() {
+        // Test inline context management with null hooks
+        ContextManagementTemplate contextManagementWithNullHooks = ContextManagementTemplate
+            .builder()
+            .name("test_template")
+            .hooks(null)
+            .build();
+
+        MLAgent agentWithNullHooks = MLAgent
+            .builder()
+            .name("test_agent")
+            .type("flow")
+            .contextManagement(contextManagementWithNullHooks)
+            .build();
+
+        MLRegisterAgentRequest request = new MLRegisterAgentRequest(agentWithNullHooks);
+        ActionRequestValidationException exception = request.validate();
+
+        // Should pass since null hooks are handled gracefully
+        assertNull(exception);
+    }
+
+    @Test
+    public void validate_HookName_AllValidTypes() {
+        // Test all valid hook names to improve branch coverage
+        Map<String, List<ContextManagerConfig>> allValidHooks = new HashMap<>();
+        allValidHooks.put("POST_TOOL", Arrays.asList(new ContextManagerConfig("ToolsOutputTruncateManager", null, null)));
+        allValidHooks.put("PRE_LLM", Arrays.asList(new ContextManagerConfig("SummarizationManager", null, null)));
+        allValidHooks.put("PRE_TOOL", Arrays.asList(new ContextManagerConfig("MemoryManager", null, null)));
+        allValidHooks.put("POST_LLM", Arrays.asList(new ContextManagerConfig("ConversationManager", null, null)));
+
+        ContextManagementTemplate contextManagement = ContextManagementTemplate
+            .builder()
+            .name("test_template")
+            .hooks(allValidHooks)
+            .build();
+
+        MLAgent agentWithAllHooks = MLAgent.builder().name("test_agent").type("flow").contextManagement(contextManagement).build();
+
+        MLRegisterAgentRequest request = new MLRegisterAgentRequest(agentWithAllHooks);
+        ActionRequestValidationException exception = request.validate();
+
+        assertNull(exception);
+    }
+
     /**
      * Helper method to create valid hooks configuration for testing
      */
