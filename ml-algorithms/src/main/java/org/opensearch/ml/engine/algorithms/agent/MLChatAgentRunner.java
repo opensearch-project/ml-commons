@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -190,7 +191,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
 
-        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent);
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params.get(MEMORY_CONTAINER_ID_FIELD));
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {

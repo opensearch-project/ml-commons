@@ -1018,7 +1018,13 @@ public class AgentUtils {
         return tool;
     }
 
-    public static Map<String, Object> createMemoryParams(String question, String memoryId, String appType, MLAgent mlAgent) {
+    public static Map<String, Object> createMemoryParams(
+        String question,
+        String memoryId,
+        String appType,
+        MLAgent mlAgent,
+        String memoryContainerId
+    ) {
         Map<String, Object> memoryParams = new HashMap<>();
         memoryParams.put(ConversationIndexMemory.MEMORY_NAME, question);
         memoryParams.put(ConversationIndexMemory.MEMORY_ID, memoryId);
@@ -1026,6 +1032,7 @@ public class AgentUtils {
         if (mlAgent.getMemory().getMemoryContainerId() != null) {
             memoryParams.put(MEMORY_CONTAINER_ID_FIELD, mlAgent.getMemory().getMemoryContainerId());
         }
+        memoryParams.putIfAbsent(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         return memoryParams;
     }
 }

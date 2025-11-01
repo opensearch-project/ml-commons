@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
@@ -257,7 +258,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap
                                                 .get(MLMemoryType.from(memorySpec.getType()).name());
 
-                                            Map<String, Object> memoryParams = createMemoryParams(question, memoryId, appType, mlAgent);
+                                            Map<String, Object> memoryParams = createMemoryParams(
+                                                question,
+                                                memoryId,
+                                                appType,
+                                                mlAgent,
+                                                inputDataSet.getParameters().get(MEMORY_CONTAINER_ID_FIELD)
+                                            );
                                             memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
                                                 inputDataSet.getParameters().put(MEMORY_ID, memory.getId());
                                                 // get question for regenerate
@@ -319,7 +326,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         question,
                                                         memoryId,
                                                         appType,
-                                                        mlAgent
+                                                        mlAgent,
+                                                        inputDataSet.getParameters().get(MEMORY_CONTAINER_ID_FIELD)
                                                     );
 
                                                     memoryFactory
