@@ -76,7 +76,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
     ) {
         try {
             log.info("Creating SSE connection for streaming request");
-            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface);
+            String agentType = parameters.get("agent_type");
+            EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface, agentType);
             Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
@@ -100,16 +101,23 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         private StreamPredictActionListener<MLTaskResponse, ?> streamActionListener;
         private final String llmInterface;
         private AtomicBoolean isStreamClosed;
+        private final String agentType;
         private boolean functionCallInProgress = false;
         private boolean agentExecutionInProgress = false;
         private String accumulatedToolCallId = null;
         private String accumulatedToolName = null;
         private String accumulatedArguments = "";
+        private StringBuilder accumulatedContent = new StringBuilder();
 
-        public HTTPEventSourceListener(StreamPredictActionListener<MLTaskResponse, ?> streamActionListener, String llmInterface) {
+        public HTTPEventSourceListener(
+            StreamPredictActionListener<MLTaskResponse, ?> streamActionListener,
+            String llmInterface,
+            String agentType
+        ) {
             this.streamActionListener = streamActionListener;
             this.llmInterface = llmInterface;
             this.isStreamClosed = new AtomicBoolean(false);
+            this.agentType = agentType;
         }
 
         /***
@@ -206,14 +214,20 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             // Handle stop finish reason
             String finishReason = extractPath(dataMap, "$.choices[0].finish_reason");
             if ("stop".equals(finishReason)) {
-                agentExecutionInProgress = false;
-                sendCompletionResponse(isStreamClosed, streamActionListener);
+                // For PER agent, we should keep the connection open after the planner LLM finish
+                if ("per".equals(agentType)) {
+                    completePlannerResponse();
+                } else {
+                    agentExecutionInProgress = false;
+                    sendCompletionResponse(isStreamClosed, streamActionListener);
+                }
                 return;
             }
 
             // Process content
             String content = extractPath(dataMap, "$.choices[0].delta.content");
             if (content != null && !content.isEmpty()) {
+                accumulatedContent.append(content);
                 sendContentResponse(content, false, streamActionListener);
             }
 
@@ -266,6 +280,19 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(responseData).build();
             ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
             return ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+        }
+
+        private void completePlannerResponse() {
+            String fullContent = accumulatedContent.toString().trim();
+
+            // Create compatible response format
+            Map<String, Object> message = Map.of("content", fullContent);
+            Map<String, Object> choice = Map.of("message", message);
+            Map<String, Object> response = Map.of("choices", List.of(choice));
+
+            ModelTensorOutput output = createModelTensorOutput(response);
+            streamActionListener.onResponse(new MLTaskResponse(output));
+            agentExecutionInProgress = true;
         }
 
         private void accumulateFunctionCall(List<?> toolCalls) {

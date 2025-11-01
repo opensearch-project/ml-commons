@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -56,7 +57,6 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -65,8 +65,6 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
@@ -91,6 +89,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    private StreamingWrapper streamingWrapper;
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
     private final Map<String, Object> taskUpdates = new HashMap<>();
@@ -181,6 +180,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void setupPromptParameters(Map<String, String> params) {
+        // Set agent type for PER agent for streaming
+        params.put("agent_type", "per");
+
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
@@ -272,6 +274,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener, TransportChannel channel) {
+        this.streamingWrapper = new StreamingWrapper(channel, client);
         Map<String, String> allParams = new HashMap<>();
         allParams.putAll(apiParams);
         allParams.putAll(mlAgent.getParameters());
@@ -386,16 +389,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             return;
         }
 
-        MLPredictionTaskRequest request = new MLPredictionTaskRequest(
-            llm.getModelId(),
-            RemoteInferenceMLInput
-                .builder()
-                .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(allParams).build())
-                .build(),
-            null,
-            allParams.get(TENANT_ID_FIELD)
-        );
+        ActionRequest request = streamingWrapper.createPredictionRequest(llm, allParams, allParams.get(TENANT_ID_FIELD));
 
         StepListener<MLTaskResponse> planListener = new StepListener<>();
 
@@ -540,8 +534,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             log.error("Failed to run deep research agent", e);
             finalListener.onFailure(e);
         });
-
-        client.execute(MLPredictionTaskAction.INSTANCE, request, planListener);
+        streamingWrapper.executeRequest(request, planListener);
     }
 
     @VisibleForTesting
@@ -646,6 +639,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+            // Send completion chunk to close streaming connection
+            streamingWrapper
+                .sendCompletionChunk(memory.getConversationId(), parentInteractionId, reactAgentMemoryId, reactParentInteractionId);
             List<ModelTensors> finalModelTensors = createModelTensors(
                 memory.getConversationId(),
                 parentInteractionId,

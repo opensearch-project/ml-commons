@@ -95,6 +95,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             AtomicReference<String> toolUseId = new AtomicReference<>();
             StringBuilder toolInputAccumulator = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
+            String agentType = parameters.get("agent_type");
+            StringBuilder accumulatedContent = new StringBuilder();
 
             // Build Bedrock client
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
@@ -128,7 +130,18 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     log.debug("Tool execution in progress - keeping stream open");
                 }
             }).subscriber(event -> {
-                handleStreamEvent(event, listener, isStreamClosed, toolName, toolInput, toolUseId, toolInputAccumulator, currentState);
+                handleStreamEvent(
+                    event,
+                    listener,
+                    isStreamClosed,
+                    toolName,
+                    toolInput,
+                    toolUseId,
+                    toolInputAccumulator,
+                    currentState,
+                    agentType,
+                    accumulatedContent
+                );
             }).build();
 
             // Start streaming
@@ -183,7 +196,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
         StringBuilder toolInputAccumulator,
-        AtomicReference<StreamState> currentState
+        AtomicReference<StreamState> currentState,
+        String agentType,
+        StringBuilder accumulatedContent
     ) {
         switch (currentState.get()) {
             case STREAMING_CONTENT:
@@ -191,10 +206,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     currentState.set(StreamState.TOOL_CALL_DETECTED);
                     extractToolInfo(event, toolName, toolUseId);
                 } else if (isContentDelta(event)) {
-                    sendContentResponse(getTextContent(event), false, listener);
+                    String content = getTextContent(event);
+                    accumulatedContent.append(content);
+                    sendContentResponse(content, false, listener);
                 } else if (isStreamComplete(event)) {
-                    currentState.set(StreamState.COMPLETED);
-                    sendCompletionResponse(isStreamClosed, listener);
+                    // For PER agent, we should keep the connection open after the planner LLM finish
+                    if ("per".equals(agentType)) {
+                        sendPlannerResponse(false, listener, String.valueOf(accumulatedContent));
+                        currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
+                        log.info("PER agent planner phase completed - waiting for execution phase");
+                    } else {
+                        currentState.set(StreamState.COMPLETED);
+                        sendCompletionResponse(isStreamClosed, listener);
+                    }
                 }
                 break;
 
@@ -222,6 +246,26 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             case COMPLETED:
                 // Stream already completed
                 break;
+        }
+    }
+
+    private void sendPlannerResponse(
+        boolean isStreamClosed,
+        StreamPredictActionListener<MLTaskResponse, ?> listener,
+        String plannerContent
+    ) {
+        if (!isStreamClosed) {
+            Map<String, Object> responseMap = new HashMap<>();
+            responseMap.put("output", Map.of("message", Map.of("content", List.of(Map.of("text", plannerContent)))));
+
+            ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(responseMap).build();
+
+            ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+
+            ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+            listener.onResponse(MLTaskResponse.builder().output(output).build());
+            log.debug("Sent planner response for PER agent");
         }
     }
 
