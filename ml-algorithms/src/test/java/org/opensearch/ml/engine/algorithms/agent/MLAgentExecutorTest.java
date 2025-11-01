@@ -863,6 +863,8 @@ public class MLAgentExecutorTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
 
@@ -946,6 +948,8 @@ public class MLAgentExecutorTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
 
@@ -1045,6 +1049,8 @@ public class MLAgentExecutorTest {
             Instant.EPOCH,
             "test",
             isHidden,
+            null,
+            null,
             tenantId
         );
 

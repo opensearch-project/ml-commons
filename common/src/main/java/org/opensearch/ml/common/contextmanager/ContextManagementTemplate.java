@@ -237,15 +237,20 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
             return false;
         }
 
-        if (hooks == null || hooks.isEmpty()) {
-            return false;
-        }
+        // Allow null hooks (no context management) but not empty hooks map (misconfiguration)
+        if (hooks != null) {
+            if (hooks.isEmpty()) {
+                return false;
+            }
 
-        // Validate all context manager configs
-        for (List<ContextManagerConfig> configs : hooks.values()) {
-            for (ContextManagerConfig config : configs) {
-                if (!config.isValid()) {
-                    return false;
+            // Validate all context manager configs
+            for (List<ContextManagerConfig> configs : hooks.values()) {
+                if (configs != null) {
+                    for (ContextManagerConfig config : configs) {
+                        if (!config.isValid()) {
+                            return false;
+                        }
+                    }
                 }
             }
         }
