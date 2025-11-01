@@ -51,6 +51,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.Input;
@@ -65,6 +66,9 @@ import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
+import org.opensearch.ml.engine.algorithms.contextmanager.SlidingWindowManager;
+import org.opensearch.ml.engine.algorithms.contextmanager.SummarizationManager;
+import org.opensearch.ml.engine.algorithms.contextmanager.ToolsOutputTruncateManager;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -205,10 +209,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     ) {
                                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                         MLAgent mlAgent = MLAgent.parse(parser);
-                                        // Get HookRegistry from AgentMLInput if available, otherwise create empty one
-                                        HookRegistry hookRegistry = (agentMLInput.getHookRegistry() != null)
-                                            ? agentMLInput.getHookRegistry()
-                                            : new HookRegistry();
+                                        // Always create a fresh HookRegistry for agent execution
+                                        // This prevents callback accumulation from previous executions
+                                        HookRegistry hookRegistry = new HookRegistry();
                                         if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
                                             listener
                                                 .onFailure(
@@ -307,7 +310,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 ConversationIndexMemory.Factory factory = (ConversationIndexMemory.Factory) memoryFactoryMap
                                                     .get(memorySpec.getType());
                                                 if (factory != null) {
-                                                    // memoryId exists, so create returns an object with existing memory, therefore name can
+                                                    // memoryId exists, so create returns an object with existing
+                                                    // memory, therefore name can
                                                     // be null
                                                     factory
                                                         .create(
@@ -379,10 +383,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     /**
      * save root interaction and start execute the agent
-     * @param listener callback listener
-     * @param memory memory instance
+     * 
+     * @param listener     callback listener
+     * @param memory       memory instance
      * @param inputDataSet input
-     * @param mlAgent agent to run
+     * @param mlAgent      agent to run
      */
     private void saveRootInteractionAndExecute(
         ActionListener<Output> listener,
@@ -459,6 +464,203 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }));
     }
 
+    /**
+     * Process context management configuration and register context managers in
+     * hook registry
+     * 
+     * @param mlAgent      the ML agent with context management configuration
+     * @param hookRegistry the hook registry to register context managers with
+     * @param inputDataSet the input dataset to update with context management info
+     */
+    private void processContextManagement(MLAgent mlAgent, HookRegistry hookRegistry, RemoteInferenceInputDataSet inputDataSet) {
+        try {
+            ContextManagementTemplate template = null;
+            String templateName = null;
+
+            if (mlAgent.hasContextManagementTemplate()) {
+                // Template reference - would need to be resolved from template service
+                templateName = mlAgent.getContextManagementTemplateName();
+                log.info("Agent '{}' has context management template reference: {}", mlAgent.getName(), templateName);
+                // For now, we'll pass the template name to parameters for MLExecuteTaskRunner
+                // to handle
+                inputDataSet.getParameters().put("context_management", templateName);
+                return; // Let MLExecuteTaskRunner handle template resolution
+            } else if (mlAgent.getInlineContextManagement() != null) {
+                // Inline template - process directly
+                template = mlAgent.getInlineContextManagement();
+                templateName = template.getName();
+                log.info("Agent '{}' has inline context management configuration: {}", mlAgent.getName(), templateName);
+            }
+
+            if (template != null) {
+                // Process inline context management template
+                processInlineContextManagement(template, hookRegistry);
+                // Mark as processed to prevent MLExecuteTaskRunner from processing it again
+                inputDataSet.getParameters().put("context_management_processed", "true");
+                inputDataSet.getParameters().put("context_management", templateName);
+            }
+        } catch (Exception e) {
+            log.error("Failed to process context management for agent '{}': {}", mlAgent.getName(), e.getMessage(), e);
+            // Don't fail the entire execution, just log the error
+        }
+    }
+
+    /**
+     * Process inline context management template and register context managers
+     * 
+     * @param template     the context management template
+     * @param hookRegistry the hook registry to register with
+     */
+    private void processInlineContextManagement(ContextManagementTemplate template, HookRegistry hookRegistry) {
+        try {
+            log.debug("Processing inline context management template: {}", template.getName());
+
+            // Fresh HookRegistry ensures no duplicate registrations
+
+            // Create context managers from template configuration
+            List<org.opensearch.ml.common.contextmanager.ContextManager> contextManagers = createContextManagers(template);
+
+            if (!contextManagers.isEmpty()) {
+                // Create hook provider and register with hook registry
+                org.opensearch.ml.common.contextmanager.ContextManagerHookProvider hookProvider =
+                    new org.opensearch.ml.common.contextmanager.ContextManagerHookProvider(contextManagers);
+
+                // Update hook configuration based on template
+                hookProvider.updateHookConfiguration(template.getHooks());
+
+                // Register hooks with the registry
+                hookProvider.registerHooks(hookRegistry);
+
+                log.info("Successfully registered {} context managers from template '{}'", contextManagers.size(), template.getName());
+            } else {
+                log.warn("No context managers created from template '{}'", template.getName());
+            }
+        } catch (Exception e) {
+            log.error("Failed to process inline context management template '{}': {}", template.getName(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Create context managers from template configuration
+     * 
+     * @param template the context management template
+     * @return list of created context managers
+     */
+    private List<org.opensearch.ml.common.contextmanager.ContextManager> createContextManagers(ContextManagementTemplate template) {
+        List<org.opensearch.ml.common.contextmanager.ContextManager> managers = new ArrayList<>();
+
+        try {
+            // Iterate through all hooks and their configurations
+            for (Map.Entry<String, List<org.opensearch.ml.common.contextmanager.ContextManagerConfig>> entry : template
+                .getHooks()
+                .entrySet()) {
+                String hookName = entry.getKey();
+                List<org.opensearch.ml.common.contextmanager.ContextManagerConfig> configs = entry.getValue();
+
+                log.debug("Processing hook '{}' with {} configurations", hookName, configs.size());
+
+                for (org.opensearch.ml.common.contextmanager.ContextManagerConfig config : configs) {
+                    try {
+                        org.opensearch.ml.common.contextmanager.ContextManager manager = createContextManager(config);
+                        if (manager != null) {
+                            managers.add(manager);
+                            log.debug("Created context manager: {} for hook: {}", config.getType(), hookName);
+                        }
+                    } catch (Exception e) {
+                        log
+                            .error(
+                                "Failed to create context manager of type '{}' for hook '{}': {}",
+                                config.getType(),
+                                hookName,
+                                e.getMessage(),
+                                e
+                            );
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to create context managers from template: {}", e.getMessage(), e);
+        }
+
+        return managers;
+    }
+
+    /**
+     * Create a single context manager from configuration
+     * 
+     * @param config the context manager configuration
+     * @return the created context manager or null if creation failed
+     */
+    private org.opensearch.ml.common.contextmanager.ContextManager createContextManager(
+        org.opensearch.ml.common.contextmanager.ContextManagerConfig config
+    ) {
+        try {
+            String type = config.getType();
+            Map<String, Object> managerConfig = config.getConfig();
+
+            log.debug("Creating context manager of type: {}", type);
+
+            // Create context manager based on type
+            switch (type) {
+                case "ToolsOutputTruncateManager":
+                    return createToolsOutputTruncateManager(managerConfig);
+                case "SummarizationManager":
+                case "SummarizingManager":
+                    return createSummarizationManager(managerConfig);
+                case "MemoryManager":
+                    return createMemoryManager(managerConfig);
+                case "ConversationManager":
+                    return createConversationManager(managerConfig);
+                default:
+                    log.warn("Unknown context manager type: {}", type);
+                    return null;
+            }
+        } catch (Exception e) {
+            log.error("Failed to create context manager: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Create ToolsOutputTruncateManager
+     */
+    private org.opensearch.ml.common.contextmanager.ContextManager createToolsOutputTruncateManager(Map<String, Object> config) {
+        log.debug("Creating ToolsOutputTruncateManager with config: {}", config);
+        ToolsOutputTruncateManager manager = new ToolsOutputTruncateManager();
+        manager.initialize(config != null ? config : new HashMap<>());
+        return manager;
+    }
+
+    /**
+     * Create SummarizationManager
+     */
+    private org.opensearch.ml.common.contextmanager.ContextManager createSummarizationManager(Map<String, Object> config) {
+        log.debug("Creating SummarizationManager with config: {}", config);
+        SummarizationManager manager = new SummarizationManager(client);
+        manager.initialize(config != null ? config : new HashMap<>());
+        return manager;
+    }
+
+    /**
+     * Create SlidingWindowManager (used for MemoryManager type)
+     */
+    private org.opensearch.ml.common.contextmanager.ContextManager createMemoryManager(Map<String, Object> config) {
+        log.debug("Creating SlidingWindowManager (MemoryManager) with config: {}", config);
+        SlidingWindowManager manager = new SlidingWindowManager();
+        manager.initialize(config != null ? config : new HashMap<>());
+        return manager;
+    }
+
+    /**
+     * Create ConversationManager (placeholder - using SummarizationManager for now)
+     */
+    private org.opensearch.ml.common.contextmanager.ContextManager createConversationManager(Map<String, Object> config) {
+        log.debug("Creating ConversationManager (using SummarizationManager as placeholder) with config: {}", config);
+        SummarizationManager manager = new SummarizationManager(client);
+        manager.initialize(config != null ? config : new HashMap<>());
+        return manager;
+    }
+
     private void executeAgent(
         RemoteInferenceInputDataSet inputDataSet,
         MLTask mlTask,
@@ -479,10 +681,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             return;
         }
 
+        // Check for agent-level context management configuration (following connector
+        // pattern)
+        if (mlAgent.hasContextManagement()) {
+            processContextManagement(mlAgent, hookRegistry, inputDataSet);
+        }
+
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent, hookRegistry);
         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
 
-        // If async is true, index ML task and return the taskID. Also add memoryID to the task if it exists
+        // If async is true, index ML task and return the taskID. Also add memoryID to
+        // the task if it exists
         if (isAsync) {
             Map<String, Object> agentResponse = new HashMap<>();
             if (memoryId != null && !memoryId.isEmpty()) {
@@ -745,4 +954,5 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
         }
     }
+
 }
