@@ -159,7 +159,7 @@ public class StreamingWrapperTest {
 
     @Test
     public void testSendCompletionChunkStreaming() throws Exception {
-        streamingWrapper.sendCompletionChunk("session1", "parent1");
+        streamingWrapper.sendCompletionChunk("session1", "parent1", "executeMemory", "executeParent");
 
         ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
         verify(channel).sendResponseBatch(responseCaptor.capture());
@@ -170,7 +170,7 @@ public class StreamingWrapperTest {
 
     @Test
     public void testSendCompletionChunkNonStreaming() throws Exception {
-        nonStreamingWrapper.sendCompletionChunk("session1", "parent1");
+        nonStreamingWrapper.sendCompletionChunk("session1", "parent1", "executeMemory", "executeParent");
 
         verify(channel, never()).sendResponseBatch(any());
     }
@@ -180,7 +180,7 @@ public class StreamingWrapperTest {
         doThrow(new RuntimeException("Channel error")).when(channel).sendResponseBatch(any());
 
         // Should not throw exception, just log warning
-        streamingWrapper.sendCompletionChunk("session1", "parent1");
+        streamingWrapper.sendCompletionChunk("session1", "parent1", "executeMemory", "executeParent");
 
         verify(channel).sendResponseBatch(any());
     }
@@ -236,7 +236,7 @@ public class StreamingWrapperTest {
 
     @Test
     public void testCreateStreamChunkStructure() throws Exception {
-        streamingWrapper.sendCompletionChunk("test-session", "test-parent");
+        streamingWrapper.sendCompletionChunk("test-session", "test-parent", "executeMemory", "executeParent");
 
         ArgumentCaptor<MLTaskResponse> responseCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
         verify(channel).sendResponseBatch(responseCaptor.capture());
@@ -245,7 +245,7 @@ public class StreamingWrapperTest {
         ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
         List<ModelTensor> tensors = output.getMlModelOutputs().get(0).getMlModelTensors();
 
-        assertEquals(3, tensors.size());
+        assertEquals(5, tensors.size());
 
         // Find specific tensors by name
         ModelTensor memoryTensor = tensors.stream().filter(t -> "memory_id".equals(t.getName())).findFirst().orElse(null);

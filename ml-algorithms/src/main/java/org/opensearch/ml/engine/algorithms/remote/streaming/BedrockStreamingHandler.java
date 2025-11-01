@@ -212,9 +212,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 } else if (isStreamComplete(event)) {
                     // For PER agent, we should keep the connection open after the planner LLM finish
                     if ("per".equals(agentType)) {
-                        sendPlannerResponse(false, listener, String.valueOf(accumulatedContent));
                         currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
-                        log.info("PER agent planner phase completed - waiting for execution phase");
+                        sendPlannerResponse(false, listener, String.valueOf(accumulatedContent));
                     } else {
                         currentState.set(StreamState.COMPLETED);
                         sendCompletionResponse(isStreamClosed, listener);
