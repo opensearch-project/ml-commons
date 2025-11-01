@@ -108,9 +108,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 log.error("You don't have permission to use the context management template provided, template name: {}", templateName, e);
                 listener.onFailure(e);
             }));
-        } else {
-            // Validate inline context management configuration (similar to inline connector validation)
+        } else if (agent.getInlineContextManagement() != null) {
+            // Validate inline context management configuration only if it exists (similar to inline connector validation)
             validateInlineContextManagement(agent);
+            continueAgentRegistration(agent, listener);
+        } else {
+            // No context management configuration - that's fine, continue with registration
             continueAgentRegistration(agent, listener);
         }
     }
