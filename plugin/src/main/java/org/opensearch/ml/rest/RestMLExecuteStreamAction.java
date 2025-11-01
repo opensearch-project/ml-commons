@@ -20,6 +20,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -346,21 +347,33 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 // Regular response - extract values and build proper structure
                 String memoryId = extractTensorResult(response, "memory_id");
                 String parentInteractionId = extractTensorResult(response, "parent_interaction_id");
+                String executorMemoryId = extractTensorResult(response, "executor_agent_memory_id");
+                String executorParentInteractionId = extractTensorResult(response, "executor_agent_parent_interaction_id");
                 String content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
                 isLast = dataMap.containsKey("is_last") ? Boolean.TRUE.equals(dataMap.get("is_last")) : false;
                 boolean finalIsLast = isLast;
 
-                List<ModelTensor> orderedTensors = List
-                    .of(
-                        ModelTensor.builder().name("memory_id").result(memoryId).build(),
-                        ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
-                        ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
-                            {
-                                put("content", content);
-                                put("is_last", finalIsLast);
-                            }
-                        }).build()
-                    );
+                List<ModelTensor> orderedTensors = new ArrayList<>();
+                orderedTensors.add(ModelTensor.builder().name("memory_id").result(memoryId).build());
+                orderedTensors.add(ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build());
+
+                if (executorMemoryId != null && !executorMemoryId.isEmpty()) {
+                    orderedTensors.add(ModelTensor.builder().name("executor_agent_memory_id").result(executorMemoryId).build());
+                }
+
+                if (executorParentInteractionId != null && !executorParentInteractionId.isEmpty()) {
+                    orderedTensors
+                        .add(
+                            ModelTensor.builder().name("executor_agent_parent_interaction_id").result(executorParentInteractionId).build()
+                        );
+                }
+
+                orderedTensors.add(ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
+                    {
+                        put("content", content);
+                        put("is_last", finalIsLast);
+                    }
+                }).build());
 
                 ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
                 ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
