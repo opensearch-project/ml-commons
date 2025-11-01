@@ -42,6 +42,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.action.contextmanagement.ContextManagementTemplateService;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -96,6 +97,9 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    private ContextManagementTemplateService contextManagementTemplateService;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -116,7 +120,8 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             sdkClient,
             mlIndicesHandler,
             clusterService,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            contextManagementTemplateService
         );
         indexResponse = new IndexResponse(new ShardId(ML_AGENT_INDEX, "_na_", 0), "AGENT_ID", 1, 0, 2, true);
     }
@@ -510,7 +515,8 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             sdkClient,
             mlIndicesHandler,
             clusterService,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            contextManagementTemplateService
         );
 
         disabledAction.doExecute(task, request, actionListener);
