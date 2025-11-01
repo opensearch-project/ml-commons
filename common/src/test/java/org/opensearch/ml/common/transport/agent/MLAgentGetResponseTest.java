@@ -96,6 +96,8 @@ public class MLAgentGetResponseTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
@@ -115,7 +117,7 @@ public class MLAgentGetResponseTest {
 
     @Test
     public void toXContent() throws IOException {
-        mlAgent = new MLAgent("mock", MLAgentType.FLOW.name(), "test", null, null, null, null, null, null, "test", false, null);
+        mlAgent = new MLAgent("mock", MLAgentType.FLOW.name(), "test", null, null, null, null, null, null, "test", false, null, null, null);
         MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         ToXContent.Params params = EMPTY_PARAMS;

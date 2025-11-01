@@ -48,6 +48,11 @@ public class MLRegisterAgentRequest extends ActionRequest {
         ActionRequestValidationException exception = null;
         if (mlAgent == null) {
             exception = addValidationError("ML agent can't be null", exception);
+        } else {
+            // Basic validation - check for conflicting configuration (following connector pattern)
+            if (mlAgent.getContextManagementName() != null && mlAgent.getContextManagement() != null) {
+                exception = addValidationError("Cannot specify both context_management_name and context_management", exception);
+            }
         }
 
         return exception;
