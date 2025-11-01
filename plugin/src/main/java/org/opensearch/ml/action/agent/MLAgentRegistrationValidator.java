@@ -29,6 +29,45 @@ public class MLAgentRegistrationValidator {
     }
 
     /**
+     * Validates an ML agent for registration, performing all necessary validation checks.
+     * This is the main validation entry point that orchestrates all validation steps.
+     * 
+     * @param agent the ML agent to validate
+     * @param listener callback for validation result - onResponse(true) if valid, onFailure with exception if not
+     */
+    public void validateAgentForRegistration(MLAgent agent, ActionListener<Boolean> listener) {
+        try {
+            log.debug("Starting agent registration validation for agent: {}", agent.getName());
+
+            // First, perform basic context management configuration validation
+            String configError = validateContextManagementConfiguration(agent);
+            if (configError != null) {
+                log.error("Agent registration validation failed - configuration error: {}", configError);
+                listener.onFailure(new IllegalArgumentException(configError));
+                return;
+            }
+
+            // If agent has a context management template reference, validate template access
+            if (agent.getContextManagementName() != null) {
+                validateContextManagementTemplateAccess(agent.getContextManagementName(), ActionListener.wrap(templateAccessValid -> {
+                    log.debug("Agent registration validation completed successfully for agent: {}", agent.getName());
+                    listener.onResponse(true);
+                }, templateAccessError -> {
+                    log.error("Agent registration validation failed - template access error: {}", templateAccessError.getMessage());
+                    listener.onFailure(templateAccessError);
+                }));
+            } else {
+                // No template reference, validation is complete
+                log.debug("Agent registration validation completed successfully for agent: {}", agent.getName());
+                listener.onResponse(true);
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error during agent registration validation", e);
+            listener.onFailure(new IllegalArgumentException("Agent validation failed: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Validates context management template access (following connector access validation pattern).
      * This method checks if the template exists and if the user has access to it.
      * 
