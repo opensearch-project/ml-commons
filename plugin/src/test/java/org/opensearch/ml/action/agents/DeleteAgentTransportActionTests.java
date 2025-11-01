@@ -353,6 +353,8 @@ public class DeleteAgentTransportActionTests {
             Instant.EPOCH,
             "test",
             isHidden,
+            null, // contextManagementName
+            null, // contextManagement
             tenantId
         );
 
