@@ -211,7 +211,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 for (Interaction next : r) {
                     String question = next.getInput();
                     String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when have final answer,
+                    // As we store the conversation with empty response first and then update when
+                    // have final answer,
                     // filter out those in-flight requests when run in parallel
                     if (Strings.isNullOrEmpty(response)) {
                         continue;
@@ -235,7 +236,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
                         params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
+                        // to input params to validate
                         inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                     } else {
                         List<String> chatHistory = new ArrayList<>();
@@ -256,7 +258,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
                         params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
+                        // to input params to validate
                         inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
                     }
                 }
@@ -544,12 +547,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
                         ContextManagerContext contextAfterEvent = AgentContextUtil
                             .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
-                        ActionRequest request = streamingWrapper.createPredictionRequest(llm, contextAfterEvent.getParameters(), tenantId);
-                        streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
-                    } else {
-                        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
-                        streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
+
+                        if (tmpParameters.get(INTERACTIONS) != null || tmpParameters.get(INTERACTIONS) != "") {
+                            tmpParameters.put(INTERACTIONS, StringUtils.toJson(contextAfterEvent.getParameters().get(INTERACTIONS)));
+
+                        }
                     }
+                    ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+                    streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
@@ -566,12 +571,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
         if (hookRegistry != null) {
             ContextManagerContext contextAfterEvent = AgentContextUtil
                 .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
-            ActionRequest request = streamingWrapper.createPredictionRequest(llm, contextAfterEvent.getParameters(), tenantId);
-            streamingWrapper.executeRequest(request, firstListener);
-        } else {
-            ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
-            streamingWrapper.executeRequest(request, firstListener);
+            if (tmpParameters.get(INTERACTIONS) != null || tmpParameters.get(INTERACTIONS) != "") {
+                tmpParameters.put(INTERACTIONS, StringUtils.toJson(contextAfterEvent.getParameters().get(INTERACTIONS)));
+            }
         }
+        ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
+        streamingWrapper.executeRequest(request, firstListener);
 
     }
 
@@ -648,7 +653,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     if (functionCalling != null) {
                         String outputResponse = parseResponse(filterToolOutput(toolParams, r));
 
-                        // Emit POST_TOOL hook event after tool execution and process current tool output
+                        // Emit POST_TOOL hook event after tool execution and process current tool
+                        // output
                         List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
                         String outputResponseAfterHook = AgentContextUtil
                             .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry)
@@ -657,7 +663,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         List<Map<String, Object>> toolResults = List
                             .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
-                        // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
+                        // TODO: support multiple tool calls at the same time so that multiple
+                        // LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
                     } else {
                         // Emit POST_TOOL hook event for non-function calling path
@@ -725,9 +732,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     /**
-     * In each tool runs, it copies agent parameters, which is tmpParameters into a new set of parameter llmToolTmpParameters,
-     * after the tool runs, normally llmToolTmpParameters will be discarded, but for some special parameters like SCRATCHPAD_NOTES_KEY,
-     * some new llmToolTmpParameters produced by the tool run can opt to be copied back to tmpParameters to share across tools in the same interaction
+     * In each tool runs, it copies agent parameters, which is tmpParameters into a
+     * new set of parameter llmToolTmpParameters,
+     * after the tool runs, normally llmToolTmpParameters will be discarded, but for
+     * some special parameters like SCRATCHPAD_NOTES_KEY,
+     * some new llmToolTmpParameters produced by the tool run can opt to be copied
+     * back to tmpParameters to share across tools in the same interaction
+     * 
      * @param tmpParameters
      * @param llmToolTmpParameters
      */
