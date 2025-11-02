@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +18,10 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.transport.client.Client;
 
 /**
@@ -159,6 +165,159 @@ public class SummarizationManagerTest {
         // First should be summary
         String firstOutput = (String) context.getToolInteractions().get(0).get("output");
         Assert.assertTrue(firstOutput.contains("Test summary"));
+    }
+
+    @Test
+    public void testExtractSummaryFromResponseWithLLMResponseFilter() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Set up context with LLM_RESPONSE_FILTER
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.choices[0].message.content");
+        context.setParameters(parameters);
+
+        // Create mock response with OpenAI-style structure
+        Map<String, Object> responseData = new HashMap<>();
+        Map<String, Object> choice = new HashMap<>();
+        Map<String, Object> message = new HashMap<>();
+        message.put("content", "This is the extracted summary content");
+        choice.put("message", message);
+        responseData.put("choices", List.of(choice));
+
+        MLTaskResponse mockResponse = createMockMLTaskResponse(responseData);
+
+        // Use reflection to access the private method
+        java.lang.reflect.Method extractMethod = SummarizationManager.class
+            .getDeclaredMethod("extractSummaryFromResponse", MLTaskResponse.class, ContextManagerContext.class);
+        extractMethod.setAccessible(true);
+
+        String result = (String) extractMethod.invoke(manager, mockResponse, context);
+
+        Assert.assertEquals("This is the extracted summary content", result);
+    }
+
+    @Test
+    public void testExtractSummaryFromResponseWithBedrockResponseFilter() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Set up context with Bedrock-style LLM_RESPONSE_FILTER
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+        context.setParameters(parameters);
+
+        // Create mock response with Bedrock-style structure
+        Map<String, Object> responseData = new HashMap<>();
+        Map<String, Object> output = new HashMap<>();
+        Map<String, Object> message = new HashMap<>();
+        Map<String, Object> content = new HashMap<>();
+        content.put("text", "Bedrock extracted summary");
+        message.put("content", List.of(content));
+        output.put("message", message);
+        responseData.put("output", output);
+
+        MLTaskResponse mockResponse = createMockMLTaskResponse(responseData);
+
+        // Use reflection to access the private method
+        java.lang.reflect.Method extractMethod = SummarizationManager.class
+            .getDeclaredMethod("extractSummaryFromResponse", MLTaskResponse.class, ContextManagerContext.class);
+        extractMethod.setAccessible(true);
+
+        String result = (String) extractMethod.invoke(manager, mockResponse, context);
+
+        Assert.assertEquals("Bedrock extracted summary", result);
+    }
+
+    @Test
+    public void testExtractSummaryFromResponseWithInvalidFilter() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Set up context with invalid LLM_RESPONSE_FILTER path
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "$.invalid.path");
+        context.setParameters(parameters);
+
+        // Create mock response with simple structure
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("response", "Fallback summary content");
+
+        MLTaskResponse mockResponse = createMockMLTaskResponse(responseData);
+
+        // Use reflection to access the private method
+        java.lang.reflect.Method extractMethod = SummarizationManager.class
+            .getDeclaredMethod("extractSummaryFromResponse", MLTaskResponse.class, ContextManagerContext.class);
+        extractMethod.setAccessible(true);
+
+        String result = (String) extractMethod.invoke(manager, mockResponse, context);
+
+        // Should fall back to default parsing
+        Assert.assertEquals("Fallback summary content", result);
+    }
+
+    @Test
+    public void testExtractSummaryFromResponseWithoutFilter() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Context without LLM_RESPONSE_FILTER
+        Map<String, String> parameters = new HashMap<>();
+        context.setParameters(parameters);
+
+        // Create mock response with simple structure
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("response", "Default parsed summary");
+
+        MLTaskResponse mockResponse = createMockMLTaskResponse(responseData);
+
+        // Use reflection to access the private method
+        java.lang.reflect.Method extractMethod = SummarizationManager.class
+            .getDeclaredMethod("extractSummaryFromResponse", MLTaskResponse.class, ContextManagerContext.class);
+        extractMethod.setAccessible(true);
+
+        String result = (String) extractMethod.invoke(manager, mockResponse, context);
+
+        Assert.assertEquals("Default parsed summary", result);
+    }
+
+    @Test
+    public void testExtractSummaryFromResponseWithEmptyFilter() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        manager.initialize(config);
+
+        // Set up context with empty LLM_RESPONSE_FILTER
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_FILTER, "");
+        context.setParameters(parameters);
+
+        // Create mock response
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("response", "Empty filter fallback");
+
+        MLTaskResponse mockResponse = createMockMLTaskResponse(responseData);
+
+        // Use reflection to access the private method
+        java.lang.reflect.Method extractMethod = SummarizationManager.class
+            .getDeclaredMethod("extractSummaryFromResponse", MLTaskResponse.class, ContextManagerContext.class);
+        extractMethod.setAccessible(true);
+
+        String result = (String) extractMethod.invoke(manager, mockResponse, context);
+
+        Assert.assertEquals("Empty filter fallback", result);
+    }
+
+    /**
+     * Helper method to create a mock MLTaskResponse with the given data.
+     */
+    private MLTaskResponse createMockMLTaskResponse(Map<String, Object> responseData) {
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(responseData).build();
+
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+        return MLTaskResponse.builder().output(output).build();
     }
 
     /**
