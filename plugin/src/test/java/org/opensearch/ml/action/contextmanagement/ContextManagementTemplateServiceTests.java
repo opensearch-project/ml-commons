@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.contextmanagement;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import org.junit.Before;
@@ -49,6 +51,13 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Mock cluster service dependencies for proper setup
+        org.opensearch.cluster.ClusterState clusterState = mock(org.opensearch.cluster.ClusterState.class);
+        org.opensearch.cluster.metadata.Metadata metadata = mock(org.opensearch.cluster.metadata.Metadata.class);
+        when(clusterService.state()).thenReturn(clusterState);
+        when(clusterState.metadata()).thenReturn(metadata);
+        when(metadata.hasIndex(anyString())).thenReturn(false); // Default to index not existing
 
         contextManagementTemplateService = new ContextManagementTemplateService(mlIndicesHandler, client, clusterService);
     }
@@ -97,6 +106,57 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testSaveTemplate_NullTemplate() {
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test_template", null, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof NullPointerException);
+    }
+
+    @Test
+    public void testSaveTemplate_ValidTemplate() {
+        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValid()).thenReturn(true);
+        when(template.getName()).thenReturn("test_template");
+        when(template.getCreatedTime()).thenReturn(null);
+        when(template.getCreatedBy()).thenReturn(null);
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test_template", template, listener);
+
+        // Verify template validation was called - the method will fail due to complex mocking requirements
+        // but this covers the validation path and timestamp setting
+        verify(template).isValid();
+        verify(template).getCreatedTime();
+        verify(template).getCreatedBy();
+        verify(template).setCreatedTime(any(java.time.Instant.class));
+        verify(template).setLastModified(any(java.time.Instant.class));
+    }
+
+    @Test
+    public void testSaveTemplate_ExceptionInTryBlock() {
+        // Test exception handling in the outer try-catch block
+        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValid()).thenThrow(new RuntimeException("Validation error"));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test_template", template, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("Validation error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
     public void testGetTemplate_NullTemplateName() {
         @SuppressWarnings("unchecked")
         ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
@@ -142,5 +202,150 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
         ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
         assertEquals("Template name cannot be null or empty", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testGetTemplate_ExceptionInTryBlock() {
+        // Test exception handling in the outer try-catch block by making threadPool throw
+        when(client.threadPool()).thenThrow(new RuntimeException("ThreadPool error"));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.getTemplate("test_template", listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("ThreadPool error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDeleteTemplate_ExceptionInTryBlock() {
+        // Test exception handling in the outer try-catch block by making threadPool throw
+        when(client.threadPool()).thenThrow(new RuntimeException("ThreadPool error"));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.deleteTemplate("test_template", listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("ThreadPool error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testListTemplates_ExceptionInTryBlock() {
+        // Test exception handling in the outer try-catch block by making threadPool throw
+        when(client.threadPool()).thenThrow(new RuntimeException("ThreadPool error"));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<java.util.List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.listTemplates(listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("ThreadPool error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testListTemplates_WithPaginationExceptionInTryBlock() {
+        // Test exception handling in the outer try-catch block for paginated version
+        when(client.threadPool()).thenThrow(new RuntimeException("ThreadPool error"));
+
+        @SuppressWarnings("unchecked")
+        ActionListener<java.util.List<ContextManagementTemplate>> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.listTemplates(10, 50, listener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("ThreadPool error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testListTemplates_NullListener() {
+        // This should not throw an exception, but we can test that the method handles it gracefully
+        try {
+            contextManagementTemplateService.listTemplates(null);
+            // If we get here without exception, that's fine - the method should handle null listeners gracefully
+        } catch (Exception e) {
+            // If an exception is thrown, it should be a meaningful one
+            assertTrue(e instanceof IllegalArgumentException || e instanceof NullPointerException);
+        }
+    }
+
+    @Test
+    public void testGetTemplate_WhitespaceTemplateName() {
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.getTemplate("   ", listener);
+
+        // Whitespace is not considered empty by Strings.isNullOrEmpty(), so it will proceed
+        // This tests the branch where template name is not null/empty but contains only whitespace
+        verify(client).threadPool();
+    }
+
+    @Test
+    public void testDeleteTemplate_WhitespaceTemplateName() {
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.deleteTemplate("   ", listener);
+
+        // Whitespace is not considered empty by Strings.isNullOrEmpty(), so it will proceed
+        // This tests the branch where template name is not null/empty but contains only whitespace
+        verify(client).threadPool();
+    }
+
+    @Test
+    public void testSaveTemplate_TemplateWithExistingCreatedTime() {
+        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValid()).thenReturn(true);
+        when(template.getName()).thenReturn("test_template");
+        when(template.getCreatedTime()).thenReturn(java.time.Instant.now()); // Already has created time
+        when(template.getCreatedBy()).thenReturn("existing_user"); // Already has created by
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test_template", template, listener);
+
+        // Verify template validation was called and existing values were checked
+        verify(template).isValid();
+        verify(template).getCreatedTime();
+        verify(template).getCreatedBy();
+        // Should call setLastModified but not setCreatedTime or setCreatedBy since they exist
+        verify(template).setLastModified(any(java.time.Instant.class));
+        verify(template, never()).setCreatedTime(any(java.time.Instant.class));
+        verify(template, never()).setCreatedBy(anyString());
+    }
+
+    @Test
+    public void testSaveTemplate_TemplateWithNullCreatedBy() {
+        ContextManagementTemplate template = mock(ContextManagementTemplate.class);
+        when(template.isValid()).thenReturn(true);
+        when(template.getName()).thenReturn("test_template");
+        when(template.getCreatedTime()).thenReturn(null);
+        when(template.getCreatedBy()).thenReturn(null);
+
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.saveTemplate("test_template", template, listener);
+
+        // Verify template validation was called
+        verify(template).isValid();
+        verify(template).getCreatedTime();
+        verify(template).getCreatedBy();
+        // Should set both created time and last modified
+        verify(template).setCreatedTime(any(java.time.Instant.class));
+        verify(template).setLastModified(any(java.time.Instant.class));
     }
 }

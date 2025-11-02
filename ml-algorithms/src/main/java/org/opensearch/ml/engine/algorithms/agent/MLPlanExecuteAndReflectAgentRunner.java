@@ -372,7 +372,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // completedSteps stores the step and its result, hence divide by 2 to find total steps completed
         // on reaching max iteration, update parent interaction question with last executed step rather than task to allow continue using
         // memory_id
-        // emit PRE_LLM hook for planner agent
         if (stepsExecuted >= maxSteps) {
             String finalResult = String
                 .format(
@@ -405,13 +404,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             requestParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
             try {
                 AgentContextUtil.emitPreLLMHook(requestParams, completedSteps, null, memory, hookRegistry);
+                if (requestParams.get(INTERACTIONS) != null || requestParams.get(INTERACTIONS) != "") {
+                    requestParams.put(COMPLETED_STEPS_FIELD, StringUtils.toJson(requestParams.get(INTERACTIONS)));
+                    requestParams.put(INTERACTIONS, "");
+                }
             } catch (Exception e) {
                 log.error("Failed to emit pre-LLM hook", e);
             }
-            if (requestParams.get(INTERACTIONS) != null || requestParams.get(INTERACTIONS) != "") {
-                requestParams.put(COMPLETED_STEPS_FIELD, StringUtils.toJson(requestParams.get(INTERACTIONS)));
-                requestParams.put(INTERACTIONS, "");
-            }
+
         }
 
         request = new MLPredictionTaskRequest(
