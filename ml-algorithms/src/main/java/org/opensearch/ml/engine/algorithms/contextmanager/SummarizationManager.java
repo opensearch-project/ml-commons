@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
 import static org.opensearch.ml.common.FunctionName.REMOTE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 
 import java.util.ArrayList;
@@ -31,11 +32,15 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.transport.client.Client;
 
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+
 import lombok.extern.log4j.Log4j2;
 
 /**
  * Context manager that implements summarization approach for tool interactions.
- * Summarizes older interactions while preserving recent ones to manage context window.
+ * Summarizes older interactions while preserving recent ones to manage context
+ * window.
  */
 @Log4j2
 public class SummarizationManager implements ContextManager {
@@ -191,7 +196,7 @@ public class SummarizationManager implements ContextManager {
             // Execute prediction
             ActionListener<MLTaskResponse> listener = ActionListener.wrap(response -> {
                 try {
-                    String summary = extractSummaryFromResponse(response);
+                    String summary = extractSummaryFromResponse(response, context);
                     processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalToolInteractions);
                 } catch (Exception e) {
                     // Fallback to default behavior
@@ -279,7 +284,7 @@ public class SummarizationManager implements ContextManager {
         }
     }
 
-    private String extractSummaryFromResponse(MLTaskResponse response) {
+    private String extractSummaryFromResponse(MLTaskResponse response, ContextManagerContext context) {
         try {
             MLOutput output = response.getOutput();
             if (output instanceof ModelTensorOutput) {
@@ -290,7 +295,38 @@ public class SummarizationManager implements ContextManager {
                     List<ModelTensor> tensors = mlModelOutputs.get(0).getMlModelTensors();
                     if (tensors != null && !tensors.isEmpty()) {
                         Map<String, ?> dataAsMap = tensors.get(0).getDataAsMap();
-                        // TODO need to parse LLM response output, maybe reused how filtered output from chatAgentRunner
+
+                        // Use LLM_RESPONSE_FILTER from agent configuration if available
+                        Map<String, String> parameters = context.getParameters();
+                        if (parameters != null
+                            && parameters.containsKey(LLM_RESPONSE_FILTER)
+                            && !parameters.get(LLM_RESPONSE_FILTER).isEmpty()) {
+                            try {
+                                String responseFilter = parameters.get(LLM_RESPONSE_FILTER);
+                                Object filteredResponse = JsonPath.read(dataAsMap, responseFilter);
+                                if (filteredResponse instanceof String) {
+                                    String result = ((String) filteredResponse).trim();
+                                    return result;
+                                } else {
+                                    String result = StringUtils.toJson(filteredResponse);
+                                    return result;
+                                }
+                            } catch (PathNotFoundException e) {
+                                // Fall back to default parsing
+                            } catch (Exception e) {
+                                // Fall back to default parsing
+                            }
+                        }
+
+                        // Fallback to default parsing if no filter or filter fails
+                        if (dataAsMap.size() == 1 && dataAsMap.containsKey("response")) {
+                            Object responseObj = dataAsMap.get("response");
+                            if (responseObj instanceof String) {
+                                return ((String) responseObj).trim();
+                            }
+                        }
+
+                        // Last resort: return JSON representation
                         return StringUtils.toJson(dataAsMap);
                     }
                 }

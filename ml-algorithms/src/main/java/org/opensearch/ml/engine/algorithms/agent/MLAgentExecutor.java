@@ -209,9 +209,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                     ) {
                                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                         MLAgent mlAgent = MLAgent.parse(parser);
-                                        // Always create a fresh HookRegistry for agent execution
-                                        // This prevents callback accumulation from previous executions
-                                        HookRegistry hookRegistry = new HookRegistry();
+                                        // Use existing HookRegistry from AgentMLInput if available (set by MLExecuteTaskRunner for template
+                                        // references)
+                                        // Otherwise create a fresh HookRegistry for agent execution
+                                        final HookRegistry hookRegistry = agentMLInput.getHookRegistry() != null
+                                            ? agentMLInput.getHookRegistry()
+                                            : new HookRegistry();
                                         if (isMultiTenancyEnabled && !Objects.equals(tenantId, mlAgent.getTenantId())) {
                                             listener
                                                 .onFailure(
