@@ -135,9 +135,8 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     });
                     // If any to update tool not found, return error.
                     if (!updateToolSet.isEmpty()) {
-                        String errMsg = String.format("Failed to find tools: %s in system index", updateToolSet);
-                        log.warn(errMsg);
-                        restoreListener.onFailure(new OpenSearchException(errMsg));
+                        log.warn("Failed to find tools: {} in system index", updateToolSet);
+                        restoreListener.onFailure(new OpenSearchException("Failed to find one or more requested tools in system index"));
                     } else {
                         updateMcpTools(updateNodesRequest, searchedMcpToolWrappers, restoreListener);
                     }
@@ -210,16 +209,18 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                         errMsgBuilder.append("\n");
                     }
                     log.error(errMsgBuilder.toString());
+                    StringBuilder responseErrorBuilder = new StringBuilder(
+                        String.format("Failed to update %d tool(s) in system index", updateFailedTools.get().size())
+                    );
                     if (!updateSucceedTools.get().isEmpty()) {
                         updateMcpToolsOnNodes(
-                            errMsgBuilder,
+                            responseErrorBuilder,
                             mergeDocFields(updateNodesRequest, searchedMcpToolWrappers, bulkResponse),
                             updateSucceedTools.get(),
                             restoreListener
                         );
                     } else {
-                        restoreListener
-                            .onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                        restoreListener.onFailure(new OpenSearchException(responseErrorBuilder.toString()));
                     }
                 }
             }, e -> {
@@ -289,6 +290,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
         Set<String> indexSucceedTools,
         ActionListener<MLMcpToolsUpdateNodesResponse> listener
     ) {
+        StringBuilder respErrMsgBuilder = new StringBuilder(errMsgBuilder.toString());
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLMcpToolsUpdateNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<MLMcpToolsUpdateNodesResponse> addToMemoryResultListener = ActionListener.wrap(r -> {
@@ -308,27 +310,19 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     });
                     errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1);
                     log.error(errMsgBuilder.toString());
-                    restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
+                    respErrMsgBuilder.append("Tools were updated successfully, but failed to update to mcp server memory");
+                    restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
                 } else {
                     if (errMsgBuilder.isEmpty()) {
                         restoreListener.onResponse(r);
                     } else {
-                        restoreListener
-                            .onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                        restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
                     }
                 }
             }, e -> {
-                errMsgBuilder
-                    .append(
-                        String
-                            .format(
-                                Locale.ROOT,
-                                "Tools are updated successfully but failed to update to mcp server memory with error: %s",
-                                e.getMessage()
-                            )
-                    );
+                respErrMsgBuilder.append("Tools are updated successfully, but failed to update to mcp server memory");
                 log.error(errMsgBuilder.toString(), e);
-                restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
+                restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
             });
             client.execute(MLMcpToolsUpdateOnNodesAction.INSTANCE, toolsUpdateNodesRequest, addToMemoryResultListener);
         } catch (Exception e) {
