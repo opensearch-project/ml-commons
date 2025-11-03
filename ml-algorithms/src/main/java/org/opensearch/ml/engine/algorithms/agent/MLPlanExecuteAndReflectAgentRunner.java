@@ -371,7 +371,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // completedSteps stores the step and its result, hence divide by 2 to find total steps completed
         // on reaching max iteration, update parent interaction question with last executed step rather than task to allow continue using
         // memory_id
-        // emit PRE_LLM hook for planner agent
         if (stepsExecuted >= maxSteps) {
             String finalResult = String
                 .format(
@@ -397,20 +396,21 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // completedSteps to context management.
         // TODO should refactor the completed steps as message array format, similar to chat agent.
 
-        Map<String, String> requestParams = new HashMap<>(allParams);
-
+        allParams.put("_llm_model_id", llm.getModelId());
         if (hookRegistry != null && !completedSteps.isEmpty()) {
-            requestParams.put("_llm_model_id", llm.getModelId());
-            requestParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
+            allParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
+            Map<String, String> requestParams = new HashMap<>(allParams);
             try {
                 AgentContextUtil.emitPreLLMHook(requestParams, completedSteps, null, memory, hookRegistry);
+
+                if (requestParams.get(INTERACTIONS) != null || requestParams.get(INTERACTIONS) != "") {
+                    allParams.put(COMPLETED_STEPS_FIELD, StringUtils.toJson(requestParams.get(INTERACTIONS)));
+                    allParams.put(INTERACTIONS, "");
+                }
             } catch (Exception e) {
                 log.error("Failed to emit pre-LLM hook", e);
             }
-            if (requestParams.get(INTERACTIONS) != null || requestParams.get(INTERACTIONS) != "") {
-                requestParams.put(COMPLETED_STEPS_FIELD, StringUtils.toJson(requestParams.get(INTERACTIONS)));
-                requestParams.put(INTERACTIONS, "");
-            }
+
         }
 
         request = new MLPredictionTaskRequest(
@@ -418,7 +418,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             RemoteInferenceMLInput
                 .builder()
                 .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(requestParams).build())
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(allParams).build())
                 .build(),
             null,
             allParams.get(TENANT_ID_FIELD)

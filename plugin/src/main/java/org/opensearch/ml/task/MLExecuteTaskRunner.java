@@ -173,7 +173,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 // Handle agent execution with context management
                 if (FunctionName.AGENT.equals(functionName) && input instanceof AgentMLInput) {
                     AgentMLInput agentInput = (AgentMLInput) input;
-                    String contextManagementName = agentInput.getContextManagementName();
+                    String contextManagementName = getEffectiveContextManagementName(agentInput);
 
                     if (contextManagementName != null && !contextManagementName.trim().isEmpty()) {
                         // Execute agent with context management
@@ -191,10 +191,15 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 }
 
                 // Default execution for all functions (including agents without context management)
-                mlEngine.execute(input, ActionListener.wrap(output -> {
-                    MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
-                    listener.onResponse(response);
-                }, e -> { listener.onFailure(e); }), channel);
+                try {
+                    mlEngine.execute(input, ActionListener.wrap(output -> {
+                        MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
+                        listener.onResponse(response);
+                    }, e -> { listener.onFailure(e); }), channel);
+                } catch (Exception e) {
+                    log.error("Failed to execute ML function", e);
+                    listener.onFailure(e);
+                }
             } catch (Exception e) {
                 mlStats
                     .createCounterStatIfAbsent(request.getFunctionName(), ActionName.EXECUTE, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
@@ -243,14 +248,19 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                     );
 
                 // Execute agent with hook registry
-                mlEngine.execute(request.getInput(), ActionListener.wrap(output -> {
-                    log.info("Agent execution completed successfully with context management");
-                    MLExecuteTaskResponse response = new MLExecuteTaskResponse(request.getFunctionName(), output);
-                    listener.onResponse(response);
-                }, error -> {
-                    log.error("Agent execution failed with context management", error);
-                    listener.onFailure(error);
-                }), channel);
+                try {
+                    mlEngine.execute(request.getInput(), ActionListener.wrap(output -> {
+                        log.info("Agent execution completed successfully with context management");
+                        MLExecuteTaskResponse response = new MLExecuteTaskResponse(request.getFunctionName(), output);
+                        listener.onResponse(response);
+                    }, error -> {
+                        log.error("Agent execution failed with context management", error);
+                        listener.onFailure(error);
+                    }), channel);
+                } catch (Exception e) {
+                    log.error("Failed to execute agent with context management", e);
+                    listener.onFailure(e);
+                }
 
             } catch (Exception e) {
                 log.error("Failed to create context managers from template: {}", contextManagementName, e);
@@ -260,6 +270,106 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
             log.error("Failed to retrieve context management template: {}", contextManagementName, error);
             listener.onFailure(error);
         }));
+    }
+
+    /**
+     * Gets the effective context management name for an agent.
+     * Priority: 1) Runtime parameter from execution request, 2) Agent's stored configuration, 3) Runtime parameters set by MLAgentExecutor
+     * This follows the same pattern as MCP connectors.
+     * 
+     * @param agentInput the agent ML input
+     * @return the effective context management name, or null if none configured
+     */
+    private String getEffectiveContextManagementName(AgentMLInput agentInput) {
+        // Priority 1: Runtime parameter from execution request (user override)
+        String runtimeContextManagementName = agentInput.getContextManagementName();
+        if (runtimeContextManagementName != null && !runtimeContextManagementName.trim().isEmpty()) {
+            log.debug("Using runtime context management name: {}", runtimeContextManagementName);
+            return runtimeContextManagementName;
+        }
+
+        // Priority 2: Check agent's stored configuration directly
+        String agentId = agentInput.getAgentId();
+        if (agentId != null) {
+            try {
+                // Use a blocking call to get the agent synchronously
+                // This is acceptable here since we're in the task execution path
+                java.util.concurrent.CompletableFuture<String> future = new java.util.concurrent.CompletableFuture<>();
+
+                try (
+                    org.opensearch.common.util.concurrent.ThreadContext.StoredContext context = client
+                        .threadPool()
+                        .getThreadContext()
+                        .stashContext()
+                ) {
+                    client
+                        .get(
+                            new org.opensearch.action.get.GetRequest(org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX, agentId),
+                            org.opensearch.core.action.ActionListener.runBefore(org.opensearch.core.action.ActionListener.wrap(response -> {
+                                if (response.isExists()) {
+                                    try {
+                                        org.opensearch.core.xcontent.XContentParser parser =
+                                            org.opensearch.common.xcontent.json.JsonXContent.jsonXContent
+                                                .createParser(
+                                                    null,
+                                                    org.opensearch.common.xcontent.LoggingDeprecationHandler.INSTANCE,
+                                                    response.getSourceAsString()
+                                                );
+                                        org.opensearch.core.xcontent.XContentParserUtils
+                                            .ensureExpectedToken(
+                                                org.opensearch.core.xcontent.XContentParser.Token.START_OBJECT,
+                                                parser.nextToken(),
+                                                parser
+                                            );
+                                        org.opensearch.ml.common.agent.MLAgent mlAgent = org.opensearch.ml.common.agent.MLAgent
+                                            .parse(parser);
+
+                                        if (mlAgent.hasContextManagementTemplate()) {
+                                            String templateName = mlAgent.getContextManagementTemplateName();
+                                            future.complete(templateName);
+                                        } else {
+                                            future.complete(null);
+                                        }
+                                    } catch (Exception e) {
+                                        future.completeExceptionally(e);
+                                    }
+                                } else {
+                                    future.complete(null); // Agent not found
+                                }
+                            }, future::completeExceptionally), context::restore)
+                        );
+                }
+
+                // Wait for the result with a timeout
+                String contextManagementName = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                if (contextManagementName != null && !contextManagementName.trim().isEmpty()) {
+                    return contextManagementName;
+                }
+            } catch (Exception e) {
+                // Continue to fallback methods
+            }
+        }
+
+        // Priority 3: Agent's runtime parameters (set by MLAgentExecutor in input parameters)
+        if (agentInput.getInputDataset() instanceof org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) {
+            org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet dataset =
+                (org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+            // Check if context management has already been processed by MLAgentExecutor (for inline templates)
+            String contextManagementProcessed = dataset.getParameters().get("context_management_processed");
+            if ("true".equals(contextManagementProcessed)) {
+                log.debug("Context management already processed by MLAgentExecutor, skipping MLExecuteTaskRunner processing");
+                return null; // Skip processing in MLExecuteTaskRunner
+            }
+
+            // Handle template references (not processed by MLAgentExecutor)
+            String agentContextManagementName = dataset.getParameters().get("context_management");
+            if (agentContextManagementName != null && !agentContextManagementName.trim().isEmpty()) {
+                return agentContextManagementName;
+            }
+        }
+
+        return null;
     }
 
     /**
