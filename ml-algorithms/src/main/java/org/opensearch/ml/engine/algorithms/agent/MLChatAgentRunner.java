@@ -543,7 +543,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         return;
                     }
                     // Emit PRE_LLM hook event
-                    if (hookRegistry != null) {
+                    if (hookRegistry != null && !interactions.isEmpty()) {
                         List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
                         ContextManagerContext contextAfterEvent = AgentContextUtil
                             .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
@@ -568,9 +568,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Emit PRE_LLM hook event for initial LLM call
         List<MLToolSpec> initialToolSpecs = new ArrayList<>(toolSpecMap.values());
         tmpParameters.put("_llm_model_id", llm.getModelId());
-        if (hookRegistry != null) {
+        if (hookRegistry != null && !interactions.isEmpty()) {
             ContextManagerContext contextAfterEvent = AgentContextUtil
                 .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
+
             if (tmpParameters.get(INTERACTIONS) != null || tmpParameters.get(INTERACTIONS) != "") {
                 tmpParameters.put(INTERACTIONS, StringUtils.toJson(contextAfterEvent.getParameters().get(INTERACTIONS)));
             }
