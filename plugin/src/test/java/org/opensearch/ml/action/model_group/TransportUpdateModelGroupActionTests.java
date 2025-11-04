@@ -454,6 +454,80 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         );
     }
 
+    public void test_Update_RSC_FeatureEnabled_TypeEnabled_SkipsLegacyValidation() throws Exception {
+        // Enable RSC fast-path.
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        // when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+
+        // No ACL changes in request (so even legacy would pass, but we won't go there).
+        MLUpdateModelGroupRequest req = prepareRequest(null, null, null);
+
+        transportUpdateModelGroupAction.doExecute(null, req, actionListener);
+
+        // Legacy validation was skipped.
+        verify(modelAccessControlHelper, times(0)).isSecurityEnabledAndModelAccessControlEnabled(any());
+        verify(modelAccessControlHelper, times(0)).isOwner(any(), any());
+        verify(modelAccessControlHelper, times(0)).isAdmin(any());
+
+        // Update succeeded.
+        ArgumentCaptor<MLUpdateModelGroupResponse> captor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals("Updated", captor.getValue().getStatus());
+    }
+
+    public void test_Update_RSC_FeatureEnabled_TypeDisabled_UsesLegacyValidation() throws Exception {
+        // RSC feature on, but type disabled → legacy path.
+        ResourceSharingClient rsc = mock(ResourceSharingClient.class);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
+        // when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
+
+        // Allow legacy validation to pass:
+        // security/model-access-control enabled:
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
+        // user is allowed to update:
+        when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
+        when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
+        when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
+        when(modelAccessControlHelper.isUserHasBackendRole(any(), any())).thenReturn(true);
+
+        MLUpdateModelGroupRequest req = prepareRequest(null, null, null);
+
+        transportUpdateModelGroupAction.doExecute(null, req, actionListener);
+
+        // Legacy path consulted helper
+        verify(modelAccessControlHelper, times(1)).isSecurityEnabledAndModelAccessControlEnabled(any());
+
+        // Update succeeded
+        ArgumentCaptor<MLUpdateModelGroupResponse> captor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals("Updated", captor.getValue().getStatus());
+    }
+
+    public void test_Update_RSC_FeatureDisabled_UsesLegacyValidation() throws Exception {
+        // Entire feature disabled → legacy path.
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(null);
+
+        // Allow legacy validation to pass:
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
+        when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
+        when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
+        when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
+        when(modelAccessControlHelper.isUserHasBackendRole(any(), any())).thenReturn(true);
+
+        MLUpdateModelGroupRequest req = prepareRequest(null, null, null);
+
+        transportUpdateModelGroupAction.doExecute(null, req, actionListener);
+
+        // Legacy path consulted helper
+        verify(modelAccessControlHelper, times(1)).isSecurityEnabledAndModelAccessControlEnabled(any());
+
+        // Update succeeded
+        ArgumentCaptor<MLUpdateModelGroupResponse> captor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals("Updated", captor.getValue().getStatus());
+    }
+
     private MLUpdateModelGroupRequest prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         MLUpdateModelGroupInput UpdateModelGroupInput = MLUpdateModelGroupInput
             .builder()
