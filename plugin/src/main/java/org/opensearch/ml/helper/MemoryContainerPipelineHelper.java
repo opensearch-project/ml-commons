@@ -63,14 +63,26 @@ public final class MemoryContainerPipelineHelper {
                     indicesHandler.createLongTermMemoryIndex(pipelineName, indexName, config, listener);
                 }, e -> {
                     log.error("Failed to create text embedding pipeline '{}'", pipelineName, e);
-                    listener.onFailure(e);
+                    listener
+                        .onFailure(
+                            new org.opensearch.OpenSearchStatusException(
+                                "Internal server error",
+                                org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                            )
+                        );
                 }));
             } else {
                 indicesHandler.createLongTermMemoryIndex(null, indexName, config, listener);
             }
         } catch (Exception e) {
-            log.error("Failed to create long-term memory infrastructure for index: {}", indexName, e);
-            listener.onFailure(e);
+            log.error("Failed to create text embedding pipeline for long term memory index: {}", indexName, e);
+            listener
+                .onFailure(
+                    new org.opensearch.OpenSearchStatusException(
+                        "Internal server error",
+                        org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                    )
+                );
         }
     }
 
@@ -105,7 +117,13 @@ public final class MemoryContainerPipelineHelper {
                 createPipelineInternal(pipelineName, config, client, listener);
             } catch (IOException e) {
                 log.error("Failed to build pipeline configuration for '{}'", pipelineName, e);
-                listener.onFailure(e);
+                listener
+                    .onFailure(
+                        new org.opensearch.OpenSearchStatusException(
+                            "Internal server error",
+                            org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                        )
+                    );
             }
         }, error -> {
             // Pipeline doesn't exist (404 error expected) - create it
@@ -113,7 +131,13 @@ public final class MemoryContainerPipelineHelper {
                 createPipelineInternal(pipelineName, config, client, listener);
             } catch (IOException e) {
                 log.error("Failed to build pipeline configuration for '{}'", pipelineName, e);
-                listener.onFailure(e);
+                listener
+                    .onFailure(
+                        new org.opensearch.OpenSearchStatusException(
+                            "Internal server error",
+                            org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                        )
+                    );
             }
         }));
     }
@@ -159,11 +183,23 @@ public final class MemoryContainerPipelineHelper {
                 listener.onResponse(true);
             } else {
                 log.error("Pipeline creation not acknowledged: {}", pipelineName);
-                listener.onFailure(new IllegalStateException("Pipeline creation not acknowledged"));
+                listener
+                    .onFailure(
+                        new org.opensearch.OpenSearchStatusException(
+                            "Internal server error",
+                            org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                        )
+                    );
             }
         }, e -> {
             log.error("Failed to create pipeline '{}'", pipelineName, e);
-            listener.onFailure(e);
+            listener
+                .onFailure(
+                    new org.opensearch.OpenSearchStatusException(
+                        "Internal server error",
+                        org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+                    )
+                );
         }));
     }
 

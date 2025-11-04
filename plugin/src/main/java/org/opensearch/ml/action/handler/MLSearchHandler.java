@@ -8,6 +8,7 @@ package org.opensearch.ml.action.handler;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
+import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
@@ -53,7 +54,6 @@ import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -148,11 +148,13 @@ public class MLSearchHandler {
                     mlFeatureEnabledSetting.isMultiTenancyEnabled(),
                     CommonValue.ML_MODEL_GROUP_INDEX
                 );
-            boolean rsClientPresent = ResourceSharingClientAccessor.getInstance().getResourceSharingClient() != null;
 
-            if (rsClientPresent && user != null && modelAccessControlHelper.modelAccessControlEnabled() && hasModelGroupIndex) {
+            if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)
+                && user != null
+                && modelAccessControlHelper.modelAccessControlEnabled()
+                && hasModelGroupIndex) {
                 // RSC fast-path: get accessible group IDs → gate models (IDs or missing)
-                ResourceSharingClient rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+                var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
                 rsc.getAccessibleResourceIds(ML_MODEL_GROUP_RESOURCE_TYPE, ActionListener.wrap(ids -> {
                     SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
                     gated.query(rewriteQueryBuilderRSC(gated.query(), ids)); // ids may be empty → "missing only"
