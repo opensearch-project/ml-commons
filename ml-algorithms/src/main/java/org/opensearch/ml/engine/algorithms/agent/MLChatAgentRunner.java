@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTIONS_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_CHAT_HISTORY_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
@@ -86,6 +87,7 @@ import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -1098,10 +1100,38 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     public String extractSummaryFromResponse(MLTaskResponse response) {
         try {
-            String outputString = outputToOutputString(response.getOutput());
-            if (outputString != null && !outputString.trim().isEmpty()) {
-                return outputString.trim();
+            ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+            if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
+                return null;
             }
+
+            ModelTensors tensors = output.getMlModelOutputs().getFirst();
+            if (tensors == null || tensors.getMlModelTensors() == null || tensors.getMlModelTensors().isEmpty()) {
+                return null;
+            }
+
+            ModelTensor tensor = tensors.getMlModelTensors().getFirst();
+            if (tensor.getResult() != null) {
+                return tensor.getResult().trim();
+            }
+
+            if (tensor.getDataAsMap() == null) {
+                return null;
+            }
+
+            Map<String, ?> dataMap = tensor.getDataAsMap();
+            if (dataMap.containsKey("response")) {
+                return String.valueOf(dataMap.get("response")).trim();
+            }
+
+            if (dataMap.containsKey("output")) {
+                Object outputObj = JsonPath.read(dataMap, LLM_RESPONSE_FILTER);
+                if (outputObj != null) {
+                    return String.valueOf(outputObj).trim();
+                }
+            }
+
+            log.error("Summary generate error. No result/response field found. Available fields: {}", dataMap.keySet());
             return null;
         } catch (Exception e) {
             log.error("Failed to extract summary from response", e);
