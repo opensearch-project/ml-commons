@@ -920,32 +920,37 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private String extractSummaryFromResponse(MLTaskResponse response) {
         try {
             ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
-            if (output != null && output.getMlModelOutputs() != null && !output.getMlModelOutputs().isEmpty()) {
-                ModelTensors tensors = output.getMlModelOutputs().getFirst();
-                if (tensors != null && tensors.getMlModelTensors() != null && !tensors.getMlModelTensors().isEmpty()) {
-                    ModelTensor tensor = tensors.getMlModelTensors().getFirst();
-                    if (tensor.getResult() != null) {
-                        return tensor.getResult().trim();
-                    }
-                    if (tensor.getDataAsMap() != null) {
-                        Map<String, ?> dataMap = tensor.getDataAsMap();
-                        if (dataMap.containsKey(RESPONSE_FIELD)) {
-                            return String.valueOf(dataMap.get(RESPONSE_FIELD)).trim();
-                        }
-                        if (dataMap.containsKey("output")) {
-                            Object outputObj = JsonPath.read(dataMap, "$.output.message.content[0].text");
-                            if (outputObj != null) {
-                                return String.valueOf(outputObj).trim();
-                            }
-                        }
-                    }
-                    log
-                        .error(
-                            "Summary generate error. No result/response field. Available: {}",
-                            tensor.getDataAsMap() != null ? tensor.getDataAsMap().keySet() : "null"
-                        );
+            if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
+                return null;
+            }
+
+            ModelTensors tensors = output.getMlModelOutputs().getFirst();
+            if (tensors == null || tensors.getMlModelTensors() == null || tensors.getMlModelTensors().isEmpty()) {
+                return null;
+            }
+
+            ModelTensor tensor = tensors.getMlModelTensors().getFirst();
+            if (tensor.getResult() != null) {
+                return tensor.getResult().trim();
+            }
+
+            if (tensor.getDataAsMap() == null) {
+                return null;
+            }
+
+            Map<String, ?> dataMap = tensor.getDataAsMap();
+            if (dataMap.containsKey(RESPONSE_FIELD)) {
+                return String.valueOf(dataMap.get(RESPONSE_FIELD)).trim();
+            }
+
+            if (dataMap.containsKey("output")) {
+                Object outputObj = JsonPath.read(dataMap, LLM_RESPONSE_FILTER);
+                if (outputObj != null) {
+                    return String.valueOf(outputObj).trim();
                 }
             }
+
+            log.error("Summary generate error. No result/response field found. Available fields: {}", dataMap.keySet());
             return null;
         } catch (Exception e) {
             log.error("Summary extraction failed", e);
