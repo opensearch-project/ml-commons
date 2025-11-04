@@ -1001,4 +1001,145 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         // Verify that onFailure was called with the expected exception
         verify(agentActionListener).onFailure(any(IllegalStateException.class));
     }
+
+    @Test
+    public void testMaxStepsWithSingleCompletedStep() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            listener.onResponse(Arrays.asList(Interaction.builder().id("i1").input("step1").response("").build()));
+            return null;
+        }).when(conversationIndexMemory).getMessages(any(), anyInt());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        params.put("parent_interaction_id", "pid");
+        params.put("max_steps", "0");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        String response = (String) ((ModelTensorOutput) objectCaptor.getValue())
+            .getMlModelOutputs()
+            .get(1)
+            .getMlModelTensors()
+            .get(0)
+            .getDataAsMap()
+            .get("response");
+        assertTrue(response.contains("Max Steps Limit (0) Reached"));
+    }
+
+    @Test
+    public void testSummaryExtractionWithResultField() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor tensor = ModelTensor.builder().result("Summary from result").build();
+            when(mlTaskResponse.getOutput())
+                .thenReturn(
+                    ModelTensorOutput
+                        .builder()
+                        .mlModelOutputs(Arrays.asList(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build()))
+                        .build()
+                );
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        params.put("parent_interaction_id", "pid");
+        params.put("max_steps", "0");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        String response = (String) ((ModelTensorOutput) objectCaptor.getValue())
+            .getMlModelOutputs()
+            .get(1)
+            .getMlModelTensors()
+            .get(0)
+            .getDataAsMap()
+            .get("response");
+        assertTrue(response.contains("Summary from result"));
+    }
+
+    @Test
+    public void testSummaryExtractionWithEmptyResponse() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor tensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "   ")).build();
+            when(mlTaskResponse.getOutput())
+                .thenReturn(
+                    ModelTensorOutput
+                        .builder()
+                        .mlModelOutputs(Arrays.asList(ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build()))
+                        .build()
+                );
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        params.put("parent_interaction_id", "pid");
+        params.put("max_steps", "0");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        String response = (String) ((ModelTensorOutput) objectCaptor.getValue())
+            .getMlModelOutputs()
+            .get(1)
+            .getMlModelTensors()
+            .get(0)
+            .getDataAsMap()
+            .get("response");
+        assertTrue(response.contains("Max Steps Limit"));
+    }
+
+    @Test
+    public void testSummaryExtractionWithNullOutput() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            when(mlTaskResponse.getOutput()).thenReturn(null);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test");
+        params.put("parent_interaction_id", "pid");
+        params.put("max_steps", "0");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(agentActionListener).onResponse(any());
+    }
 }
