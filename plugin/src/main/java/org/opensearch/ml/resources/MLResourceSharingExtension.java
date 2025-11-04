@@ -17,20 +17,22 @@ import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 
 public class MLResourceSharingExtension implements ResourceSharingExtension {
 
+    private static final ResourceProvider MODEL_GROUP_PROVIDER = new ResourceProvider() {
+
+        @Override
+        public String resourceType() {
+            return ML_MODEL_GROUP_RESOURCE_TYPE;
+        }
+
+        @Override
+        public String resourceIndexName() {
+            return ML_MODEL_GROUP_INDEX;
+        }
+    };
+
     @Override
     public Set<ResourceProvider> getResourceProviders() {
-        return Set.of(new ResourceProvider() {
-
-            @Override
-            public String resourceType() {
-                return ML_MODEL_GROUP_RESOURCE_TYPE;
-            }
-
-            @Override
-            public String resourceIndexName() {
-                return ML_MODEL_GROUP_INDEX;
-            }
-        });
+        return Set.of(MODEL_GROUP_PROVIDER);
     }
 
     @Override
