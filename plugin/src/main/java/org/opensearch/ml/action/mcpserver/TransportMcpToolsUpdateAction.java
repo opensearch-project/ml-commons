@@ -320,8 +320,17 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     }
                 }
             }, e -> {
-                respErrMsgBuilder.append("Tools are updated successfully, but failed to update to mcp server memory");
+                errMsgBuilder
+                    .append(
+                        String
+                            .format(
+                                Locale.ROOT,
+                                "Tools are updated successfully but failed to update to mcp server memory with error: %s",
+                                e.getMessage()
+                            )
+                    );
                 log.error(errMsgBuilder.toString(), e);
+                respErrMsgBuilder.append("Tools are updated successfully, but failed to update to mcp server memory");
                 restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
             });
             client.execute(MLMcpToolsUpdateOnNodesAction.INSTANCE, toolsUpdateNodesRequest, addToMemoryResultListener);
