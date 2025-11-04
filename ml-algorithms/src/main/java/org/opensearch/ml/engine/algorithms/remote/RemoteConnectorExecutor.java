@@ -184,6 +184,8 @@ public interface RemoteConnectorExecutor {
 
     default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
 
+    default void setConnectorSslVerificationEnabled(boolean connectorSslVerificationEnabled) {}
+
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 
     default void setClusterService(ClusterService clusterService) {}

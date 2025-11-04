@@ -10,8 +10,10 @@ import static org.opensearch.secure_sm.AccessController.doPrivileged;
 import java.time.Duration;
 
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.utils.AttributeMap;
 
 @Log4j2
 public class MLHttpClientFactory {
@@ -20,7 +22,8 @@ public class MLHttpClientFactory {
         Duration connectionTimeout,
         Duration readTimeout,
         int maxConnections,
-        boolean connectorPrivateIpEnabled
+        boolean connectorPrivateIpEnabled,
+        boolean connectorSslVerificationEnabled
     ) {
         return doPrivileged(() -> {
             log
@@ -35,7 +38,9 @@ public class MLHttpClientFactory {
                 .connectionTimeout(connectionTimeout)
                 .readTimeout(readTimeout)
                 .maxConcurrency(maxConnections)
-                .build();
+                .buildWithDefaults(AttributeMap.builder()
+                .put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, !connectorSslVerificationEnabled)
+                .build());
             return new MLValidatableAsyncHttpClient(delegate, connectorPrivateIpEnabled);
         });
     }

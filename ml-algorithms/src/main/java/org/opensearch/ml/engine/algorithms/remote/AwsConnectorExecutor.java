@@ -82,6 +82,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     private boolean connectorPrivateIpEnabled;
 
+    @Setter
+    private boolean connectorSslVerificationEnabled;
+
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
@@ -193,7 +196,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             this.httpClientRef
                 .compareAndSet(
                     null,
-                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
+                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled, connectorSslVerificationEnabled)
                 );
         }
         return httpClientRef.get();
