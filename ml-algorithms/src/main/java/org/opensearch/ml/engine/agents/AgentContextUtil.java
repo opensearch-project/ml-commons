@@ -95,15 +95,7 @@ public class AgentContextUtil {
             builder.toolConfigs(toolSpecs);
         }
 
-        List<Map<String, Object>> toolInteractions = new ArrayList<>();
-        if (interactions != null) {
-            for (String interaction : interactions) {
-                Map<String, Object> toolInteraction = new HashMap<>();
-                toolInteraction.put("output", interaction);
-                toolInteractions.add(toolInteraction);
-            }
-        }
-        builder.toolInteractions(toolInteractions);
+        builder.toolInteractions(interactions != null ? interactions : new ArrayList<>());
 
         Map<String, String> contextParameters = new HashMap<>();
         contextParameters.putAll(parameters);
@@ -152,10 +144,10 @@ public class AgentContextUtil {
         HookRegistry hookRegistry
     ) {
         ContextManagerContext context = buildContextManagerContext(parameters, interactions, toolSpecs, memory);
+
         try {
             PreLLMEvent event = new PreLLMEvent(context, new HashMap<>());
             hookRegistry.emit(event);
-            log.debug("Emitted PRE_LLM hook event and updated context");
             return context;
 
         } catch (Exception e) {
@@ -177,16 +169,7 @@ public class AgentContextUtil {
         }
 
         if (context.getToolInteractions() != null && !context.getToolInteractions().isEmpty()) {
-            List<String> updatedInteractions = new ArrayList<>();
-            for (Map<String, Object> toolInteraction : context.getToolInteractions()) {
-                Object output = toolInteraction.get("output");
-                if (output instanceof String) {
-                    updatedInteractions.add((String) output);
-                }
-            }
-            if (!updatedInteractions.isEmpty()) {
-                parameters.put(INTERACTIONS, ", " + String.join(", ", updatedInteractions));
-            }
+            parameters.put(INTERACTIONS, ", " + String.join(", ", context.getToolInteractions()));
         }
 
         if (context.getParameters() != null) {
