@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
+import static java.lang.Math.min;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
+import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 
@@ -13,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.contextmanager.ActivationRule;
@@ -115,20 +119,10 @@ public class SummarizationManager implements ContextManager {
 
     @Override
     public void execute(ContextManagerContext context) {
-        List<Map<String, Object>> toolInteractions = context.getToolInteractions();
+        List<String> interactions = context.getToolInteractions();
 
-        if (toolInteractions == null || toolInteractions.isEmpty()) {
-            log.debug("No tool interactions to process");
+        if (interactions == null || interactions.isEmpty()) {
             return;
-        }
-
-        // Extract interactions from tool interactions
-        List<String> interactions = new ArrayList<>();
-        for (Map<String, Object> toolInteraction : toolInteractions) {
-            Object output = toolInteraction.get("output");
-            if (output instanceof String) {
-                interactions.add((String) output);
-            }
         }
 
         if (interactions.isEmpty()) {
@@ -142,16 +136,22 @@ public class SummarizationManager implements ContextManager {
         int messagesToSummarizeCount = Math.max(1, (int) (totalMessages * summaryRatio));
 
         // Ensure we don't summarize recent messages
-        messagesToSummarizeCount = Math.min(messagesToSummarizeCount, totalMessages - preserveRecentMessages);
+        messagesToSummarizeCount = min(messagesToSummarizeCount, totalMessages - preserveRecentMessages);
 
         if (messagesToSummarizeCount <= 0) {
-            log.debug("Cannot summarize: insufficient messages for summarization");
+            return;
+        }
+
+        // Find a safe cut point that doesn't break assistant-tool pairs
+        int safeCutPoint = findSafeCutPoint(interactions, messagesToSummarizeCount);
+
+        if (safeCutPoint <= 0) {
             return;
         }
 
         // Extract messages to summarize and remaining messages
-        List<String> messagesToSummarize = new ArrayList<>(interactions.subList(0, messagesToSummarizeCount));
-        List<String> remainingMessages = new ArrayList<>(interactions.subList(messagesToSummarizeCount, totalMessages));
+        List<String> messagesToSummarize = new ArrayList<>(interactions.subList(0, safeCutPoint));
+        List<String> remainingMessages = new ArrayList<>(interactions.subList(safeCutPoint, totalMessages));
 
         // Get model ID
         String modelId = summarizationModelId;
@@ -172,7 +172,7 @@ public class SummarizationManager implements ContextManager {
         summarizationParameters.put("prompt", "Help summarize the following" + StringUtils.toJson(String.join(",", messagesToSummarize)));
         summarizationParameters.put("system_prompt", summarizationSystemPrompt);
 
-        executeSummarization(context, modelId, summarizationParameters, messagesToSummarizeCount, remainingMessages, toolInteractions);
+        executeSummarization(context, modelId, summarizationParameters, safeCutPoint, remainingMessages, interactions);
     }
 
     protected void executeSummarization(
@@ -181,8 +181,10 @@ public class SummarizationManager implements ContextManager {
         Map<String, String> summarizationParameters,
         int messagesToSummarizeCount,
         List<String> remainingMessages,
-        List<Map<String, Object>> originalToolInteractions
+        List<String> originalInteractions
     ) {
+        CountDownLatch latch = new CountDownLatch(1);
+
         try {
             // Create ML input dataset for remote inference
             MLInputDataset inputDataset = RemoteInferenceInputDataSet.builder().parameters(summarizationParameters).build();
@@ -197,7 +199,7 @@ public class SummarizationManager implements ContextManager {
             ActionListener<MLTaskResponse> listener = ActionListener.wrap(response -> {
                 try {
                     String summary = extractSummaryFromResponse(response, context);
-                    processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalToolInteractions);
+                    processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalInteractions);
                 } catch (Exception e) {
                     // Fallback to default behavior
                     processSummarizationResult(
@@ -205,30 +207,39 @@ public class SummarizationManager implements ContextManager {
                         "Summarized " + messagesToSummarizeCount + " previous tool interactions",
                         messagesToSummarizeCount,
                         remainingMessages,
-                        originalToolInteractions
+                        originalInteractions
                     );
+                } finally {
+                    latch.countDown();
                 }
             }, e -> {
-                // Fallback to default behavior
-                processSummarizationResult(
-                    context,
-                    "Summarized " + messagesToSummarizeCount + " previous tool interactions",
-                    messagesToSummarizeCount,
-                    remainingMessages,
-                    originalToolInteractions
-                );
+                try {
+                    // Fallback to default behavior
+                    processSummarizationResult(
+                        context,
+                        "Summarized " + messagesToSummarizeCount + " previous tool interactions",
+                        messagesToSummarizeCount,
+                        remainingMessages,
+                        originalInteractions
+                    );
+                } finally {
+                    latch.countDown();
+                }
             });
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
+
+            // Wait for summarization to complete (30 second timeout)
+            latch.await(30, TimeUnit.SECONDS);
 
         } catch (Exception e) {
             // Fallback to default behavior
             processSummarizationResult(
                 context,
-                "Summarized " + messagesToSummarizeCount + " previous tool interactions",
+                "Summarized " + messagesToSummarizeCount + " previous interactions",
                 messagesToSummarizeCount,
                 remainingMessages,
-                originalToolInteractions
+                originalInteractions
             );
         }
     }
@@ -238,11 +249,13 @@ public class SummarizationManager implements ContextManager {
         String summary,
         int messagesToSummarizeCount,
         List<String> remainingMessages,
-        List<Map<String, Object>> originalToolInteractions
+        List<String> originalInteractions
     ) {
         try {
             // Create summarized interaction
-            String summarizedInteraction = "{\"role\":\"tool\",\"content\":\"Summarized previous tool interactions: " + summary + "\"}";
+            String summarizedInteraction = "{\"role\":\"assistant\",\"content\":\"Summarized previous interactions: "
+                + processTextDoc(summary)
+                + "\"}";
 
             // Update interactions: summary + remaining messages
             List<String> updatedInteractions = new ArrayList<>();
@@ -250,19 +263,7 @@ public class SummarizationManager implements ContextManager {
             updatedInteractions.addAll(remainingMessages);
 
             // Update toolInteractions in context
-            List<Map<String, Object>> updatedToolInteractions = new ArrayList<>();
-
-            // Add summary as first interaction
-            Map<String, Object> summaryInteraction = new HashMap<>();
-            summaryInteraction.put("output", summarizedInteraction);
-            updatedToolInteractions.add(summaryInteraction);
-
-            // Add remaining tool interactions
-            for (int i = messagesToSummarizeCount; i < originalToolInteractions.size(); i++) {
-                updatedToolInteractions.add(originalToolInteractions.get(i));
-            }
-
-            context.setToolInteractions(updatedToolInteractions);
+            context.setToolInteractions(updatedInteractions);
 
             // Update parameters
             Map<String, String> parameters = context.getParameters();
@@ -382,5 +383,53 @@ public class SummarizationManager implements ContextManager {
             log.warn("Invalid integer value for config key '{}': {}, using default {}", key, value, defaultValue);
             return defaultValue;
         }
+    }
+
+    /**
+     * Find a safe cut point that doesn't break assistant-tool message pairs
+     * Exact same logic as Strands agent
+     */
+    private int findSafeCutPoint(List<String> interactions, int targetCutPoint) {
+        if (targetCutPoint >= interactions.size()) {
+            return targetCutPoint;
+        }
+        // // the current agent logic is when odd number it's tool called result and even number is tool input, should always summarize for
+        // pairs, so the targetCutPoint needs to be even
+        // if (targetCutPoint%2==0){
+        // return targetCutPoint;
+        // } else {
+        // return min(targetCutPoint+1,interactions.size());
+        // }
+        int splitPoint = targetCutPoint;
+
+        while (splitPoint < interactions.size()) {
+            try {
+                String messageAtSplit = interactions.get(splitPoint);
+
+                // Oldest message cannot be a toolResult because it needs a toolUse preceding it
+                boolean hasToolResult = (messageAtSplit.contains("toolResult") || messageAtSplit.contains("tool_call_id"));
+
+                // Oldest message can be a toolUse only if a toolResult immediately follows it
+                boolean hasToolUse = messageAtSplit.contains("toolUse");
+                boolean nextHasToolResult = false;
+                // TODO we need better way to handle the tool result based on the llm interfaces.
+                if (splitPoint + 1 < interactions.size()) {
+                    nextHasToolResult = (interactions.get(splitPoint + 1).contains("toolResult")
+                        || messageAtSplit.contains("tool_call_id"));
+                }
+
+                if (hasToolResult || (hasToolUse && splitPoint + 1 < interactions.size() && !nextHasToolResult)) {
+                    splitPoint++;
+                } else {
+                    break;
+                }
+
+            } catch (Exception e) {
+                log.warn("Error checking message at index {}: {}", splitPoint, e.getMessage());
+                splitPoint++;
+            }
+        }
+
+        return splitPoint;
     }
 }
