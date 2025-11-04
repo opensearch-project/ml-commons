@@ -280,10 +280,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Failed to persist 1 mcp tool(s) into system index", argumentCaptor.getValue().getMessage());
     }
 
     public void test_doExecute_bulkIndexPartialFailed() {
@@ -323,10 +320,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Failed to persist 1 mcp tool(s) into system index", argumentCaptor.getValue().getMessage());
     }
 
     public void test_doExecute_registerOnNodeHasFailure() {
