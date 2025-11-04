@@ -310,7 +310,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     });
                     errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1);
                     log.error(errMsgBuilder.toString());
-                    respErrMsgBuilder.append("Tools were updated successfully, but failed to update to mcp server memory");
+                    respErrMsgBuilder.append("Tools are updated successfully, but failed to update to mcp server memory");
                     restoreListener.onFailure(new OpenSearchException(respErrMsgBuilder.toString()));
                 } else {
                     if (errMsgBuilder.isEmpty()) {
