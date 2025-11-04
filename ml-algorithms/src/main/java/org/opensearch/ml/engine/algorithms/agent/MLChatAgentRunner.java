@@ -340,7 +340,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StepListener<?> lastStepListener = firstListener;
 
         StringBuilder scratchpadBuilder = new StringBuilder();
-        List<String> interactions = new CopyOnWriteArrayList<>();
+        final List<String> interactions = new CopyOnWriteArrayList<>();
 
         StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
@@ -548,9 +548,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ContextManagerContext contextAfterEvent = AgentContextUtil
                             .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
 
-                        if (tmpParameters.get(INTERACTIONS) != null || tmpParameters.get(INTERACTIONS) != "") {
-                            tmpParameters.put(INTERACTIONS, StringUtils.toJson(contextAfterEvent.getParameters().get(INTERACTIONS)));
+                        // Check if context managers actually modified the interactions
+                        List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
 
+                        if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                            interactions.clear();
+                            interactions.addAll(updatedInteractions);
+
+                            // Update parameters if context manager set INTERACTIONS
+                            String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                                tmpParameters.put(INTERACTIONS, contextInteractions);
+                            }
                         }
                     }
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
@@ -572,8 +581,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
             ContextManagerContext contextAfterEvent = AgentContextUtil
                 .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
 
-            if (tmpParameters.get(INTERACTIONS) != null || tmpParameters.get(INTERACTIONS) != "") {
-                tmpParameters.put(INTERACTIONS, StringUtils.toJson(contextAfterEvent.getParameters().get(INTERACTIONS)));
+            // Check if context managers actually modified the interactions
+            List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
+            if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                interactions.clear();
+                interactions.addAll(updatedInteractions);
+
+                // Update parameters if context manager set INTERACTIONS
+                String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                    tmpParameters.put(INTERACTIONS, contextInteractions);
+                }
             }
         }
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
