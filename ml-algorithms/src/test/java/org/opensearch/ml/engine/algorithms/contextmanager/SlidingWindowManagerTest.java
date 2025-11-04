@@ -120,7 +120,7 @@ public class SlidingWindowManagerTest {
         // Verify toolInteractions also contain the most recent ones
         for (int i = 0; i < context.getToolInteractions().size(); i++) {
             String expected = "Tool output " + (6 + i);
-            String actual = (String) context.getToolInteractions().get(i).get("output");
+            String actual = context.getToolInteractions().get(i);
             Assert.assertEquals(expected, actual);
         }
     }
@@ -177,22 +177,18 @@ public class SlidingWindowManagerTest {
     @Test
     public void testExecuteWithNonStringOutputs() {
         Map<String, Object> config = new HashMap<>();
-        config.put("max_messages", 3);
+        config.put("max_messages", 1); // Set to 1 to force truncation
         manager.initialize(config);
 
-        // Add tool interactions with non-string outputs
-        Map<String, Object> interaction1 = new HashMap<>();
-        interaction1.put("output", 123); // Integer output
-        context.getToolInteractions().add(interaction1);
-
-        Map<String, Object> interaction2 = new HashMap<>();
-        interaction2.put("output", "String output"); // String output
-        context.getToolInteractions().add(interaction2);
+        // Add tool interactions as strings
+        context.getToolInteractions().add("123"); // Integer as string
+        context.getToolInteractions().add("String output"); // String output
 
         manager.execute(context);
 
-        // Should only process string outputs
-        Assert.assertNull(context.getParameters().get("_interactions"));
+        // Should process all string interactions and set _interactions parameter
+        Assert.assertNotNull(context.getParameters().get("_interactions"));
+        Assert.assertEquals(1, context.getToolInteractions().size()); // Should keep only 1
     }
 
     @Test
@@ -232,9 +228,7 @@ public class SlidingWindowManagerTest {
      */
     private void addToolInteractionsToContext(int count) {
         for (int i = 1; i <= count; i++) {
-            Map<String, Object> interaction = new HashMap<>();
-            interaction.put("output", "Tool output " + i);
-            context.getToolInteractions().add(interaction);
+            context.getToolInteractions().add("Tool output " + i);
         }
     }
 }
