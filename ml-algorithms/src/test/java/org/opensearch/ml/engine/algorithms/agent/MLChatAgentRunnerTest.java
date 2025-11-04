@@ -1354,4 +1354,41 @@ public class MLChatAgentRunnerTest {
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
     }
+
+    @Test
+    public void testExtractSummaryFromResponse_WithResponseField() {
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", "Summary from response field");
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        assertEquals("Summary from response field", result);
+    }
+
+    @Test
+    public void testExtractSummaryFromResponse_WithNullDataMap() {
+        ModelTensor tensor = ModelTensor.builder().build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        assertEquals(null, result);
+    }
+
+    @Test
+    public void testExtractSummaryFromResponse_WithEmptyDataMap() {
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("other_field", "some value");
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors tensors = ModelTensors.builder().mlModelTensors(Arrays.asList(tensor)).build();
+        ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build();
+        MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        assertEquals(null, result);
+    }
 }
