@@ -477,6 +477,13 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      */
     private void processContextManagement(MLAgent mlAgent, HookRegistry hookRegistry, RemoteInferenceInputDataSet inputDataSet) {
         try {
+            // Check if context_management is already specified in runtime parameters
+            String runtimeContextManagement = inputDataSet.getParameters().get("context_management");
+            if (runtimeContextManagement != null && !runtimeContextManagement.trim().isEmpty()) {
+                log.info("Using runtime context management parameter: {}", runtimeContextManagement);
+                return; // Runtime parameter takes precedence, let MLExecuteTaskRunner handle it
+            }
+
             ContextManagementTemplate template = null;
             String templateName = null;
 
