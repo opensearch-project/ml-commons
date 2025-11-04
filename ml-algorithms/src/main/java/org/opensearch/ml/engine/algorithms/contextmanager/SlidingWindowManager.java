@@ -78,20 +78,11 @@ public class SlidingWindowManager implements ContextManager {
 
     @Override
     public void execute(ContextManagerContext context) {
-        List<Map<String, Object>> toolInteractions = context.getToolInteractions();
+        List<String> interactions = context.getToolInteractions();
 
-        if (toolInteractions == null || toolInteractions.isEmpty()) {
+        if (interactions == null || interactions.isEmpty()) {
             log.debug("No tool interactions to process");
             return;
-        }
-
-        // Extract interactions from tool interactions
-        List<String> interactions = new ArrayList<>();
-        for (Map<String, Object> toolInteraction : toolInteractions) {
-            Object output = toolInteraction.get("output");
-            if (output instanceof String) {
-                interactions.add((String) output);
-            }
         }
 
         if (interactions.isEmpty()) {
@@ -106,14 +97,14 @@ public class SlidingWindowManager implements ContextManager {
             return;
         }
 
-        // Keep the most recent interactions
-        List<String> updatedInteractions = new ArrayList<>(interactions.subList(originalSize - maxMessages, originalSize));
+        // Find safe start point to avoid breaking tool pairs
+        int startIndex = findSafeStartPoint(interactions, originalSize - maxMessages);
+
+        // Keep the most recent interactions from safe start point
+        List<String> updatedInteractions = new ArrayList<>(interactions.subList(startIndex, originalSize));
 
         // Update toolInteractions in context to keep only the most recent ones
-        List<Map<String, Object>> updatedToolInteractions = new ArrayList<>(
-            toolInteractions.subList(originalSize - maxMessages, originalSize)
-        );
-        context.setToolInteractions(updatedToolInteractions);
+        context.setToolInteractions(updatedInteractions);
 
         // Update the _interactions parameter with smaller size of updated interactions
         Map<String, String> parameters = context.getParameters();
@@ -123,8 +114,13 @@ public class SlidingWindowManager implements ContextManager {
         }
         parameters.put("_interactions", ", " + String.join(", ", updatedInteractions));
 
-        int removedMessages = originalSize - maxMessages;
-        log.info("Applied sliding window: kept {} most recent interactions, removed {} older interactions", maxMessages, removedMessages);
+        int removedMessages = originalSize - updatedInteractions.size();
+        log
+            .info(
+                "Applied sliding window: kept {} most recent interactions, removed {} older interactions",
+                updatedInteractions.size(),
+                removedMessages
+            );
     }
 
     private int parseIntegerConfig(Map<String, Object> config, String key, int defaultValue) {
@@ -148,5 +144,48 @@ public class SlidingWindowManager implements ContextManager {
             log.warn("Invalid integer value for config key '{}': {}, using default {}", key, value, defaultValue);
             return defaultValue;
         }
+    }
+
+    /**
+     * Find a safe start point that doesn't break assistant-tool message pairs
+     * Same logic as SummarizationManager but for finding start point
+     */
+    private int findSafeStartPoint(List<String> interactions, int targetStartPoint) {
+        if (targetStartPoint <= 0) {
+            return 0;
+        }
+        if (targetStartPoint >= interactions.size()) {
+            return interactions.size();
+        }
+
+        int startPoint = targetStartPoint;
+
+        while (startPoint < interactions.size()) {
+            try {
+                String messageAtStart = interactions.get(startPoint);
+
+                // Oldest message cannot be a toolResult because it needs a toolUse preceding it
+                boolean hasToolResult = messageAtStart.contains("toolResult");
+
+                // Oldest message can be a toolUse only if a toolResult immediately follows it
+                boolean hasToolUse = messageAtStart.contains("toolUse");
+                boolean nextHasToolResult = false;
+                if (startPoint + 1 < interactions.size()) {
+                    nextHasToolResult = interactions.get(startPoint + 1).contains("toolResult");
+                }
+
+                if (hasToolResult || (hasToolUse && startPoint + 1 < interactions.size() && !nextHasToolResult)) {
+                    startPoint++;
+                } else {
+                    break;
+                }
+
+            } catch (Exception e) {
+                log.warn("Error checking message at index {}: {}", startPoint, e.getMessage());
+                startPoint++;
+            }
+        }
+
+        return startPoint;
     }
 }

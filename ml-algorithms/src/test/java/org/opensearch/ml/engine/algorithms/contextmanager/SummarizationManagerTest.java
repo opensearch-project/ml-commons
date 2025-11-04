@@ -134,18 +134,13 @@ public class SummarizationManagerTest {
         Map<String, Object> config = new HashMap<>();
         manager.initialize(config);
 
-        // Add tool interactions with non-string outputs
-        Map<String, Object> interaction1 = new HashMap<>();
-        interaction1.put("output", 123); // Integer output
-        context.getToolInteractions().add(interaction1);
-
-        Map<String, Object> interaction2 = new HashMap<>();
-        interaction2.put("output", "String output"); // String output
-        context.getToolInteractions().add(interaction2);
+        // Add tool interactions as strings
+        context.getToolInteractions().add("123"); // Integer as string
+        context.getToolInteractions().add("String output"); // String output
 
         manager.execute(context);
 
-        // Should handle gracefully - only 1 string interaction, not enough to summarize
+        // Should handle gracefully - only 2 string interactions, not enough to summarize
         Assert.assertEquals(2, context.getToolInteractions().size());
     }
 
@@ -163,7 +158,7 @@ public class SummarizationManagerTest {
         Assert.assertEquals(6, context.getToolInteractions().size());
 
         // First should be summary
-        String firstOutput = (String) context.getToolInteractions().get(0).get("output");
+        String firstOutput = context.getToolInteractions().get(0);
         Assert.assertTrue(firstOutput.contains("Test summary"));
     }
 
@@ -325,9 +320,7 @@ public class SummarizationManagerTest {
      */
     private void addToolInteractionsToContext(int count) {
         for (int i = 1; i <= count; i++) {
-            Map<String, Object> interaction = new HashMap<>();
-            interaction.put("output", "Tool output " + i);
-            context.getToolInteractions().add(interaction);
+            context.getToolInteractions().add("Tool output " + i);
         }
     }
 }

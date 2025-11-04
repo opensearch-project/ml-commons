@@ -59,7 +59,7 @@ public class ContextManagerContext {
      * The tool interactions/results from tool executions
      */
     @Builder.Default
-    private List<Map<String, Object>> toolInteractions = new ArrayList<>();
+    private List<String> toolInteractions = new ArrayList<>();
 
     /**
      * Additional parameters for context processing
@@ -96,11 +96,8 @@ public class ContextManagerContext {
         }
 
         // Estimate tokens for tool interactions
-        for (Map<String, Object> interaction : toolInteractions) {
-            Object output = interaction.get("output");
-            if (output instanceof String) {
-                tokenCount += estimateTokens((String) output);
-            }
+        for (String interaction : toolInteractions) {
+            tokenCount += estimateTokens(interaction);
         }
 
         return tokenCount;
@@ -133,7 +130,7 @@ public class ContextManagerContext {
      * Add a tool interaction to the context.
      * @param interaction the tool interaction to add
      */
-    public void addToolInteraction(Map<String, Object> interaction) {
+    public void addToolInteraction(String interaction) {
         if (toolInteractions == null) {
             toolInteractions = new ArrayList<>();
         }
