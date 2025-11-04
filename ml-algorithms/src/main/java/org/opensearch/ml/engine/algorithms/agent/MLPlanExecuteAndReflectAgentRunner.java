@@ -54,6 +54,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
@@ -298,7 +299,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         conversationIndexMemoryFactory
             .create(allParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
                 memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
-                    List<String> completedSteps = new ArrayList<>();
+                    final List<String> completedSteps = new ArrayList<>();
                     for (Interaction interaction : interactions) {
                         String question = interaction.getInput();
                         String response = interaction.getResponse();
@@ -399,14 +400,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         allParams.put("_llm_model_id", llm.getModelId());
         if (hookRegistry != null && !completedSteps.isEmpty()) {
-            allParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
-            Map<String, String> requestParams = new HashMap<>(allParams);
-            try {
-                AgentContextUtil.emitPreLLMHook(requestParams, completedSteps, null, memory, hookRegistry);
 
-                if (requestParams.get(INTERACTIONS) != null || requestParams.get(INTERACTIONS) != "") {
-                    allParams.put(COMPLETED_STEPS_FIELD, StringUtils.toJson(requestParams.get(INTERACTIONS)));
-                    allParams.put(INTERACTIONS, "");
+            Map<String, String> requestParams = new HashMap<>(allParams);
+            requestParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
+            try {
+                ContextManagerContext contextAfterEvent = AgentContextUtil
+                    .emitPreLLMHook(requestParams, completedSteps, null, memory, hookRegistry);
+
+                // Check if context managers actually modified the interactions
+                List<String> updatedSteps = contextAfterEvent.getToolInteractions();
+                if (updatedSteps != null && !updatedSteps.equals(completedSteps)) {
+                    completedSteps.clear();
+                    completedSteps.addAll(updatedSteps);
+
+                    // Update parameters if context manager set INTERACTIONS
+                    String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                    if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                        allParams.put(COMPLETED_STEPS_FIELD, contextInteractions);
+                        // TODO should I always clear interactions after update the completed steps?
+                        allParams.put(INTERACTIONS, "");
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed to emit pre-LLM hook", e);
