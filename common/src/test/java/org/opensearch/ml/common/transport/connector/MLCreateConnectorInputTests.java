@@ -10,7 +10,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.*;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_STREAMABLE_HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.VALID_PROTOCOLS;
 
 import java.io.IOException;
 import java.util.Arrays;
