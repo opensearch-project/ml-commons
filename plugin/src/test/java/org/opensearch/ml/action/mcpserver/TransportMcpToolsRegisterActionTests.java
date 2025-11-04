@@ -250,7 +250,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Unable to register tools: [ListIndexTool] as they already exist", argumentCaptor.getValue().getMessage());
+        assertEquals("Unable to register tool: a tool with the same name already exists.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_doExecute_bulkIndexAllFailed() {
