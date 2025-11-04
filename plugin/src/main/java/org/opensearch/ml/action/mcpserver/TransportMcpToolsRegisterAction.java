@@ -114,7 +114,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                             .toList();
                         String exceptionMessage = "Unable to register tool: a tool with the same name already exists.";
                         log.warn(exceptionMessage);
-                        restoreListener.onFailure(new OpenSearchException(exceptionMessage));
+                        restoreListener.onFailure(new IllegalArgumentException(exceptionMessage));
                     } else {
                         indexMcpTools(registerNodesRequest, restoreListener);
                     }
