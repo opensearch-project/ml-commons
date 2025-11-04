@@ -458,7 +458,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         // Enable RSC fast-path.
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
-        // when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(true);
 
         // No ACL changes in request (so even legacy would pass, but we won't go there).
         MLUpdateModelGroupRequest req = prepareRequest(null, null, null);
@@ -480,7 +480,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         // RSC feature on, but type disabled → legacy path.
         ResourceSharingClient rsc = mock(ResourceSharingClient.class);
         ResourceSharingClientAccessor.getInstance().setResourceSharingClient(rsc);
-        // when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
+        when(rsc.isFeatureEnabledForType(any())).thenReturn(false);
 
         // Allow legacy validation to pass:
         // security/model-access-control enabled:
