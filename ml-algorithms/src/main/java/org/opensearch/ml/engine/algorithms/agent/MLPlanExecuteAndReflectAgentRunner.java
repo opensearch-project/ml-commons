@@ -163,6 +163,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
 
+    private static final String BODY_FIELD = "body";
+    private static final String BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.prompt}\"}]}";
+
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
         Settings settings,
@@ -195,6 +198,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
+        // workaround for agent revamp until PER supports messages
+        if (params.containsKey(BODY_FIELD)) {
+            params.put(BODY_FIELD, BODY_TEMPLATE);
+        }
 
         String userPrompt = params.get(QUESTION_FIELD);
         params.put(USER_PROMPT_FIELD, userPrompt);
