@@ -133,7 +133,23 @@ public class MLAgent implements ToXContentObject, Writeable {
         Boolean isHidden,
         String tenantId
     ) {
-        this(name, type, description, llm, null, tools, parameters, memory, createdTime, lastUpdateTime, appType, isHidden, tenantId);
+        this(
+            name,
+            type,
+            description,
+            llm,
+            null,
+            tools,
+            parameters,
+            memory,
+            createdTime,
+            lastUpdateTime,
+            appType,
+            isHidden,
+            null,
+            null,
+            tenantId
+        );
     }
 
     private void validate() {

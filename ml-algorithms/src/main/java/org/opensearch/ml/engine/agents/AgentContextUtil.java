@@ -17,7 +17,7 @@ import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.hooks.EnhancedPostToolEvent;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.hooks.PreLLMEvent;
-import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 

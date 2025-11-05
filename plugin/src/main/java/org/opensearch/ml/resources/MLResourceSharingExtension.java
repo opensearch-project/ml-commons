@@ -19,7 +19,17 @@ public class MLResourceSharingExtension implements ResourceSharingExtension {
 
     @Override
     public Set<ResourceProvider> getResourceProviders() {
-        return Set.of(new ResourceProvider(ML_MODEL_GROUP_RESOURCE_TYPE, ML_MODEL_GROUP_INDEX));
+        return Set.of(new ResourceProvider() {
+            @Override
+            public String resourceType() {
+                return ML_MODEL_GROUP_RESOURCE_TYPE;
+            }
+
+            @Override
+            public String resourceIndexName() {
+                return ML_MODEL_GROUP_INDEX;
+            }
+        });
     }
 
     @Override
