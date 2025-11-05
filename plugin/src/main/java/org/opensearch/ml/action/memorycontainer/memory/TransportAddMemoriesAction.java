@@ -124,7 +124,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             return;
         }
 
-        memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
+        memoryContainerHelper.getMemoryContainer(memoryContainerId, request.getMlAddMemoryInput().getTenantId(), ActionListener.wrap(container -> {
             if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
                 actionListener
                     .onFailure(
