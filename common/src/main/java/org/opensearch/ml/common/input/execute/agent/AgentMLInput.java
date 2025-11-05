@@ -22,6 +22,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agent.AgentInput;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.utils.StringUtils;
 
@@ -53,6 +54,14 @@ public class AgentMLInput extends MLInput {
     @Getter
     @Setter
     private AgentInput agentInput;
+
+    @Getter
+    @Setter
+    private HookRegistry hookRegistry;
+
+    @Getter
+    @Setter
+    private String contextManagementName;
 
     @Builder(builderMethodName = "AgentMLInputBuilder")
     public AgentMLInput(String agentId, String tenantId, FunctionName functionName, MLInputDataset inputDataset) {
@@ -105,6 +114,7 @@ public class AgentMLInput extends MLInput {
                 agentInput.writeTo(out);
             }
         }
+        // Note: contextManagementName and hookRegistry are not serialized as they are runtime-only fields
     }
 
     public AgentMLInput(StreamInput in) throws IOException {
@@ -139,7 +149,12 @@ public class AgentMLInput extends MLInput {
                     break;
                 case PARAMETERS_FIELD:
                     // Legacy format - parse parameters into RemoteInferenceInputDataSet
-                    Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
+                    Map<String, Object> parameterObjs = parser.map();
+                    Map<String, String> parameters = StringUtils.getParameterMap(parameterObjs);
+                    // Extract context_management from parameters
+                    if (parameterObjs.containsKey("context_management")) {
+                        contextManagementName = (String) parameterObjs.get("context_management");
+                    }
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
                 case INPUT_FIELD:

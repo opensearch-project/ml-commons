@@ -76,6 +76,7 @@ public class RestActionUtils {
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
     public static final String PARAMETER_TOOL_NAME = "tool_name";
+    public static final String PARAMETER_TEMPLATE_NAME = "template_name";
 
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
 

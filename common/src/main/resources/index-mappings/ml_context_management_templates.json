@@ -1,0 +1,26 @@
+{
+  "dynamic": false,
+  "properties": {
+    "name": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "text"
+    },
+    "hooks": {
+      "type": "object",
+      "enabled": false
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_modified": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "created_by": {
+      "type": "keyword"
+    }
+  }
+}

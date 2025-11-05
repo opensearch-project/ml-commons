@@ -48,9 +48,60 @@ public class MLRegisterAgentRequest extends ActionRequest {
         ActionRequestValidationException exception = null;
         if (mlAgent == null) {
             exception = addValidationError("ML agent can't be null", exception);
+        } else {
+            // Basic validation - check for conflicting configuration (following connector pattern)
+            if (mlAgent.getContextManagementName() != null && mlAgent.getContextManagement() != null) {
+                exception = addValidationError("Cannot specify both context_management_name and context_management", exception);
+            }
+
+            // Validate context management template name
+            if (mlAgent.getContextManagementName() != null) {
+                exception = validateContextManagementTemplateName(mlAgent.getContextManagementName(), exception);
+            }
+
+            // Validate inline context management configuration
+            if (mlAgent.getContextManagement() != null) {
+                exception = validateInlineContextManagement(mlAgent.getContextManagement(), exception);
+            }
         }
 
         return exception;
+    }
+
+    private ActionRequestValidationException validateContextManagementTemplateName(
+        String templateName,
+        ActionRequestValidationException exception
+    ) {
+        if (templateName == null || templateName.trim().isEmpty()) {
+            exception = addValidationError("Context management template name cannot be null or empty", exception);
+        } else if (templateName.length() > 256) {
+            exception = addValidationError("Context management template name cannot exceed 256 characters", exception);
+        } else if (!templateName.matches("^[a-zA-Z0-9._-]+$")) {
+            exception = addValidationError(
+                "Context management template name can only contain letters, numbers, underscores, hyphens, and dots",
+                exception
+            );
+        }
+        return exception;
+    }
+
+    private ActionRequestValidationException validateInlineContextManagement(
+        org.opensearch.ml.common.contextmanager.ContextManagementTemplate contextManagement,
+        ActionRequestValidationException exception
+    ) {
+        if (contextManagement.getHooks() != null) {
+            for (String hookName : contextManagement.getHooks().keySet()) {
+                if (!isValidHookName(hookName)) {
+                    exception = addValidationError("Invalid hook name: " + hookName, exception);
+                }
+            }
+        }
+        return exception;
+    }
+
+    private boolean isValidHookName(String hookName) {
+        // Define valid hook names based on the system's supported hooks
+        return hookName.equals("POST_TOOL") || hookName.equals("PRE_LLM") || hookName.equals("PRE_TOOL") || hookName.equals("POST_LLM");
     }
 
     @Override
