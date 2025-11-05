@@ -36,7 +36,6 @@ public class MLGetMemoryRequest extends ActionRequest {
     String memoryId;
     String tenantId;
 
-
     @Builder
     public MLGetMemoryRequest(String memoryContainerId, MemoryType memoryType, String memoryId, String tenantId) {
         this.memoryContainerId = memoryContainerId;

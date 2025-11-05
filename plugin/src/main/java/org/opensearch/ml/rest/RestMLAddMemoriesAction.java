@@ -76,7 +76,6 @@ public class RestMLAddMemoriesAction extends BaseRestHandler {
         String tenantId = TenantAwareHelper.getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser, memoryContainerId, tenantId);
 
-
         return new MLAddMemoriesRequest(mlAddMemoryInput);
     }
 }
