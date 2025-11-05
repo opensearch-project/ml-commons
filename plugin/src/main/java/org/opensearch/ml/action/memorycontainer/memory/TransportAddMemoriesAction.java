@@ -124,16 +124,20 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             return;
         }
 
-        memoryContainerHelper.getMemoryContainer(memoryContainerId, request.getMlAddMemoryInput().getTenantId(), ActionListener.wrap(container -> {
-            if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
-                actionListener
-                    .onFailure(
-                        new OpenSearchStatusException("User doesn't have permissions to add memory to this container", RestStatus.FORBIDDEN)
-                    );
-                return;
-            }
-            createNewSessionIfAbsent(input, container, user, actionListener);
-        }, actionListener::onFailure));
+        memoryContainerHelper
+            .getMemoryContainer(memoryContainerId, request.getMlAddMemoryInput().getTenantId(), ActionListener.wrap(container -> {
+                if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User doesn't have permissions to add memory to this container",
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                createNewSessionIfAbsent(input, container, user, actionListener);
+            }, actionListener::onFailure));
     }
 
     private void createNewSessionIfAbsent(
