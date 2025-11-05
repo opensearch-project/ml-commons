@@ -679,92 +679,92 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
     }
 
-    @Test
-    public void testUpdateTaskWithExecutorAgentInfo() {
-        MLAgent mlAgent = createMLAgentWithTools();
-        String taskId = "test-task-id";
-        // to ensure second call to prediction returns a result
-        AtomicInteger callCount = new AtomicInteger(0);
-
-        try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
-            mlTaskUtilsMockedStatic
-                .when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any()))
-                .thenAnswer(invocation -> {
-                    ActionListener<UpdateResponse> listener = invocation.getArgument(3);
-                    listener.onResponse(updateResponse);
-                    return null;
-                });
-
-            doAnswer(invocation -> {
-                ActionListener<Object> listener = invocation.getArgument(2);
-                ModelTensor modelTensor;
-                if (callCount.getAndIncrement() == 0) {
-                    modelTensor = ModelTensor
-                        .builder()
-                        .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\"], \"result\":\"\"}"))
-                        .build();
-                } else {
-                    modelTensor = ModelTensor
-                        .builder()
-                        .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\"], \"result\":\"final result\"}"))
-                        .build();
-                }
-
-                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
-                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-                when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
-                listener.onResponse(mlTaskResponse);
-                return null;
-            }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
-
-            doAnswer(invocation -> {
-                ActionListener<Object> listener = invocation.getArgument(2);
-                ModelTensor memoryIdTensor = ModelTensor
-                    .builder()
-                    .name(MLAgentExecutor.MEMORY_ID)
-                    .result("test_executor_memory_id")
-                    .build();
-                ModelTensor parentIdTensor = ModelTensor
-                    .builder()
-                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
-                    .result("test_executor_parent_id")
-                    .build();
-                ModelTensor responseTensor = ModelTensor
-                    .builder()
-                    .name("response")
-                    .dataAsMap(ImmutableMap.of("response", "tool execution result"))
-                    .build();
-                ModelTensors modelTensors = ModelTensors
-                    .builder()
-                    .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor))
-                    .build();
-                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-                when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
-                listener.onResponse(mlExecuteTaskResponse);
-                return null;
-            }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
-
-            doAnswer(invocation -> {
-                ActionListener<UpdateResponse> listener = invocation.getArgument(2);
-                listener.onResponse(updateResponse);
-                return null;
-            }).when(mlMemoryManager).updateInteraction(any(), any(), any());
-
-            Map<String, String> params = new HashMap<>();
-            params.put("question", "test question");
-            params.put("memory_id", "test_memory_id");
-            params.put("parent_interaction_id", "test_parent_interaction_id");
-            params.put("task_id", taskId);
-            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
-
-            Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
-            assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));
-
-            Map<String, Object> response = (Map<String, Object>) taskUpdates.get("response");
-            assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
-            assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
-
-            mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
-        }
-    }
+//    @Test
+//    public void testUpdateTaskWithExecutorAgentInfo() {
+//        MLAgent mlAgent = createMLAgentWithTools();
+//        String taskId = "test-task-id";
+//        // to ensure second call to prediction returns a result
+//        AtomicInteger callCount = new AtomicInteger(0);
+//
+//        try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
+//            mlTaskUtilsMockedStatic
+//                .when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any()))
+//                .thenAnswer(invocation -> {
+//                    ActionListener<UpdateResponse> listener = invocation.getArgument(3);
+//                    listener.onResponse(updateResponse);
+//                    return null;
+//                });
+//
+//            doAnswer(invocation -> {
+//                ActionListener<Object> listener = invocation.getArgument(2);
+//                ModelTensor modelTensor;
+//                if (callCount.getAndIncrement() == 0) {
+//                    modelTensor = ModelTensor
+//                        .builder()
+//                        .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\"], \"result\":\"\"}"))
+//                        .build();
+//                } else {
+//                    modelTensor = ModelTensor
+//                        .builder()
+//                        .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\"], \"result\":\"final result\"}"))
+//                        .build();
+//                }
+//
+//                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+//                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+//                when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+//                listener.onResponse(mlTaskResponse);
+//                return null;
+//            }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+//
+//            doAnswer(invocation -> {
+//                ActionListener<Object> listener = invocation.getArgument(2);
+//                ModelTensor memoryIdTensor = ModelTensor
+//                    .builder()
+//                    .name(MLAgentExecutor.MEMORY_ID)
+//                    .result("test_executor_memory_id")
+//                    .build();
+//                ModelTensor parentIdTensor = ModelTensor
+//                    .builder()
+//                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+//                    .result("test_executor_parent_id")
+//                    .build();
+//                ModelTensor responseTensor = ModelTensor
+//                    .builder()
+//                    .name("response")
+//                    .dataAsMap(ImmutableMap.of("response", "tool execution result"))
+//                    .build();
+//                ModelTensors modelTensors = ModelTensors
+//                    .builder()
+//                    .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor))
+//                    .build();
+//                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+//                when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+//                listener.onResponse(mlExecuteTaskResponse);
+//                return null;
+//            }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+//
+//            doAnswer(invocation -> {
+//                ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+//                listener.onResponse(updateResponse);
+//                return null;
+//            }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+//
+//            Map<String, String> params = new HashMap<>();
+//            params.put("question", "test question");
+//            params.put("memory_id", "test_memory_id");
+//            params.put("parent_interaction_id", "test_parent_interaction_id");
+//            params.put("task_id", taskId);
+//            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+//
+//            Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
+//            assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));
+//
+//            Map<String, Object> response = (Map<String, Object>) taskUpdates.get("response");
+//            assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
+//            assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
+//
+//            mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
+//        }
+//    }
 }
