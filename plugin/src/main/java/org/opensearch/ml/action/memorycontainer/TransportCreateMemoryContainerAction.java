@@ -147,7 +147,7 @@ public class TransportCreateMemoryContainerAction extends
         String tenantId = input.getTenantId();
 
         // Validate configuration before creating memory container
-        validateConfiguration(input.getConfiguration(), ActionListener.wrap(isValid -> {
+        validateConfiguration(tenantId, input.getConfiguration(), ActionListener.wrap(isValid -> {
             // Check if memory container index exists, create if not
             ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
                 try {
@@ -375,7 +375,7 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void validateConfiguration(MemoryConfiguration config, ActionListener<Boolean> listener) {
+    private void validateConfiguration(String tenantId, MemoryConfiguration config, ActionListener<Boolean> listener) {
         if (config.getRemoteStore() != null && config.getRemoteStore().getConnector() != null) {
             if (config.getRemoteStore().getEmbeddingModel() != null
                 && (config.getRemoteStore().getIngestPipeline() == null || config.getRemoteStore().getIngestPipeline().isEmpty())) {
@@ -414,7 +414,7 @@ public class TransportCreateMemoryContainerAction extends
             && config.getRemoteStore().getConnectorId() == null
             && config.getRemoteStore().getEndpoint() != null) {
             // Auto-create connector first
-            createInternalConnectorForRemoteStore(config.getRemoteStore(), ActionListener.wrap(connector -> {
+            createInternalConnectorForRemoteStore(tenantId, config.getRemoteStore(), ActionListener.wrap(connector -> {
                 // Set the connector ID in the remote store config
                 config.getRemoteStore().setConnector(connector);
 
@@ -619,7 +619,7 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void createInternalConnectorForRemoteStore(RemoteStore remoteStore, ActionListener<Connector> listener) {
+    private void createInternalConnectorForRemoteStore(String tenantId, RemoteStore remoteStore, ActionListener<Connector> listener) {
         try {
             String connectorName = "auto_"
                 + remoteStore.getType().name().toLowerCase()
@@ -652,7 +652,7 @@ public class TransportCreateMemoryContainerAction extends
             connectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
             Connector connector = Connector.createConnector(builder, connectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-            connector.encrypt(mlEngine::encrypt, null);
+            connector.encrypt(mlEngine::encrypt, tenantId);
             listener.onResponse(connector);
         } catch (Exception e) {
             log.error("Error building connector for remote store", e);
