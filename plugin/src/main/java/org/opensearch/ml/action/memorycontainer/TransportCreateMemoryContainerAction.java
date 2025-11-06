@@ -646,6 +646,7 @@ public class TransportCreateMemoryContainerAction extends
                 .parameters(parameters)
                 .credential(credential)
                 .actions(actions)
+                .tenantId(tenantId)
                 .build();
 
             XContentBuilder builder = XContentFactory.jsonBuilder();
