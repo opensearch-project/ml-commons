@@ -431,7 +431,7 @@ public final class MLCommonsSettings {
      * After setting this option, a full cluster restart is required for the changes to take effect.
      */
     public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "multi_tenancy_enabled", true, Setting.Property.NodeScope);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "multi_tenancy_enabled", false, Setting.Property.NodeScope);
 
     /** This setting sets the remote metadata type */
     public static final Setting<String> REMOTE_METADATA_TYPE = Setting
