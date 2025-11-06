@@ -30,6 +30,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
@@ -1031,6 +1032,7 @@ public class AgentUtils {
         memoryParams.put(APP_TYPE, appType);
         if (mlAgent.getMemory().getMemoryContainerId() != null) {
             memoryParams.put(MEMORY_CONTAINER_ID_FIELD, mlAgent.getMemory().getMemoryContainerId());
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
         memoryParams.putIfAbsent(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         return memoryParams;

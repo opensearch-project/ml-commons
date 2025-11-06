@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.memory;
 
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
@@ -64,11 +65,13 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     private final Client client;
     private final String conversationId;
     private final String memoryContainerId;
+    private final String tenantId;
 
-    public AgenticConversationMemory(Client client, String memoryId, String memoryContainerId) {
+    public AgenticConversationMemory(Client client, String memoryId, String memoryContainerId, String tenantId) {
         this.client = client;
         this.conversationId = memoryId;
         this.memoryContainerId = memoryContainerId;
+        this.tenantId = tenantId;
     }
 
     @Override
@@ -159,6 +162,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .messageId(traceNum) // Store trace number in messageId field (null for messages)
             .namespace(namespace)
             .metadata(metadata)
+            .tenantId(tenantId)
             .infer(false) // Don't infer long-term memory by default
             .build();
 
@@ -183,7 +187,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         }
 
         // Use retry mechanism for AOSS compatibility (high refresh latency)
-        updateWithRetry(messageId, updateContent, updateListener, 0);
+        updateWithRetry(messageId, updateContent, updateListener, 0, tenantId);
     }
 
     /**
@@ -194,7 +198,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         String messageId,
         Map<String, Object> updateContent,
         ActionListener<UpdateResponse> updateListener,
-        int attemptNumber
+        int attemptNumber,
+        String tenantId
     ) {
         final int maxRetries = 5;
         final long baseDelayMs = 500;
@@ -205,6 +210,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .memoryContainerId(memoryContainerId)
             .memoryType(MemoryType.WORKING)
             .memoryId(messageId)
+            .tenantId(tenantId)
             .build();
 
         client.execute(MLGetMemoryAction.INSTANCE, getRequest, ActionListener.wrap(getResponse -> {
@@ -245,6 +251,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 .memoryType(MemoryType.WORKING)
                 .memoryId(messageId)
                 .mlUpdateMemoryInput(input)
+                .tenantId(tenantId)
                 .build();
 
             // Step 5: Execute the update
@@ -291,7 +298,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 }
 
                 // Retry
-                updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1);
+                updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1, tenantId);
             } else {
                 if (attemptNumber >= maxRetries) {
                     log.error("Failed to get existing memory after {} retries. MessageId: {}", maxRetries, messageId, e);
@@ -328,7 +335,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
-        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(tenantId).build();
 
         client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
             List<Message> interactions = parseSearchResponseToInteractions(searchResponse);
@@ -456,7 +463,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
-        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(tenantId).build();
 
         client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
             List<Interaction> traces = parseSearchResponseToTraces(searchResponse);
@@ -554,8 +561,9 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             String name = (String) map.get(MEMORY_NAME);
             String appType = (String) map.get(APP_TYPE);
             String memoryContainerId = (String) map.get("memory_container_id");
+            String tenantId = (String) map.get(TENANT_ID_FIELD);
 
-            create(name, memoryId, appType, memoryContainerId, listener);
+            create(name, memoryId, appType, memoryContainerId, tenantId, listener);
         }
 
         public void create(
@@ -563,6 +571,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             String memoryId,
             String appType,
             String memoryContainerId,
+            String tenantId,
             ActionListener<AgenticConversationMemory> listener
         ) {
             // Memory container ID is required for AgenticConversationMemory
@@ -579,8 +588,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
             if (Strings.isEmpty(memoryId)) {
                 // Create new session using TransportCreateSessionAction
-                createSessionInMemoryContainer(name, memoryContainerId, ActionListener.wrap(sessionId -> {
-                    create(sessionId, memoryContainerId, listener);
+                createSessionInMemoryContainer(name, memoryContainerId, tenantId, ActionListener.wrap(sessionId -> {
+                    create(sessionId, memoryContainerId, tenantId, listener);
                     log.debug("Created session in memory container, session id: {}", sessionId);
                 }, e -> {
                     log.error("Failed to create session in memory container", e);
@@ -588,15 +597,18 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 }));
             } else {
                 // Use existing session/memory ID
-                create(memoryId, memoryContainerId, listener);
+                create(memoryId, memoryContainerId, tenantId, listener);
             }
         }
 
         /**
          * Create a new session in the memory container using the new session API
          */
-        private void createSessionInMemoryContainer(String summary, String memoryContainerId, ActionListener<String> listener) {
-            MLCreateSessionInput input = MLCreateSessionInput.builder().memoryContainerId(memoryContainerId).summary(summary).build();
+        private void createSessionInMemoryContainer(String summary, String memoryContainerId, String tenantId, ActionListener<String> listener) {
+            MLCreateSessionInput input = MLCreateSessionInput.builder().
+                    memoryContainerId(memoryContainerId).
+                    tenantId(tenantId).
+                    summary(summary).build();
 
             MLCreateSessionRequest request = MLCreateSessionRequest.builder().mlCreateSessionInput(input).build();
 
@@ -611,8 +623,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 );
         }
 
-        public void create(String memoryId, String memoryContainerId, ActionListener<AgenticConversationMemory> listener) {
-            listener.onResponse(new AgenticConversationMemory(client, memoryId, memoryContainerId));
+        public void create(String memoryId, String memoryContainerId, String tenantId, ActionListener<AgenticConversationMemory> listener) {
+            listener.onResponse(new AgenticConversationMemory(client, memoryId, memoryContainerId, tenantId));
         }
     }
 

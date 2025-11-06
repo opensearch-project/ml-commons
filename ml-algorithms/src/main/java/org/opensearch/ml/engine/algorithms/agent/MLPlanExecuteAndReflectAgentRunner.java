@@ -359,7 +359,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             AtomicInteger traceNumber = new AtomicInteger(0);
 
-            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, mlAgent.getTenantId(), finalListener);
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -380,6 +380,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String conversationId,
         int stepsExecuted,
         AtomicInteger traceNumber,
+        String tenantId,
         ActionListener<Object> finalListener
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
@@ -398,7 +399,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     completedSteps.getLast()
                 );
             saveAndReturnFinalResult(
-                (ConversationIndexMemory) memory,
+                memory,
                 parentInteractionId,
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
@@ -450,7 +451,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(allParams).build())
                 .build(),
             null,
-            allParams.get(TENANT_ID_FIELD)
+            tenantId
         );
 
         StepListener<MLTaskResponse> planListener = new StepListener<>();
@@ -496,6 +497,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .agentId(reActAgentId)
                     .functionName(FunctionName.AGENT)
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
+                    .tenantId(tenantId)
                     .build();
 
                 // Pass hookRegistry to internal agent execution
@@ -589,6 +591,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         conversationId,
                         stepsExecuted + 1,
                         traceNumber,
+                        tenantId,
                         finalListener
                     );
                 }, e -> {

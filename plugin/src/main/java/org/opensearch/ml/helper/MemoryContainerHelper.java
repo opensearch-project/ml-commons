@@ -765,7 +765,7 @@ public class MemoryContainerHelper {
             return searchSourceBuilder;
         }
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD + ".keyword", containerId));
+        boolQueryBuilder.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
 
         return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
     }
@@ -786,7 +786,7 @@ public class MemoryContainerHelper {
 
         BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
         filteredQuery.must(query);
-        filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD + ".keyword", containerId));
+        filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
 
         return filteredQuery;
     }
