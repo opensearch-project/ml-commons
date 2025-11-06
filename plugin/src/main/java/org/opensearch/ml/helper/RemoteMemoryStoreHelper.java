@@ -422,8 +422,11 @@ public class RemoteMemoryStoreHelper {
         if (connector == null) {
             throw new IllegalArgumentException("connector is null");
         }
+        //TODO: current we only support internal connector inside memory container in OASIS. The tenant id is same with container's.
+        // We should check tenant id in future if we use a standalone connector inside memory container.
+        String connectorTenantId = connector.getTenantId();
         // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-        connector.decrypt(actionName, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
+        connector.decrypt(actionName, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId);
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
         connectorExecutor.setScriptService(scriptService);
