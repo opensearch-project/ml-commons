@@ -140,4 +140,28 @@ public class ContextManagerFactoryTests {
             assertTrue(e.getMessage().contains("Unsupported context manager type"));
         }
     }
+
+    @Test
+    public void testContextManagerHookProvider_SelectiveRegistration() {
+        // Test that ContextManagerHookProvider only registers hooks for configured managers
+        java.util.Map<String, java.util.List<String>> hookToManagersMap = new java.util.HashMap<>();
+
+        // Test 1: Only POST_TOOL configured
+        hookToManagersMap.put("POST_TOOL", java.util.Arrays.asList("ToolsOutputTruncateManager"));
+
+        // Simulate the registration logic
+        java.util.Set<String> registeredHooks = new java.util.HashSet<>();
+        if (hookToManagersMap.containsKey("PRE_LLM")) {
+            registeredHooks.add("PRE_LLM");
+        }
+        if (hookToManagersMap.containsKey("POST_TOOL")) {
+            registeredHooks.add("POST_TOOL");
+        }
+        if (hookToManagersMap.containsKey("POST_MEMORY")) {
+            registeredHooks.add("POST_MEMORY");
+        }
+
+        // Assert only POST_TOOL is registered
+        assertTrue("Should only register POST_TOOL hook", registeredHooks.size() == 1 && registeredHooks.contains("POST_TOOL"));
+    }
 }

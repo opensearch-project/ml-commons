@@ -509,6 +509,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 return; // Runtime parameter takes precedence, let MLExecuteTaskRunner handle it
             }
 
+            // Check if already processed to avoid duplicate registrations
+            if ("true".equals(inputDataSet.getParameters().get("context_management_processed"))) {
+                log.debug("Context management already processed for this execution, skipping");
+                return;
+            }
+
+            // Check if HookRegistry already has callbacks (from previous runtime setup)
+            // Don't override with inline configuration if runtime config is already active
+            if (hookRegistry.getCallbackCount(org.opensearch.ml.common.hooks.EnhancedPostToolEvent.class) > 0
+                || hookRegistry.getCallbackCount(org.opensearch.ml.common.hooks.PreLLMEvent.class) > 0) {
+                log.info("HookRegistry already has active configuration, skipping inline context management");
+                return;
+            }
+
             ContextManagementTemplate template = null;
             String templateName = null;
 

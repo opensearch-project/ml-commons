@@ -500,6 +500,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .build();
 
                 // Pass hookRegistry to internal agent execution
+                // TODO need to check if the agentInput already have the hookResgistry?
                 agentInput.setHookRegistry(hookRegistry);
 
                 MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
