@@ -393,7 +393,7 @@ public class TransportCreateMemoryContainerAction extends
                             config.getRemoteStore().setEmbeddingDimension(embModel.getDimension());
                             log.info("Auto-created embedding model with ID: {} in remote store", modelId);
                             // Continue with normal validation
-                            validateConfigurationInternal(config, listener);
+                            validateConfigurationInternal(tenantId, config, listener);
                         }, listener::onFailure)
                     );
             } else {
@@ -405,7 +405,7 @@ public class TransportCreateMemoryContainerAction extends
                         );
                 }
                 // Continue with normal validation
-                validateConfigurationInternal(config, listener);
+                validateConfigurationInternal(tenantId, config, listener);
             }
             return;
         }
@@ -436,7 +436,7 @@ public class TransportCreateMemoryContainerAction extends
                                 config.getRemoteStore().setEmbeddingDimension(embModel.getDimension());
                                 log.info("Auto-created embedding model with ID: {} in remote store", modelId);
                                 // Continue with normal validation
-                                validateConfigurationInternal(config, listener);
+                                validateConfigurationInternal(tenantId, config, listener);
                             }, listener::onFailure)
                         );
                 } else {
@@ -448,16 +448,16 @@ public class TransportCreateMemoryContainerAction extends
                             );
                     }
                     // Continue with normal validation
-                    validateConfigurationInternal(config, listener);
+                    validateConfigurationInternal(tenantId, config, listener);
                 }
             }, listener::onFailure));
         } else {
             // Normal validation flow
-            validateConfigurationInternal(config, listener);
+            validateConfigurationInternal(tenantId, config, listener);
         }
     }
 
-    private void validateConfigurationInternal(MemoryConfiguration config, ActionListener<Boolean> listener) {
+    private void validateConfigurationInternal(String tenantId, MemoryConfiguration config, ActionListener<Boolean> listener) {
         // Validate that strategies have required AI models
         try {
             MemoryConfiguration.validateStrategiesRequireModels(config);
@@ -481,10 +481,11 @@ public class TransportCreateMemoryContainerAction extends
         }
 
         // Validate LLM model using helper
-        MemoryContainerModelValidator.validateLlmModel(config.getLlmId(), mlModelManager, client, ActionListener.wrap(isValid -> {
+        MemoryContainerModelValidator.validateLlmModel(tenantId, config.getLlmId(), mlModelManager, client, ActionListener.wrap(isValid -> {
             // LLM model is valid, now validate embedding model
             MemoryContainerModelValidator
                 .validateEmbeddingModel(
+                    tenantId,
                     config.getEmbeddingModelId(),
                     config.getEmbeddingModelType(),
                     mlModelManager,

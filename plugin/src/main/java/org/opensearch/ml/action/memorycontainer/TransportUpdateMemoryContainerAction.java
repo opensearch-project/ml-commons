@@ -284,11 +284,13 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         String memoryContainerId,
         ActionListener<UpdateResponse> listener
     ) {
+        String tenantId = container.getTenantId();
         // Validate LLM model using helper
-        MemoryContainerModelValidator.validateLlmModel(config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
+        MemoryContainerModelValidator.validateLlmModel(tenantId, config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
             // LLM validated, now validate embedding model
             MemoryContainerModelValidator
                 .validateEmbeddingModel(
+                    tenantId,
                     config.getEmbeddingModelId(),
                     config.getEmbeddingModelType(),
                     mlModelManager,
