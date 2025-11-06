@@ -1504,4 +1504,51 @@ public class MLChatAgentRunnerTest {
         String result = mlChatAgentRunner.extractSummaryFromResponse(response);
         assertEquals(null, result);
     }
+
+    @Test
+    public void testExtractSummaryFromResponse_ThrowsException_FallbackStrategyUsed() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(llmSpec)
+            .memory(mlMemorySpec)
+            .tools(Arrays.asList(firstToolSpec))
+            .build();
+
+        Mockito.reset(client);
+        Mockito.reset(firstTool);
+        when(firstTool.getName()).thenReturn(FIRST_TOOL);
+        when(firstTool.validate(Mockito.anyMap())).thenReturn(true);
+        Mockito.doAnswer(generateToolResponse("First tool response")).when(firstTool).run(Mockito.anyMap(), any());
+
+        Mockito.doAnswer(getLLMAnswer(ImmutableMap.of("thought", "Analyzing the problem", "action", FIRST_TOOL))).doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            Map<String, Object> invalidDataMap = new HashMap<>();
+            invalidDataMap.put("output", new HashMap<>());
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(invalidDataMap).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            MLTaskResponse mlTaskResponse = MLTaskResponse.builder().output(mlModelTensorOutput).build();
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object capturedResponse = objectCaptor.getValue();
+        assertTrue(capturedResponse instanceof ModelTensorOutput);
+
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
+        List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
+        assertEquals(1, agentOutput.size());
+
+        String response = (String) agentOutput.get(0).getDataAsMap().get("response");
+        assertEquals("Agent reached maximum iterations (1) without completing the task. Last thought: Analyzing the problem", response);
+    }
 }
