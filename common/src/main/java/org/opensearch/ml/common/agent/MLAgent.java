@@ -465,6 +465,14 @@ public class MLAgent implements ToXContentObject, Writeable {
     }
 
     /**
+     * Check if this agent has inline context management configuration
+     * @return true if agent has inline context management configuration
+     */
+    public boolean hasInlineContextManagement() {
+        return contextManagement != null;
+    }
+
+    /**
      * Get the context management template name if this agent references one
      * @return the template name, or null if no template reference
      */

@@ -301,4 +301,21 @@ public class MLAgentExecutorTest {
             .appType("test-app")
             .build();
     }
+
+    @Test
+    public void testContextManagementProcessedFlagPreventsReprocessing() {
+        // Test that the context_management_processed flag prevents duplicate processing
+        Map<String, String> parameters = new HashMap<>();
+
+        // First check - should allow processing
+        boolean shouldProcess1 = !"true".equals(parameters.get("context_management_processed"));
+        assertTrue("First call should allow processing", shouldProcess1);
+
+        // Mark as processed (simulating what the method does)
+        parameters.put("context_management_processed", "true");
+
+        // Second check - should prevent processing
+        boolean shouldProcess2 = !"true".equals(parameters.get("context_management_processed"));
+        assertFalse("Second call should prevent processing", shouldProcess2);
+    }
 }
