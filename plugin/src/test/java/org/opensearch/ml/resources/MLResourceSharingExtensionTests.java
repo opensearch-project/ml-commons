@@ -67,7 +67,17 @@ public class MLResourceSharingExtensionTests {
         Set<ResourceProvider> providers = ext.getResourceProviders();
 
         // Attempt to modify — Set.of(...) should be unmodifiable and throw
-        providers.add(new ResourceProvider("some.Type", "some-index"));
+        providers.add(new ResourceProvider() {
+            @Override
+            public String resourceType() {
+                return "exampleType";
+            }
+
+            @Override
+            public String resourceIndexName() {
+                return "some-index";
+            }
+        });
     }
 
     @Test

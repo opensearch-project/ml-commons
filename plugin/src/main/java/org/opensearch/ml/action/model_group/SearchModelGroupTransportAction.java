@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 import static org.opensearch.ml.helper.ModelAccessControlHelper.shouldUseResourceAuthz;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
@@ -116,7 +115,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         SearchSourceBuilder sourceBuilder = request.source() != null ? request.source() : new SearchSourceBuilder();
         var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
         // filter by accessible model-groups
-        rsc.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
+        rsc.getAccessibleResourceIds(ML_MODEL_GROUP_RESOURCE_TYPE, ActionListener.wrap(ids -> {
             sourceBuilder.query(modelAccessControlHelper.mergeWithAccessFilter(sourceBuilder.query(), ids));
             request.source(sourceBuilder);
             search(tenantId, request, wrappedListener);

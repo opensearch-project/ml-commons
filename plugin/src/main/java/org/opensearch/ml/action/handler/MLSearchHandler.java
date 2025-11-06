@@ -155,7 +155,7 @@ public class MLSearchHandler {
                 && hasModelGroupIndex) {
                 // RSC fast-path: get accessible group IDs → gate models (IDs or missing)
                 var rsc = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-                rsc.getAccessibleResourceIds(CommonValue.ML_MODEL_GROUP_INDEX, ActionListener.wrap(ids -> {
+                rsc.getAccessibleResourceIds(ML_MODEL_GROUP_RESOURCE_TYPE, ActionListener.wrap(ids -> {
                     SearchSourceBuilder gated = Optional.ofNullable(request.source()).orElseGet(SearchSourceBuilder::new);
                     gated.query(rewriteQueryBuilderRSC(gated.query(), ids)); // ids may be empty → "missing only"
                     request.source(gated);
