@@ -100,7 +100,7 @@ public class ModelAccessControlHelper {
         }
         if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
             var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_RESOURCE_TYPE, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -175,7 +175,7 @@ public class ModelAccessControlHelper {
         }
         if (shouldUseResourceAuthz(ML_MODEL_GROUP_RESOURCE_TYPE)) {
             var resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_RESOURCE_TYPE, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
