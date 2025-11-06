@@ -47,10 +47,16 @@ public class ContextManagerHookProvider implements HookProvider {
      */
     @Override
     public void registerHooks(HookRegistry registry) {
-        // Register callbacks for each hook type
-        registry.addCallback(PreLLMEvent.class, this::handlePreLLM);
-        registry.addCallback(EnhancedPostToolEvent.class, this::handlePostTool);
-        registry.addCallback(PostMemoryEvent.class, this::handlePostMemory);
+        // Only register callbacks for hooks that have managers configured
+        if (hookToManagersMap.containsKey("PRE_LLM")) {
+            registry.addCallback(PreLLMEvent.class, this::handlePreLLM);
+        }
+        if (hookToManagersMap.containsKey("POST_TOOL")) {
+            registry.addCallback(EnhancedPostToolEvent.class, this::handlePostTool);
+        }
+        if (hookToManagersMap.containsKey("POST_MEMORY")) {
+            registry.addCallback(PostMemoryEvent.class, this::handlePostMemory);
+        }
 
         log.info("Registered context manager hooks for {} managers", contextManagers.size());
     }
