@@ -423,7 +423,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             lastThought,
                             maxIterations,
                             tools,
-                            tmpParameters,
                             llm,
                             tenantId
                         );
@@ -527,7 +526,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             lastThought,
                             maxIterations,
                             tools,
-                            tmpParameters,
                             llm,
                             tenantId
                         );
@@ -903,7 +901,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastThought,
         int maxIterations,
         Map<String, Tool> tools,
-        Map<String, String> parameters,
         LLMSpec llmSpec,
         String tenantId
     ) {
