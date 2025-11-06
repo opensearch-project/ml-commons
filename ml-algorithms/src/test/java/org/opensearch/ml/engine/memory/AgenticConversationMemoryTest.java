@@ -41,7 +41,7 @@ public class AgenticConversationMemoryTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        agenticMemory = new AgenticConversationMemory(client, "test_conversation_id", "test_memory_container_id");
+        agenticMemory = new AgenticConversationMemory(client, "test_conversation_id", "test_memory_container_id", null);
     }
 
     @Test
@@ -81,7 +81,7 @@ public class AgenticConversationMemoryTest {
     @Test
     public void testFactoryCreate() {
         AgenticConversationMemory.Factory factory = new AgenticConversationMemory.Factory();
-        factory.init(client, mlIndicesHandler, memoryManager);
+        factory.init(client);
 
         Map<String, Object> params = new HashMap<>();
         params.put("memory_id", "test_memory_id");
@@ -99,7 +99,7 @@ public class AgenticConversationMemoryTest {
     @Test
     public void testFactoryCreateWithNewSession() {
         AgenticConversationMemory.Factory factory = new AgenticConversationMemory.Factory();
-        factory.init(client, mlIndicesHandler, memoryManager);
+        factory.init(client);
 
         // Mock session creation
         doAnswer(invocation -> {
@@ -129,7 +129,8 @@ public class AgenticConversationMemoryTest {
         AgenticConversationMemory memoryWithoutContainer = new AgenticConversationMemory(
             client,
             "test_conversation_id",
-            null  // No memory container ID = should fail
+            null,  // No memory container ID = should fail,
+                null
         );
 
         ConversationIndexMessage message = ConversationIndexMessage
