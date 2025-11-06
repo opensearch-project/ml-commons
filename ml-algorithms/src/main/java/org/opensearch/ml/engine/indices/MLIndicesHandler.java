@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.OpenSearchWrapperException;
@@ -97,7 +98,7 @@ public class MLIndicesHandler {
      * pre-populated. If this is incorrect, it will result in unwanted early returns without checking the clusterService.
      */
     public static boolean doesMultiTenantIndexExist(ClusterService clusterService, boolean isMultiTenancyEnabled, String indexName) {
-        return isMultiTenancyEnabled || clusterService.state().metadata().hasIndex(indexName);
+        return (indexName.startsWith(".") && isMultiTenancyEnabled) || clusterService.state().metadata().hasIndex(indexName);
     }
 
     public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
@@ -175,19 +176,31 @@ public class MLIndicesHandler {
     public void createSessionMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_MEMORY_SESSION_INDEX_MAPPING_PATH);
         Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SESSION_INDEX);
-        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        if (configuration.isUseSystemIndex()) {
+            initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        } else {
+            initIndexWithContext(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        }
     }
 
     public void createWorkingMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_WORKING_MEMORY_INDEX_MAPPING_PATH);
         Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX);
-        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        if (configuration.isUseSystemIndex()) {
+            initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        } else {
+            initIndexWithContext(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        }
     }
 
     public void createLongTermMemoryHistoryIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH);
         Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX);
-        initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        if (configuration.isUseSystemIndex()) {
+            initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        } else {
+            initIndexWithContext(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
+        }
     }
 
     /**
@@ -271,7 +284,11 @@ public class MLIndicesHandler {
             }
 
             // Initialize index with mapping and settings
-            initIndexIfAbsent(indexName, indexMappings, indexSettings, 1, listener);
+            if (memoryConfig.isUseSystemIndex()) {
+                initIndexIfAbsent(indexName, indexMappings, indexSettings, 1, listener);
+            } else {
+                initIndexWithContext(indexName, indexMappings, indexSettings, 1, listener);
+            }
         } catch (Exception e) {
             log.error("Failed to create long-term memory index", e);
             listener.onFailure(e);
@@ -285,6 +302,41 @@ public class MLIndicesHandler {
 
     public void initIndexIfAbsent(String indexName, String mapping, Integer version, ActionListener<Boolean> listener) {
         initIndexIfAbsent(indexName, mapping, null, version, listener);
+    }
+
+    public void initIndexWithContext(
+        String indexName,
+        String mapping,
+        Map<String, Object> indexSettings,
+        Integer version,
+        ActionListener<Boolean> listener
+    ) {
+        log.info("Using initIndexWithContext method to create index: {}", indexName);
+        try {
+            ActionListener<CreateIndexResponse> actionListener = ActionListener.wrap(r -> {
+                if (r.isAcknowledged()) {
+                    log.info("create index:{}", indexName);
+                    listener.onResponse(true);
+                } else {
+                    listener.onResponse(false);
+                }
+            }, e -> {
+                if (e instanceof ResourceAlreadyExistsException
+                    || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
+                    log.info("Skip creating the Index:{} that is already created by another parallel request", indexName);
+                    listener.onResponse(true);
+                } else {
+                    log.error("Failed to create index {}", indexName, e);
+                    listener.onFailure(e);
+                }
+            });
+            CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping, XContentType.JSON);
+            request.settings(Objects.requireNonNullElse(indexSettings, DEFAULT_INDEX_SETTINGS));
+            client.admin().indices().create(request, actionListener);
+        } catch (Exception e) {
+            log.error("Failed to init index {}", indexName, e);
+            listener.onFailure(e);
+        }
     }
 
     public void initIndexIfAbsent(
@@ -395,7 +447,7 @@ public class MLIndicesHandler {
 
     /**
      * Check if we should update index based on schema version.
-     * 
+     *
      * @param indexName  index name
      * @param newVersion new index mapping version
      * @param listener   action listener, if should update index, will pass true to

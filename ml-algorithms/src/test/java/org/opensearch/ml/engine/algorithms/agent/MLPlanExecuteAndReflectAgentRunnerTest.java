@@ -68,6 +68,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -76,6 +77,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
 
+    @Mock
+    private TransportChannel transportChannel;
     @Mock
     private Client client;
     private Settings settings;
@@ -139,6 +142,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         when(memoryMap.get(ConversationIndexMemory.TYPE)).thenReturn(memoryFactory);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         when(conversationIndexMemory.getConversationId()).thenReturn("test_memory_id");
+        when(conversationIndexMemory.getId()).thenReturn("test_memory_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
         when(createInteractionResponse.getId()).thenReturn("create_interaction_id");
         when(updateResponse.getId()).thenReturn("update_interaction_id");
@@ -152,7 +156,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         // Setup conversation index memory
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(generateInteractions());
             return null;
         }).when(conversationIndexMemory).getMessages(anyInt(), memoryInteractionCapture.capture());
@@ -223,11 +227,18 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
         // Run the agent
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -295,12 +306,19 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
+        // Setup memory update response
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
+
         // Run the agent with history
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put("memory_id", "test_memory_id");
         params.put("parent_interaction_id", "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -371,7 +389,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("parent_interaction_id", "test_parent_interaction_id");
         params.put("message_history_limit", "5");
         params.put("executor_message_history_limit", "3");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         verify(conversationIndexMemory).getMessages(eq(5), any());
 
@@ -639,6 +657,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         String executorParentId = "test_executor_parent_id";
 
         when(conversationIndexMemory.getConversationId()).thenReturn(conversationId);
+        when(conversationIndexMemory.getId()).thenReturn(conversationId);
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
 
         doAnswer(invocation -> {
@@ -646,6 +665,12 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(eq(parentInteractionId), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         mlPlanExecuteAndReflectAgentRunner
             .saveAndReturnFinalResult(
@@ -763,7 +788,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             return null;
         }).when(agentActionListener).onFailure(any());
 
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that onFailure was called with the expected exception
         verify(agentActionListener).onFailure(any(IllegalStateException.class));
@@ -845,7 +870,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             params.put("memory_id", "test_memory_id");
             params.put("parent_interaction_id", "test_parent_interaction_id");
             params.put("task_id", taskId);
-            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
             Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
             assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));

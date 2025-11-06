@@ -46,7 +46,7 @@ public class AgenticConversationMemoryTest {
 
     @Test
     public void testGetType() {
-        assert agenticMemory.getType().equals("agentic_conversation");
+        assert agenticMemory.getType().equals("AGENTIC_MEMORY");
     }
 
     @Test
