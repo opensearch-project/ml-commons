@@ -604,11 +604,18 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         /**
          * Create a new session in the memory container using the new session API
          */
-        private void createSessionInMemoryContainer(String summary, String memoryContainerId, String tenantId, ActionListener<String> listener) {
-            MLCreateSessionInput input = MLCreateSessionInput.builder().
-                    memoryContainerId(memoryContainerId).
-                    tenantId(tenantId).
-                    summary(summary).build();
+        private void createSessionInMemoryContainer(
+            String summary,
+            String memoryContainerId,
+            String tenantId,
+            ActionListener<String> listener
+        ) {
+            MLCreateSessionInput input = MLCreateSessionInput
+                .builder()
+                .memoryContainerId(memoryContainerId)
+                .tenantId(tenantId)
+                .summary(summary)
+                .build();
 
             MLCreateSessionRequest request = MLCreateSessionRequest.builder().mlCreateSessionInput(input).build();
 

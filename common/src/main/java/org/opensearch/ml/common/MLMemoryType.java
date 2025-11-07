@@ -9,7 +9,8 @@ import java.util.Locale;
 
 public enum MLMemoryType {
     CONVERSATION_INDEX,
-    AGENTIC_MEMORY;
+    AGENTIC_MEMORY,
+    REMOTE_AGENTIC_MEMORY;
 
     public static MLMemoryType from(String value) {
         if (value != null) {
