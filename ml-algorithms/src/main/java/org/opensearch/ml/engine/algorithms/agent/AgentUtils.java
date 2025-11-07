@@ -10,7 +10,9 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.RemoteStore.CREDENTIAL_FIELD;
+import static org.opensearch.ml.common.memorycontainer.RemoteStore.ENDPOINT_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -65,6 +67,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -73,8 +76,10 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -1024,17 +1029,60 @@ public class AgentUtils {
         String memoryId,
         String appType,
         MLAgent mlAgent,
-        String memoryContainerId
+        Map<String, String> requestParameters
     ) {
         Map<String, Object> memoryParams = new HashMap<>();
         memoryParams.put(ConversationIndexMemory.MEMORY_NAME, question);
         memoryParams.put(ConversationIndexMemory.MEMORY_ID, memoryId);
         memoryParams.put(APP_TYPE, appType);
-        if (mlAgent.getMemory().getMemoryContainerId() != null) {
-            memoryParams.put(MEMORY_CONTAINER_ID_FIELD, mlAgent.getMemory().getMemoryContainerId());
+        MLMemorySpec agentMemory = mlAgent != null ? mlAgent.getMemory() : null;
+        if (agentMemory != null) {
+            String containerId = agentMemory.getMemoryContainerId();
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
             memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
-        memoryParams.putIfAbsent(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        if (requestParameters != null) {
+            String endpointParam = requestParameters.get(ENDPOINT_FIELD);
+            if (!Strings.isNullOrEmpty(endpointParam)) {
+                memoryParams.put(ENDPOINT_FIELD, endpointParam);
+            }
+            String regionParam = requestParameters.get(HttpConnector.REGION_FIELD);
+            if (!Strings.isNullOrEmpty(regionParam)) {
+                memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
+            }
+            Map<String, String> credential = parseStringMapParameter(requestParameters.get(CREDENTIAL_FIELD), CREDENTIAL_FIELD);
+            if (credential != null && !credential.isEmpty()) {
+                memoryParams.put(CREDENTIAL_FIELD, credential);
+            }
+            // Extract user_id if provided
+            String userIdParam = requestParameters.get("user_id");
+            if (!Strings.isNullOrEmpty(userIdParam)) {
+                memoryParams.put("user_id", userIdParam);
+            }
+            memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+        }
         return memoryParams;
+    }
+
+    private static Map<String, String> parseStringMapParameter(String rawValue, String fieldName) {
+        if (Strings.isNullOrEmpty(rawValue)) {
+            return null;
+        }
+        try (
+            XContentParser parser = JsonXContent.jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rawValue)
+        ) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            Map<String, String> parsed = parser.mapStrings();
+            if (parsed == null || parsed.isEmpty()) {
+                return null;
+            }
+            return parsed;
+        } catch (IOException ex) {
+            log.warn("Failed to parse {} field; ignoring value", fieldName, ex);
+            return null;
+        }
     }
 }

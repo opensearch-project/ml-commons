@@ -130,7 +130,7 @@ public class AgenticConversationMemoryTest {
             client,
             "test_conversation_id",
             null,  // No memory container ID = should fail,
-                null
+            null
         );
 
         ConversationIndexMessage message = ConversationIndexMessage

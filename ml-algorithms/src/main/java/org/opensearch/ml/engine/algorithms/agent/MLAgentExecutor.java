@@ -235,6 +235,38 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
+                                        Map<String, String> requestParameters = inputDataSet.getParameters();
+                                        String containerOverride = null;
+                                        if (requestParameters != null && requestParameters.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
+                                            String containerParam = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+                                            if (!Strings.isNullOrEmpty(containerParam)) {
+                                                containerOverride = containerParam;
+                                            }
+                                        }
+                                        if (containerOverride != null) {
+                                            if (memorySpec == null) {
+                                                throw new IllegalArgumentException(
+                                                    "memory_container_id override requires the agent to be configured with memory"
+                                                );
+                                            }
+                                            String currentContainerId = memorySpec.getMemoryContainerId();
+                                            if (!containerOverride.equals(currentContainerId)) {
+                                                MLMemorySpec updatedSpec = memorySpec
+                                                    .toBuilder()
+                                                    .memoryContainerId(containerOverride)
+                                                    .build();
+                                                mlAgent = mlAgent.toBuilder().memory(updatedSpec).build();
+                                                memorySpec = updatedSpec;
+                                                log
+                                                    .debug(
+                                                        "Agent {} overriding memory container from {} to {}",
+                                                        agentId,
+                                                        currentContainerId,
+                                                        containerOverride
+                                                    );
+                                            }
+                                        }
+                                        final MLAgent finalMlAgent = mlAgent;
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
                                         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
@@ -266,16 +298,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             && memorySpec.getType() != null
                                             && memoryFactoryMap.containsKey(MLMemoryType.from(memorySpec.getType()).name())
                                             && (memoryId == null || parentInteractionId == null)) {
-                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory = memoryFactoryMap
-                                                .get(MLMemoryType.from(memorySpec.getType()).name());
-
                                             Map<String, Object> memoryParams = createMemoryParams(
                                                 question,
                                                 memoryId,
                                                 appType,
                                                 mlAgent,
-                                                inputDataSet.getParameters().get(MEMORY_CONTAINER_ID_FIELD)
+                                                requestParameters
                                             );
+
+                                            // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
+                                            Memory.Factory<Memory<?, ?, ?>> memoryFactory;
+                                            if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+                                                // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+                                                memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+                                                log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+                                            } else {
+                                                // Use the originally specified memory factory
+                                                memoryFactory = memoryFactoryMap.get(MLMemoryType.from(memorySpec.getType()).name());
+                                            }
                                             memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
                                                 inputDataSet.getParameters().put(MEMORY_ID, memory.getId());
                                                 // get question for regenerate
@@ -297,7 +337,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                     isAsync,
                                                                     outputs,
                                                                     modelTensors,
-                                                                    mlAgent,
+                                                                    finalMlAgent,
                                                                     channel,
                                                                     hookRegistry
                                                                 );
@@ -315,7 +355,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         isAsync,
                                                         outputs,
                                                         modelTensors,
-                                                        mlAgent,
+                                                        finalMlAgent,
                                                         channel,
                                                         hookRegistry
                                                     );
@@ -340,8 +380,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         question,
                                                         memoryId,
                                                         appType,
-                                                        mlAgent,
-                                                        inputDataSet.getParameters().get(MEMORY_CONTAINER_ID_FIELD)
+                                                        finalMlAgent,
+                                                        requestParameters
                                                     );
 
                                                     factory
@@ -354,7 +394,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                         mlTask,
                                                                         isAsync,
                                                                         memoryId,
-                                                                        mlAgent,
+                                                                        finalMlAgent,
                                                                         outputs,
                                                                         modelTensors,
                                                                         listener,

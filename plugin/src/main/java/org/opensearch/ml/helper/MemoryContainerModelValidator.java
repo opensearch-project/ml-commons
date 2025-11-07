@@ -38,7 +38,13 @@ public final class MemoryContainerModelValidator {
      * @param client        The OpenSearch client
      * @param listener      Action listener that receives true on success, or error on failure
      */
-    public static void validateLlmModel(String tenantId, String llmId, MLModelManager modelManager, Client client, ActionListener<Boolean> listener) {
+    public static void validateLlmModel(
+        String tenantId,
+        String llmId,
+        MLModelManager modelManager,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
         if (llmId == null) {
             listener.onResponse(true);
             return;

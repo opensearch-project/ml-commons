@@ -286,21 +286,22 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
     ) {
         String tenantId = container.getTenantId();
         // Validate LLM model using helper
-        MemoryContainerModelValidator.validateLlmModel(tenantId, config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
-            // LLM validated, now validate embedding model
-            MemoryContainerModelValidator
-                .validateEmbeddingModel(
-                    tenantId,
-                    config.getEmbeddingModelId(),
-                    config.getEmbeddingModelType(),
-                    mlModelManager,
-                    client,
-                    ActionListener.wrap(embeddingValid -> {
-                        // Both models validated, proceed to shared index validation and creation
-                        validateSharedIndexAndCreateIndices(container, config, updateFields, memoryContainerId, listener);
-                    }, listener::onFailure)
-                );
-        }, listener::onFailure));
+        MemoryContainerModelValidator
+            .validateLlmModel(tenantId, config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
+                // LLM validated, now validate embedding model
+                MemoryContainerModelValidator
+                    .validateEmbeddingModel(
+                        tenantId,
+                        config.getEmbeddingModelId(),
+                        config.getEmbeddingModelType(),
+                        mlModelManager,
+                        client,
+                        ActionListener.wrap(embeddingValid -> {
+                            // Both models validated, proceed to shared index validation and creation
+                            validateSharedIndexAndCreateIndices(container, config, updateFields, memoryContainerId, listener);
+                        }, listener::onFailure)
+                    );
+            }, listener::onFailure));
     }
 
     /**
