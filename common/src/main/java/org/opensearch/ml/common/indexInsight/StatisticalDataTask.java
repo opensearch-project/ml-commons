@@ -241,7 +241,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         }
         String prompt = generateFilterColumnPrompt(parsedResult);
         getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
-            callLLMWithAgent(client, agentId, prompt, tenantId, ActionListener.wrap(response -> {
+            callLLMWithAgent(client, agentId, prompt,sourceIndex, tenantId, ActionListener.wrap(response -> {
                 listener.onResponse(parseLLMFilteredResult(response));
             }, e -> { listener.onResponse(new ArrayList<>()); }));
         }, e -> { listener.onResponse(new ArrayList<>()); }));

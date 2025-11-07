@@ -27,6 +27,7 @@ import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.Numbers;
 import org.opensearch.common.regex.Regex;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -123,8 +124,12 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
 
     protected void handleExistingDoc(Map<String, Object> source, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
-        Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
-        long currentTime = Instant.now().toEpochMilli();
+        Object v = source.get(IndexInsight.LAST_UPDATE_FIELD);
+	Long lastUpdateTime = (v == null) ? null
+            : (v instanceof Number n) ? n.longValue()
+            : (v instanceof CharSequence cs && cs.length() > 0) ? Numbers.toLong(cs.toString(), true)
+            : null;
+	long currentTime = Instant.now().toEpochMilli();
 
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
         switch (status) {
@@ -468,6 +473,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         String agentId,
         String prompt,
         String sourceIndex,
+	String tenantId,
         ActionListener<String> listener
     ) {
         AgentMLInput agentInput = AgentMLInput
@@ -475,7 +481,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .agentId(agentId)
             .functionName(FunctionName.AGENT)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
-            .build();
+            .tenantId(tenantId)
+	    .build();
 
         MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
