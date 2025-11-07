@@ -99,15 +99,8 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         String indexName = mlIndexInsightGetRequest.getIndexName();
     	mlIndicesHandler.initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT_STORAGE, ActionListener.wrap(r2 -> {
             ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
-                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
-                        .runBefore(actionListener, () -> context.restore());
-                    executeTaskAndReturn(mlIndexInsightGetRequest, mlIndexInsightGetRequest.getTenantId(), wrappedListener);
-                } catch (Exception e) {
-                    log.error("Failed to get index insight", e);
-                    actionListener.onFailure(e);
-                }
-            }, actionListener::onFailure);
+                executeTaskAndReturn(mlIndexInsightGetRequest, mlIndexInsightGetRequest.getTenantId(), actionListener);
+	    }, actionListener::onFailure);
             IndexInsightAccessControllerHelper.verifyAccessController(client, actionAfterDryRun, indexName);
         }, e -> {
             log.error("Failed to create index insight storage", e);
