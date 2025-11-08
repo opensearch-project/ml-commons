@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
+import static org.opensearch.ml.engine.agents.AgentContextUtil.extractProcessedToolOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTIONS_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_CHAT_HISTORY_PREFIX;
@@ -686,9 +687,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // Emit POST_TOOL hook event after tool execution and process current tool
                         // output
                         List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        String outputResponseAfterHook = AgentContextUtil
-                            .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry)
-                            .toString();
+                        ContextManagerContext contextAfterPostTool = AgentContextUtil
+                            .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                        // Extract processed output and update interactions
+                        Object extractedOutput = extractProcessedToolOutput(contextAfterPostTool);
+                        String outputResponseAfterHook = extractedOutput != null ? StringUtils.toJson(extractedOutput) : StringUtils.toJson(outputResponse);
+
+                        // Update interactions if context manager modified them
+                        List<String> postToolUpdatedInteractions = contextAfterPostTool.getToolInteractions();
+                        if (postToolUpdatedInteractions != null && !postToolUpdatedInteractions.equals(interactions)) {
+                            interactions.clear();
+                            interactions.addAll(postToolUpdatedInteractions);
+
+                            // Update parameters if context manager set INTERACTIONS
+                            String contextInteractions = contextAfterPostTool.getParameters().get(INTERACTIONS);
+                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                                tmpParameters.put(INTERACTIONS, contextInteractions);
+                            }
+                        }
 
                         List<Map<String, Object>> toolResults = List
                             .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
@@ -699,7 +716,28 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     } else {
                         // Emit POST_TOOL hook event for non-function calling path
                         List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        Object processedOutput = AgentContextUtil.emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
+                        ContextManagerContext contextAfterPostTool = AgentContextUtil
+                            .emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                        // Extract processed output
+                        Object processedOutput = extractProcessedToolOutput(contextAfterPostTool);
+                        if (processedOutput == null) {
+                            processedOutput = r;
+                        }
+
+                        // Update interactions if context manager modified them
+                        List<String> postToolUpdatedInteractions = contextAfterPostTool.getToolInteractions();
+                        if (postToolUpdatedInteractions != null && !postToolUpdatedInteractions.equals(interactions)) {
+                            interactions.clear();
+                            interactions.addAll(postToolUpdatedInteractions);
+
+                            // Update parameters if context manager set INTERACTIONS
+                            String contextInteractions = contextAfterPostTool.getParameters().get(INTERACTIONS);
+                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                                tmpParameters.put(INTERACTIONS, contextInteractions);
+                            }
+                        }
+
                         interactions
                             .add(
                                 substitute(
