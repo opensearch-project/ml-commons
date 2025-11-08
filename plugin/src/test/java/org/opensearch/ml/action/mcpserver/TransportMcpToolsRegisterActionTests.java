@@ -344,7 +344,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Tools: [ListIndexTool] are persisted successfully but failed to register to mcp server memory with error: Network issue",
+            "Tools are persisted successfully but failed to register to mcp server memory",
             argumentCaptor.getValue().getMessage()
         );
     }
