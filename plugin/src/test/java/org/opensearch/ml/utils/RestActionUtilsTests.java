@@ -395,4 +395,103 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         }
     }
+
+    @Test
+    public void testStoreMcpRequestHeaders_withAllHeaders() {
+        // Setup
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("x-amzn-fas-accesskey", List.of("access-key-value"));
+        headers.put("x-amzn-fas-secretkey", List.of("secret-key-value"));
+        headers.put("x-amzn-fas-sessiontoken", List.of("session-token-value"));
+        headers.put("x-amzn-datasources", List.of("https://example.aos.us-east-1.on.aws"));
+        
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withHeaders(headers)
+            .build();
+
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Execute
+        RestActionUtils.storeMcpRequestHeaders(request, client);
+
+        // Verify
+        @SuppressWarnings("unchecked")
+        Map<String, String> storedHeaders = threadContext.getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        assertNotNull(storedHeaders);
+        assertEquals(4, storedHeaders.size());
+        assertEquals("access-key-value", storedHeaders.get("x-amzn-fas-accesskey"));
+        assertEquals("secret-key-value", storedHeaders.get("x-amzn-fas-secretkey"));
+        assertEquals("session-token-value", storedHeaders.get("x-amzn-fas-sessiontoken"));
+        assertEquals("https://example.aos.us-east-1.on.aws", storedHeaders.get("x-amzn-datasources"));
+    }
+
+    @Test
+    public void testStoreMcpRequestHeaders_withNoHeaders() {
+        // Setup - request with no MCP headers
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .build();
+
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Execute
+        RestActionUtils.storeMcpRequestHeaders(request, client);
+
+        // Verify - should not store anything in ThreadContext
+        @SuppressWarnings("unchecked")
+        Map<String, String> storedHeaders = threadContext.getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        assertNull(storedHeaders);
+    }
+
+    @Test
+    public void testGetMcpRequestHeaders_withHeaders() {
+        // Setup
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, String> expectedHeaders = new HashMap<>();
+        expectedHeaders.put("x-amzn-fas-accesskey", "access-key-value");
+        expectedHeaders.put("x-amzn-datasources", "https://example.aos.us-east-1.on.aws");
+        threadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
+
+        // Execute
+        Map<String, String> result = RestActionUtils.getMcpRequestHeaders(client);
+
+        // Verify
+        assertEquals(expectedHeaders, result);
+        assertEquals(2, result.size());
+        assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
+        assertEquals("https://example.aos.us-east-1.on.aws", result.get("x-amzn-datasources"));
+    }
+
+    @Test
+    public void testGetMcpRequestHeaders_withNoHeaders() {
+        // Setup
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Execute
+        Map<String, String> result = RestActionUtils.getMcpRequestHeaders(client);
+
+        // Verify
+        assertTrue(result.isEmpty());
+        assertEquals(Collections.emptyMap(), result);
+    }
 }

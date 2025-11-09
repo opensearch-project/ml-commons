@@ -13,10 +13,12 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -40,8 +42,6 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -53,7 +53,6 @@ import org.opensearch.transport.client.Client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.gson.Gson;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -61,7 +60,6 @@ import lombok.extern.log4j.Log4j2;
 public class RestActionUtils {
 
     private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
-    private static final Gson gson = new Gson();
 
     public static final String SECURITY_AUTHCZ_ADMIN_DN = "plugins.security.authcz.admin_dn";
 
@@ -348,14 +346,14 @@ public class RestActionUtils {
     }
 
     /**
-     * Adds MCP (Model Context Protocol) request headers from the REST request to the agent input.
-     * Extracts FAS credentials and datasources headers and adds them to the agent's input dataset parameters.
+     * Extracts MCP (Model Context Protocol) request headers from the REST request and stores them in ThreadContext.
+     * Extracts FAS credentials and datasources headers for forwarding to MCP connectors.
      *
      * @param request RestRequest containing the MCP headers
-     * @param agentInput AgentMLInput to add the headers to
+     * @param client Client to access ThreadContext
      */
-    public static void addMcpRequestHeaders(RestRequest request, AgentMLInput agentInput) {
-        java.util.Map<String, String> headers = new java.util.HashMap<>();
+    public static void storeMcpRequestHeaders(RestRequest request, Client client) {
+        Map<String, String> headers = new HashMap<>();
         String accessKey = request.header(HEADER_FAS_ACCESS_KEY);
         if (accessKey != null && !accessKey.isEmpty()) {
             headers.put(HEADER_FAS_ACCESS_KEY, accessKey);
@@ -373,14 +371,17 @@ public class RestActionUtils {
             headers.put(HEADER_DATASOURCES, datasources);
         }
         if (!headers.isEmpty()) {
-            String headersJson = gson.toJson(headers);
-            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
-            if (inputDataSet != null && inputDataSet.getParameters() != null) {
-                inputDataSet.getParameters().put(CommonValue.MCP_REQUEST_HEADERS, headersJson);
-                log.debug("Added MCP request headers to agent input parameters with keys: {}", headers.keySet());
-            } else {
-                log.warn("Cannot add MCP request headers: input dataset or parameters is null");
-            }
+            client.threadPool().getThreadContext().putTransient(CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, headers);
+        }
+    }
+
+    public static Map<String, String> getMcpRequestHeaders(Client client) {
+        try {
+            Map<String, String> headers = client.threadPool().getThreadContext().getTransient(CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+            return headers != null ? headers : Collections.emptyMap();
+        } catch (Exception e) {
+            log.warn("Failed to retrieve MCP request headers from ThreadContext", e);
+            return Collections.emptyMap();
         }
     }
 }

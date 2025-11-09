@@ -14,7 +14,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
-import static org.opensearch.ml.utils.RestActionUtils.addMcpRequestHeaders;
+import static org.opensearch.ml.utils.RestActionUtils.storeMcpRequestHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
@@ -161,7 +161,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
                 try {
                     BytesReference completeContent = combineChunks(chunks);
-                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
+                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent, client);
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
@@ -303,11 +303,14 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Creates a MLExecuteTaskRequest from a RestRequest
      *
+     * @param agentId Agent ID
      * @param request RestRequest
+     * @param content Request content
+     * @param client NodeClient
      * @return MLExecuteTaskRequest
      */
     @VisibleForTesting
-    MLExecuteTaskRequest getRequest(String agentId, RestRequest request, BytesReference content) throws IOException {
+    MLExecuteTaskRequest getRequest(String agentId, RestRequest request, BytesReference content, NodeClient client) throws IOException {
         XContentParser parser = request
             .getMediaType()
             .xContent()
@@ -327,7 +330,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         agentInput.setIsAsync(async);
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
         inputDataSet.getParameters().put("stream", String.valueOf(true));
-        addMcpRequestHeaders(request, agentInput);
+        storeMcpRequestHeaders(request, client);
         return new MLExecuteTaskRequest(functionName, input);
     }
 

@@ -119,12 +119,10 @@ public class CommonValue {
     public static final String MCP_TOOL_DESCRIPTION_FIELD = "description";
     public static final String MCP_TOOL_INPUT_SCHEMA_FIELD = "inputSchema";
     public static final String MCP_SYNC_CLIENT = "mcp_sync_client";
-    public static final String MCP_CONNECTOR = "mcp_connector";
-    public static final String MCP_CONNECTOR_CONFIG = "mcp_connector_config";
-    public static final String MCP_REQUEST_HEADERS = "mcp_request_headers";
     public static final String MCP_TOOLS_FIELD = "tools";
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
+    public static final String MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY = "ML_MCP_REQUEST_HEADERS";
     public static final String MCP_DEFAULT_SSE_ENDPOINT = "/sse";
     public static final String SSE_ENDPOINT_FIELD = "sse_endpoint";
     public static final String MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT = "/mcp/";

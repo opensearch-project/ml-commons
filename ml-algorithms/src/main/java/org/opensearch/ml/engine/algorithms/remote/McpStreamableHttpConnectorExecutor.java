@@ -77,17 +77,18 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
-            Map<String, String> mergedHeaders = new HashMap<>();
-            if (connector.getDecryptedHeaders() != null) {
-                mergedHeaders.putAll(connector.getDecryptedHeaders());
-            }
-            if (requestHeaders != null) {
-                mergedHeaders.putAll(requestHeaders);
-            }
-
             Consumer<HttpRequest.Builder> headerConfig = builder -> {
-                for (Map.Entry<String, String> entry : mergedHeaders.entrySet()) {
-                    builder.header(entry.getKey(), entry.getValue());
+                // Add connector headers first
+                if (connector.getDecryptedHeaders() != null) {
+                    for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
+                        builder.header(entry.getKey(), entry.getValue());
+                    }
+                }
+                // Add request headers second (they override connector headers)
+                if (requestHeaders != null) {
+                    for (Map.Entry<String, String> entry : requestHeaders.entrySet()) {
+                        builder.header(entry.getKey(), entry.getValue());
+                    }
                 }
             };
 

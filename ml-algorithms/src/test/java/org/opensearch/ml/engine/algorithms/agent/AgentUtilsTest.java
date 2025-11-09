@@ -2003,80 +2003,80 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
     @Test
     public void testExtractRequestHeaders_WithValidHeaders() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters
-            .put(
-                org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS,
-                "{\"Authorization\":\"Bearer token123\",\"Content-Type\":\"application/json\"}"
-            );
+        // Setup ThreadContext with headers
+        Map<String, String> expectedHeaders = new HashMap<>();
+        expectedHeaders.put("x-amzn-fas-accesskey", "access-key-value");
+        expectedHeaders.put("x-amzn-datasources", "https://example.aos.us-east-1.on.aws");
+        
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+        
+        realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
 
         assertEquals(2, result.size());
-        assertEquals("Bearer token123", result.get("Authorization"));
-        assertEquals("application/json", result.get("Content-Type"));
+        assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
+        assertEquals("https://example.aos.us-east-1.on.aws", result.get("x-amzn-datasources"));
     }
 
     @Test
-    public void testExtractRequestHeaders_WithNullParameters() {
-        Map<String, String> result = AgentUtils.extractRequestHeaders(null);
+    public void testExtractRequestHeaders_WithNoHeaders() {
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
 
         assertEquals(0, result.size());
         assertEquals(Collections.emptyMap(), result);
     }
 
     @Test
-    public void testExtractRequestHeaders_WithEmptyHeadersJson() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "");
+    public void testExtractRequestHeaders_WithEmptyHeaders() {
+        Map<String, String> emptyHeaders = new HashMap<>();
+        
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+        
+        realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, emptyHeaders);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
+
+        assertEquals(0, result.size());
+        assertEquals(emptyHeaders, result);
+    }
+
+    @Test
+    public void testExtractRequestHeaders_WithException() {
+        // Setup mock to throw exception
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenThrow(new RuntimeException("ThreadContext access failed"));
+
+        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
 
         assertEquals(0, result.size());
         assertEquals(Collections.emptyMap(), result);
     }
 
     @Test
-    public void testExtractRequestHeaders_WithNullHeadersJson() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, null);
+    public void testExtractRequestHeaders_WithPartialHeaders() {
+        Map<String, String> partialHeaders = new HashMap<>();
+        partialHeaders.put("x-amzn-fas-accesskey", "access-key-value");
+        
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+        
+        realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, partialHeaders);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
+        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
 
-        assertEquals(0, result.size());
-        assertEquals(Collections.emptyMap(), result);
-    }
-
-    @Test
-    public void testExtractRequestHeaders_WithWhitespaceHeadersJson() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "   ");
-
-        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
-
-        assertEquals(0, result.size());
-        assertEquals(Collections.emptyMap(), result);
-    }
-
-    @Test
-    public void testExtractRequestHeaders_WithInvalidJson() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "{invalid json}");
-
-        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
-
-        assertEquals(0, result.size());
-        assertEquals(Collections.emptyMap(), result);
-    }
-
-    @Test
-    public void testExtractRequestHeaders_WithEmptyJsonObject() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS, "{}");
-
-        Map<String, String> result = AgentUtils.extractRequestHeaders(parameters);
-
-        assertEquals(0, result.size());
+        assertEquals(1, result.size());
+        assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
+        assertEquals(partialHeaders, result);
     }
 
 }

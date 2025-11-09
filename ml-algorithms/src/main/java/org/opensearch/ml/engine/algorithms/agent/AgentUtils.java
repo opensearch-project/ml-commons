@@ -145,23 +145,15 @@ public class AgentUtils {
     public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
     private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
 
-    public static Map<String, String> extractRequestHeaders(Map<String, String> parameters) {
-        if (parameters == null) {
-            return Collections.emptyMap();
-        }
-
-        String headersJson = parameters.get(CommonValue.MCP_REQUEST_HEADERS);
-        if (headersJson == null || headersJson.trim().isEmpty()) {
-            return Collections.emptyMap();
-        }
-
+    public static Map<String, String> extractRequestHeaders(Client client) {
         try {
-            Type mapType = new TypeToken<Map<String, String>>() {
-            }.getType();
-            Map<String, String> headers = gson.fromJson(headersJson, mapType);
+            @SuppressWarnings("unchecked")
+            Map<String, String> headers = client.threadPool().getThreadContext().getTransient(
+                CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY
+            );
             return headers != null ? headers : Collections.emptyMap();
         } catch (Exception e) {
-            log.warn("Failed to parse request headers from JSON: {}", headersJson, e);
+            log.warn("Failed to retrieve MCP request headers from ThreadContext", e);
             return Collections.emptyMap();
         }
     }
@@ -720,7 +712,7 @@ public class AgentUtils {
         }.getType();
         List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
 
-        Map<String, String> requestHeaders = extractRequestHeaders(params);
+        Map<String, String> requestHeaders = extractRequestHeaders(client);
 
         // Use AtomicInteger to track completion of all async operations
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
