@@ -12,7 +12,6 @@ import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
-import static org.opensearch.ml.engine.agents.AgentContextUtil.extractProcessedToolOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTIONS_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_CHAT_HISTORY_PREFIX;
@@ -500,11 +499,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
+                    // Emit POST_TOOL hook event for non-function calling path
+                    List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
+                    ContextManagerContext contextAfterPostTool = AgentContextUtil
+                        .emitPostToolHook(filteredOutput, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                    // Extract processed output from POST_TOOL hook
+                    String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
+                    Object processedOutput = processedToolOutput != null ? processedToolOutput : filteredOutput;
+
+                    // Save trace with processed output
                     saveTraceData(
                         memory,
                         "ReAct",
                         lastActionInput.get(),
-                        outputToOutputString(filteredOutput),
+                        outputToOutputString(processedOutput),
                         sessionId,
                         traceDisabled,
                         parentInteractionId,
@@ -521,8 +530,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         tmpParameters.put(INTERACTIONS, ", " + interactionsStr);
                     }
 
-                    sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-                    streamingWrapper.sendToolResponse(outputToOutputString(filteredOutput), sessionId, parentInteractionId);
+                    sessionMsgAnswerBuilder.append(outputToOutputString(processedOutput));
+                    streamingWrapper.sendToolResponse(outputToOutputString(processedOutput), sessionId, parentInteractionId);
                     traceTensors
                         .add(
                             ModelTensors
@@ -690,22 +699,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ContextManagerContext contextAfterPostTool = AgentContextUtil
                             .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry);
 
-                        // Extract processed output and update interactions
-                        Object extractedOutput = extractProcessedToolOutput(contextAfterPostTool);
-                        String outputResponseAfterHook = extractedOutput != null ? StringUtils.toJson(extractedOutput) : StringUtils.toJson(outputResponse);
-
-                        // Update interactions if context manager modified them
-                        List<String> postToolUpdatedInteractions = contextAfterPostTool.getToolInteractions();
-                        if (postToolUpdatedInteractions != null && !postToolUpdatedInteractions.equals(interactions)) {
-                            interactions.clear();
-                            interactions.addAll(postToolUpdatedInteractions);
-
-                            // Update parameters if context manager set INTERACTIONS
-                            String contextInteractions = contextAfterPostTool.getParameters().get(INTERACTIONS);
-                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
-                                tmpParameters.put(INTERACTIONS, contextInteractions);
-                            }
-                        }
+                        // Extract processed output from POST_TOOL hook
+                        String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
+                        String outputResponseAfterHook = processedToolOutput != null
+                            ? processedToolOutput
+                            : StringUtils.toJson(outputResponse);
 
                         List<Map<String, Object>> toolResults = List
                             .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
@@ -714,35 +712,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
                     } else {
-                        // Emit POST_TOOL hook event for non-function calling path
-                        List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        ContextManagerContext contextAfterPostTool = AgentContextUtil
-                            .emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
-
-                        // Extract processed output
-                        Object processedOutput = extractProcessedToolOutput(contextAfterPostTool);
-                        if (processedOutput == null) {
-                            processedOutput = r;
-                        }
-
-                        // Update interactions if context manager modified them
-                        List<String> postToolUpdatedInteractions = contextAfterPostTool.getToolInteractions();
-                        if (postToolUpdatedInteractions != null && !postToolUpdatedInteractions.equals(interactions)) {
-                            interactions.clear();
-                            interactions.addAll(postToolUpdatedInteractions);
-
-                            // Update parameters if context manager set INTERACTIONS
-                            String contextInteractions = contextAfterPostTool.getParameters().get(INTERACTIONS);
-                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
-                                tmpParameters.put(INTERACTIONS, contextInteractions);
-                            }
-                        }
-
                         interactions
                             .add(
                                 substitute(
                                     tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(processedOutput))),
+                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
                                     INTERACTIONS_PREFIX
                                 )
                             );
@@ -753,19 +727,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                Map
+                                    .of(
+                                        TOOL_CALL_ID,
+                                        toolCallId,
+                                        "tool_response",
+                                        "Tool " + action + " failed: " + StringUtils.processTextDoc(e.getMessage())
+                                    ),
                                 INTERACTIONS_PREFIX
                             )
                         );
                     nextStepListener
                         .onResponse(
-                            String
-                                .format(
-                                    Locale.ROOT,
-                                    "Failed to run the tool %s with the error message %s.",
-                                    finalAction,
-                                    e.getMessage().replaceAll("\\n", "\n")
-                                )
+                            String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", finalAction, e.getMessage())
                         );
                 });
                 if (tools.get(action) instanceof MLModelTool) {
