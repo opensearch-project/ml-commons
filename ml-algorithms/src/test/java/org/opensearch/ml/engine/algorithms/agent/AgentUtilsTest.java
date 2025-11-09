@@ -2007,11 +2007,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
         Map<String, String> expectedHeaders = new HashMap<>();
         expectedHeaders.put("x-amzn-fas-accesskey", "access-key-value");
         expectedHeaders.put("x-amzn-datasources", "https://example.aos.us-east-1.on.aws");
-        
+
         ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(realThreadContext);
-        
+
         realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
 
         Map<String, String> result = AgentUtils.extractRequestHeaders(client);
@@ -2036,11 +2036,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
     @Test
     public void testExtractRequestHeaders_WithEmptyHeaders() {
         Map<String, String> emptyHeaders = new HashMap<>();
-        
+
         ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(realThreadContext);
-        
+
         realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, emptyHeaders);
 
         Map<String, String> result = AgentUtils.extractRequestHeaders(client);
@@ -2065,11 +2065,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
     public void testExtractRequestHeaders_WithPartialHeaders() {
         Map<String, String> partialHeaders = new HashMap<>();
         partialHeaders.put("x-amzn-fas-accesskey", "access-key-value");
-        
+
         ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(realThreadContext);
-        
+
         realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, partialHeaders);
 
         Map<String, String> result = AgentUtils.extractRequestHeaders(client);

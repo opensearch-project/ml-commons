@@ -14,8 +14,8 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
-import static org.opensearch.ml.utils.RestActionUtils.storeMcpRequestHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.storeMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.ByteArrayOutputStream;

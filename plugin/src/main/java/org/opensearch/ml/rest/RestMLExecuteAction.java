@@ -14,9 +14,9 @@ import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
-import static org.opensearch.ml.utils.RestActionUtils.storeMcpRequestHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.storeMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;

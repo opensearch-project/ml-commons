@@ -148,9 +148,10 @@ public class AgentUtils {
     public static Map<String, String> extractRequestHeaders(Client client) {
         try {
             @SuppressWarnings("unchecked")
-            Map<String, String> headers = client.threadPool().getThreadContext().getTransient(
-                CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY
-            );
+            Map<String, String> headers = client
+                .threadPool()
+                .getThreadContext()
+                .getTransient(CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
             return headers != null ? headers : Collections.emptyMap();
         } catch (Exception e) {
             log.warn("Failed to retrieve MCP request headers from ThreadContext", e);

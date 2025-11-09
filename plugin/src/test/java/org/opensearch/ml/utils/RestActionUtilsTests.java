@@ -404,7 +404,7 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         headers.put("x-amzn-fas-secretkey", List.of("secret-key-value"));
         headers.put("x-amzn-fas-sessiontoken", List.of("session-token-value"));
         headers.put("x-amzn-datasources", List.of("https://example.aos.us-east-1.on.aws"));
-        
+
         FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
             .withMethod(RestRequest.Method.POST)
             .withPath(urlPath)
@@ -422,7 +422,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
 
         // Verify
         @SuppressWarnings("unchecked")
-        Map<String, String> storedHeaders = threadContext.getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        Map<String, String> storedHeaders = threadContext
+            .getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
         assertNotNull(storedHeaders);
         assertEquals(4, storedHeaders.size());
         assertEquals("access-key-value", storedHeaders.get("x-amzn-fas-accesskey"));
@@ -450,7 +451,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
 
         // Verify - should not store anything in ThreadContext
         @SuppressWarnings("unchecked")
-        Map<String, String> storedHeaders = threadContext.getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        Map<String, String> storedHeaders = threadContext
+            .getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
         assertNull(storedHeaders);
     }
 
