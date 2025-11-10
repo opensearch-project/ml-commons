@@ -104,36 +104,33 @@ public class AgentContextUtil {
         return builder.build();
     }
 
-    public static Object emitPostToolHook(
+    public static ContextManagerContext emitPostToolHook(
         Object toolOutput,
         Map<String, String> parameters,
         List<MLToolSpec> toolSpecs,
         Memory memory,
         HookRegistry hookRegistry
     ) {
+        ContextManagerContext context = buildContextManagerContextForToolOutput(
+            StringUtils.toJson(toolOutput),
+            parameters,
+            toolSpecs,
+            memory
+        );
+
         if (hookRegistry != null) {
             try {
                 if (toolOutput == null) {
                     log.warn("Tool output is null, skipping POST_TOOL hook");
-                    return null;
+                    return context;
                 }
-                ContextManagerContext context = buildContextManagerContextForToolOutput(
-                    StringUtils.toJson(toolOutput),
-                    parameters,
-                    toolSpecs,
-                    memory
-                );
                 EnhancedPostToolEvent event = new EnhancedPostToolEvent(null, null, context, new HashMap<>());
                 hookRegistry.emit(event);
-
-                Object processedOutput = extractProcessedToolOutput(context);
-                return processedOutput != null ? processedOutput : toolOutput;
             } catch (Exception e) {
                 log.error("Failed to emit POST_TOOL hook event", e);
-                return toolOutput;
             }
         }
-        return toolOutput;
+        return context;
     }
 
     public static ContextManagerContext emitPreLLMHook(
