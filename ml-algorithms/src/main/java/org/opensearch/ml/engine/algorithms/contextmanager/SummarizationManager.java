@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.contextmanager;
 
 import static java.lang.Math.min;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
@@ -193,7 +194,13 @@ public class SummarizationManager implements ContextManager {
             MLInput mlInput = MLInput.builder().algorithm(REMOTE).inputDataset(inputDataset).build();
 
             // Create prediction request
-            MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().modelId(modelId).mlInput(mlInput).build();
+            String tenantId = (String) context.getParameter(TENANT_ID_FIELD);
+            MLPredictionTaskRequest request = MLPredictionTaskRequest
+                .builder()
+                .modelId(modelId)
+                .mlInput(mlInput)
+                .tenantId(tenantId)
+                .build();
 
             // Execute prediction
             ActionListener<MLTaskResponse> listener = ActionListener.wrap(response -> {

@@ -486,7 +486,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
-                    // filteredOutput is the POST Tool output
+                    // output is now the processed output from POST_TOOL hook in runTool
                     Object filteredOutput = filterToolOutput(lastToolParams, output);
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
 
@@ -499,6 +499,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
+                    // Save trace with processed output
                     saveTraceData(
                         memory,
                         "ReAct",
@@ -680,26 +681,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                    // Emit POST_TOOL hook event - common for all tool executions
+                    List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
+                    ContextManagerContext contextAfterPostTool = AgentContextUtil
+                        .emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                    // Extract processed output from POST_TOOL hook
+                    String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
+                    Object processedOutput = processedToolOutput != null ? processedToolOutput : r;
+
                     if (functionCalling != null) {
-                        String outputResponse = parseResponse(filterToolOutput(toolParams, r));
-
-                        // Emit POST_TOOL hook event after tool execution and process current tool
-                        // output
-                        List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        String outputResponseAfterHook = AgentContextUtil
-                            .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry)
-                            .toString();
-
+                        String outputResponse = parseResponse(filterToolOutput(toolParams, processedOutput));
                         List<Map<String, Object>> toolResults = List
-                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
+                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
-                        // TODO: support multiple tool calls at the same time so that multiple
-                        // LLMMessages can be generated here
+                        // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
                     } else {
-                        // Emit POST_TOOL hook event for non-function calling path
-                        List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        Object processedOutput = AgentContextUtil.emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
                         interactions
                             .add(
                                 substitute(
@@ -709,25 +707,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 )
                             );
                     }
-                    nextStepListener.onResponse(r);
+                    nextStepListener.onResponse(processedOutput);
                 }, e -> {
                     interactions
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                Map
+                                    .of(
+                                        TOOL_CALL_ID,
+                                        toolCallId,
+                                        "tool_response",
+                                        "Tool " + action + " failed: " + StringUtils.processTextDoc(e.getMessage())
+                                    ),
                                 INTERACTIONS_PREFIX
                             )
                         );
                     nextStepListener
                         .onResponse(
-                            String
-                                .format(
-                                    Locale.ROOT,
-                                    "Failed to run the tool %s with the error message %s.",
-                                    finalAction,
-                                    e.getMessage().replaceAll("\\n", "\n")
-                                )
+                            String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", finalAction, e.getMessage())
                         );
                 });
                 if (tools.get(action) instanceof MLModelTool) {
