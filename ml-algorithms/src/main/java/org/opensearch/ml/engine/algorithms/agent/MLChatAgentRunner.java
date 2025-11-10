@@ -625,7 +625,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                Map
+                                    .of(
+                                        TOOL_CALL_ID,
+                                        toolCallId,
+                                        "tool_response",
+                                        "Tool " + action + " failed: " + StringUtils.processTextDoc(e.getMessage())
+                                    ),
                                 INTERACTIONS_PREFIX
                             )
                         );
