@@ -1044,22 +1044,52 @@ public class AgentUtils {
             memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
         if (requestParameters != null) {
-            String endpointParam = requestParameters.get(ENDPOINT_FIELD);
-            if (!Strings.isNullOrEmpty(endpointParam)) {
-                memoryParams.put(ENDPOINT_FIELD, endpointParam);
-            }
-            String regionParam = requestParameters.get(HttpConnector.REGION_FIELD);
-            if (!Strings.isNullOrEmpty(regionParam)) {
-                memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
-            }
-            Map<String, String> credential = parseStringMapParameter(requestParameters.get(CREDENTIAL_FIELD), CREDENTIAL_FIELD);
-            if (credential != null && !credential.isEmpty()) {
-                memoryParams.put(CREDENTIAL_FIELD, credential);
-            }
-            // Extract user_id if provided
-            String userIdParam = requestParameters.get("user_id");
-            if (!Strings.isNullOrEmpty(userIdParam)) {
-                memoryParams.put("user_id", userIdParam);
+            // Check if parameters are wrapped in remote_agent_memory_configuration
+            String remoteMemoryConfigStr = requestParameters.get("remote_agent_memory_configuration");
+            if (!Strings.isNullOrEmpty(remoteMemoryConfigStr)) {
+                // Parse the remote_agent_memory_configuration JSON
+                try (
+                    XContentParser parser = JsonXContent.jsonXContent
+                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, remoteMemoryConfigStr)
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Map<String, Object> remoteMemoryConfig = parser.map();
+
+                    // Extract memory_container_id
+                    String memoryContainerIdParam = (String) remoteMemoryConfig.get(MEMORY_CONTAINER_ID_FIELD);
+                    if (!Strings.isNullOrEmpty(memoryContainerIdParam)) {
+                        memoryParams.put(MEMORY_CONTAINER_ID_FIELD, memoryContainerIdParam);
+                    }
+
+                    // Extract endpoint
+                    String endpointParam = (String) remoteMemoryConfig.get(ENDPOINT_FIELD);
+                    if (!Strings.isNullOrEmpty(endpointParam)) {
+                        memoryParams.put(ENDPOINT_FIELD, endpointParam);
+                    }
+
+                    // Extract region
+                    String regionParam = (String) remoteMemoryConfig.get(HttpConnector.REGION_FIELD);
+                    if (!Strings.isNullOrEmpty(regionParam)) {
+                        memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
+                    }
+
+                    // Extract credential
+                    Object credentialObj = remoteMemoryConfig.get(CREDENTIAL_FIELD);
+                    if (credentialObj instanceof Map) {
+                        Map<String, String> credential = (Map<String, String>) credentialObj;
+                        if (!credential.isEmpty()) {
+                            memoryParams.put(CREDENTIAL_FIELD, credential);
+                        }
+                    }
+
+                    // Extract user_id if provided
+                    String userIdParam = (String) remoteMemoryConfig.get("user_id");
+                    if (!Strings.isNullOrEmpty(userIdParam)) {
+                        memoryParams.put("user_id", userIdParam);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse remote_agent_memory_configuration", e);
+                }
             }
             memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }

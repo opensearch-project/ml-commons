@@ -1201,12 +1201,14 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             if (endpoint.contains(".aoss.amazonaws.com")) {
                 return "aoss";
             }
-            // For managed OpenSearch: https://xxx.us-west-2.es.amazonaws.com
-            if (endpoint.contains(".es.amazonaws.com")) {
+            // For managed OpenSearch (production, staging, integration)
+            if (endpoint.contains(".es.amazonaws.com")
+                || endpoint.contains(".es-staging.amazonaws.com")
+                || endpoint.contains(".es-integ.amazonaws.com")) {
                 return "es";
             }
-            // Default to es for OpenSearch/Elasticsearch service
-            return "es";
+            // Default to aoss for other OpenSearch services
+            return "aoss";
         }
 
         /**
