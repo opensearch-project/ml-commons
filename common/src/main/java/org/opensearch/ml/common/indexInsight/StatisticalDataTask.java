@@ -323,7 +323,6 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         Map<String, Aggregation> aggregationMap = ((ParsedSampler) searchResponse.getAggregations().getAsMap().get("sample"))
             .getAggregations()
             .getAsMap();
-	log.error("search result: " + aggregationMap);
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, Object> finalResult = new LinkedHashMap<>();
         List<Object> exampleDocs = null;
