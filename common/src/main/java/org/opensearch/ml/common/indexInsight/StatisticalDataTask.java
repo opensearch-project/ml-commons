@@ -25,6 +25,8 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.utils.mergeMetaDataUtils.MergeRuleHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -32,11 +34,16 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.aggregations.Aggregation;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.AggregatorFactories;
+import org.opensearch.search.aggregations.bucket.filter.Filters;
 import org.opensearch.search.aggregations.bucket.filter.FiltersAggregationBuilder;
 import org.opensearch.search.aggregations.bucket.filter.FiltersAggregator.KeyedFilter;
 import org.opensearch.search.aggregations.bucket.filter.InternalFilters;
+import org.opensearch.search.aggregations.bucket.sampler.Sampler;
 import org.opensearch.search.aggregations.bucket.sampler.InternalSampler;
+import org.opensearch.search.aggregations.bucket.sampler.ParsedSampler;
+import org.opensearch.search.aggregations.metrics.ParsedTopHits;
 import org.opensearch.search.aggregations.bucket.sampler.SamplerAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.filter.ParsedFilters;
 import org.opensearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.opensearch.search.aggregations.metrics.CardinalityAggregationBuilder;
 import org.opensearch.search.aggregations.metrics.InternalTopHits;
@@ -313,9 +320,10 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         Set<String> filteredNames,
         SearchResponse searchResponse
     ) {
-        Map<String, Aggregation> aggregationMap = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"))
+        Map<String, Aggregation> aggregationMap = ((ParsedSampler) searchResponse.getAggregations().getAsMap().get("sample"))
             .getAggregations()
             .getAsMap();
+	log.error("search result: " + aggregationMap);
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, Object> finalResult = new LinkedHashMap<>();
         List<Object> exampleDocs = null;
@@ -323,7 +331,12 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
             String key = entry.getKey();
             Aggregation aggregation = entry.getValue();
             if (key.equals(EXAMPLE_DOC_KEYWORD)) {
-                SearchHit[] hits = ((InternalTopHits) aggregation).getHits().getHits();
+                SearchHit[] hits;
+                try {
+                    hits = ((ParsedTopHits) aggregation).getHits().getHits();
+                } catch (Exception e) {
+                    hits = ((InternalTopHits) aggregation).getHits().getHits();
+                }
                 exampleDocs = new ArrayList<>(hits.length);
                 for (SearchHit hit : hits) {
                     exampleDocs.add(hit.getSourceAsMap());
@@ -335,13 +348,23 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                         if (!filteredNames.contains(targetField)) {
                             continue;
                         }
-                        String aggregationType = key.substring(0, prefix.length() - 1);
-                        Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
+                        
+			
+			String aggregationType = key.substring(0, prefix.length() - 1);
+
+			Map<String, Object> aggregationResult = gson.fromJson(Strings.toString(MediaTypeRegistry.JSON, aggregation), Map.class);
                         Object targetValue;
+			String targetKey = key;
+			for (String aggKey: aggregationResult.keySet()) {
+                            if (aggKey.split("#", 2)[1].equals(key)) {
+                                targetKey = aggKey;
+                                break;
+                            }
+                        }
                         try {
                             if (prefix.equals(UNIQUE_TERM_PREFIX)) {
                                 // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
-                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(targetKey);
                                 List<Map<String, Object>> buckets = aggResult != null
                                     ? (List<Map<String, Object>>) aggResult.get("buckets")
                                     : null;
@@ -351,7 +374,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
                                 targetValue = buckets.stream().filter(bucket -> bucket != null).map(bucket -> bucket.get("key")).toList();
                             } else {
-                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
+                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(targetKey);
                                 if (aggResult.containsKey("value_as_string")) {
                                     targetValue = aggResult.get("value_as_string");
                                 } else {
@@ -381,13 +404,25 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     }
 
     private Set<String> filterColumns(Map<String, String> allFieldsToType, SearchResponse searchResponse) {
-        InternalSampler sampleAggregation = ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample"));
-        Map<String, Aggregation> aggregationMap = sampleAggregation.getAggregations().getAsMap();
-        long totalDocCount = sampleAggregation.getDocCount();
+        Map<String, Aggregation> aggregationMap;
+	Sampler sampleAggregation;
+        try {
+	    sampleAggregation = (ParsedSampler) searchResponse.getAggregations().getAsMap().get("sample"); 
+	    aggregationMap =  ((ParsedSampler) searchResponse.getAggregations().getAsMap().get("sample")).getAggregations().getAsMap();
+	} catch (Exception e) {
+	    sampleAggregation = (InternalSampler) searchResponse.getAggregations().getAsMap().get("sample");
+	    aggregationMap =  ((InternalSampler) searchResponse.getAggregations().getAsMap().get("sample")).getAggregations().getAsMap();
+	}
+	long totalDocCount = sampleAggregation.getDocCount();
         Set<String> filteredNames = new HashSet<>();
-        InternalFilters aggregation = (InternalFilters) aggregationMap.get(NOT_NULL_KEYWORD);
-        for (InternalFilters.InternalBucket bucket : aggregation.getBuckets()) {
-            String targetField = bucket.getKey();
+	Filters aggregation;
+	try {
+            aggregation = (Filters) aggregationMap.get(NOT_NULL_KEYWORD);
+	} catch (Exception e) {
+	    return filteredNames;
+	}
+	for (Filters.Bucket bucket : aggregation.getBuckets()) {
+            String targetField = bucket.getKey().toString();
             targetField = targetField.substring(0, targetField.length() - 1 - NOT_NULL_KEYWORD.length());
             long docCount = bucket.getDocCount();
             if (docCount > HIGH_PRIORITY_COLUMN_THRESHOLD * totalDocCount && allFieldsToType.containsKey(targetField)) {
