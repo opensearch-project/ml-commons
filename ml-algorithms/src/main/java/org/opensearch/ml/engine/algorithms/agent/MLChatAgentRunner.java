@@ -486,7 +486,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
-                    // filteredOutput is the POST Tool output
+                    // output is now the processed output from POST_TOOL hook in runTool
                     Object filteredOutput = filterToolOutput(lastToolParams, output);
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
 
@@ -499,21 +499,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
-                    // Emit POST_TOOL hook event for non-function calling path
-                    List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                    ContextManagerContext contextAfterPostTool = AgentContextUtil
-                        .emitPostToolHook(filteredOutput, tmpParameters, postToolSpecs, null, hookRegistry);
-
-                    // Extract processed output from POST_TOOL hook
-                    String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
-                    Object processedOutput = processedToolOutput != null ? processedToolOutput : filteredOutput;
-
                     // Save trace with processed output
                     saveTraceData(
                         memory,
                         "ReAct",
                         lastActionInput.get(),
-                        outputToOutputString(processedOutput),
+                        outputToOutputString(filteredOutput),
                         sessionId,
                         traceDisabled,
                         parentInteractionId,
@@ -530,8 +521,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         tmpParameters.put(INTERACTIONS, ", " + interactionsStr);
                     }
 
-                    sessionMsgAnswerBuilder.append(outputToOutputString(processedOutput));
-                    streamingWrapper.sendToolResponse(outputToOutputString(processedOutput), sessionId, parentInteractionId);
+                    sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
+                    streamingWrapper.sendToolResponse(outputToOutputString(filteredOutput), sessionId, parentInteractionId);
                     traceTensors
                         .add(
                             ModelTensors
@@ -690,38 +681,33 @@ public class MLChatAgentRunner implements MLAgentRunner {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                    // Emit POST_TOOL hook event - common for all tool executions
+                    List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
+                    ContextManagerContext contextAfterPostTool = AgentContextUtil
+                        .emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                    // Extract processed output from POST_TOOL hook
+                    String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
+                    Object processedOutput = processedToolOutput != null ? processedToolOutput : r;
+
                     if (functionCalling != null) {
-                        String outputResponse = parseResponse(filterToolOutput(toolParams, r));
-
-                        // Emit POST_TOOL hook event after tool execution and process current tool
-                        // output
-                        List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        ContextManagerContext contextAfterPostTool = AgentContextUtil
-                            .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry);
-
-                        // Extract processed output from POST_TOOL hook
-                        String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
-                        String outputResponseAfterHook = processedToolOutput != null
-                            ? processedToolOutput
-                            : StringUtils.toJson(outputResponse);
-
+                        String outputResponse = parseResponse(filterToolOutput(toolParams, processedOutput));
                         List<Map<String, Object>> toolResults = List
-                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
+                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
-                        // TODO: support multiple tool calls at the same time so that multiple
-                        // LLMMessages can be generated here
+                        // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
                     } else {
                         interactions
                             .add(
                                 substitute(
                                     tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
+                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(processedOutput))),
                                     INTERACTIONS_PREFIX
                                 )
                             );
                     }
-                    nextStepListener.onResponse(r);
+                    nextStepListener.onResponse(processedOutput);
                 }, e -> {
                     interactions
                         .add(
