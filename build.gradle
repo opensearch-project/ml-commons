@@ -105,6 +105,15 @@ subprojects {
         resolutionStrategy.force "io.netty:netty-resolver:${versions.netty}"
         resolutionStrategy.force "io.netty:netty-transport:${versions.netty}"
         resolutionStrategy.force "io.netty:netty-transport-native-unix-common:${versions.netty}"
+        resolutionStrategy.force "software.amazon.awssdk:bom:${versions.aws}"
+        resolutionStrategy.force "software.amazon.awssdk:kms:${versions.aws}"
+        resolutionStrategy.force "software.amazon.awssdk:dynamodb:${versions.aws}"
+        resolutionStrategy.force "software.amazon.awssdk:dynamodb-enhanced:${versions.aws}"
+        resolutionStrategy.force "org.dafny:DafnyRuntime:4.9.0"
+    }
+
+    configurations.all {
+        exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
     }
 
     apply plugin: 'com.diffplug.spotless'
