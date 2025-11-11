@@ -86,8 +86,11 @@ shadowJar {
     destinationDirectory = file("${project.buildDir}/distributions")
     archiveClassifier.set(null)
     exclude 'META-INF/maven/com.google.guava/**'
-    exclude 'com/google/thirdparty/**'
-    relocate 'com.google.common', 'org.opensearch.ml.repackage.com.google.common' // dependency of cron-utils
+
+    exclude 'org/jspecify/**'
+    // Relocate Guava to avoid conflicts with other plugins
+    relocate 'com.google.common', 'org.opensearch.ml.repackage.com.google.common'
+    relocate 'com.google.thirdparty', 'org.opensearch.ml.repackage.com.google.thirdparty'
 }
 
 jar {
