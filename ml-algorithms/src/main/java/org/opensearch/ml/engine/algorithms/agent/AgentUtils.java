@@ -1033,21 +1033,28 @@ public class AgentUtils {
     }
 
     public static ModelTensorOutput createFrontendToolCallResponse(String toolCallId, String action, String actionInput) {
+        // Create the tool_calls structure for frontend tools (original approach)
         Map<String, Object> toolCallData = Map
             .of(
                 "tool_calls",
                 List.of(Map.of("id", toolCallId, "type", "function", "function", Map.of("name", action, "arguments", actionInput)))
             );
 
-        ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(toolCallData).build();
-
-        org.opensearch.ml.common.output.model.ModelTensors modelTensors = org.opensearch.ml.common.output.model.ModelTensors
-            .builder()
-            .mlModelTensors(List.of(responseTensor))
+        // Create response tensor with the tool_calls structure
+        ModelTensor responseTensor = ModelTensor.builder()
+            .name("response")
+            .dataAsMap(Map.of("content", gson.toJson(toolCallData)))
             .build();
 
-        return ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+        return ModelTensorOutput.builder()
+            .mlModelOutputs(List.of(org.opensearch.ml.common.output.model.ModelTensors
+                .builder()
+                .mlModelTensors(List.of(responseTensor))
+                .build()))
+            .build();
     }
+
+
 
     public static Map<String, Tool> wrapFrontendToolsAsToolObjects(List<Map<String, Object>> frontendTools) {
         Map<String, Tool> wrappedTools = new HashMap<>();

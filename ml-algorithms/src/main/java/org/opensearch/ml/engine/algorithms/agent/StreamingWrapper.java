@@ -22,6 +22,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.agui.ToolCallResultEvent;
 import org.opensearch.ml.common.transport.prediction.MLPredictionStreamTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -118,6 +119,32 @@ public class StreamingWrapper {
                 channel.sendResponseBatch(toolChunk);
             } catch (Exception e) {
                 log.error("Failed to send tool response chunk", e);
+            }
+        }
+    }
+
+    /**
+     * Send TOOL_CALL_RESULT event for backend tools.
+     * Note: TOOL_CALL_START, TOOL_CALL_ARGS, and TOOL_CALL_END are already sent by BedrockStreamingHandler during LLM streaming.
+     */
+    public void sendBackendToolResult(String toolCallId, String toolResult, String sessionId, String parentInteractionId) {
+        if (isStreaming) {
+            try {
+                // Generate only TOOL_CALL_RESULT event (TOOL_CALL_END already sent after args completed)
+                ToolCallResultEvent resultEvent = new ToolCallResultEvent("msg_" + System.currentTimeMillis(), toolCallId, toolResult);
+
+                // Create JSON array with single AGUI event using proper toXContent() method for correct field ordering
+                String aguiEventsJson = "[" + resultEvent.toJsonString() + "]";
+
+                log.debug("AG-UI: Sending backend tool TOOL_CALL_RESULT event for toolCallId '{}'", toolCallId);
+
+                // Send as streaming chunk
+                MLTaskResponse toolChunk = createStreamChunk(aguiEventsJson, sessionId, parentInteractionId, false);
+                channel.sendResponseBatch(toolChunk);
+            } catch (Exception e) {
+                log.error("Failed to send backend tool AGUI events for toolCallId '{}': {}", toolCallId, e.getMessage());
+                // Fallback to plain text response
+                sendToolResponse(toolResult, sessionId, parentInteractionId);
             }
         }
     }

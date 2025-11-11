@@ -320,6 +320,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
+        AtomicReference<String> lastToolCallId = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
         Map<String, String> lastToolParams = new ConcurrentHashMap<>();
 
@@ -386,6 +387,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     lastAction.set(action);
                     lastActionInput.set(actionInput);
                     lastToolSelectionResponse.set(thoughtResponse);
+                    lastToolCallId.set(toolCallId);
 
                     traceTensors
                         .add(
@@ -516,7 +518,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-                    streamingWrapper.sendToolResponse(outputToOutputString(filteredOutput), sessionId, parentInteractionId);
+
+                    if (streamingWrapper != null) {
+                        streamingWrapper.sendBackendToolResult(
+                            lastToolCallId.get(),
+                            outputToOutputString(filteredOutput),
+                            sessionId,
+                            parentInteractionId
+                        );
+                    }
                     traceTensors
                         .add(
                             ModelTensors

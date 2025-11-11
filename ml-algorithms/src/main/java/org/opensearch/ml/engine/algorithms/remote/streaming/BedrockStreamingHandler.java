@@ -244,11 +244,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     extractToolInfo(event, toolName, toolUseId);
 
                     if (isAGUIAgent) {
-                        List<String> backendToolNames = getBackendToolNames();
-                        if (!backendToolNames.contains(toolName.get())) {
-                            List<BaseEvent> events = List.of(new ToolCallStartEvent(toolUseId.get(), toolName.get(), null));
-                            sendAGUIEvents(events, false, listener);
-                        }
+                        List<BaseEvent> events = List.of(new ToolCallStartEvent(toolUseId.get(), toolName.get(), null));
+                        sendAGUIEvents(events, false, listener);
                     }
                 } else if (isContentDelta(event)) {
                     sendContentResponse(getTextContent(event), false, listener);
@@ -265,13 +262,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
 
                     if (isAGUIAgent) {
-                        List<String> backendToolNames = getBackendToolNames();
                         List<BaseEvent> argsEvents = convertToAGUIEvents(
                             ToolCallState.ARGS_DELTA,
                             toolUseId.get(),
                             toolName.get(),
                             inputFragment,
-                            backendToolNames
+                            null
                         );
                         if (!argsEvents.isEmpty()) {
                             sendAGUIEvents(argsEvents, false, listener);
@@ -288,13 +284,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
 
                     if (isAGUIAgent) {
-                        List<String> backendToolNames = getBackendToolNames();
                         List<BaseEvent> argsEvents = convertToAGUIEvents(
                             ToolCallState.ARGS_DELTA,
                             toolUseId.get(),
                             toolName.get(),
                             inputFragment,
-                            backendToolNames
+                            null
                         );
                         if (!argsEvents.isEmpty()) {
                             sendAGUIEvents(argsEvents, false, listener);
@@ -303,6 +298,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         sendContentResponse(inputFragment, false, listener);
                     }
                 } else if (isToolInputComplete(event)) {
+                    // Send TOOL_CALL_END event immediately after tool args are done streaming
+                    if (isAGUIAgent) {
+                        List<BaseEvent> endEvent = List.of(new ToolCallEndEvent(toolUseId.get()));
+                        sendAGUIEvents(endEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}' after args completed", toolName.get());
+                    }
+
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
                     completeBedrockToolCall(toolName, toolInput, toolUseId, listener);
                 }
@@ -371,11 +373,10 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 log.debug("AG-UI: Processing backend tool call '{}' in native Bedrock format", toolName.get());
                 listener.onResponse(createBedrockToolUseResponse(toolName, toolInput, toolUseId));
             } else {
-                List<BaseEvent> events = List
-                    .of(
-                        new ToolCallEndEvent(toolUseId.get()),
-                        new RunFinishedEvent(parameters.get(AGUI_PARAM_THREAD_ID), parameters.get(AGUI_PARAM_RUN_ID), null)
-                    );
+                // Frontend tools: Only send RunFinishedEvent (TOOL_CALL_END already sent after args completed)
+                List<BaseEvent> events = List.of(
+                    new RunFinishedEvent(parameters.get(AGUI_PARAM_THREAD_ID), parameters.get(AGUI_PARAM_RUN_ID), null)
+                );
                 sendAGUIEvents(events, true, listener);
             }
         } else {
@@ -677,22 +678,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         String toolArgsDelta,
         List<String> backendToolNames
     ) {
-        if (backendToolNames != null && backendToolNames.contains(toolName)) {
-            log.debug("AG-UI: Skipping AG-UI events for backend tool '{}'", toolName);
-            return List.of();
-        }
-
         switch (toolCallState) {
             case START:
-                log.debug("AG-UI: Generating TOOL_CALL_START event for frontend tool '{}'", toolName);
+                log.debug("AG-UI: Generating TOOL_CALL_START event for tool '{}'", toolName);
                 return List.of(new ToolCallStartEvent(toolCallId, toolName, null));
 
             case ARGS_DELTA:
-                log
-                    .debug(
-                        "AG-UI: Generating TOOL_CALL_ARGS event with delta length: {}",
-                        toolArgsDelta != null ? toolArgsDelta.length() : 0
-                    );
+                log.debug("AG-UI: Generating TOOL_CALL_ARGS event for tool '{}' with delta length: {}",
+                    toolName, toolArgsDelta != null ? toolArgsDelta.length() : 0);
                 return List.of(new ToolCallArgsEvent(toolCallId, toolArgsDelta));
 
             case END:
