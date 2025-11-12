@@ -94,12 +94,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
         }
         // Check if request came from REST and user should be blocked
         if (request.isFromRest() && shouldBlockRestAccessForMemoryCreation(client, restrictedBackendRoles)) {
-            actionListener.onFailure(
-                new OpenSearchStatusException(
-                    "You are not permitted to create conversations.",
-                    FORBIDDEN
-                )
-            );
+            actionListener.onFailure(new OpenSearchStatusException("You are not permitted to create conversations.", FORBIDDEN));
             return;
         }
         String name = request.getName();
@@ -107,9 +102,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
         Map<String, String> additionalInfos = request.getAdditionalInfos();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            ActionListener<String> al = ActionListener.wrap(r -> {
-                internalListener.onResponse(new CreateConversationResponse(r));
-            }, e -> {
+            ActionListener<String> al = ActionListener.wrap(r -> { internalListener.onResponse(new CreateConversationResponse(r)); }, e -> {
                 log.error("Failed to create new memory with name " + request.getName(), e);
                 internalListener.onFailure(e);
             });

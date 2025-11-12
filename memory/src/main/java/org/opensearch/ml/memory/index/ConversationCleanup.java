@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.memory.index;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_CLEANUP_USERNAMES;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -38,8 +40,6 @@ import org.opensearch.transport.client.Client;
 import org.opensearch.transport.client.Requests;
 
 import lombok.extern.log4j.Log4j2;
-
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_CLEANUP_USERNAMES;
 
 /**
  * Service for cleaning up old conversations (memories) from specified usernames that are older than 24 hours.
@@ -71,9 +71,7 @@ public class ConversationCleanup {
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.cleanupUsers = ML_COMMONS_MEMORY_CLEANUP_USERNAMES.get(clusterService.getSettings());
-        clusterService
-                .getClusterSettings()
-                .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_CLEANUP_USERNAMES, it -> cleanupUsers = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MEMORY_CLEANUP_USERNAMES, it -> cleanupUsers = it);
     }
 
     /**
@@ -81,20 +79,13 @@ public class ConversationCleanup {
      */
     public void startCleanupJob() {
         try {
-            threadPool.schedule(
-                () -> cleanupOldConversations(),
-                TimeValue.timeValueHours(CLEANUP_INTERVAL_HOURS),
-                MEMORY_CLEANUP_THREAD_POOL
-            );
+            threadPool
+                .schedule(() -> cleanupOldConversations(), TimeValue.timeValueHours(CLEANUP_INTERVAL_HOURS), MEMORY_CLEANUP_THREAD_POOL);
         } catch (Exception e) {
             log.error("Failed to schedule cleanup job, will retry", e);
             // Retry scheduling after a short delay to handle transient failures
             try {
-                threadPool.schedule(
-                    () -> startCleanupJob(),
-                    TimeValue.timeValueMinutes(5),
-                    MEMORY_CLEANUP_THREAD_POOL
-                );
+                threadPool.schedule(() -> startCleanupJob(), TimeValue.timeValueMinutes(5), MEMORY_CLEANUP_THREAD_POOL);
             } catch (Exception retryException) {
                 log.error("Failed to retry scheduling cleanup job", retryException);
             }
@@ -147,9 +138,7 @@ public class ConversationCleanup {
             // Filter by usernames from the setting
             org.opensearch.index.query.TermsQueryBuilder userQuery = QueryBuilders
                 .termsQuery(ConversationalIndexConstants.USER_FIELD, cleanupUsers);
-            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery()
-                .must(rangeQuery)
-                .must(userQuery);
+            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery().must(rangeQuery).must(userQuery);
             searchRequest.source().query(boolQuery);
             searchRequest.source().size(1000);
 
@@ -186,9 +175,7 @@ public class ConversationCleanup {
         }
 
         ConversationMeta conversationMeta = ConversationMeta.fromSearchHit(hits[index]);
-        ActionListener<Boolean> deleteListener = ActionListener.wrap(success -> {
-            deleteNextConversation(hits, index + 1);
-        }, e -> {
+        ActionListener<Boolean> deleteListener = ActionListener.wrap(success -> { deleteNextConversation(hits, index + 1); }, e -> {
             log.error("Error deleting conversation: " + conversationMeta.getId(), e);
             // Continue with next conversation even if this one failed
             deleteNextConversation(hits, index + 1);
@@ -197,4 +184,3 @@ public class ConversationCleanup {
         cmHandler.deleteConversation(conversationMeta.getId(), deleteListener);
     }
 }
-

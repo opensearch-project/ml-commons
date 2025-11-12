@@ -329,13 +329,13 @@ public final class MLCommonsSettings {
      * Usernames whose messages will be cleaned up
      */
     public static final Setting<List<String>> ML_COMMONS_MEMORY_CLEANUP_USERNAMES = Setting
-            .listSetting(
-                    ML_PLUGIN_SETTING_PREFIX + "memory_cleanup_usernames",
-                    ImmutableList.of(),
-                    Function.identity(),
-                    Setting.Property.NodeScope,
-                    Setting.Property.Dynamic
-            );
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory_cleanup_usernames",
+            ImmutableList.of(),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     public static final Setting<Boolean> ML_COMMONS_MCP_CONNECTOR_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "mcp_connector_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);

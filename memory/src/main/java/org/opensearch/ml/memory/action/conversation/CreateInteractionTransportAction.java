@@ -97,12 +97,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         }
         // Check if request came from REST and user should be blocked
         if (request.isFromRest() && shouldBlockRestAccessForMemoryCreation(client, restrictedBackendRoles)) {
-            actionListener.onFailure(
-                new OpenSearchStatusException(
-                    "You are not permitted to create interactions.",
-                    FORBIDDEN
-                )
-            );
+            actionListener.onFailure(new OpenSearchStatusException("You are not permitted to create interactions.", FORBIDDEN));
             return;
         }
         String cid = request.getConversationId();
