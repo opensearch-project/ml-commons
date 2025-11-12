@@ -17,16 +17,22 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.core.rest.RestStatus.FORBIDDEN;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES;
 
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -45,8 +51,10 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
 
     private ConversationalMemoryHandler cmHandler;
     private Client client;
+    private ClusterService clusterService;
 
     private volatile boolean featureIsEnabled;
+    private volatile List<String> restrictedBackendRoles;
 
     /**
      * Constructor
@@ -67,10 +75,15 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
         super(CreateConversationAction.NAME, transportService, actionFilters, CreateConversationRequest::new);
         this.cmHandler = cmHandler;
         this.client = client;
+        this.clusterService = clusterService;
         this.featureIsEnabled = MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
+        this.restrictedBackendRoles = ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES.get(clusterService.getSettings());
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, it -> featureIsEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES, it -> restrictedBackendRoles = it);
     }
 
     @Override
@@ -79,12 +92,24 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
             actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         }
+        // Check if request came from REST and user should be blocked
+        if (request.isFromRest() && shouldBlockRestAccessForMemoryCreation(client, restrictedBackendRoles)) {
+            actionListener.onFailure(
+                new OpenSearchStatusException(
+                    "You are not permitted to create conversations.",
+                    FORBIDDEN
+                )
+            );
+            return;
+        }
         String name = request.getName();
         String applicationType = request.getApplicationType();
         Map<String, String> additionalInfos = request.getAdditionalInfos();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            ActionListener<String> al = ActionListener.wrap(r -> { internalListener.onResponse(new CreateConversationResponse(r)); }, e -> {
+            ActionListener<String> al = ActionListener.wrap(r -> {
+                internalListener.onResponse(new CreateConversationResponse(r));
+            }, e -> {
                 log.error("Failed to create new memory with name " + request.getName(), e);
                 internalListener.onFailure(e);
             });
@@ -98,6 +123,35 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
             log.error("Failed to create new memory with name " + request.getName(), e);
             actionListener.onFailure(e);
         }
+    }
+
+    /**
+     * Check if a user should be blocked from REST access for creating conversations/interactions.
+     * Users with any of the specified backend roles will be blocked from REST access but can still use transport actions.
+     * @param client Client containing user info
+     * @param restrictedBackendRoles List of backend roles that should be blocked from REST access (null or empty to disable blocking)
+     * @return true if the user should be blocked from REST access, false otherwise
+     */
+    private boolean shouldBlockRestAccessForMemoryCreation(Client client, List<String> restrictedBackendRoles) {
+        if (restrictedBackendRoles == null || restrictedBackendRoles.isEmpty()) {
+            return false;
+        }
+        String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        User user = User.parse(userStr);
+        if (user == null) {
+            return false;
+        }
+        List<String> userBackendRoles = user.getBackendRoles();
+        if (userBackendRoles == null || userBackendRoles.isEmpty()) {
+            return false;
+        }
+        // Check if user has any of the restricted backend roles
+        for (String restrictedRole : restrictedBackendRoles) {
+            if (userBackendRoles.contains(restrictedRole)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

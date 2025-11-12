@@ -56,6 +56,8 @@ public class CreateInteractionRequest extends ActionRequest {
     private String parentIid;
     @Getter
     private Integer traceNumber;
+    @Getter
+    private boolean fromRest = false;
 
     public CreateInteractionRequest(
         String conversationId,
@@ -71,6 +73,27 @@ public class CreateInteractionRequest extends ActionRequest {
         this.response = response;
         this.origin = origin;
         this.additionalInfo = additionalInfo;
+    }
+
+    public CreateInteractionRequest(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        String parentIid,
+        Integer traceNumber
+    ) {
+        this.conversationId = conversationId;
+        this.input = input;
+        this.promptTemplate = promptTemplate;
+        this.response = response;
+        this.origin = origin;
+        this.additionalInfo = additionalInfo;
+        this.parentIid = parentIid;
+        this.traceNumber = traceNumber;
+        this.fromRest = false; // Default to false for transport requests
     }
 
     /**
@@ -90,6 +113,7 @@ public class CreateInteractionRequest extends ActionRequest {
         }
         this.parentIid = in.readOptionalString();
         this.traceNumber = in.readOptionalInt();
+        this.fromRest = false;
     }
 
     @Override
@@ -181,7 +205,7 @@ public class CreateInteractionRequest extends ActionRequest {
                 "At least one of the following parameters must be non-empty: " + "input, prompt_template, response, origin, additional_info"
             );
         }
-        return new CreateInteractionRequest(cid, input, prompt, response, origin, addinf, parintid, tracenum);
+        return new CreateInteractionRequest(cid, input, prompt, response, origin, addinf, parintid, tracenum, true);
     }
 
 }

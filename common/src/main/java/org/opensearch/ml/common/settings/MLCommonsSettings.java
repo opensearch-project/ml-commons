@@ -311,6 +311,32 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    /**
+     * Backend roles that should be blocked from REST access for creating conversations/interactions.
+     * Users with any of these backend roles can still create conversations/interactions via transport actions (e.g., via execute agent).
+     * Set to empty list to disable blocking.
+     */
+    public static final Setting<List<String>> ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES = Setting
+        .listSetting(
+            ML_PLUGIN_SETTING_PREFIX + "memory_rest_access_restricted_backend_roles",
+            ImmutableList.of(),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    /**
+     * Usernames whose messages will be cleaned up
+     */
+    public static final Setting<List<String>> ML_COMMONS_MEMORY_CLEANUP_USERNAMES = Setting
+            .listSetting(
+                    ML_PLUGIN_SETTING_PREFIX + "memory_cleanup_usernames",
+                    ImmutableList.of(),
+                    Function.identity(),
+                    Setting.Property.NodeScope,
+                    Setting.Property.Dynamic
+            );
+
     public static final Setting<Boolean> ML_COMMONS_MCP_CONNECTOR_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "mcp_connector_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE =
