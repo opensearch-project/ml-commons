@@ -335,6 +335,8 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
             Instant.EPOCH,
             "test",
             isHidden,
+            null, // contextManagementName
+            null, // contextManagement
             tenantId
         );
 
