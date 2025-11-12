@@ -53,6 +53,7 @@ public class RemoteModel implements Predictable {
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
     public static final String GUARDRAILS = "guardrails";
     public static final String CONNECTOR_PRIVATE_IP_ENABLED = "connectorPrivateIpEnabled";
+    public static final String CONNECTOR_SSL_VERIFICATION_ENABLED = "connectorSslVerificationEnabled";
     public static final String SDK_CLIENT = "sdk_client";
     public static final String SETTINGS = "settings";
 
@@ -127,6 +128,7 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
             this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
             this.connectorExecutor.setConnectorPrivateIpEnabled((boolean) params.getOrDefault(CONNECTOR_PRIVATE_IP_ENABLED, false));
+            this.connectorExecutor.setConnectorSslVerificationEnabled((boolean) params.getOrDefault(CONNECTOR_SSL_VERIFICATION_ENABLED, true));
             return CompletableFuture.completedStage(true);
         }).exceptionally(e -> {
             log.error("Failed to init remote model.", e);

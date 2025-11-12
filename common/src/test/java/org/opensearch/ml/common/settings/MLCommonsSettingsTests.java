@@ -107,4 +107,9 @@ public class MLCommonsSettingsTests {
     public void testStreamDisabledByDefault() {
         assertFalse(MLCommonsSettings.ML_COMMONS_STREAM_ENABLED.getDefault(null));
     }
+
+    @Test
+    public void testConnectorSSLVerificationByDefault() {
+        assertTrue(MLCommonsSettings.ML_COMMONS_CONNECTOR_SSL_VERIFICATION_ENABLED.getDefault(null));
+    }
 }
