@@ -1032,6 +1032,9 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                 credentials.putAll(credential);
             }
 
+            // Extract tenant ID from role ARN if applicable
+            String tenantId = extractTenantIdFromRoleArn(serviceName, credentials);
+
             // Create Memory Container API actions
             List<ConnectorAction> actions = createMemoryContainerActions();
 
@@ -1046,6 +1049,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                     .parameters(parameters)
                     .credential(credentials)
                     .actions(actions)
+                    .tenantId(tenantId)
                     .build();
             } else {
                 // Use HttpConnector for plain HTTP
@@ -1056,6 +1060,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                     .parameters(parameters)
                     .credential(credentials.isEmpty() ? null : credentials)
                     .actions(actions)
+                    .tenantId(null)
                     .build();
             }
 
@@ -1087,8 +1092,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             connector
                 .decrypt(
                     ConnectorAction.ActionType.EXECUTE.name(),
-                    (cred, tenantId) -> cred,  // No-op function - credentials are already plaintext
-                    null  // No tenant ID for inline connectors
+                    (cred, tenant) -> cred,  // No-op function - credentials are already plaintext
+                    tenantId
                 );
 
             return connector;
@@ -1209,6 +1214,48 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             }
             // Default to aoss for other OpenSearch services
             return "aoss";
+        }
+
+        /**
+         * Extract dummy tenant ID from role ARN for AOSS services.
+         * Essentially we only need the front part (account ID) as client ID when in AOSS
+         *
+         * @param serviceName The AWS service name (aoss or es)
+         * @param credential The credential map that may contain roleArn
+         * @return Tenant ID in format "account:role" for AOSS, null for ES or if roleArn not present
+         *
+         * Example:
+         * - Input: serviceName="aoss", roleArn="arn:aws:iam::123456789012:role/role-name"
+         * - Output: "123456789012:role"
+         */
+        private String extractTenantIdFromRoleArn(String serviceName, Map<String, String> credential) {
+            // Return null for ES service
+            if (!"aoss".equals(serviceName)) {
+                return null;
+            }
+
+            // Check if credential map exists and contains roleArn
+            if (credential == null || !credential.containsKey("roleArn")) {
+                return null;
+            }
+
+            String roleArn = credential.get("roleArn");
+            if (Strings.isNullOrEmpty(roleArn)) {
+                return null;
+            }
+
+            // Expected format: arn:aws:iam::{account}:role/{role-name}
+            try {
+                String[] parts = roleArn.split(":");
+                if (parts.length >= 5 && "role".equals(parts[4])) {
+                    String account = parts[3];
+                    return account + ":role";
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse roleArn: {}", roleArn, e);
+            }
+
+            return null;
         }
 
         /**
