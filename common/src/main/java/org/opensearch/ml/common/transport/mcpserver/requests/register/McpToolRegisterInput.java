@@ -31,6 +31,9 @@ public class McpToolRegisterInput extends McpToolBaseInput {
         if (super.getType() == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
+        if (super.getName() == null) {
+            super.setName(super.getType());
+        }
     }
 
     public McpToolRegisterInput(
@@ -42,11 +45,10 @@ public class McpToolRegisterInput extends McpToolBaseInput {
         Instant createdTime,
         Instant lastUpdateTime
     ) {
-        super(name, type, description, parameters, attributes, createdTime, lastUpdateTime);
+        super(name == null ? type : name, type, description, parameters, attributes, createdTime, lastUpdateTime);
         if (type == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
-
     }
 
     public static McpToolRegisterInput parse(XContentParser parser) throws IOException {
@@ -88,6 +90,10 @@ public class McpToolRegisterInput extends McpToolBaseInput {
                     parser.skipChildren();
                     break;
             }
+        }
+        // If name is null, default to type
+        if (name == null && type != null) {
+            name = type;
         }
         return new McpToolRegisterInput(name, type, description, params, attributes, createdTime, lastUpdateTime);
     }
