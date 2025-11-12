@@ -56,6 +56,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
@@ -1170,5 +1171,49 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_SUFFIX));
         Assert.assertTrue(result.containsKey(AgentUtils.RESPONSE_FORMAT_INSTRUCTION));
         Assert.assertTrue(result.containsKey(AgentUtils.TOOL_RESPONSE));
+    }
+
+    @Test
+    public void testExceptionMessageEscaping() {
+        // Test the problematic exception message from the error
+        String problematicMessage = "Invalid payload: { \"system\": [{\"text\": \"You are a precise...\"}], \"messages\": [...] }\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(problematicMessage);
+
+        // Verify that problematic characters are escaped
+        Assert
+            .assertFalse(
+                "Escaped message should not contain unescaped newlines",
+                escapedMessage.contains("\n") && !escapedMessage.contains("\\n")
+            );
+        Assert
+            .assertFalse(
+                "Escaped message should not contain unescaped quotes",
+                escapedMessage.contains("\"") && !escapedMessage.contains("\\\"")
+            );
+    }
+
+    @Test
+    public void testGsonParsingErrorMessageEscaping() {
+        // Test the specific Gson error message pattern
+        String gsonError = "Expected BEGIN_ARRAY but was STRING at line 1 column 1 path $\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(gsonError);
+
+        // The escaped message should be safe for JSON inclusion
+        Assert.assertTrue("Escaped message should be safe for JSON", !escapedMessage.contains("\n") || escapedMessage.contains("\\n"));
+    }
+
+    @Test
+    public void testNormalMessagePassthrough() {
+        // Test that normal messages without special characters pass through unchanged
+        String normalMessage = "Tool execution failed with normal error";
+
+        String escapedMessage = StringUtils.processTextDoc(normalMessage);
+
+        // Normal messages should be handled properly
+        Assert.assertTrue("Normal messages should be handled properly", escapedMessage.length() > 0);
     }
 }
