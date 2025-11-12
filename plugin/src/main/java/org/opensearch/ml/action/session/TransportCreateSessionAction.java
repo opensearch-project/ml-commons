@@ -133,9 +133,13 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
             memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, ActionListener.wrap(r -> {
                 MLCreateSessionResponse response = MLCreateSessionResponse.builder().sessionId(r.getId()).status("created").build();
                 actionListener.onResponse(response);
-            }, e -> { actionListener.onFailure(e); }));
+            }, e -> {
+                log.error("Failed to create session in container {}", input.getMemoryContainerId(), e);
+                actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            }));
         } catch (IOException e) {
-            actionListener.onFailure(e);
+            log.error("Failed to build XContent for session in container {}", input.getMemoryContainerId(), e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 

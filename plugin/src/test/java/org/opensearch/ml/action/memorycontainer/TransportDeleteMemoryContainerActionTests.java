@@ -245,8 +245,9 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         verify(actionListener).onFailure(argumentCaptor.capture());
 
         Exception exception = argumentCaptor.getValue();
-        assertTrue(exception instanceof IndexNotFoundException);
-        assertTrue(exception.getMessage().contains("Memory container index not found"));
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     public void testDeleteMemoryContainer_MultiTenancyEnabled_ValidTenantId() {
@@ -491,7 +492,9 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
-        assertEquals("Failed to delete memory indices", exception.getMessage());
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     @Test
@@ -568,7 +571,9 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception instanceof NullPointerException || exception.getMessage().contains("configuration"));
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     @Test
@@ -855,7 +860,9 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(exceptionCaptor.capture());
         Exception exception = exceptionCaptor.getValue();
-        assertTrue(exception.getMessage().contains("Failed to count containers"));
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) exception).status());
+        assertTrue(exception.getMessage().contains("Internal server error"));
     }
 
     @Test
