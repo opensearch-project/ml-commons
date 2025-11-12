@@ -758,7 +758,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             saveAndReturnFinalResult(
-                (ConversationIndexMemory) memory,
+                memory,
                 parentInteractionId,
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
