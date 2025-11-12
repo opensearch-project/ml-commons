@@ -1044,37 +1044,37 @@ public class AgentUtils {
             memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
         if (requestParameters != null) {
-            // Check if parameters are wrapped in remote_agent_memory_configuration
-            String remoteMemoryConfigStr = requestParameters.get("remote_agent_memory_configuration");
-            if (!Strings.isNullOrEmpty(remoteMemoryConfigStr)) {
-                // Parse the remote_agent_memory_configuration JSON
+            // Check if parameters are wrapped in memory_configuration
+            String memoryConfigStr = requestParameters.get("memory_configuration");
+            if (!Strings.isNullOrEmpty(memoryConfigStr)) {
+                // Parse the memory_configuration JSON
                 try (
                     XContentParser parser = JsonXContent.jsonXContent
-                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, remoteMemoryConfigStr)
+                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, memoryConfigStr)
                 ) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    Map<String, Object> remoteMemoryConfig = parser.map();
+                    Map<String, Object> memoryConfig = parser.map();
 
                     // Extract memory_container_id
-                    String memoryContainerIdParam = (String) remoteMemoryConfig.get(MEMORY_CONTAINER_ID_FIELD);
+                    String memoryContainerIdParam = (String) memoryConfig.get(MEMORY_CONTAINER_ID_FIELD);
                     if (!Strings.isNullOrEmpty(memoryContainerIdParam)) {
                         memoryParams.put(MEMORY_CONTAINER_ID_FIELD, memoryContainerIdParam);
                     }
 
                     // Extract endpoint
-                    String endpointParam = (String) remoteMemoryConfig.get(ENDPOINT_FIELD);
+                    String endpointParam = (String) memoryConfig.get(ENDPOINT_FIELD);
                     if (!Strings.isNullOrEmpty(endpointParam)) {
                         memoryParams.put(ENDPOINT_FIELD, endpointParam);
                     }
 
                     // Extract region
-                    String regionParam = (String) remoteMemoryConfig.get(HttpConnector.REGION_FIELD);
+                    String regionParam = (String) memoryConfig.get(HttpConnector.REGION_FIELD);
                     if (!Strings.isNullOrEmpty(regionParam)) {
                         memoryParams.put(HttpConnector.REGION_FIELD, regionParam);
                     }
 
                     // Extract credential
-                    Object credentialObj = remoteMemoryConfig.get(CREDENTIAL_FIELD);
+                    Object credentialObj = memoryConfig.get(CREDENTIAL_FIELD);
                     if (credentialObj instanceof Map) {
                         Map<String, String> credential = (Map<String, String>) credentialObj;
                         if (!credential.isEmpty()) {
@@ -1082,13 +1082,22 @@ public class AgentUtils {
                         }
                     }
 
+                    // Check for direct roleArn field - if present, override credential map
+                    String roleArnParam = (String) memoryConfig.get("roleArn");
+                    if (!Strings.isNullOrEmpty(roleArnParam)) {
+                        // Override credential with roleArn
+                        Map<String, String> roleArnCredential = new HashMap<>();
+                        roleArnCredential.put("roleArn", roleArnParam);
+                        memoryParams.put(CREDENTIAL_FIELD, roleArnCredential);
+                    }
+
                     // Extract user_id if provided
-                    String userIdParam = (String) remoteMemoryConfig.get("user_id");
+                    String userIdParam = (String) memoryConfig.get("user_id");
                     if (!Strings.isNullOrEmpty(userIdParam)) {
                         memoryParams.put("user_id", userIdParam);
                     }
                 } catch (Exception e) {
-                    log.error("Failed to parse remote_agent_memory_configuration", e);
+                    log.error("Failed to parse memory_configuration", e);
                 }
             }
             memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
