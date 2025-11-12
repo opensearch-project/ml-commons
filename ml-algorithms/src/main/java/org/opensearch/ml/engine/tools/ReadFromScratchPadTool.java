@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -137,6 +138,7 @@ public class ReadFromScratchPadTool implements Tool {
 
         @Override
         public ReadFromScratchPadTool create(Map<String, Object> params) {
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, PERSISTENT_NOTES_KEY);
             return new ReadFromScratchPadTool();
         }
 

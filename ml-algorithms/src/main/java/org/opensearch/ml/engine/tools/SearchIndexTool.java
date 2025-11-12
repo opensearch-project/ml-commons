@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -296,6 +297,7 @@ public class SearchIndexTool implements Tool {
 
         @Override
         public SearchIndexTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, INPUT_FIELD);
             SearchIndexTool tool = new SearchIndexTool(client, xContentRegistry);
             // Enhance the output parser with processors if configured
             tool.setOutputParser(ToolParser.createFromToolParams(params));

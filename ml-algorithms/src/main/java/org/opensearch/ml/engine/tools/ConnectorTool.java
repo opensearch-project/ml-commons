@@ -10,6 +10,7 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -125,6 +126,7 @@ public class ConnectorTool implements Tool {
 
         @Override
         public ConnectorTool create(Map<String, Object> params) {
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "response_filter");
             ConnectorTool connectorTool = new ConnectorTool(client, (String) params.get(CONNECTOR_ID));
             connectorTool.setOutputParser(ToolParser.createFromToolParams(params));
             return connectorTool;

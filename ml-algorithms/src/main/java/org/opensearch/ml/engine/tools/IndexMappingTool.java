@@ -24,6 +24,7 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -55,6 +56,9 @@ public class IndexMappingTool implements Tool {
         + "\"required\":[\"index\"],"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
+    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
+    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
+    private int maxQuestionLength = DEFAULT_MAX_QUESTION_LENGTH;
 
     @Setter
     @Getter
@@ -175,7 +179,17 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && !parameters.isEmpty() && parameters.containsKey("index");
+        if (parameters == null || parameters.isEmpty() || !parameters.containsKey("index")) {
+            return false;
+        }
+
+        // Validate question length
+        String question = parameters.get("question");
+        if (question != null && question.length() > maxQuestionLength) {
+            throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
+        }
+
+        return true;
     }
 
     /**
@@ -212,8 +226,14 @@ public class IndexMappingTool implements Tool {
 
         @Override
         public IndexMappingTool create(Map<String, Object> params) {
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "question");
+            ConfigurationUtils.readOptionalList(TYPE, null, params, "index");
+            ConfigurationUtils.readBooleanProperty(TYPE, null, params, "local", false);
+
             IndexMappingTool indexMappingTool = new IndexMappingTool(client);
             indexMappingTool.setOutputParser(ToolParser.createFromToolParams(params));
+            indexMappingTool.maxQuestionLength = ConfigurationUtils
+                .readIntProperty(TYPE, null, params, MAX_QUESTION_LENGTH_FIELD, DEFAULT_MAX_QUESTION_LENGTH);
             return indexMappingTool;
         }
 

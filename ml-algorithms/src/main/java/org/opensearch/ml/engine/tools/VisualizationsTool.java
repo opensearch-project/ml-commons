@@ -21,6 +21,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -43,6 +44,9 @@ public class VisualizationsTool implements Tool {
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
     public static final String STRICT_FIELD = "strict";
+    public static final String INPUT_FIELD = "input";
+    public static final String INDEX_FIELD = "index";
+    public static final String SIZE_FIELD = "size";
 
     /**
      * default number of visualizations returned
@@ -55,6 +59,10 @@ public class VisualizationsTool implements Tool {
         + "\"required\":[\"input\"],"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+    public static final int DEFAULT_MAX_INPUT_LENGTH = 10000;
+    public static final String MAX_INPUT_LENGTH_FIELD = "max_input_length";
+    private int maxInputLength = DEFAULT_MAX_INPUT_LENGTH;
+
     @Setter
     @Getter
     private String description = DEFAULT_DESCRIPTION;
@@ -93,7 +101,7 @@ public class VisualizationsTool implements Tool {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
             boolQueryBuilder.must().add(QueryBuilders.termQuery("type", SAVED_OBJECT_TYPE));
-            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get("input")));
+            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get(INPUT_FIELD)));
 
             SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource().query(boolQueryBuilder);
             searchSourceBuilder.from(0).size(size);
@@ -146,10 +154,19 @@ public class VisualizationsTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null
-            && !parameters.isEmpty()
-            && !Strings.isNullOrEmpty(parameters.get("input"))
-            && parameters.containsKey("input");
+        if (parameters == null
+            || parameters.isEmpty()
+            || Strings.isNullOrEmpty(parameters.get(INPUT_FIELD))
+            || !parameters.containsKey(INPUT_FIELD)) {
+            return false;
+        }
+
+        // Validate input length
+        String input = parameters.get(INPUT_FIELD);
+        if (input != null && input.length() > maxInputLength) {
+            throw new IllegalArgumentException("input length cannot exceed " + maxInputLength + " characters");
+        }
+        return true;
     }
 
     public static class Factory implements Tool.Factory<VisualizationsTool> {
@@ -176,15 +193,20 @@ public class VisualizationsTool implements Tool {
 
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
-            String index = params.get("index") == null ? ".kibana" : (String) params.get("index");
-            String sizeStr = params.get("size") == null ? "3" : (String) params.get("size");
+            ConfigurationUtils.readStringProperty(TYPE, null, params, INPUT_FIELD);
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, INDEX_FIELD);
+            ConfigurationUtils.readIntProperty(TYPE, null, params, SIZE_FIELD, 3);
+            String index = params.get(INDEX_FIELD) == null ? ".kibana" : (String) params.get(INDEX_FIELD);
+            String sizeStr = params.get(SIZE_FIELD) == null ? "3" : (String) params.get(SIZE_FIELD);
             int size;
             try {
                 size = Integer.parseInt(sizeStr);
             } catch (NumberFormatException ignored) {
                 size = DEFAULT_SIZE;
             }
-            return VisualizationsTool.builder().client(client).index(index).size(size).build();
+            VisualizationsTool tool = VisualizationsTool.builder().client(client).index(index).size(size).build();
+            tool.maxInputLength = ConfigurationUtils.readIntProperty(TYPE, null, params, MAX_INPUT_LENGTH_FIELD, DEFAULT_MAX_INPUT_LENGTH);
+            return tool;
         }
 
         @Override

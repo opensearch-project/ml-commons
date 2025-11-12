@@ -36,6 +36,7 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
@@ -121,6 +122,9 @@ public class QueryPlanningTool implements WithModelTool {
         + "}";
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
+    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
+    private int maxQuestionLength = DEFAULT_MAX_QUESTION_LENGTH;
 
     @Getter
     @Setter
@@ -394,6 +398,12 @@ public class QueryPlanningTool implements WithModelTool {
             || !parameters.containsKey(INDEX_NAME_FIELD)) {
             return false;
         }
+
+        // Validate question length
+        String question = parameters.get(QUESTION_FIELD);
+        if (question != null && question.length() > maxQuestionLength) {
+            throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
+        }
         return true;
     }
 
@@ -420,6 +430,14 @@ public class QueryPlanningTool implements WithModelTool {
 
         @Override
         public QueryPlanningTool create(Map<String, Object> params) {
+            ConfigurationUtils.readStringProperty(TYPE, null, params, QUESTION_FIELD);
+            ConfigurationUtils.readStringProperty(TYPE, null, params, INDEX_NAME_FIELD);
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, GENERATION_TYPE_FIELD);
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, QUERY_PLANNER_SYSTEM_PROMPT_FIELD);
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, QUERY_PLANNER_USER_PROMPT_FIELD);
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "embedding_model_id");
+            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "response_filter");
+            ConfigurationUtils.readOptionalList(TYPE, null, params, SEARCH_TEMPLATES_FIELD);
 
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(params);
 
@@ -455,6 +473,8 @@ public class QueryPlanningTool implements WithModelTool {
             // Create parser with default extract_json processor + any custom processors
             queryPlanningTool.setOutputParser(createParserWithDefaultExtractJson(params));
 
+            queryPlanningTool.maxQuestionLength = ConfigurationUtils
+                .readIntProperty(TYPE, null, params, MAX_QUESTION_LENGTH_FIELD, DEFAULT_MAX_QUESTION_LENGTH);
             return queryPlanningTool;
         }
 
