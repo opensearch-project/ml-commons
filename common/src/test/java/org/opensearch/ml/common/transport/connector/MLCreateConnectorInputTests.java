@@ -166,7 +166,10 @@ public class MLCreateConnectorInputTests {
                 .addAllBackendRoles(false)
                 .build();
         });
-        assertEquals("Connector protocol is null", exception.getMessage());
+        assertEquals(
+            "Connector protocol is null. Please use one of [aws_sigv4, http, mcp_sse, mcp_streamable_http]",
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -560,6 +563,56 @@ public class MLCreateConnectorInputTests {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLCreateConnectorInput parsedInput = new MLCreateConnectorInput(streamInput);
         verify.accept(parsedInput);
+    }
+
+    @Test
+    public void testParse_BackendRolesWithJsonObject_ShouldThrowException() throws IOException {
+        // Test that backend_roles array containing a JSON object throws IllegalArgumentException
+        String jsonWithObjectInBackendRoles = """
+            {
+              "name": "test_connector_name",
+              "credential": {"key": "test_key_value"},
+              "version": "1",
+              "protocol": "http",
+              "backend_roles": [
+                {
+                  "role_name": "admin",
+                  "permissions": "all"
+                }
+              ]
+            }
+            """;
+
+        XContentParser parser = createParser(jsonWithObjectInBackendRoles);
+
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> { MLCreateConnectorInput.parse(parser); });
+
+        assertTrue(exception.getMessage().contains("Backend roles must contain only string values"));
+        assertTrue(exception.getMessage().contains("START_OBJECT"));
+    }
+
+    @Test
+    public void testParse_CredentialWithJsonObject_ShouldThrowException() throws IOException {
+        // Test that credential values containing JSON objects throw IllegalArgumentException
+        String jsonWithObjectInCredential = """
+            {
+              "name": "test_connector_name",
+              "credential": {
+                "key": {
+                  "nested": "object"
+                }
+              },
+              "version": "1",
+              "protocol": "http"
+            }
+            """;
+
+        XContentParser parser = createParser(jsonWithObjectInCredential);
+
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> { MLCreateConnectorInput.parse(parser); });
+
+        assertTrue(exception.getMessage().contains("Credential values must be strings"));
+        assertTrue(exception.getMessage().contains("START_OBJECT"));
     }
 
 }
