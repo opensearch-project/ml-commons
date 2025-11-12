@@ -81,6 +81,6 @@ public class RestMLCreateConnectorAction extends BaseRestHandler implements Rest
 
     @Override
     public Set<String> getFilteredFields() {
-        return Set.of("credential.openai_key");
+        return Set.of("credential", "*.Authorization");
     }
 }
