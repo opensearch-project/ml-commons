@@ -107,10 +107,11 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         ActionListener<MLTaskResponse> listener,
         boolean decryptWithEncryptor
     ) {
+        String connectorTenantId = connector.getTenantId();
         if (decryptWithEncryptor) {
-            connector.decrypt(action, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
+            connector.decrypt(action, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId);
         } else {
-            connector.decrypt(action, (credential, tenantId) -> credential, null);
+            connector.decrypt(action, (credential, tenantId) -> credential, connectorTenantId);
         }
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
