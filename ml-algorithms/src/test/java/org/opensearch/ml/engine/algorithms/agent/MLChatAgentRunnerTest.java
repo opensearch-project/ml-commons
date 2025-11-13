@@ -681,7 +681,7 @@ public class MLChatAgentRunnerTest {
                 .when(firstTool)
                 .run(Mockito.anyMap(), toolListenerCaptor.capture());
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
 
         // Verify that the tool's run method was called
         verify(firstTool).run(any(), any());
