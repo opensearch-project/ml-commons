@@ -48,6 +48,8 @@ public class CreateConversationRequest extends ActionRequest {
     private String applicationType = null;
     @Getter
     private Map<String, String> additionalInfos = null;
+    @Getter
+    private boolean fromRest = false;
 
     /**
      * Constructor
@@ -63,6 +65,7 @@ public class CreateConversationRequest extends ActionRequest {
                 this.additionalInfos = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
+        this.fromRest = false;
     }
 
     /**
@@ -102,6 +105,21 @@ public class CreateConversationRequest extends ActionRequest {
      * name will be null
      */
     public CreateConversationRequest() {}
+
+    /**
+     * Constructor with fromRest flag
+     * @param name name of the conversation
+     * @param applicationType of the conversation
+     * @param additionalInfos information of the conversation
+     * @param fromRest whether this request came from REST API
+     */
+    public CreateConversationRequest(String name, String applicationType, Map<String, String> additionalInfos, boolean fromRest) {
+        super();
+        this.name = name;
+        this.applicationType = applicationType;
+        this.additionalInfos = additionalInfos;
+        this.fromRest = fromRest;
+    }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
@@ -158,9 +176,11 @@ public class CreateConversationRequest extends ActionRequest {
                 }
             }
             if (body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD) != null) {
-                return new CreateConversationRequest(name, applicationType, additionalInfo);
+                return new CreateConversationRequest(name, applicationType, additionalInfo, true);
             } else {
-                return new CreateConversationRequest();
+                CreateConversationRequest request = new CreateConversationRequest();
+                request.fromRest = true;
+                return request;
             }
         } catch (Exception exception) {
             throw new OpenSearchParseException(exception.getMessage());

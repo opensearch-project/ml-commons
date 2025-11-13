@@ -17,12 +17,16 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.core.rest.RestStatus.FORBIDDEN;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -30,6 +34,8 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -48,8 +54,10 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
 
     private final ConversationalMemoryHandler cmHandler;
     private final Client client;
+    private final ClusterService clusterService;
 
     private volatile boolean featureIsEnabled;
+    private volatile List<String> restrictedBackendRoles;
 
     /**
      * Constructor
@@ -70,16 +78,26 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         super(CreateInteractionAction.NAME, transportService, actionFilters, CreateInteractionRequest::new);
         this.client = client;
         this.cmHandler = cmHandler;
+        this.clusterService = clusterService;
         this.featureIsEnabled = MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
+        this.restrictedBackendRoles = ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES.get(clusterService.getSettings());
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, it -> featureIsEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES, it -> restrictedBackendRoles = it);
     }
 
     @Override
     protected void doExecute(Task task, CreateInteractionRequest request, ActionListener<CreateInteractionResponse> actionListener) {
         if (!featureIsEnabled) {
             actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
+            return;
+        }
+        // Check if request came from REST and user should be blocked
+        if (request.isFromRest() && shouldBlockRestAccessForMemoryCreation(client, restrictedBackendRoles)) {
+            actionListener.onFailure(new OpenSearchStatusException("You are not permitted to create interactions.", FORBIDDEN));
             return;
         }
         String cid = request.getConversationId();
@@ -131,5 +149,34 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
             actionListener.onResponse(new CreateInteractionResponse(interactionId));
         });
 
+    }
+
+    /**
+     * Check if a user should be blocked from REST access for creating conversations/interactions.
+     * Users with any of the specified backend roles will be blocked from REST access but can still use transport actions.
+     * @param client Client containing user info
+     * @param restrictedBackendRoles List of backend roles that should be blocked from REST access (null or empty to disable blocking)
+     * @return true if the user should be blocked from REST access, false otherwise
+     */
+    private boolean shouldBlockRestAccessForMemoryCreation(Client client, List<String> restrictedBackendRoles) {
+        if (restrictedBackendRoles == null || restrictedBackendRoles.isEmpty()) {
+            return false;
+        }
+        String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        User user = User.parse(userStr);
+        if (user == null) {
+            return false;
+        }
+        List<String> userBackendRoles = user.getBackendRoles();
+        if (userBackendRoles == null || userBackendRoles.isEmpty()) {
+            return false;
+        }
+        // Check if user has any of the restricted backend roles
+        for (String restrictedRole : restrictedBackendRoles) {
+            if (userBackendRoles.contains(restrictedRole)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -313,6 +313,7 @@ import org.opensearch.ml.memory.action.conversation.UpdateConversationAction;
 import org.opensearch.ml.memory.action.conversation.UpdateConversationTransportAction;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionTransportAction;
+import org.opensearch.ml.memory.index.ConversationCleanup;
 import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
@@ -476,6 +477,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
     public static final String MCP_TOOLS_SYNC_THREAD_POOL = "opensearch_mcp_tools_sync";
     public static final String AGENTIC_MEMORY_THREAD_POOL = "opensearch_ml_agentic_memory";
+    public static final String MEMORY_CLEANUP_THREAD_POOL = "opensearch_ml_memory_cleanup";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     public static final String ML_COMMONS_JOBS_TYPE = "opensearch_ml_commons_jobs";
@@ -513,6 +515,7 @@ public class MachineLearningPlugin extends Plugin
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private ConversationalMemoryHandler cmHandler;
+    private ConversationCleanup conversationCleanup;
 
     private volatile boolean ragSearchPipelineEnabled;
 
@@ -686,6 +689,11 @@ public class MachineLearningPlugin extends Plugin
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
+        conversationCleanup = new ConversationCleanup(cmHandler, client, threadPool, clusterService);
+        // Start cleanup job if memory feature is enabled
+        if (MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(settings)) {
+            conversationCleanup.startCleanupJob();
+        }
         DJLUtils.setMlEngine(mlEngine);
 
         JvmService jvmService = new JvmService(environment.settings());
@@ -942,6 +950,7 @@ public class MachineLearningPlugin extends Plugin
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
                 cmHandler,
+                conversationCleanup,
                 sdkClient,
                 toolFactoryWrapper,
                 mcpToolsHelper,
@@ -1260,6 +1269,15 @@ public class MachineLearningPlugin extends Plugin
             false
         );
 
+        FixedExecutorBuilder memoryCleanupThreadPool = new FixedExecutorBuilder(
+            settings,
+            MEMORY_CLEANUP_THREAD_POOL,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + MEMORY_CLEANUP_THREAD_POOL,
+            false
+        );
+
         return ImmutableList
             .of(
                 generalThreadPool,
@@ -1274,7 +1292,8 @@ public class MachineLearningPlugin extends Plugin
                 streamPredictThreadPool,
                 streamExecuteThreadPool,
                 mcpThreadPool,
-                agenticMemoryThreadPool
+                agenticMemoryThreadPool,
+                memoryCleanupThreadPool
             );
     }
 
@@ -1333,6 +1352,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES,
+                MLCommonsSettings.ML_COMMONS_MEMORY_CLEANUP_USERNAMES,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
