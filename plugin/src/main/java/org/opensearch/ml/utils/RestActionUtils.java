@@ -85,10 +85,12 @@ public class RestActionUtils {
     public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
 
     // Header names for MCP request passthrough
-    private static final String HEADER_FAS_ACCESS_KEY = "x-amzn-fas-accesskey";
-    private static final String HEADER_FAS_SECRET_KEY = "x-amzn-fas-secretkey";
-    private static final String HEADER_FAS_SESSION_TOKEN = "x-amzn-fas-sessiontoken";
-    private static final String HEADER_DATASOURCES = "x-amzn-datasources";
+    private static final String HEADER_AWS_ACCESS_KEY_ID = "aws-access-key-id";
+    private static final String HEADER_AWS_SECRET_ACCESS_KEY = "aws-secret-access-key";
+    private static final String HEADER_AWS_SESSION_TOKEN = "aws-session-token";
+    private static final String HEADER_AWS_REGION = "aws-region";
+    private static final String HEADER_AWS_SERVICE_NAME = "aws-service-name";
+    private static final String HEADER_OPENSEARCH_URL = "opensearch-url";
 
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
@@ -347,28 +349,36 @@ public class RestActionUtils {
 
     /**
      * Extracts MCP (Model Context Protocol) request headers from the REST request and stores them in ThreadContext.
-     * Extracts FAS credentials and datasources headers for forwarding to MCP connectors.
+     * Extracts AWS credentials, region, service name, and OpenSearch URL headers for forwarding to MCP connectors.
      *
      * @param request RestRequest containing the MCP headers
      * @param client Client to access ThreadContext
      */
     public static void storeMcpRequestHeaders(RestRequest request, Client client) {
         Map<String, String> headers = new HashMap<>();
-        String accessKey = request.header(HEADER_FAS_ACCESS_KEY);
-        if (accessKey != null && !accessKey.isEmpty()) {
-            headers.put(HEADER_FAS_ACCESS_KEY, accessKey);
+        String accessKeyId = request.header(HEADER_AWS_ACCESS_KEY_ID);
+        if (accessKeyId != null && !accessKeyId.isEmpty()) {
+            headers.put(HEADER_AWS_ACCESS_KEY_ID, accessKeyId);
         }
-        String secretKey = request.header(HEADER_FAS_SECRET_KEY);
-        if (secretKey != null && !secretKey.isEmpty()) {
-            headers.put(HEADER_FAS_SECRET_KEY, secretKey);
+        String secretAccessKey = request.header(HEADER_AWS_SECRET_ACCESS_KEY);
+        if (secretAccessKey != null && !secretAccessKey.isEmpty()) {
+            headers.put(HEADER_AWS_SECRET_ACCESS_KEY, secretAccessKey);
         }
-        String sessionToken = request.header(HEADER_FAS_SESSION_TOKEN);
+        String sessionToken = request.header(HEADER_AWS_SESSION_TOKEN);
         if (sessionToken != null && !sessionToken.isEmpty()) {
-            headers.put(HEADER_FAS_SESSION_TOKEN, sessionToken);
+            headers.put(HEADER_AWS_SESSION_TOKEN, sessionToken);
         }
-        String datasources = request.header(HEADER_DATASOURCES);
-        if (datasources != null && !datasources.isEmpty()) {
-            headers.put(HEADER_DATASOURCES, datasources);
+        String region = request.header(HEADER_AWS_REGION);
+        if (region != null && !region.isEmpty()) {
+            headers.put(HEADER_AWS_REGION, region);
+        }
+        String serviceName = request.header(HEADER_AWS_SERVICE_NAME);
+        if (serviceName != null && !serviceName.isEmpty()) {
+            headers.put(HEADER_AWS_SERVICE_NAME, serviceName);
+        }
+        String opensearchUrl = request.header(HEADER_OPENSEARCH_URL);
+        if (opensearchUrl != null && !opensearchUrl.isEmpty()) {
+            headers.put(HEADER_OPENSEARCH_URL, opensearchUrl);
         }
         if (!headers.isEmpty()) {
             client.threadPool().getThreadContext().putTransient(CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, headers);

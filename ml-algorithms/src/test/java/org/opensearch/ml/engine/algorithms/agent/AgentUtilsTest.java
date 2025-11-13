@@ -2002,7 +2002,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testExtractRequestHeaders_WithValidHeaders() {
+    public void testExtractMcpRequestHeaders_WithValidHeaders() {
         // Setup ThreadContext with headers
         Map<String, String> expectedHeaders = new HashMap<>();
         expectedHeaders.put("x-amzn-fas-accesskey", "access-key-value");
@@ -2014,7 +2014,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
 
         assertEquals(2, result.size());
         assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
@@ -2022,19 +2022,19 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testExtractRequestHeaders_WithNoHeaders() {
+    public void testExtractMcpRequestHeaders_WithNoHeaders() {
         ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(realThreadContext);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
 
         assertEquals(0, result.size());
         assertEquals(Collections.emptyMap(), result);
     }
 
     @Test
-    public void testExtractRequestHeaders_WithEmptyHeaders() {
+    public void testExtractMcpRequestHeaders_WithEmptyHeaders() {
         Map<String, String> emptyHeaders = new HashMap<>();
 
         ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
@@ -2043,26 +2043,26 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, emptyHeaders);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
 
         assertEquals(0, result.size());
         assertEquals(emptyHeaders, result);
     }
 
     @Test
-    public void testExtractRequestHeaders_WithException() {
+    public void testExtractMcpRequestHeaders_WithException() {
         // Setup mock to throw exception
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenThrow(new RuntimeException("ThreadContext access failed"));
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
 
         assertEquals(0, result.size());
         assertEquals(Collections.emptyMap(), result);
     }
 
     @Test
-    public void testExtractRequestHeaders_WithPartialHeaders() {
+    public void testExtractMcpRequestHeaders_WithPartialHeaders() {
         Map<String, String> partialHeaders = new HashMap<>();
         partialHeaders.put("x-amzn-fas-accesskey", "access-key-value");
 
@@ -2072,7 +2072,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, partialHeaders);
 
-        Map<String, String> result = AgentUtils.extractRequestHeaders(client);
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
 
         assertEquals(1, result.size());
         assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));

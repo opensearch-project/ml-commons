@@ -400,10 +400,12 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
     public void testStoreMcpRequestHeaders_withAllHeaders() {
         // Setup
         Map<String, List<String>> headers = new HashMap<>();
-        headers.put("x-amzn-fas-accesskey", List.of("access-key-value"));
-        headers.put("x-amzn-fas-secretkey", List.of("secret-key-value"));
-        headers.put("x-amzn-fas-sessiontoken", List.of("session-token-value"));
-        headers.put("x-amzn-datasources", List.of("https://example.aos.us-east-1.on.aws"));
+        headers.put("aws-access-key-id", List.of("access-key-value"));
+        headers.put("aws-secret-access-key", List.of("secret-key-value"));
+        headers.put("aws-session-token", List.of("session-token-value"));
+        headers.put("aws-region", List.of("us-east-1"));
+        headers.put("aws-service-name", List.of("es"));
+        headers.put("opensearch-url", List.of("https://example.aos.us-east-1.on.aws"));
 
         FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
             .withMethod(RestRequest.Method.POST)
@@ -425,11 +427,13 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         Map<String, String> storedHeaders = threadContext
             .getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
         assertNotNull(storedHeaders);
-        assertEquals(4, storedHeaders.size());
-        assertEquals("access-key-value", storedHeaders.get("x-amzn-fas-accesskey"));
-        assertEquals("secret-key-value", storedHeaders.get("x-amzn-fas-secretkey"));
-        assertEquals("session-token-value", storedHeaders.get("x-amzn-fas-sessiontoken"));
-        assertEquals("https://example.aos.us-east-1.on.aws", storedHeaders.get("x-amzn-datasources"));
+        assertEquals(6, storedHeaders.size());
+        assertEquals("access-key-value", storedHeaders.get("aws-access-key-id"));
+        assertEquals("secret-key-value", storedHeaders.get("aws-secret-access-key"));
+        assertEquals("session-token-value", storedHeaders.get("aws-session-token"));
+        assertEquals("us-east-1", storedHeaders.get("aws-region"));
+        assertEquals("es", storedHeaders.get("aws-service-name"));
+        assertEquals("https://example.aos.us-east-1.on.aws", storedHeaders.get("opensearch-url"));
     }
 
     @Test
@@ -466,8 +470,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         Map<String, String> expectedHeaders = new HashMap<>();
-        expectedHeaders.put("x-amzn-fas-accesskey", "access-key-value");
-        expectedHeaders.put("x-amzn-datasources", "https://example.aos.us-east-1.on.aws");
+        expectedHeaders.put("aws-access-key-id", "access-key-value");
+        expectedHeaders.put("opensearch-url", "https://example.aos.us-east-1.on.aws");
         threadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
 
         // Execute
@@ -476,8 +480,8 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         // Verify
         assertEquals(expectedHeaders, result);
         assertEquals(2, result.size());
-        assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
-        assertEquals("https://example.aos.us-east-1.on.aws", result.get("x-amzn-datasources"));
+        assertEquals("access-key-value", result.get("aws-access-key-id"));
+        assertEquals("https://example.aos.us-east-1.on.aws", result.get("opensearch-url"));
     }
 
     @Test

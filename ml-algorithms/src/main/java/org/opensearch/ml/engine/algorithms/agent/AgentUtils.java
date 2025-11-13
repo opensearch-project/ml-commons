@@ -145,7 +145,7 @@ public class AgentUtils {
     public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
     private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
 
-    public static Map<String, String> extractRequestHeaders(Client client) {
+    public static Map<String, String> extractMcpRequestHeaders(Client client) {
         try {
             @SuppressWarnings("unchecked")
             Map<String, String> headers = client
@@ -713,7 +713,7 @@ public class AgentUtils {
         }.getType();
         List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
 
-        Map<String, String> requestHeaders = extractRequestHeaders(client);
+        Map<String, String> requestHeaders = extractMcpRequestHeaders(client);
 
         // Use AtomicInteger to track completion of all async operations
         AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
