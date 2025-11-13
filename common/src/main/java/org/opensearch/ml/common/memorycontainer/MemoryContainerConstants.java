@@ -63,6 +63,7 @@ public class MemoryContainerConstants {
     public static final String STRATEGY_CONFIG_FIELD = "configuration";
     public static final String BINARY_DATA_FIELD = "binary_data";
     public static final String STRUCTURED_DATA_FIELD = "structured_data";
+    public static final String STRUCTURED_DATA_BLOB_FIELD = "structured_data_blob";
     public static final String NAMESPACE_SIZE_FIELD = "namespace_size";
     public static final String MEMORY_FIELD = "memory";
     public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";

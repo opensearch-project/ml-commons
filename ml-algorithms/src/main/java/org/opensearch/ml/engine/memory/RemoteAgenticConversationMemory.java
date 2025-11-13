@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.memory;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.AGENTIC_MEMORY_THREAD_POOL;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
@@ -22,6 +23,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -238,8 +240,19 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
     }
 
     /**
-     * Update with retry mechanism to handle AOSS refresh latency (up to 10s)
+     * Update with retry mechanism to handle AOSS refresh latency and transient errors.
      * Uses exponential backoff: 500ms, 1s, 2s, 4s, 8s
+     *
+     * Retries on:
+     * - 404/Document not found (AOSS refresh latency up to 10s)
+     * - Version conflicts (concurrent updates)
+     * - Timeouts (network/service delays)
+     * - Service unavailable (503, 502)
+     *
+     * Retry flow:
+     * 1. GET existing memory (with retry)
+     * 2. Merge update content
+     * 3. UPDATE memory (with retry)
      */
     private void updateWithRetry(
         String messageId,
@@ -284,57 +297,164 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             updateRequest.put("memory_id", messageId);
             updateRequest.put("update_content", finalUpdateContent);
 
-            // Step 5: Execute the update
+            // Step 5: Execute the update with retry on failure
             executeConnectorAction("update_memory", updateRequest, ActionListener.wrap(response -> {
+                log.info("UPDATE memory succeeded! MessageId: {}, Attempt: {}", messageId, attemptNumber + 1);
                 try {
-                    // Parse using standard UpdateResponse parser
                     UpdateResponse updateResponse = parseUpdateResponse(response);
                     updateListener.onResponse(updateResponse);
                 } catch (Exception parseException) {
                     log.error("Failed to parse update response from remote memory", parseException);
                     updateListener.onFailure(parseException);
                 }
-            }, e -> {
-                log.error("Failed to update memory in remote memory container", e);
-                updateListener.onFailure(e);
-            }));
-        }, e -> {
-            // Check if it's a 404 (document not found) and we haven't exceeded max retries
-            boolean isNotFound = e.getMessage() != null && (e.getMessage().contains("404") || e.getMessage().contains("\"found\":false"));
-
-            if (isNotFound && attemptNumber < maxRetries) {
-                // Calculate delay with exponential backoff
-                long delayMs = baseDelayMs * (1L << attemptNumber);
-
+            }, updateException -> {
                 log
-                    .warn(
-                        "Document not found (attempt {}/{}), retrying after {}ms due to refresh latency. MessageId: {}",
+                    .error(
+                        "UPDATE memory failed. MessageId: {}, Attempt: {}/{}, Error: {}",
+                        messageId,
                         attemptNumber + 1,
-                        maxRetries,
-                        delayMs,
-                        messageId
+                        maxRetries + 1,
+                        updateException.getMessage(),
+                        updateException
                     );
 
-                // Schedule retry after delay
-                try {
-                    Thread.sleep(delayMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    updateListener.onFailure(new RuntimeException("Retry interrupted", ie));
-                    return;
-                }
+                // Check if update failed and we should retry
+                boolean shouldRetry = shouldRetryOnError(updateException, attemptNumber, maxRetries);
 
-                // Retry
-                updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1);
-            } else {
-                if (attemptNumber >= maxRetries) {
-                    log.error("Failed to get existing memory after {} retries. MessageId: {}", maxRetries, messageId, e);
+                if (shouldRetry) {
+                    long delayMs = baseDelayMs * (1L << attemptNumber);
+                    log
+                        .warn(
+                            "UPDATE operation failed but is retryable. MessageId: {}, Attempt: {}/{}, RetryAfter: {}ms, ErrorType: {}",
+                            messageId,
+                            attemptNumber + 1,
+                            maxRetries + 1,
+                            delayMs,
+                            updateException.getMessage() != null
+                                ? updateException.getMessage().substring(0, Math.min(100, updateException.getMessage().length()))
+                                : "null"
+                        );
+
+                    // Use ThreadPool for non-blocking async retry
+                    try {
+                        client
+                            .threadPool()
+                            .schedule(
+                                () -> { updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1); },
+                                TimeValue.timeValueMillis(delayMs),
+                                AGENTIC_MEMORY_THREAD_POOL
+                            );
+                    } catch (Exception scheduleException) {
+                        log.error("Failed to schedule retry after UPDATE failure. MessageId: {}", messageId, scheduleException);
+                        updateListener.onFailure(scheduleException);
+                    }
                 } else {
-                    log.error("Failed to get existing memory for update. MessageId: {}", messageId, e);
+                    log
+                        .error(
+                            "UPDATE operation failed and is NOT retryable. MessageId: {}, TotalAttempts: {}",
+                            messageId,
+                            attemptNumber + 1,
+                            updateException
+                        );
+                    updateListener.onFailure(updateException);
                 }
+            }));
+        }, e -> {
+            log
+                .error(
+                    "GET memory failed. MessageId: {}, Attempt: {}/{}, Error: {}",
+                    messageId,
+                    attemptNumber + 1,
+                    maxRetries + 1,
+                    e.getMessage(),
+                    e
+                );
+
+            // Check if GET failed and we should retry
+            boolean shouldRetry = shouldRetryOnError(e, attemptNumber, maxRetries);
+
+            if (shouldRetry) {
+                long delayMs = baseDelayMs * (1L << attemptNumber);
+                log
+                    .warn(
+                        "GET operation failed but is retryable. MessageId: {}, Attempt: {}/{}, RetryAfter: {}ms, ErrorType: {}",
+                        messageId,
+                        attemptNumber + 1,
+                        maxRetries + 1,
+                        delayMs,
+                        e.getMessage() != null ? e.getMessage().substring(0, Math.min(100, e.getMessage().length())) : "null"
+                    );
+
+                // Use ThreadPool for non-blocking async retry
+                try {
+                    client
+                        .threadPool()
+                        .schedule(
+                            () -> { updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1); },
+                            TimeValue.timeValueMillis(delayMs),
+                            AGENTIC_MEMORY_THREAD_POOL
+                        );
+                } catch (Exception scheduleException) {
+                    log.error("Failed to schedule retry after GET failure. MessageId: {}", messageId, scheduleException);
+                    updateListener.onFailure(scheduleException);
+                }
+            } else {
+                log.error("GET operation failed and is NOT retryable. MessageId: {}, TotalAttempts: {}", messageId, attemptNumber + 1, e);
                 updateListener.onFailure(e);
             }
         }));
+    }
+
+    /**
+     * Determine if an error should trigger a retry attempt.
+     * Matches retry logic from AgenticConversationMemory for consistency.
+     *
+     * @param e The exception that occurred
+     * @param attemptNumber Current attempt number (0-indexed)
+     * @param maxRetries Maximum number of retries allowed
+     * @return true if should retry, false otherwise
+     */
+    private boolean shouldRetryOnError(Exception e, int attemptNumber, int maxRetries) {
+        if (attemptNumber >= maxRetries) {
+            log.info("Retry limit reached. Attempt: {}, MaxRetries: {}", attemptNumber, maxRetries);
+            return false;
+        }
+
+        String errorMessage = e.getMessage();
+        if (errorMessage == null) {
+            log.info("Error message is null, not retrying. Exception type: {}", e.getClass().getName());
+            return false;
+        }
+
+        // Retry on document not found (404) - common in AOSS due to refresh latency
+        if (errorMessage.contains("404") || errorMessage.contains("\"found\":false")) {
+            log.info("Detected 404/not found error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Retry on version conflicts
+        if (errorMessage.contains("version_conflict") || errorMessage.contains("VersionConflictEngineException")) {
+            log.info("Detected version conflict error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Retry on timeout errors
+        if (errorMessage.contains("timeout") || errorMessage.contains("TimeoutException")) {
+            log.info("Detected timeout error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Retry on temporary remote service errors
+        if (errorMessage.contains("ServiceUnavailable")
+            || errorMessage.contains("503")
+            || errorMessage.contains("502")
+            || errorMessage.contains("Bad Gateway")) {
+            log.info("Detected service unavailable error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        log.info("Error is not retryable. Error: {}", errorMessage);
+        return false;
     }
 
     @Override

@@ -426,7 +426,7 @@ public class RemoteMemoryStoreHelper {
         // We should check tenant id in future if we use a standalone connector inside memory container.
         String connectorTenantId = connector.getTenantId();
         // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-        connector.decrypt(actionName, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId);
+        connector.decrypt(actionName, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId); // throw error
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
         connectorExecutor.setScriptService(scriptService);
@@ -794,19 +794,19 @@ public class RemoteMemoryStoreHelper {
             // input parameter is optional for delete, use empty string as default
             parameters.put(INPUT_PARAM, "");
 
-            // Execute the connector action with delete_doc action name
+            // Execute the connector action with get_doc action name
             executeConnectorAction(connectorId, GET_DOC_ACTION, parameters, ActionListener.wrap(response -> {
-                log.info("Successfully deleted document from remote index: {}, doc_id: {}", indexName, docId);
+                log.info("Successfully get document from remote index: {}, doc_id: {}", indexName, docId);
                 XContentParser parser = createParserFromTensorOutput(response);
                 GetResponse getResponse = GetResponse.fromXContent(parser);
                 listener.onResponse(getResponse);
             }, e -> {
-                log.error("Failed to delete document from remote index: {}, doc_id: {}", indexName, docId, e);
+                log.error("Failed to get document from remote index: {}, doc_id: {}", indexName, docId, e);
                 listener.onFailure(e);
             }));
 
         } catch (Exception e) {
-            log.error("Error preparing remote document delete for index: {}, doc_id: {}", indexName, docId, e);
+            log.error("Error preparing remote document get for index: {}, doc_id: {}", indexName, docId, e);
             listener.onFailure(e);
         }
     }
@@ -817,22 +817,21 @@ public class RemoteMemoryStoreHelper {
             Map<String, String> parameters = new HashMap<>();
             parameters.put(INDEX_NAME_PARAM, indexName);
             parameters.put(DOC_ID_PARAM, docId);
-            // input parameter is optional for delete, use empty string as default
             parameters.put(INPUT_PARAM, "");
 
-            // Execute the connector action with delete_doc action name
+            // Execute the connector action with get_doc action name
             executeConnectorAction(connector, GET_DOC_ACTION, parameters, ActionListener.wrap(response -> {
-                log.info("Successfully deleted document from remote index: {}, doc_id: {}", indexName, docId);
+                log.info("Successfully get document from remote store, index: {}, doc_id: {}", indexName, docId);
                 XContentParser parser = createParserFromTensorOutput(response);
                 GetResponse getResponse = GetResponse.fromXContent(parser);
                 listener.onResponse(getResponse);
             }, e -> {
-                log.error("Failed to delete document from remote index: {}, doc_id: {}", indexName, docId, e);
+                log.error("Failed to get document from remote store, index: {}, doc_id: {}", indexName, docId, e);
                 listener.onFailure(e);
             }));
 
         } catch (Exception e) {
-            log.error("Error preparing remote document delete for index: {}, doc_id: {}", indexName, docId, e);
+            log.error("Error preparing remote document get for index: {}, doc_id: {}", indexName, docId, e);
             listener.onFailure(e);
         }
     }
@@ -895,7 +894,7 @@ public class RemoteMemoryStoreHelper {
 
             // Execute the connector action with delete_doc action name
             executeConnectorAction(connector, DELETE_DOC_ACTION, parameters, ActionListener.wrap(response -> {
-                log.info("Successfully deleted document from remote index: {}, doc_id: {}", indexName, docId);
+                log.info("Successfully deleted document from remote store, index: {}, doc_id: {}", indexName, docId);
                 XContentParser parser = createParserFromTensorOutput(response);
                 DeleteResponse deleteResponse = DeleteResponse.fromXContent(parser);
                 listener.onResponse(deleteResponse);

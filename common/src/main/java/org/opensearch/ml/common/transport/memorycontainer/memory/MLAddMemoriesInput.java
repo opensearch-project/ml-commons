@@ -23,6 +23,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETERS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PAYLOAD_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_BLOB_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STRUCTURED_DATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
@@ -62,6 +63,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
     private Integer messageId;
     private String binaryData;
     private Map<String, Object> structuredData;
+    private Map<String, Object> structuredDataBlob;
 
     // Optional fields
     private Map<String, String> namespace;
@@ -82,6 +84,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Integer messageId,
         String binaryData,
         Map<String, Object> structuredData,
+        Map<String, Object> structuredDataBlob,
         Map<String, String> namespace,
         boolean infer,
         Map<String, String> metadata,
@@ -99,6 +102,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         this.messageId = messageId;
         this.binaryData = binaryData;
         this.structuredData = structuredData;
+        this.structuredDataBlob = structuredDataBlob;
         this.namespace = namespace;
         this.infer = infer; // default infer is false
         this.metadata = metadata;
@@ -141,6 +145,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             this.structuredData = in.readMap();
         }
         if (in.readBoolean()) {
+            this.structuredDataBlob = in.readMap();
+        }
+        if (in.readBoolean()) {
             this.namespace = in.readMap(StreamInput::readString, StreamInput::readString);
         }
         this.infer = in.readBoolean();
@@ -176,6 +183,12 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (structuredData != null) {
             out.writeBoolean(true);
             out.writeMap(structuredData);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (structuredDataBlob != null) {
+            out.writeBoolean(true);
+            out.writeMap(structuredDataBlob);
         } else {
             out.writeBoolean(false);
         }
@@ -236,6 +249,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (structuredData != null) {
             builder.field(STRUCTURED_DATA_FIELD, structuredData);
         }
+        if (structuredDataBlob != null) {
+            builder.field(STRUCTURED_DATA_BLOB_FIELD, structuredDataBlob);
+        }
         if (namespace != null && !namespace.isEmpty()) {
             builder.field(NAMESPACE_FIELD, namespace);
             builder.field(NAMESPACE_SIZE_FIELD, namespace.size());
@@ -274,6 +290,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         Integer messageId = null;
         String binaryData = null;
         Map<String, Object> structuredData = null;
+        Map<String, Object> structuredDataBlob = null;
         Map<String, String> namespace = null;
         boolean infer = false;
         Map<String, String> metadata = null;
@@ -309,6 +326,9 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
                     break;
                 case STRUCTURED_DATA_FIELD:
                     structuredData = parser.map();
+                    break;
+                case STRUCTURED_DATA_BLOB_FIELD:
+                    structuredDataBlob = parser.map();
                     break;
                 case NAMESPACE_FIELD:
                     namespace = StringUtils.getParameterMap(parser.map());
@@ -347,6 +367,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
             .messageId(messageId)
             .binaryData(binaryData)
             .structuredData(structuredData)
+            .structuredDataBlob(structuredDataBlob)
             .namespace(namespace)
             .infer(infer)
             .metadata(metadata)
