@@ -1247,8 +1247,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             // Expected format: arn:aws:iam::{account}:role/{role-name}
             try {
                 String[] parts = roleArn.split(":");
-                if (parts.length >= 5 && "role".equals(parts[4])) {
-                    String account = parts[3];
+                if (parts.length >= 6 && parts[5].startsWith("role/")) {
+                    String account = parts[4];
                     return account + ":role";
                 }
             } catch (Exception e) {
