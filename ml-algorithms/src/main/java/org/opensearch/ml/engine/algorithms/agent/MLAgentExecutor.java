@@ -234,38 +234,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
                                         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput
                                             .getInputDataset();
+
+                                        // Apply memory container override if provided in request parameters
+                                        mlAgent = applyMemoryContainerOverride(mlAgent, inputDataSet, agentId);
+
+                                        // Extract variables needed for subsequent processing
                                         MLMemorySpec memorySpec = mlAgent.getMemory();
                                         Map<String, String> requestParameters = inputDataSet.getParameters();
-                                        String containerOverride = null;
-                                        if (requestParameters != null && requestParameters.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
-                                            String containerParam = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
-                                            if (!Strings.isNullOrEmpty(containerParam)) {
-                                                containerOverride = containerParam;
-                                            }
-                                        }
-                                        if (containerOverride != null) {
-                                            if (memorySpec == null) {
-                                                throw new IllegalArgumentException(
-                                                    "memory_container_id override requires the agent to be configured with memory"
-                                                );
-                                            }
-                                            String currentContainerId = memorySpec.getMemoryContainerId();
-                                            if (!containerOverride.equals(currentContainerId)) {
-                                                MLMemorySpec updatedSpec = memorySpec
-                                                    .toBuilder()
-                                                    .memoryContainerId(containerOverride)
-                                                    .build();
-                                                mlAgent = mlAgent.toBuilder().memory(updatedSpec).build();
-                                                memorySpec = updatedSpec;
-                                                log
-                                                    .debug(
-                                                        "Agent {} overriding memory container from {} to {}",
-                                                        agentId,
-                                                        currentContainerId,
-                                                        containerOverride
-                                                    );
-                                            }
-                                        }
+
                                         final MLAgent finalMlAgent = mlAgent;
                                         String memoryId = inputDataSet.getParameters().get(MEMORY_ID);
                                         String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
@@ -1041,6 +1017,61 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                         )
                 );
         }
+    }
+
+    /**
+     * Applies memory container ID override from request parameters if provided.
+     *
+     * This method allows runtime override of the memory container ID that an agent uses,
+     * enabling dynamic memory context switching. If a memory_container_id parameter is
+     * provided in the request and differs from the agent's current container ID, the
+     * agent's memory configuration is updated to use the override value.
+     *
+     * @param mlAgent The agent whose memory container may be overridden
+     * @param inputDataSet The input dataset containing request parameters
+     * @param agentId The agent ID for logging purposes
+     * @return Updated MLAgent with overridden memory container if applicable, or original agent
+     * @throws IllegalArgumentException if memory_container_id override is requested but agent has no memory configured
+     */
+    private MLAgent applyMemoryContainerOverride(MLAgent mlAgent, RemoteInferenceInputDataSet inputDataSet, String agentId) {
+        Map<String, String> requestParameters = inputDataSet.getParameters();
+        MLMemorySpec memorySpec = mlAgent.getMemory();
+
+        // Extract memory_container_id override from request parameters if present
+        String containerOverride = null;
+        if (requestParameters != null && requestParameters.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
+            String containerParam = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+            if (!Strings.isNullOrEmpty(containerParam)) {
+                containerOverride = containerParam;
+            }
+        }
+
+        // Apply override if provided
+        if (containerOverride != null) {
+            // Validate that agent has memory configured
+            if (memorySpec == null) {
+                throw new IllegalArgumentException(
+                    "memory_container_id override requires the agent to be configured with memory"
+                );
+            }
+
+            // Only update if override differs from current container ID
+            String currentContainerId = memorySpec.getMemoryContainerId();
+            if (!containerOverride.equals(currentContainerId)) {
+                MLMemorySpec updatedSpec = memorySpec.toBuilder().memoryContainerId(containerOverride).build();
+                mlAgent = mlAgent.toBuilder().memory(updatedSpec).build();
+
+                log
+                    .debug(
+                        "Agent {} overriding memory container from {} to {}",
+                        agentId,
+                        currentContainerId,
+                        containerOverride
+                    );
+            }
+        }
+
+        return mlAgent;
     }
 
     /**
