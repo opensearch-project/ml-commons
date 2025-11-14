@@ -500,4 +500,20 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
         assertTrue(result.isEmpty());
         assertEquals(Collections.emptyMap(), result);
     }
+
+    @Test
+    public void testGetMcpRequestHeaders_withException() {
+        // Setup
+        Client client = mock(Client.class);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenThrow(new RuntimeException("Thread context error"));
+
+        // Execute
+        Map<String, String> result = RestActionUtils.getMcpRequestHeaders(client);
+
+        // Verify - should return empty map on exception
+        assertTrue(result.isEmpty());
+        assertEquals(Collections.emptyMap(), result);
+    }
 }
