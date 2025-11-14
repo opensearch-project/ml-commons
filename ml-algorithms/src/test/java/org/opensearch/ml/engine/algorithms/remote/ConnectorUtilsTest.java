@@ -10,12 +10,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.BEDROCK_NOVA_MODEL;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,6 +49,7 @@ import org.opensearch.script.ScriptService;
 import com.google.common.collect.ImmutableMap;
 
 import okhttp3.Request;
+import software.amazon.awssdk.http.SdkHttpFullRequest;
 
 public class ConnectorUtilsTest {
 
@@ -1055,6 +1058,51 @@ public class ConnectorUtilsTest {
             // AWS SDK not available, skip this test
             assertTrue("AWS SDK not available, skipping test", true);
         }
+    }
+
+    @Test
+    public void buildSdkRequest_NovaModelCleansJson() throws IOException {
+        Connector connector = mock(Connector.class);
+        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
+        when(connector.getActionEndpoint("predict", Map.of()))
+            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String payloadWithNulls =
+            "{\"singleEmbeddingParams\":{\"text\":{\"value\":\"hello\"},\"video\":{\"source\":{\"bytes\":null}},\"audio\":{\"source\":{\"bytes\":null}}}}";
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest("predict", connector, Map.of(), payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
+
+        // Verify request was created successfully
+        assertNotNull(request);
+        assertTrue(request.contentStreamProvider().isPresent());
+
+        // Verify the payload was cleaned, null values removed
+        String actualPayload = new String(request.contentStreamProvider().get().newStream().readAllBytes());
+        String expectedPayload = "{\"singleEmbeddingParams\":{\"text\":{\"value\":\"hello\"}}}";
+        assertEquals(expectedPayload, actualPayload);
+    }
+
+    @Test
+    public void testBuildSdkRequest_NonNovaModelSkipsCleaning() throws IOException {
+        Connector connector = mock(Connector.class);
+        when(connector.getParameters()).thenReturn(Map.of("model", "gpt-3.5-turbo"));
+        when(connector.getActionEndpoint("predict", Map.of())).thenReturn("https://api.openai.com/v1/chat/completions");
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String payloadWithNulls = "{\"video\":{\"source\":{\"bytes\":null}}}";
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest("predict", connector, Map.of(), payloadWithNulls, software.amazon.awssdk.http.SdkHttpMethod.POST);
+
+        // Verify request was created successfully
+        assertNotNull(request);
+        assertTrue(request.contentStreamProvider().isPresent());
+
+        // Verify the payload was not cleaned, null values preserved
+        String actualPayload = new String(request.contentStreamProvider().get().newStream().readAllBytes());
+        assertEquals(payloadWithNulls, actualPayload);
     }
 
     @Test
