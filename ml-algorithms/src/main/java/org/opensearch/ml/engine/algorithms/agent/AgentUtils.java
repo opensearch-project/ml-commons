@@ -1044,7 +1044,13 @@ public class AgentUtils {
             memoryParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
         }
         if (requestParameters != null) {
-            // Check if parameters are wrapped in memory_configuration
+            // Extract memory_container_id
+            String containerId = requestParameters.get(MEMORY_CONTAINER_ID_FIELD);
+            if (!Strings.isNullOrEmpty(containerId)) {
+                memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
+            }
+
+            // Check if parameters are wrapped in memory_configurationß
             String memoryConfigStr = requestParameters.get("memory_configuration");
             if (!Strings.isNullOrEmpty(memoryConfigStr)) {
                 // Parse the memory_configuration JSON
@@ -1054,12 +1060,6 @@ public class AgentUtils {
                 ) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     Map<String, Object> memoryConfig = parser.map();
-
-                    // Extract memory_container_id
-                    String memoryContainerIdParam = (String) memoryConfig.get(MEMORY_CONTAINER_ID_FIELD);
-                    if (!Strings.isNullOrEmpty(memoryContainerIdParam)) {
-                        memoryParams.put(MEMORY_CONTAINER_ID_FIELD, memoryContainerIdParam);
-                    }
 
                     // Extract endpoint
                     String endpointParam = (String) memoryConfig.get(ENDPOINT_FIELD);
