@@ -13,10 +13,12 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,6 +40,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
@@ -80,6 +83,14 @@ public class RestActionUtils {
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
 
     public static final String OPENDISTRO_SECURITY_USER = OPENDISTRO_SECURITY_CONFIG_PREFIX + "user";
+
+    // Header names for MCP request passthrough
+    private static final String HEADER_AWS_ACCESS_KEY_ID = "aws-access-key-id";
+    private static final String HEADER_AWS_SECRET_ACCESS_KEY = "aws-secret-access-key";
+    private static final String HEADER_AWS_SESSION_TOKEN = "aws-session-token";
+    private static final String HEADER_AWS_REGION = "aws-region";
+    private static final String HEADER_AWS_SERVICE_NAME = "aws-service-name";
+    private static final String HEADER_OPENSEARCH_URL = "opensearch-url";
 
     static final Set<LdapName> adminDn = new HashSet<>();
     static final Set<String> adminUsernames = new HashSet<String>();
@@ -334,5 +345,56 @@ public class RestActionUtils {
             methodName = methodName.contains("_") ? methodName.split("_")[1] : methodName;
         }
         return methodName;
+    }
+
+    /**
+     * Extracts MCP (Model Context Protocol) request headers from the REST request and stores them in ThreadContext.
+     * Extracts AWS credentials, region, service name, and OpenSearch URL headers for forwarding to MCP connectors.
+     *
+     * @param request RestRequest containing the MCP headers
+     * @param client Client to access ThreadContext
+     */
+    public static void storeMcpRequestHeaders(RestRequest request, Client client) {
+        Map<String, String> headers = new HashMap<>();
+        String accessKeyId = request.header(HEADER_AWS_ACCESS_KEY_ID);
+        if (accessKeyId != null && !accessKeyId.isEmpty()) {
+            headers.put(HEADER_AWS_ACCESS_KEY_ID, accessKeyId);
+        }
+        String secretAccessKey = request.header(HEADER_AWS_SECRET_ACCESS_KEY);
+        if (secretAccessKey != null && !secretAccessKey.isEmpty()) {
+            headers.put(HEADER_AWS_SECRET_ACCESS_KEY, secretAccessKey);
+        }
+        String sessionToken = request.header(HEADER_AWS_SESSION_TOKEN);
+        if (sessionToken != null && !sessionToken.isEmpty()) {
+            headers.put(HEADER_AWS_SESSION_TOKEN, sessionToken);
+        }
+        String region = request.header(HEADER_AWS_REGION);
+        if (region != null && !region.isEmpty()) {
+            headers.put(HEADER_AWS_REGION, region);
+        }
+        String serviceName = request.header(HEADER_AWS_SERVICE_NAME);
+        if (serviceName != null && !serviceName.isEmpty()) {
+            headers.put(HEADER_AWS_SERVICE_NAME, serviceName);
+        }
+        String opensearchUrl = request.header(HEADER_OPENSEARCH_URL);
+        if (opensearchUrl != null && !opensearchUrl.isEmpty()) {
+            headers.put(HEADER_OPENSEARCH_URL, opensearchUrl);
+        }
+        if (!headers.isEmpty()) {
+            client.threadPool().getThreadContext().putTransient(CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, headers);
+        }
+    }
+
+    public static Map<String, String> getMcpRequestHeaders(Client client) {
+        try {
+            Map<String, String> headers = client
+                .threadPool()
+                .getThreadContext()
+                .getTransient(CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+            return headers != null ? headers : Collections.emptyMap();
+        } catch (Exception e) {
+            log.warn("Failed to retrieve MCP request headers from ThreadContext", e);
+            return Collections.emptyMap();
+        }
     }
 }

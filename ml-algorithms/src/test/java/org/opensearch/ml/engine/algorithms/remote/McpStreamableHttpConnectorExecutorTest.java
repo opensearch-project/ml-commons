@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -67,7 +68,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
         try (MockedStatic<McpClient> mocked = mockStatic(McpClient.class)) {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
             McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
-            List<MLToolSpec> specs = exec.getMcpToolSpecs();
+            List<MLToolSpec> specs = exec.getMcpToolSpecs(new HashMap<>());
 
             Assert.assertEquals(1, specs.size());
             MLToolSpec spec = specs.get(0);
@@ -90,7 +91,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
             McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
-            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs(new HashMap<>()));
         }
     }
 
@@ -103,7 +104,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
             mocked.when(() -> McpClient.sync(any(McpClientTransport.class))).thenReturn(builder);
             McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
-            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs());
+            assertThrows(RuntimeException.class, () -> exec.getMcpToolSpecs(new HashMap<>()));
         }
     }
 
@@ -112,6 +113,7 @@ public class McpStreamableHttpConnectorExecutorTest extends MLStaticMockBase {
         McpStreamableHttpConnectorExecutor exec = new McpStreamableHttpConnectorExecutor(mockConnector);
 
         assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteService(null, null, null, null, null, null));
+        assertThrows(UnsupportedOperationException.class, () -> exec.invokeRemoteServiceStream(null, null, null, null, null, null));
         assertThrows(UnsupportedOperationException.class, () -> exec.getScriptService());
         assertThrows(UnsupportedOperationException.class, () -> exec.getClient());
         assertThrows(UnsupportedOperationException.class, () -> exec.getRateLimiter());

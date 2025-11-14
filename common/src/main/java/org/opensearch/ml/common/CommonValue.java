@@ -122,6 +122,7 @@ public class CommonValue {
     public static final String MCP_TOOLS_FIELD = "tools";
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
+    public static final String MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY = "ML_MCP_REQUEST_HEADERS";
     public static final String MCP_DEFAULT_SSE_ENDPOINT = "/sse";
     public static final String SSE_ENDPOINT_FIELD = "sse_endpoint";
     public static final String MCP_DEFAULT_STREAMABLE_HTTP_ENDPOINT = "/mcp/";

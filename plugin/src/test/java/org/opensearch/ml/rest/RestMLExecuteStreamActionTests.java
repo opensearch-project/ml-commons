@@ -283,7 +283,7 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
 
         String agentId = "test_agent_id";
 
-        MLExecuteTaskRequest executeTaskRequest = restAction.getRequest(agentId, request, request.content());
+        MLExecuteTaskRequest executeTaskRequest = restAction.getRequest(agentId, request, request.content(), client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -370,5 +370,57 @@ public class RestMLExecuteStreamActionTests extends OpenSearchTestCase {
         assertNotNull(result);
         assertEquals(content.length(), result.length());
         assertEquals(content, result.utf8ToString());
+    }
+
+    @Test
+    public void testGetRequestStoresMcpHeaders() throws IOException {
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(true);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_AGENT_ID, "test_agent_id");
+        
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("test-access-key"));
+        headers.put("aws-secret-access-key", List.of("test-secret-key"));
+        headers.put("opensearch-url", List.of("https://test.aos.us-east-1.on.aws"));
+        
+        final String requestContent = "{\"parameters\":{\"question\":\"test question\"}}";
+
+        RestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+                .withParams(params)
+                .withHeaders(headers)
+                .withContent(new BytesArray(requestContent), XContentType.JSON)
+                .withPath("/_plugins/_ml/agents/test_agent_id/_execute/stream")
+                .build();
+
+        String agentId = "test_agent_id";
+
+        MLExecuteTaskRequest executeTaskRequest = restAction.getRequest(agentId, request, request.content(), client);
+
+        // Verify the request was created correctly
+        assertNotNull(executeTaskRequest);
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.AGENT, input.getFunctionName());
+
+        AgentMLInput agentInput = (AgentMLInput) input;
+        assertEquals(agentId, agentInput.getAgentId());
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+        assertNotNull(inputDataSet);
+        assertEquals("true", inputDataSet.getParameters().get("stream"));
+
+        // Verify MCP headers were stored in ThreadContext
+        // This validates that storeMcpRequestHeaders was called
+        @SuppressWarnings("unchecked")
+        Map<String, String> storedHeaders = client.threadPool()
+            .getThreadContext()
+            .getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        
+        assertNotNull(storedHeaders);
+        assertEquals(3, storedHeaders.size());
+        assertEquals("test-access-key", storedHeaders.get("aws-access-key-id"));
+        assertEquals("test-secret-key", storedHeaders.get("aws-secret-access-key"));
+        assertEquals("https://test.aos.us-east-1.on.aws", storedHeaders.get("opensearch-url"));
     }
 }

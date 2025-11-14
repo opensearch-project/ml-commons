@@ -64,7 +64,7 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
         this.connector = (McpConnector) connector;
     }
 
-    public List<MLToolSpec> getMcpToolSpecs() {
+    public List<MLToolSpec> getMcpToolSpecs(Map<String, String> requestHeaders) {
         String mcpServerUrl = connector.getUrl();
         String sseEndpoint = connector.getParameters() != null && connector.getParameters().containsKey(SSE_ENDPOINT_FIELD)
             ? connector.getParameters().get(SSE_ENDPOINT_FIELD)
@@ -75,8 +75,15 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
             Consumer<HttpRequest.Builder> headerConfig = builder -> {
+                // Add connector headers first
                 if (connector.getDecryptedHeaders() != null) {
                     for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
+                        builder.header(entry.getKey(), entry.getValue());
+                    }
+                }
+                // Add request headers second (they override connector headers)
+                if (requestHeaders != null) {
+                    for (Map.Entry<String, String> entry : requestHeaders.entrySet()) {
                         builder.header(entry.getKey(), entry.getValue());
                     }
                 }

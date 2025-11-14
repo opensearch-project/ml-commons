@@ -1305,7 +1305,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         when(mlAgent.getParameters()).thenReturn(null);
 
         ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
-        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+        AgentUtils.getMcpToolSpecs(mlAgent, new HashMap<>(), client, sdkClient, encryptor, listener);
 
         verify(listener).onResponse(Collections.emptyList());
     }
@@ -1322,14 +1322,14 @@ public class AgentUtilsTest extends MLStaticMockBase {
             // mock McpConnector, McpConnectorExecutor, agent, and listener
             mockMcpConnector(connStatic);
             McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
-            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            when(exec.getMcpToolSpecs(any())).thenReturn(expected);
             loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
 
             MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, new HashMap<>(), client, sdkClient, null, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1348,7 +1348,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             mockMcpConnector(connStatic);
 
             McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
-            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            when(exec.getMcpToolSpecs(any())).thenReturn(repo);
             loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
 
             String mcpJsonConfig = "[{\""
@@ -1361,7 +1361,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, new HashMap<>(), client, sdkClient, null, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1384,7 +1384,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             mockMcpConnector(connStatic);
 
             McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
-            when(exec.getMcpToolSpecs()).thenReturn(aTools, bTools);
+            when(exec.getMcpToolSpecs(any())).thenReturn(aTools, bTools);
             loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
 
             String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"A\"}," + "{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"B\"}]";
@@ -1393,7 +1393,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, new HashMap<>(), client, sdkClient, null, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1407,7 +1407,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
 
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, new HashMap<>(), client, sdkClient, null, listener);
 
             verify(listener).onResponse(Collections.emptyList());
         }
@@ -1916,14 +1916,14 @@ public class AgentUtilsTest extends MLStaticMockBase {
             // mock McpStreamableHttpConnector, McpStreamableHttpConnectorExecutor, agent, and listener
             mockMcpStreamableHttpConnector(connStatic);
             McpStreamableHttpConnectorExecutor exec = mock(McpStreamableHttpConnectorExecutor.class);
-            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            when(exec.getMcpToolSpecs(any())).thenReturn(expected);
             loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
 
             MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, new HashMap<>(), client, sdkClient, null, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1941,7 +1941,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, new HashMap<>(), client, sdkClient, null, listener);
             verify(listener).onResponse(Collections.emptyList());
         }
     }
@@ -1957,14 +1957,14 @@ public class AgentUtilsTest extends MLStaticMockBase {
             // mock McpConnector, McpConnectorExecutor, agent, and listener
             mockMcpConnector(connStatic);
             McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
-            when(exec.getMcpToolSpecs()).thenThrow(new RuntimeException("Test exception"));
+            when(exec.getMcpToolSpecs(any())).thenThrow(new RuntimeException("Test exception"));
             loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
 
             MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, new HashMap<>(), client, sdkClient, null, listener);
             verify(listener).onResponse(Collections.emptyList());
         }
     }
@@ -1989,7 +1989,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
         ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
-        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+        AgentUtils.getMcpToolSpecs(mlAgent, new HashMap<>(), client, sdkClient, null, listener);
         verify(listener).onResponse(Collections.emptyList());
     }
 
@@ -2000,4 +2000,83 @@ public class AgentUtilsTest extends MLStaticMockBase {
         doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
+
+    @Test
+    public void testExtractMcpRequestHeaders_WithValidHeaders() {
+        // Setup ThreadContext with headers
+        Map<String, String> expectedHeaders = new HashMap<>();
+        expectedHeaders.put("x-amzn-fas-accesskey", "access-key-value");
+        expectedHeaders.put("x-amzn-datasources", "https://example.aos.us-east-1.on.aws");
+
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+
+        realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
+
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
+
+        assertEquals(2, result.size());
+        assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
+        assertEquals("https://example.aos.us-east-1.on.aws", result.get("x-amzn-datasources"));
+    }
+
+    @Test
+    public void testExtractMcpRequestHeaders_WithNoHeaders() {
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractMcpRequestHeaders_WithEmptyHeaders() {
+        Map<String, String> emptyHeaders = new HashMap<>();
+
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+
+        realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, emptyHeaders);
+
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
+
+        assertEquals(0, result.size());
+        assertEquals(emptyHeaders, result);
+    }
+
+    @Test
+    public void testExtractMcpRequestHeaders_WithException() {
+        // Setup mock to throw exception
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenThrow(new RuntimeException("ThreadContext access failed"));
+
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
+
+        assertEquals(0, result.size());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testExtractMcpRequestHeaders_WithPartialHeaders() {
+        Map<String, String> partialHeaders = new HashMap<>();
+        partialHeaders.put("x-amzn-fas-accesskey", "access-key-value");
+
+        ThreadContext realThreadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(realThreadContext);
+
+        realThreadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, partialHeaders);
+
+        Map<String, String> result = AgentUtils.extractMcpRequestHeaders(client);
+
+        assertEquals(1, result.size());
+        assertEquals("access-key-value", result.get("x-amzn-fas-accesskey"));
+        assertEquals(partialHeaders, result);
+    }
+
 }

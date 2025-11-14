@@ -66,7 +66,7 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
         this.connector = (McpStreamableHttpConnector) connector;
     }
 
-    public List<MLToolSpec> getMcpToolSpecs() {
+    public List<MLToolSpec> getMcpToolSpecs(Map<String, String> requestHeaders) {
         String mcpServerUrl = connector.getUrl();
         String endpoint = Optional
             .ofNullable(connector.getParameters())
@@ -78,8 +78,15 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
             Consumer<HttpRequest.Builder> headerConfig = builder -> {
+                // Add connector headers first
                 if (connector.getDecryptedHeaders() != null) {
                     for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
+                        builder.header(entry.getKey(), entry.getValue());
+                    }
+                }
+                // Add request headers second (they override connector headers)
+                if (requestHeaders != null) {
+                    for (Map.Entry<String, String> entry : requestHeaders.entrySet()) {
                         builder.header(entry.getKey(), entry.getValue());
                     }
                 }

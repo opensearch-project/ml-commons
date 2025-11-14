@@ -395,4 +395,125 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             return new IndexNotFoundException("Index not found", ML_CONNECTOR_INDEX);
         }
     }
+
+    @Test
+    public void testStoreMcpRequestHeaders_withAllHeaders() {
+        // Setup
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put("aws-access-key-id", List.of("access-key-value"));
+        headers.put("aws-secret-access-key", List.of("secret-key-value"));
+        headers.put("aws-session-token", List.of("session-token-value"));
+        headers.put("aws-region", List.of("us-east-1"));
+        headers.put("aws-service-name", List.of("es"));
+        headers.put("opensearch-url", List.of("https://example.aos.us-east-1.on.aws"));
+
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withHeaders(headers)
+            .build();
+
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Execute
+        RestActionUtils.storeMcpRequestHeaders(request, client);
+
+        // Verify
+        @SuppressWarnings("unchecked")
+        Map<String, String> storedHeaders = threadContext
+            .getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        assertNotNull(storedHeaders);
+        assertEquals(6, storedHeaders.size());
+        assertEquals("access-key-value", storedHeaders.get("aws-access-key-id"));
+        assertEquals("secret-key-value", storedHeaders.get("aws-secret-access-key"));
+        assertEquals("session-token-value", storedHeaders.get("aws-session-token"));
+        assertEquals("us-east-1", storedHeaders.get("aws-region"));
+        assertEquals("es", storedHeaders.get("aws-service-name"));
+        assertEquals("https://example.aos.us-east-1.on.aws", storedHeaders.get("opensearch-url"));
+    }
+
+    @Test
+    public void testStoreMcpRequestHeaders_withNoHeaders() {
+        // Setup - request with no MCP headers
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .build();
+
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Execute
+        RestActionUtils.storeMcpRequestHeaders(request, client);
+
+        // Verify - should not store anything in ThreadContext
+        @SuppressWarnings("unchecked")
+        Map<String, String> storedHeaders = threadContext
+            .getTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY);
+        assertNull(storedHeaders);
+    }
+
+    @Test
+    public void testGetMcpRequestHeaders_withHeaders() {
+        // Setup
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, String> expectedHeaders = new HashMap<>();
+        expectedHeaders.put("aws-access-key-id", "access-key-value");
+        expectedHeaders.put("opensearch-url", "https://example.aos.us-east-1.on.aws");
+        threadContext.putTransient(org.opensearch.ml.common.CommonValue.MCP_REQUEST_HEADERS_THREAD_CONTEXT_KEY, expectedHeaders);
+
+        // Execute
+        Map<String, String> result = RestActionUtils.getMcpRequestHeaders(client);
+
+        // Verify
+        assertEquals(expectedHeaders, result);
+        assertEquals(2, result.size());
+        assertEquals("access-key-value", result.get("aws-access-key-id"));
+        assertEquals("https://example.aos.us-east-1.on.aws", result.get("opensearch-url"));
+    }
+
+    @Test
+    public void testGetMcpRequestHeaders_withNoHeaders() {
+        // Setup
+        Client client = mock(Client.class);
+        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        // Execute
+        Map<String, String> result = RestActionUtils.getMcpRequestHeaders(client);
+
+        // Verify
+        assertTrue(result.isEmpty());
+        assertEquals(Collections.emptyMap(), result);
+    }
+
+    @Test
+    public void testGetMcpRequestHeaders_withException() {
+        // Setup
+        Client client = mock(Client.class);
+        ThreadPool threadPool = mock(ThreadPool.class);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenThrow(new RuntimeException("Thread context error"));
+
+        // Execute
+        Map<String, String> result = RestActionUtils.getMcpRequestHeaders(client);
+
+        // Verify - should return empty map on exception
+        assertTrue(result.isEmpty());
+        assertEquals(Collections.emptyMap(), result);
+    }
 }
