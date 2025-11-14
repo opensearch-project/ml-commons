@@ -101,7 +101,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         try {
             collectStatisticalData(tenantId, shouldStore, listener);
         } catch (Exception e) {
-            handleError("Failed to execute statistical data task for index {}", e, tenantId, listener, shouldStore);
+            handleError("Failed to execute statistical data task for index: {}", e, tenantId, listener, shouldStore);
         }
     }
 
@@ -122,7 +122,13 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         client.admin().indices().getMappings(getMappingsRequest, ActionListener.wrap(getMappingsResponse -> {
             Map<String, MappingMetadata> mappings = getMappingsResponse.getMappings();
             if (mappings.isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("No matching mapping with index name: " + sourceIndex));
+                handleError(
+                    "No matching mapping with index name: {}",
+                    new IllegalArgumentException("No matching mapping with index name: " + sourceIndex),
+                    tenantId,
+                    listener,
+                    shouldStore
+                );
                 return;
             }
 
@@ -169,9 +175,9 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                             .build();
                         listener.onResponse(insight);
                     }
-                }, listener::onFailure));
+                }, e -> handleError("Failed to filter important columns by LLM for index: {}", e, tenantId, listener, shouldStore)));
             }, e -> handleError("Failed to collect statistical data for index: {}", e, tenantId, listener, shouldStore)));
-        }, listener::onFailure));
+        }, e -> handleError("Failed to get mappings for index: {}", e, tenantId, listener, shouldStore)));
     }
 
     @Override
@@ -364,7 +370,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                         } catch (Exception e) {
                             log
                                 .error(
-                                    "Failed to parse aggregation result from DSL in statistical index insight for index name: {}",
+                                    "Failed to parse aggregation result from DSL in statistical index insight for index: {}",
                                     sourceIndex,
                                     e
                                 );

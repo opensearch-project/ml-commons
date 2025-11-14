@@ -52,11 +52,14 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                     client,
                     tenantId,
                     ActionListener
-                        .wrap(agentId -> { batchProcessFields(statisticalContentMap, agentId, tenantId, listener); }, listener::onFailure)
+                        .wrap(
+                            agentId -> { batchProcessFields(statisticalContentMap, agentId, tenantId, listener); },
+                            e -> handleError("Failed to get agent ID from ML config", e, tenantId, listener)
+                        )
                 );
-            }, e -> handleError("Failed to get statistical content for index {}", e, tenantId, listener)));
+            }, e -> handleError("Failed to get statistical content for index: {}", e, tenantId, listener)));
         } catch (Exception e) {
-            handleError("Failed to execute field description task for index {}", e, tenantId, listener);
+            handleError("Failed to execute field description task for index: {}", e, tenantId, listener);
         }
     }
 
@@ -125,17 +128,12 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                     listener.onResponse(insight);
 
                 } catch (Exception e) {
-                    log.error("Failed to process current index mapping for index {}", sourceIndex, e);
-                    listener.onFailure(e);
+                    handleError("Failed to process current index mapping for index: {}", e, tenantId, listener, false);
                 }
-            }, e -> {
-                log.error("Failed to get current index mapping for index {}", sourceIndex, e);
-                listener.onFailure(e);
-            }));
+            }, e -> { handleError("Failed to get current index mapping for index: {}", e, tenantId, listener, false); }));
 
         } catch (Exception e) {
-            log.error("Failed to filter field descriptions for index {}", sourceIndex, e);
-            listener.onFailure(e);
+            handleError("Failed to filter field descriptions for index: {}", e, tenantId, listener, false);
         }
     }
 
@@ -170,7 +168,7 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
             saveResult("", tenantId, ActionListener.wrap(insight -> {
                 log.info("Empty field description completed for: {}", sourceIndex);
                 listener.onResponse(insight);
-            }, e -> handleError("Failed to save empty field description result for index {}", e, tenantId, listener)));
+            }, e -> handleError("Failed to save empty field description result for index: {}", e, tenantId, listener)));
             return;
         }
 
@@ -195,13 +193,12 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                 saveResult(gson.toJson(resultsMap), tenantId, ActionListener.wrap(insight -> {
                     log.info("Field description completed for: {}", sourceIndex);
                     listener.onResponse(insight);
-                }, e -> handleError("Failed to save field description result for index {}", e, tenantId, listener)));
+                }, e -> handleError("Failed to save field description result for index: {}", e, tenantId, listener)));
             } else {
-                handleError("Batch processing failed for index {}", new Exception("Batch processing failed"), tenantId, listener);
+                handleError("Batch processing failed for index: {}", new Exception("Batch processing failed"), tenantId, listener);
             }
         } catch (InterruptedException e) {
-            log.error("Batch processing interrupted for index: {}", sourceIndex);
-            handleError("Batch processing interrupted for index {}", e, tenantId, listener);
+            handleError("Batch processing interrupted for index: {}", e, tenantId, listener);
         }
     }
 
@@ -231,7 +228,10 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
                 log.error("Error parsing response for batch in index {}: {}", sourceIndex, e.getMessage());
                 listener.onFailure(e);
             }
-        }, e -> { listener.onFailure(e); }));
+        }, e -> {
+            log.error("Failed to call LLM for batch processing in index {}: {}", sourceIndex, e.getMessage());
+            listener.onFailure(e);
+        }));
     }
 
     private String generateBatchPrompt(List<String> batchFields, Map<String, Object> statisticalContentMap) {

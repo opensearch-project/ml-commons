@@ -142,6 +142,7 @@ public class FieldDescriptionTaskTests {
         String statisticalContent = "{\"mapping\": {\"field1\": {\"type\": \"text\"}}}";
 
         mockGetSuccess(sdkClient, statisticalContent);
+        mockUpdateSuccess(sdkClient);
         mockMLConfigFailure(client, "Config not found");
 
         task.runTask("tenant-id", listener);
