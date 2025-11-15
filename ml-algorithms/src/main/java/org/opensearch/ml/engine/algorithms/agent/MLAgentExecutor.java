@@ -1050,9 +1050,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         if (containerOverride != null) {
             // Validate that agent has memory configured
             if (memorySpec == null) {
-                throw new IllegalArgumentException(
-                    "memory_container_id override requires the agent to be configured with memory"
-                );
+                throw new IllegalArgumentException("memory_container_id override requires the agent to be configured with memory");
             }
 
             // Only update if override differs from current container ID
@@ -1061,13 +1059,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 MLMemorySpec updatedSpec = memorySpec.toBuilder().memoryContainerId(containerOverride).build();
                 mlAgent = mlAgent.toBuilder().memory(updatedSpec).build();
 
-                log
-                    .debug(
-                        "Agent {} overriding memory container from {} to {}",
-                        agentId,
-                        currentContainerId,
-                        containerOverride
-                    );
+                log.debug("Agent {} overriding memory container from {} to {}", agentId, currentContainerId, containerOverride);
             }
         }
 
