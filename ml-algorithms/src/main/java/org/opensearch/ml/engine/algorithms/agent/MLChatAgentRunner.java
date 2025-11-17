@@ -630,7 +630,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         TOOL_CALL_ID,
                                         toolCallId,
                                         "tool_response",
-                                        "Tool " + action + " failed: " + StringUtils.processTextDoc(e.getMessage())
+                                        "Tool " + action + " failed: " + processTextDoc(e.getMessage())
                                     ),
                                 INTERACTIONS_PREFIX
                             )
