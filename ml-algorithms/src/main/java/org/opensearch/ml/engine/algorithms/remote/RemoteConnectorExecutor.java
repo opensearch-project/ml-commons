@@ -280,8 +280,7 @@ public interface RemoteConnectorExecutor {
             } else if (parameters.containsKey("stream")) {
                 String memoryId = parameters.get("memory_id");
                 String parentInteractionId = parameters.get("parent_interaction_id");
-                // TODO: find a better way to differentiate agent and predict request
-                boolean isAgentRequest = (memoryId != null || parentInteractionId != null);
+                boolean isAgentRequest = parameters.get("agent_type") != null;
                 getLogger()
                     .info(
                         "RemoteConnectorExecutor: Creating StreamPredictActionListener - isAgentRequest={}, agentListener={}",
