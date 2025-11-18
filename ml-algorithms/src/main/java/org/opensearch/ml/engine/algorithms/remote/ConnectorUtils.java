@@ -12,6 +12,8 @@ import static org.opensearch.ml.common.connector.ConnectorAction.BEDROCK;
 import static org.opensearch.ml.common.connector.ConnectorAction.COHERE;
 import static org.opensearch.ml.common.connector.ConnectorAction.OPENAI;
 import static org.opensearch.ml.common.connector.ConnectorAction.SAGEMAKER;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -75,6 +77,22 @@ public class ConnectorUtils {
 
     static {
         signer = AwsV4HttpSigner.create();
+    }
+
+    /**
+     * Determines the protocol based on parameters and credentials
+     */
+    public static String determineProtocol(Map<String, String> parameters, Map<String, String> credential) {
+        boolean hasAwsRegion = parameters != null && parameters.containsKey("region");
+        boolean hasAwsServiceName = parameters != null && parameters.containsKey("service_name");
+        boolean hasRoleArn = credential != null && credential.containsKey("roleArn");
+        boolean hasAwsCredential = credential != null && credential.containsKey("access_key") && credential.containsKey("secret_key");
+        // Check if service_name is in parameters (indicates AWS SigV4)
+        if (hasAwsRegion && hasAwsServiceName && (hasRoleArn || hasAwsCredential)) {
+            return AWS_SIGV4;
+        }
+        // Default to http (for basic auth or other)
+        return HTTP;
     }
 
     public static RemoteInferenceInputDataSet processInput(
@@ -169,11 +187,15 @@ public class ConnectorUtils {
     }
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
-        if (inputData.getParameters() == null) {
-            return;
+        inputData.setParameters(escapeRemoteInferenceInputData(inputData.getParameters()));
+    }
+
+    public static Map<String, String> escapeRemoteInferenceInputData(Map<String, String> parameters) {
+        if (parameters == null) {
+            return parameters;
         }
         Map<String, String> newParameters = new HashMap<>();
-        String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
+        String noEscapeParams = parameters.get(NO_ESCAPE_PARAMS);
         Set<String> noEscapParamSet = new HashSet<>();
         if (noEscapeParams != null && !noEscapeParams.isEmpty()) {
             String[] keys = noEscapeParams.split(",");
@@ -181,21 +203,19 @@ public class ConnectorUtils {
                 noEscapParamSet.add(key.trim());
             }
         }
-        if (inputData.getParameters() != null) {
-            inputData.getParameters().forEach((key, value) -> {
-                if (value == null) {
-                    newParameters.put(key, null);
-                } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
-                    // no need to escape if it's already valid json
-                    newParameters.put(key, value);
-                } else if (!noEscapParamSet.contains(key)) {
-                    newParameters.put(key, escapeJson(value));
-                } else {
-                    newParameters.put(key, value);
-                }
-            });
-            inputData.setParameters(newParameters);
-        }
+        parameters.forEach((key, value) -> {
+            if (value == null) {
+                newParameters.put(key, null);
+            } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
+                // no need to escape if it's already valid json
+                newParameters.put(key, value);
+            } else if (!noEscapParamSet.contains(key)) {
+                newParameters.put(key, escapeJson(value));
+            } else {
+                newParameters.put(key, value);
+            }
+        });
+        return newParameters;
     }
 
     private static String getPreprocessFunction(String action, MLInput mlInput, Connector connector) {
@@ -334,6 +354,46 @@ public class ConnectorUtils {
 
     public static SdkHttpFullRequest buildSdkRequest(
         String action,
+        String endpoint,
+        Map<String, String> headers,
+        Map<String, String> parameters,
+        String payload,
+        SdkHttpMethod method
+    ) {
+        String charset = parameters.getOrDefault("charset", "UTF-8");
+        RequestBody requestBody;
+        if (payload != null) {
+            requestBody = RequestBody.fromString(payload, Charset.forName(charset));
+        } else {
+            requestBody = RequestBody.empty();
+        }
+        if (SdkHttpMethod.POST == method
+            && 0 == requestBody.optionalContentLength().get()
+            && !action.equals(CANCEL_BATCH_PREDICT.toString())) {
+            log.error("Content length is 0. Aborting request to remote model");
+            throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
+        }
+        SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
+            .builder()
+            .method(method)
+            .uri(URI.create(endpoint))
+            .contentStreamProvider(requestBody.contentStreamProvider());
+        if (headers != null) {
+            for (String key : headers.keySet()) {
+                builder.putHeader(key, headers.get(key));
+            }
+        }
+        if (builder.matchingHeaders("Content-Type").isEmpty()) {
+            builder.putHeader("Content-Type", "application/json");
+        }
+        if (builder.matchingHeaders("Content-Length").isEmpty()) {
+            builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
+        }
+        return builder.build();
+    }
+
+    public static SdkHttpFullRequest buildSdkRequest(
+        String action,
         Connector connector,
         Map<String, String> parameters,
         String payload,
@@ -387,6 +447,16 @@ public class ConnectorUtils {
     }
 
     public static Request buildOKHttpStreamingRequest(String action, Connector connector, Map<String, String> parameters, String payload) {
+        return buildOKHttpStreamingRequest(action, connector, parameters, payload, null);
+    }
+
+    public static Request buildOKHttpStreamingRequest(
+        String action,
+        Connector connector,
+        Map<String, String> parameters,
+        String payload,
+        Map<String, String> sanitizedHeaders
+    ) {
         okhttp3.RequestBody requestBody;
         if (payload != null) {
             requestBody = okhttp3.RequestBody.create(payload, MediaType.parse("application/json; charset=utf-8"));
@@ -408,7 +478,7 @@ public class ConnectorUtils {
             );
         }
         Request.Builder requestBuilder = new Request.Builder();
-        Map<String, String> headers = connector.getDecryptedHeaders();
+        Map<String, String> headers = sanitizedHeaders != null ? sanitizedHeaders : connector.getDecryptedHeaders();
         if (headers != null) {
             for (String key : headers.keySet()) {
                 requestBuilder.addHeader(key, headers.get(key));
