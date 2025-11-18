@@ -53,6 +53,9 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
@@ -72,6 +75,7 @@ public class ConnectorUtils {
 
     private static final AwsV4HttpSigner signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
+    public static final String BEDROCK_NOVA_MODEL = "amazon.nova-2-multimodal-embeddings-v1:0";
 
     static {
         signer = AwsV4HttpSigner.create();
@@ -340,6 +344,13 @@ public class ConnectorUtils {
         SdkHttpMethod method
     ) {
         String charset = parameters.getOrDefault("charset", "UTF-8");
+
+        // Clean empty JSON sections for Bedrock Nova embedding requests
+        String model = connector.getParameters().get("model");
+        if (payload != null && model != null && model.equals(BEDROCK_NOVA_MODEL)) {
+            payload = cleanBedrockNovaRequest(payload);
+        }
+
         RequestBody requestBody;
         if (payload != null) {
             requestBody = RequestBody.fromString(payload, Charset.forName(charset));
@@ -479,5 +490,39 @@ public class ConnectorUtils {
             .requestBody(requestBody)
             .headers(batchPredictAction.get().getHeaders())
             .build();
+    }
+
+    private static String cleanBedrockNovaRequest(String json) {
+        try {
+            JsonObject root = JsonParser.parseString(json).getAsJsonObject();
+            JsonObject params = root.getAsJsonObject("singleEmbeddingParams");
+            if (params == null)
+                return json;
+
+            removeIfNull(params, "text");
+            removeIfNull(params, "image");
+            removeIfNull(params, "video");
+            removeIfNull(params, "audio");
+
+            return gson.toJson(root);
+        } catch (Exception e) {
+            log.warn("Failed to clean empty JSON sections: {}", e.getMessage());
+            return json;
+        }
+    }
+
+    private static void removeIfNull(JsonObject parent, String fieldName) {
+        JsonObject field = parent.getAsJsonObject(fieldName);
+        if (field == null)
+            return;
+
+        // Check text field's value or other fields' source.bytes
+        JsonElement element = "text".equals(fieldName)
+            ? field.get("value")
+            : (field.getAsJsonObject("source") != null ? field.getAsJsonObject("source").get("bytes") : null);
+
+        if (element != null && element.isJsonNull()) {
+            parent.remove(fieldName);
+        }
     }
 }
