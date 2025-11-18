@@ -51,10 +51,10 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -136,7 +136,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
         // memory
-        mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10);
+        mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10, null);
         when(memoryMap.get(ConversationIndexMemory.TYPE)).thenReturn(memoryFactory);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         when(conversationIndexMemory.getConversationId()).thenReturn("test_memory_id");
@@ -146,17 +146,17 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
         // memory factory
         doAnswer(invocation -> {
-            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(1);
             listener.onResponse(conversationIndexMemory);
             return null;
-        }).when(memoryFactory).create(any(), any(), any(), memoryFactoryCapture.capture());
+        }).when(memoryFactory).create(any(), memoryFactoryCapture.capture());
 
         // Setup conversation index memory
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(0);
             listener.onResponse(generateInteractions());
             return null;
-        }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), anyInt());
+        }).when(conversationIndexMemory).getMessages(anyInt(), memoryInteractionCapture.capture());
 
         // Setup memory manager
         doAnswer(invocation -> {
@@ -374,7 +374,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         params.put("executor_message_history_limit", "3");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
-        verify(conversationIndexMemory).getMessages(any(), eq(5));
+        verify(conversationIndexMemory).getMessages(eq(5), any());
 
         ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
         verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());

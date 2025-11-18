@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
@@ -24,6 +25,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
@@ -63,11 +65,11 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.hooks.HookRegistry;
+import org.opensearch.ml.common.memory.Memory;
+import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
-import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -76,7 +78,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
 import org.opensearch.ml.engine.function_calling.LLMMessage;
-import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -123,7 +124,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
-    private static final String DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant.";
+
     private static final String DEFAULT_MAX_ITERATIONS = "10";
     private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
 
@@ -136,7 +137,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private SdkClient sdkClient;
     private Encryptor encryptor;
     private StreamingWrapper streamingWrapper;
-    private HookRegistry hookRegistry;
+    private static HookRegistry hookRegistry;
 
     public MLChatAgentRunner(
         Client client,
@@ -203,20 +204,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        // Check if this is a fresh conversation (memory was just created, not provided by user)
-        boolean isFreshConversation = "true".equals(params.getOrDefault("fresh_memory", "false"));
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            // Skip memory fetch for fresh conversations to avoid race condition with newly stored messages
-            if (isFreshConversation) {
-                log.info("Fresh conversation detected (memory just created), skipping memory fetch");
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
-                return;
-            }
-
+        Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params.get(MEMORY_CONTAINER_ID_FIELD));
+        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {
                     String question = next.getInput();
@@ -231,7 +224,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             ConversationIndexMessage
                                 .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
+                                .sessionId(memory.getId())
                                 .question(question)
                                 .response(response)
                                 .build()
@@ -274,42 +267,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 }
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                runAgent(mlAgent, params, listener, memory, memory.getId(), functionCalling);
             }, e -> {
                 log.error("Failed to get chat history", e);
                 listener.onFailure(e);
-            }), messageHistoryLimit);
+            }));
         }, listener::onFailure));
-    }
-
-    /**
-     * Process PRE_LLM hook and update interactions if modified by context managers
-     */
-    private void processPreLLMHook(
-        Map<String, String> tmpParameters,
-        List<String> interactions,
-        Map<String, MLToolSpec> toolSpecMap,
-        Memory memory,
-        HookRegistry hookRegistry
-    ) {
-        if (hookRegistry != null && !interactions.isEmpty()) {
-            List<MLToolSpec> toolSpecs = new ArrayList<>(toolSpecMap.values());
-            ContextManagerContext contextAfterEvent = AgentContextUtil
-                .emitPreLLMHook(tmpParameters, interactions, toolSpecs, memory, hookRegistry);
-
-            // Check if context managers actually modified the interactions
-            List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
-            if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
-                interactions.clear();
-                interactions.addAll(updatedInteractions);
-
-                // Update parameters if context manager set INTERACTIONS
-                String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
-                if (contextInteractions != null && !contextInteractions.isEmpty()) {
-                    tmpParameters.put(INTERACTIONS, contextInteractions);
-                }
-            }
-        }
     }
 
     private void runAgent(
@@ -360,9 +323,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String parentInteractionId = tmpParameters.get(MLAgentExecutor.PARENT_INTERACTION_ID);
         boolean verbose = Boolean.parseBoolean(tmpParameters.getOrDefault(VERBOSE, "false"));
         boolean traceDisabled = tmpParameters.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(tmpParameters.get(DISABLE_TRACE));
-
-        // Create root interaction.
-        ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
 
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
@@ -425,7 +385,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             finalAnswer
@@ -449,7 +409,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
 
                     saveTraceData(
-                        conversationIndexMemory,
+                        memory,
                         memory.getType(),
                         question,
                         thoughtResponse,
@@ -469,7 +429,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             lastThought,
@@ -500,8 +460,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             toolParams,
                             interactions,
                             toolCallId,
-                            functionCalling,
-                            hookRegistry
+                            functionCalling
                         );
 
                     } else {
@@ -516,7 +475,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
-                    // filteredOutput is the POST Tool output
+                    // output is now the processed output from POST_TOOL hook in runTool
                     Object filteredOutput = filterToolOutput(lastToolParams, output);
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
 
@@ -529,8 +488,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
+                    // Save trace with processed output
                     saveTraceData(
-                        conversationIndexMemory,
+                        memory,
                         "ReAct",
                         lastActionInput.get(),
                         outputToOutputString(filteredOutput),
@@ -574,7 +534,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             verbose,
                             traceDisabled,
                             traceTensors,
-                            conversationIndexMemory,
+                            memory,
                             traceNumber,
                             additionalInfo,
                             lastThought,
@@ -584,7 +544,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         return;
                     }
                     // Emit PRE_LLM hook event
-                    processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
+                    if (hookRegistry != null && !interactions.isEmpty()) {
+                        List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
+                        ContextManagerContext contextAfterEvent = AgentContextUtil
+                            .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
+
+                        // Check if context managers actually modified the interactions
+                        List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
+
+                        if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                            interactions.clear();
+                            interactions.addAll(updatedInteractions);
+
+                            // Update parameters if context manager set INTERACTIONS
+                            String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                                tmpParameters.put(INTERACTIONS, contextInteractions);
+                            }
+                        }
+                    }
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
@@ -598,8 +576,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         // Emit PRE_LLM hook event for initial LLM call
+        List<MLToolSpec> initialToolSpecs = new ArrayList<>(toolSpecMap.values());
         tmpParameters.put("_llm_model_id", llm.getModelId());
-        processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
+        if (hookRegistry != null && !interactions.isEmpty()) {
+            ContextManagerContext contextAfterEvent = AgentContextUtil
+                .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
+
+            // Check if context managers actually modified the interactions
+            List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
+            if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                interactions.clear();
+                interactions.addAll(updatedInteractions);
+
+                // Update parameters if context manager set INTERACTIONS
+                String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                    tmpParameters.put(INTERACTIONS, contextInteractions);
+                }
+            }
+        }
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
 
@@ -669,33 +664,29 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> toolParams,
         List<String> interactions,
         String toolCallId,
-        FunctionCalling functionCalling,
-        HookRegistry hookRegistry
+        FunctionCalling functionCalling
     ) {
         if (tools.get(action).validate(toolParams)) {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                    // Emit POST_TOOL hook event - common for all tool executions
+                    List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
+                    ContextManagerContext contextAfterPostTool = AgentContextUtil
+                        .emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                    // Extract processed output from POST_TOOL hook
+                    String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
+                    Object processedOutput = processedToolOutput != null ? processedToolOutput : r;
+
                     if (functionCalling != null) {
-                        String outputResponse = parseResponse(filterToolOutput(toolParams, r));
-
-                        // Emit POST_TOOL hook event after tool execution and process current tool
-                        // output
-                        List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        String outputResponseAfterHook = AgentContextUtil
-                            .emitPostToolHook(outputResponse, tmpParameters, postToolSpecs, null, hookRegistry)
-                            .toString();
-
+                        String outputResponse = parseResponse(filterToolOutput(toolParams, processedOutput));
                         List<Map<String, Object>> toolResults = List
-                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponseAfterHook)));
+                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
-                        // TODO: support multiple tool calls at the same time so that multiple
-                        // LLMMessages can be generated here
+                        // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
                     } else {
-                        // Emit POST_TOOL hook event for non-function calling path
-                        List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        Object processedOutput = AgentContextUtil.emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
                         interactions
                             .add(
                                 substitute(
@@ -705,7 +696,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 )
                             );
                     }
-                    nextStepListener.onResponse(r);
+                    nextStepListener.onResponse(processedOutput);
                 }, e -> {
                     interactions
                         .add(
@@ -716,20 +707,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                         TOOL_CALL_ID,
                                         toolCallId,
                                         "tool_response",
-                                        "Tool " + action + " failed: " + processTextDoc(e.getMessage())
+                                        "Tool " + action + " failed: " + StringUtils.processTextDoc(e.getMessage())
                                     ),
                                 INTERACTIONS_PREFIX
                             )
                         );
                     nextStepListener
                         .onResponse(
-                            String
-                                .format(
-                                    Locale.ROOT,
-                                    "Failed to run the tool %s with the error message %s.",
-                                    finalAction,
-                                    e.getMessage().replaceAll("\\n", "\n")
-                                )
+                            String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", finalAction, e.getMessage())
                         );
                 });
                 if (tools.get(action) instanceof MLModelTool) {
@@ -776,8 +761,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     public static void saveTraceData(
-        ConversationIndexMemory conversationIndexMemory,
-        String memory,
+        Memory memory,
+        String memoryType,
         String question,
         String thoughtResponse,
         String sessionId,
@@ -786,17 +771,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicInteger traceNumber,
         String origin
     ) {
-        if (conversationIndexMemory != null) {
+        if (memory != null) {
             ConversationIndexMessage msgTemp = ConversationIndexMessage
                 .conversationIndexMessageBuilder()
-                .type(memory)
+                .type(memoryType)
                 .question(question)
                 .response(thoughtResponse)
                 .finalAnswer(false)
                 .sessionId(sessionId)
                 .build();
             if (!traceDisabled) {
-                conversationIndexMemory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), origin);
+                memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), origin);
             }
         }
     }
@@ -809,7 +794,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> cotModelTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         String finalAnswer
@@ -817,12 +802,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Send completion chunk for streaming
         streamingWrapper.sendCompletionChunk(sessionId, parentInteractionId);
 
-        if (conversationIndexMemory != null) {
+        if (memory != null) {
             String copyOfFinalAnswer = finalAnswer;
             ActionListener saveTraceListener = ActionListener.wrap(r -> {
-                conversationIndexMemory
-                    .getMemoryManager()
-                    .updateInteraction(
+                memory
+                    .update(
                         parentInteractionId,
                         Map.of(AI_RESPONSE_FIELD, copyOfFinalAnswer, ADDITIONAL_INFO_FIELD, additionalInfo),
                         ActionListener.wrap(res -> {
@@ -838,17 +822,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }, e -> { listener.onFailure(e); })
                     );
             }, e -> { listener.onFailure(e); });
-            saveMessage(
-                conversationIndexMemory,
-                question,
-                finalAnswer,
-                sessionId,
-                parentInteractionId,
-                traceNumber,
-                true,
-                traceDisabled,
-                saveTraceListener
-            );
+            saveMessage(memory, question, finalAnswer, sessionId, parentInteractionId, traceNumber, true, traceDisabled, saveTraceListener);
         } else {
             streamingWrapper
                 .sendFinalResponse(sessionId, listener, parentInteractionId, verbose, cotModelTensors, additionalInfo, finalAnswer);
@@ -935,19 +909,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.putIfAbsent(PROMPT_SUFFIX, PromptTemplate.PROMPT_TEMPLATE_SUFFIX);
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);
         tmpParameters.putIfAbsent(TOOL_RESPONSE, PromptTemplate.PROMPT_TEMPLATE_TOOL_RESPONSE);
-
-        // Set default system prompt only if none exists
-        if (!tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
-            String systemPrompt = DEFAULT_SYSTEM_PROMPT;
-            // If datetime injection was enabled, include it in the default system prompt
-            if (injectDate) {
-                String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
-                String currentDateTime = getCurrentDateTime(dateFormat);
-                systemPrompt = systemPrompt + "\n\n" + currentDateTime;
-            }
-            tmpParameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
-        }
-
         return tmpParameters;
     }
 
@@ -991,7 +952,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> traceTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         AtomicReference<String> lastThought,
@@ -1009,7 +970,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             verbose,
             traceDisabled,
             traceTensors,
-            conversationIndexMemory,
+            memory,
             traceNumber,
             additionalInfo,
             incompleteResponse
@@ -1018,7 +979,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private void saveMessage(
-        ConversationIndexMemory memory,
+        Memory memory,
         String question,
         String finalAnswer,
         String sessionId,

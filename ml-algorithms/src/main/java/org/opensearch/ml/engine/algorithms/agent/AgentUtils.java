@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.agent.MLMemorySpec.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -29,6 +30,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
+import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.io.IOException;
@@ -83,6 +85,7 @@ import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.algorithms.remote.McpStreamableHttpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -1018,5 +1021,23 @@ public class AgentUtils {
         }
 
         return tool;
+    }
+
+    public static Map<String, Object> createMemoryParams(
+        String question,
+        String memoryId,
+        String appType,
+        MLAgent mlAgent,
+        String memoryContainerId
+    ) {
+        Map<String, Object> memoryParams = new HashMap<>();
+        memoryParams.put(ConversationIndexMemory.MEMORY_NAME, question);
+        memoryParams.put(ConversationIndexMemory.MEMORY_ID, memoryId);
+        memoryParams.put(APP_TYPE, appType);
+        if (mlAgent.getMemory().getMemoryContainerId() != null) {
+            memoryParams.put(MEMORY_CONTAINER_ID_FIELD, mlAgent.getMemory().getMemoryContainerId());
+        }
+        memoryParams.putIfAbsent(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        return memoryParams;
     }
 }
