@@ -228,7 +228,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals("Failed to find tools: [SearchIndexTool] in system index", captor.getValue().getMessage());
+        assertEquals("Failed to find one or more requested tools in system index", captor.getValue().getMessage());
     }
 
     @Test
@@ -241,10 +241,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals(
-            "Failed to update mcp tool: ListIndexTool in system index with error: java.lang.RuntimeException: Network issue",
-            captor.getValue().getMessage()
-        );
+        assertEquals("Failed to update 1 tool(s) in system index", captor.getValue().getMessage());
     }
 
     @Test
@@ -257,10 +254,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals(
-            "Failed to update mcp tool: ListIndexTool in system index with error: java.lang.RuntimeException: Network issue",
-            captor.getValue().getMessage()
-        );
+        assertEquals("Failed to update 1 tool(s) in system index", captor.getValue().getMessage());
     }
 
     @Test
@@ -274,10 +268,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals(
-            "Tools are updated successfully but failed to update to mcp server memory with error: Node update failed",
-            captor.getValue().getMessage()
-        );
+        assertEquals("Tools are updated successfully, but failed to update to mcp server memory", captor.getValue().getMessage());
     }
 
     @Test
@@ -291,10 +282,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<OpenSearchException> captor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(listener).onFailure(captor.capture());
-        assertEquals(
-            "Tools: [ListIndexTool] are updated successfully but failed to update to mcp server memory with error: Node update failed",
-            captor.getValue().getMessage()
-        );
+        assertEquals("Tools are updated successfully, but failed to update to mcp server memory", captor.getValue().getMessage());
     }
 
     private MLMcpToolsUpdateNodesRequest createTestRequest() {

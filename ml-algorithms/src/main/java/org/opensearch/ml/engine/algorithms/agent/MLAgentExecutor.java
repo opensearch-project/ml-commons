@@ -22,6 +22,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -654,7 +655,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     encryptor
                 );
             default:
-                throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
+                throw new IllegalArgumentException("Unsupported agent type. Please use one of " + Arrays.toString(MLAgentType.values()));
         }
     }
 
