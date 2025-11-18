@@ -42,7 +42,7 @@ public class ActivationRuleFactory {
                     rules.add(new TokensExceedRule(tokenThreshold));
                     log.debug("Created TokensExceedRule with threshold: {}", tokenThreshold);
                 } else {
-                    log.warn("Invalid token threshold value: {}. Must be positive integer.", tokenValue);
+                    throw new IllegalArgumentException("Invalid token threshold value: " + tokenValue + ". Must be positive integer.");
                 }
             } catch (Exception e) {
                 log.error("Failed to create TokensExceedRule: {}", e.getMessage());
@@ -58,7 +58,9 @@ public class ActivationRuleFactory {
                     rules.add(new MessageCountExceedRule(messageThreshold));
                     log.debug("Created MessageCountExceedRule with threshold: {}", messageThreshold);
                 } else {
-                    log.warn("Invalid message count threshold value: {}. Must be positive integer.", messageValue);
+                    throw new IllegalArgumentException(
+                        "Invalid message count threshold value: " + messageValue + ". Must be positive integer."
+                    );
                 }
             } catch (Exception e) {
                 log.error("Failed to create MessageCountExceedRule: {}", e.getMessage());
