@@ -91,7 +91,7 @@ public class MLAgentGetResponseTest {
                     )
                 ),
             Map.of("test", "test"),
-            new MLMemorySpec("test", "123", 0),
+            new MLMemorySpec("test", "123", 0, null),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
