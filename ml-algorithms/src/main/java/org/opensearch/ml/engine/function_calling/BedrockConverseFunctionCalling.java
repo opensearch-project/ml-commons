@@ -25,6 +25,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +33,7 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
 
+import com.google.gson.Gson;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
@@ -119,6 +121,40 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         }
 
         return List.of(toolMessage);
+    }
+
+    @Override
+    public String formatAGUIToolCalls(String toolCallsJson) {
+        BedrockMessage assistantMessage = new BedrockMessage("assistant");
+        Gson gson = new Gson();
+
+        try {
+            List toolCalls = gson.fromJson(toolCallsJson, List.class);
+            for (Object toolCallObj : toolCalls) {
+                Map<String, Object> toolCall = (Map<String, Object>) toolCallObj;
+                Map<String, Object> toolUse = new HashMap<>();
+                toolUse.put("toolUseId", toolCall.get("id"));
+
+                Map<String, Object> function = (Map<String, Object>) toolCall.get("function");
+                if (function != null) {
+                    toolUse.put("name", function.get("name"));
+
+                    String argumentsJson = (String) function.get("arguments");
+                    try {
+                        Object argumentsObj = gson.fromJson(argumentsJson, Object.class);
+                        toolUse.put("input", argumentsObj);
+                    } catch (Exception e) {
+                        toolUse.put("input", Map.of());
+                    }
+                }
+
+                assistantMessage.getContent().add(Map.of("toolUse", toolUse));
+            }
+        } catch (Exception e) {
+            return "{\"role\":\"assistant\",\"content\":[]}";
+        }
+
+        return assistantMessage.getResponse();
     }
 
     @Data
