@@ -177,11 +177,11 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
@@ -278,6 +278,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
+import org.opensearch.ml.engine.memory.AgenticConversationMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
@@ -873,6 +874,10 @@ public class MachineLearningPlugin extends Plugin
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
         conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
+
+        AgenticConversationMemory.Factory agenticConversationMemoryFactory = new AgenticConversationMemory.Factory();
+        agenticConversationMemoryFactory.init(client);
+        memoryFactoryMap.put(AgenticConversationMemory.TYPE, agenticConversationMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,
