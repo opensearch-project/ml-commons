@@ -26,6 +26,7 @@ import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -123,6 +124,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 default:
                     throw new IllegalArgumentException("unsupported http method");
             }
+            ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
@@ -130,7 +132,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        actionListener,
+                        ActionListener.runBefore(actionListener, storedContext::restore),
                         parameters,
                         connector,
                         scriptService,
