@@ -58,10 +58,21 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private McpConnector connector;
+    private Client client;
 
     public McpConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (McpConnector) connector;
+    }
+
+    @Override
+    public void setClient(Client client) {
+        this.client = client;
+    }
+
+    @Override
+    public Client getClient() {
+        return this.client;
     }
 
     public List<MLToolSpec> getMcpToolSpecs() {
@@ -80,6 +91,8 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                         builder.header(entry.getKey(), entry.getValue());
                     }
                 }
+                // Add MCP request headers from ThreadContext
+                getMcpRequestHeaders(builder);
             };
 
             // Create transport
@@ -151,11 +164,6 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     @Override
     public MLGuard getMlGuard() {
-        throw new UnsupportedOperationException("Not implemented.");
-    }
-
-    @Override
-    public Client getClient() {
         throw new UnsupportedOperationException("Not implemented.");
     }
 

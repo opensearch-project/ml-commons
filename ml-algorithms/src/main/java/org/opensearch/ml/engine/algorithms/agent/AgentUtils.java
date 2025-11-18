@@ -770,6 +770,7 @@ public class AgentUtils {
                 if (connector instanceof McpConnector) {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
@@ -777,6 +778,7 @@ public class AgentUtils {
                 if (connector instanceof McpStreamableHttpConnector) {
                     McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
