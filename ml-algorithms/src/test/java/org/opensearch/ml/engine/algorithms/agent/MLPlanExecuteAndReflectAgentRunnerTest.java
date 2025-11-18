@@ -11,6 +11,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -115,6 +116,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     private MLTaskResponse mlTaskResponse;
     @Mock
     private MLExecuteTaskResponse mlExecuteTaskResponse;
+    @Mock
+    private StreamingWrapper streamingWrapper;
 
     @Captor
     private ArgumentCaptor<Object> objectCaptor;
@@ -173,6 +176,15 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             sdkClient,
             encryptor
         );
+
+        // Set streaming wrapper
+        try {
+            java.lang.reflect.Field streamingWrapperField = MLPlanExecuteAndReflectAgentRunner.class.getDeclaredField("streamingWrapper");
+            streamingWrapperField.setAccessible(true);
+            streamingWrapperField.set(mlPlanExecuteAndReflectAgentRunner, streamingWrapper);
+        } catch (Exception e) {
+            fail("Exception thrown: " + e.getMessage());
+        }
 
         // Setup tools
         when(firstToolFactory.create(any())).thenReturn(firstTool);
