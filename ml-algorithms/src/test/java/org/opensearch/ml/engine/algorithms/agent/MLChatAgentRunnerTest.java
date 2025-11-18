@@ -225,7 +225,7 @@ public class MLChatAgentRunnerTest {
     public void testParsingJsonBlockFromResponse2() {
         // Reset client mock to avoid conflicts with previous test stubbing
         Mockito.reset(client);
-        
+
         // Prepare the response with JSON block
         String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
             + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
