@@ -97,6 +97,7 @@ public class CommonValue {
     public static final Version VERSION_3_1_0 = Version.fromString("3.1.0");
     public static final Version VERSION_3_2_0 = Version.fromString("3.2.0");
     public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
+    public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";
@@ -113,6 +114,7 @@ public class CommonValue {
     public static final String CLIENT_CONFIG_FIELD = "client_config";
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
+    public static final String CONNECTOR_ACTION_FIELD = "connector_action";
 
     // MCP Constants
     public static final String MCP_TOOL_NAME_FIELD = "name";
