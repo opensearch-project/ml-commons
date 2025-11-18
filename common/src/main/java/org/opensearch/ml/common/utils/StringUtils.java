@@ -137,6 +137,40 @@ public class StringUtils {
     }
 
     /**
+     * Checks if the given string is valid JSON or NDJSON (newline-delimited JSON).
+     * NDJSON is commonly used for bulk operations in OpenSearch where each line is a separate JSON object.
+     *
+     * @param json the string to validate
+     * @return true if the string is valid JSON or NDJSON, false otherwise
+     */
+    public static boolean isJsonOrNdjson(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
+        // First check if it's regular JSON
+        if (isJson(json)) {
+            return true;
+        }
+
+        // Check if it's NDJSON (newline-delimited JSON)
+        String[] lines = json.split("\\r?\\n");
+        if (lines.length == 0) {
+            return false;
+        }
+
+        // Each non-empty line must be valid JSON
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+            if (!trimmedLine.isEmpty() && !isJson(trimmedLine)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Ensures that a string is properly JSON escaped.
      *
      * <p>This method examines the input string and determines whether it already represents
