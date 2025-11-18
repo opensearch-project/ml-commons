@@ -83,6 +83,10 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't be null");
         }
+        // The 'name' field is an optional identifier for this specific action within a connector.
+        // It allows running a specific action by name when a connector has multiple actions of the same type.
+        // We validate that 'name' is not an action type (PREDICT, EXECUTE, etc.) to avoid ambiguity
+        // when resolving actions.
         if (name != null && ActionType.isValidAction(name)) {
             throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
         }
