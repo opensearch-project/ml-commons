@@ -243,7 +243,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         }
         String prompt = generateFilterColumnPrompt(parsedResult);
         getAgentIdToRun(client, tenantId, ActionListener.wrap(agentId -> {
-            callLLMWithAgent(client, agentId, prompt,sourceIndex, tenantId, ActionListener.wrap(response -> {
+            callLLMWithAgent(client, agentId, prompt, sourceIndex, tenantId, ActionListener.wrap(response -> {
                 listener.onResponse(parseLLMFilteredResult(response));
             }, e -> { listener.onResponse(new ArrayList<>()); }));
         }, e -> { listener.onResponse(new ArrayList<>()); }));
@@ -337,14 +337,14 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
                         if (!filteredNames.contains(targetField)) {
                             continue;
                         }
-                        
-			
-			String aggregationType = key.substring(0, prefix.length() - 1);
 
-			Map<String, Object> aggregationResult = gson.fromJson(Strings.toString(MediaTypeRegistry.JSON, aggregation), Map.class);
+                        String aggregationType = key.substring(0, prefix.length() - 1);
+
+                        Map<String, Object> aggregationResult = gson
+                            .fromJson(Strings.toString(MediaTypeRegistry.JSON, aggregation), Map.class);
                         Object targetValue;
-			String targetKey = key;
-			for (String aggKey: aggregationResult.keySet()) {
+                        String targetKey = key;
+                        for (String aggKey : aggregationResult.keySet()) {
                             if (aggKey.split("#", 2)[1].equals(key)) {
                                 targetKey = aggKey;
                                 break;
@@ -393,17 +393,17 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
     }
 
     private Set<String> filterColumns(Map<String, String> allFieldsToType, SearchResponse searchResponse) {
-	Sampler sampleAggregation = (Sampler) searchResponse.getAggregations().getAsMap().get("sample");
-        Map<String, Aggregation> aggregationMap = sampleAggregation.getAggregations().getAsMap();	
-	long totalDocCount = sampleAggregation.getDocCount();
+        Sampler sampleAggregation = (Sampler) searchResponse.getAggregations().getAsMap().get("sample");
+        Map<String, Aggregation> aggregationMap = sampleAggregation.getAggregations().getAsMap();
+        long totalDocCount = sampleAggregation.getDocCount();
         Set<String> filteredNames = new HashSet<>();
-	Filters aggregation;
-	try {
+        Filters aggregation;
+        try {
             aggregation = (Filters) aggregationMap.get(NOT_NULL_KEYWORD);
-	} catch (Exception e) {
-	    return filteredNames;
-	}
-	for (Filters.Bucket bucket : aggregation.getBuckets()) {
+        } catch (Exception e) {
+            return filteredNames;
+        }
+        for (Filters.Bucket bucket : aggregation.getBuckets()) {
             String targetField = bucket.getKey().toString();
             targetField = targetField.substring(0, targetField.length() - 1 - NOT_NULL_KEYWORD.length());
             long docCount = bucket.getDocCount();

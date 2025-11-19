@@ -94,48 +94,48 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                 handleExistingDoc(getResponse.getSourceAsMap(), tenantId, listener);
             } else {
                 SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(taskType.name());
-            	try (ThreadContext.StoredContext searchContext = client.threadPool().getThreadContext().stashContext()) {
-	    	sdkClient
-                    .searchDataObjectAsync(
-                        SearchDataObjectRequest
-                            .builder()
-                            .tenantId(tenantId)
-                            .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
-                            .searchSourceBuilder(patternSourceBuilder)
-                            .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-			searchContext.restore();
-                        if (throwable != null) {
-			    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            log.error("Failed to get index insight pattern", cause);
-			    beginGeneration(tenantId, listener);
-			} else {
-                            SearchResponse searchResponse = r.searchResponse();
-                            SearchHit[] hits = searchResponse.getHits().getHits();
-                            Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
-                            if (Objects.isNull(mappedPatternSource)) {
+                try (ThreadContext.StoredContext searchContext = client.threadPool().getThreadContext().stashContext()) {
+                    sdkClient
+                        .searchDataObjectAsync(
+                            SearchDataObjectRequest
+                                .builder()
+                                .tenantId(tenantId)
+                                .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
+                                .searchSourceBuilder(patternSourceBuilder)
+                                .build()
+                        )
+                        .whenComplete((r, throwable) -> {
+                            searchContext.restore();
+                            if (throwable != null) {
+                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                                log.error("Failed to get index insight pattern", cause);
                                 beginGeneration(tenantId, listener);
                             } else {
-                                handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
+                                SearchResponse searchResponse = r.searchResponse();
+                                SearchHit[] hits = searchResponse.getHits().getHits();
+                                Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
+                                if (Objects.isNull(mappedPatternSource)) {
+                                    beginGeneration(tenantId, listener);
+                                } else {
+                                    handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
+                                }
                             }
-                        }
-                    });
-        	 } catch (Exception e) {
+                        });
+                } catch (Exception e) {
                     listener.onFailure(e);
-                }    
-	}
+                }
+            }
         }, listener::onFailure));
     }
 
     protected void handleExistingDoc(Map<String, Object> source, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
         Object v = source.get(IndexInsight.LAST_UPDATE_FIELD);
-	Long lastUpdateTime = (v == null) ? null
+        Long lastUpdateTime = (v == null) ? null
             : (v instanceof Number n) ? n.longValue()
             : (v instanceof CharSequence cs && cs.length() > 0) ? Numbers.toLong(cs.toString(), true)
             : null;
-	long currentTime = Instant.now().toEpochMilli();
+        long currentTime = Instant.now().toEpochMilli();
 
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
         switch (status) {
@@ -479,7 +479,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         String agentId,
         String prompt,
         String sourceIndex,
-	String tenantId,
+        String tenantId,
         ActionListener<String> listener
     ) {
         AgentMLInput agentInput = AgentMLInput
@@ -488,7 +488,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .functionName(FunctionName.AGENT)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
             .tenantId(tenantId)
-	    .build();
+            .build();
 
         MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
