@@ -1364,7 +1364,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
-                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
+                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED
             );
         return settings;
     }

@@ -16,6 +16,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -361,6 +362,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         String requestBodyJson = content.utf8ToString();
         Input input;
         if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+            if (!mlFeatureEnabledSetting.isAGUIEnabled()) {
+                throw new IllegalStateException(ML_COMMONS_AG_UI_DISABLED_MESSAGE);
+            }
             log.debug("AG-UI: Detected AG-UI input format for streaming agent: {}", agentId);
             input = AGUIInputConverter.convertFromAGUIInput(requestBodyJson, agentId, tenantId, async);
         } else {

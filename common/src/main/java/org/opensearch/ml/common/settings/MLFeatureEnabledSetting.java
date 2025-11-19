@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +64,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isStreamEnabled;
 
+    private volatile Boolean isAGUIEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -83,6 +86,7 @@ public class MLFeatureEnabledSetting {
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
+        isAGUIEnabled = ML_COMMONS_AG_UI_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -112,6 +116,7 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED, it -> isIndexInsightEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AG_UI_ENABLED, it -> isAGUIEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> {
             isStaticMetricCollectionEnabled = it;
             for (SettingsChangeListener listener : listeners) {
@@ -244,5 +249,13 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isStreamEnabled() {
         return isStreamEnabled;
+    }
+
+    /**
+     * Whether the AG-UI agent feature is enabled. If disabled, AG-UI agents will be blocked.
+     * @return whether the AG-UI agent feature is enabled.
+     */
+    public boolean isAGUIEnabled() {
+        return isAGUIEnabled;
     }
 }

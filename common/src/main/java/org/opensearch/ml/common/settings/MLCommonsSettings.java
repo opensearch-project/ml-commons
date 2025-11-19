@@ -483,4 +483,10 @@ public final class MLCommonsSettings {
     // Feature flag for streaming feature
     public static final Setting<Boolean> ML_COMMONS_STREAM_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "stream_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Feature flag for AG-UI agent support
+    public static final Setting<Boolean> ML_COMMONS_AG_UI_ENABLED = Setting
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
+        "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
 }

@@ -11,6 +11,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
@@ -128,6 +129,9 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
             String requestBodyJson = request.contentOrSourceParam().v2().utf8ToString();
             if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+                if (!mlFeatureEnabledSetting.isAGUIEnabled()) {
+                    throw new IllegalStateException(ML_COMMONS_AG_UI_DISABLED_MESSAGE);
+                }
                 throw new IllegalArgumentException(
                     "AG-UI agents require streaming execution. "
                         + "Please use the streaming endpoint: POST /_plugins/_ml/agents/"
