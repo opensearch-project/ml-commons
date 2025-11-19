@@ -1100,7 +1100,7 @@ public class AgentUtils {
                 memoryParams.put(MEMORY_CONTAINER_ID_FIELD, containerId);
             }
 
-            // Check if parameters are wrapped in memory_configurationß
+            // Check if parameters are wrapped in memory_configuration
             String memoryConfigStr = requestParameters.get("memory_configuration");
             if (!Strings.isNullOrEmpty(memoryConfigStr)) {
                 // Parse the memory_configuration JSON
