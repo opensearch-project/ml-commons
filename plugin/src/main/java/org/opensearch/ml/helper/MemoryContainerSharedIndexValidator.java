@@ -85,6 +85,11 @@ public final class MemoryContainerSharedIndexValidator {
 
         log.debug("Validating shared index compatibility for: {}", longTermIndexName);
 
+        if (requestedConfig.getRemoteStore() != null) { // TODO: check index in remote store
+            listener.onResponse(ValidationResult.builder().indexExists(false).compatible(true).build());
+            return;
+        }
+
         // Step 1: Check if index exists
         client.admin().indices().getMappings(new GetMappingsRequest().indices(longTermIndexName), ActionListener.wrap(mappingResponse -> {
             // Index exists - proceed with validation

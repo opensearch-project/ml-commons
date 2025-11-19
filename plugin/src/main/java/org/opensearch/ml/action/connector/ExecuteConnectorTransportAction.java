@@ -22,7 +22,6 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -61,7 +60,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         EncryptorImpl encryptor,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLConnectorDeleteRequest::new);
+        super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLExecuteConnectorRequest::new);
         this.client = client;
         this.clusterService = clusterService;
         this.scriptService = scriptService;
@@ -91,19 +90,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
             String finalConnectorAction = connectorAction;
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
-                    // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
-                    connector.decrypt(finalConnectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
-                    RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
-                        .initInstance(connector.getProtocol(), connector, Connector.class);
-                    connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-                    connectorExecutor.setScriptService(scriptService);
-                    connectorExecutor.setClusterService(clusterService);
-                    connectorExecutor.setClient(client);
-                    connectorExecutor.setXContentRegistry(xContentRegistry);
-                    connectorExecutor
-                        .executeAction(finalConnectorAction, executeConnectorRequest.getMlInput(), ActionListener.wrap(taskResponse -> {
-                            actionListener.onResponse(taskResponse);
-                        }, e -> { actionListener.onFailure(e); }));
+                    executeWithConnector(connector, finalConnectorAction, executeConnectorRequest, actionListener, true);
                 }
             }, e -> {
                 log.error("Failed to get connector " + connectorId, e);
@@ -115,6 +102,34 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         } else {
             actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + connectorId));
         }
+    }
+
+    private void executeWithConnector(
+        Connector connector,
+        String action,
+        MLExecuteConnectorRequest request,
+        ActionListener<MLTaskResponse> listener,
+        boolean decryptWithEncryptor
+    ) {
+        String connectorTenantId = connector.getTenantId();
+        if (decryptWithEncryptor) {
+            connector.decrypt(action, (credential, tenantId) -> encryptor.decrypt(credential, tenantId), connectorTenantId);
+        } else {
+            connector.decrypt(action, (credential, tenantId) -> credential, connectorTenantId);
+        }
+        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
+        connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+        connectorExecutor.setScriptService(scriptService);
+        connectorExecutor.setClusterService(clusterService);
+        connectorExecutor.setClient(client);
+        connectorExecutor.setXContentRegistry(xContentRegistry);
+        connectorExecutor.executeAction(action, request.getMlInput(), ActionListener.wrap(response -> {
+            connector.removeCredential();
+            listener.onResponse(response);
+        }, e -> {
+            connector.removeCredential();
+            listener.onFailure(e);
+        }));
     }
 
 }
