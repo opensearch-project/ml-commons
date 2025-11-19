@@ -595,7 +595,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     saveTraceData(
                         memory,
-                        memory != null ? memory.getType() : "PlanExecuteReflect",
+                        memory != null ? memory.getType() : null,
                         stepToExecute,
                         results.get(STEP_RESULT_FIELD),
                         conversationId,

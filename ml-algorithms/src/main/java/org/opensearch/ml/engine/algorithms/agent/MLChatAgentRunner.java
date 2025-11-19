@@ -426,7 +426,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     saveTraceData(
                         memory,
-                        memory != null ? memory.getType() : "ReAct",
+                        memory != null ? memory.getType() : null,
                         question,
                         thoughtResponse,
                         sessionId,
