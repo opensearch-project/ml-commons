@@ -683,7 +683,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 case SummarizationManager.TYPE:
                     return createSummarizationManager(managerConfig);
                 default:
-                    throw new IllegalArgumentException("Failed to create context manager, unknown manager type:"+type);
+                    throw new IllegalArgumentException("Failed to create context manager, unknown manager type:" + type);
             }
         } catch (Exception e) {
             log.error("Failed to create context manager: {}", e.getMessage(), e);
@@ -700,6 +700,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         manager.initialize(config != null ? config : new HashMap<>());
         return manager;
     }
+
     /**
      * Create SlidingWindowManager
      */
