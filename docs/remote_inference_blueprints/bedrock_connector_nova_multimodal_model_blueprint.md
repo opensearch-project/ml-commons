@@ -417,50 +417,14 @@ POST /_plugins/_ml/connectors/_create
 
 ## 3. Register remote model:
 
-### Text Embedding
+Register a separate model for each connector created in step 2. Use the corresponding connector_id for each modality:
 
 ```json
 POST /_plugins/_ml/models/_register
 {
-  "name": "Amazon Bedrock Nova Multi-Modal Text Embedding model",
+  "name": "Amazon Bedrock Nova Multi-Modal Embedding model",
   "function_name": "remote",
-  "description": "Test model for Amazon Bedrock Nova text embedding model",
-  "connector_id": "<connector_id>"
-}
-```
-
-### Image Embedding
-
-```json
-POST /_plugins/_ml/models/_register
-{
-  "name": "Amazon Bedrock Nova Multi-Modal Image Embedding model",
-  "function_name": "remote",
-  "description": "Test model for Amazon Bedrock Nova image embedding model",
-  "connector_id": "<connector_id>"
-}
-```
-
-### Video Embedding
-
-```json
-POST /_plugins/_ml/models/_register
-{
-  "name": "Amazon Bedrock Nova Multi-Modal Video Embedding model",
-  "function_name": "remote",
-  "description": "Test model for Amazon Bedrock Nova video embedding model",
-  "connector_id": "<connector_id>"
-}
-```
-
-### Audio Embedding
-
-```json
-POST /_plugins/_ml/models/_register
-{
-  "name": "Amazon Bedrock Nova Multi-Modal Audio Embedding model",
-  "function_name": "remote",
-  "description": "Test model for Amazon Bedrock Nova audio embedding model",
+  "description": "Test model for Amazon Bedrock Nova embedding model",
   "connector_id": "<connector_id>"
 }
 ```
