@@ -848,14 +848,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
         List<ModelTensors> cotModelTensors = new ArrayList<>();
         List<ModelTensor> tensors = new ArrayList<>();
-        
+
         if (sessionId != null) {
             tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
         }
         if (parentInteractionId != null) {
             tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
         }
-        
+
         if (!tensors.isEmpty()) {
             cotModelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
         }

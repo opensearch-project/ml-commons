@@ -770,20 +770,20 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             memory.update(parentInteractionId, updateContent, ActionListener.wrap(res -> {
                 List<ModelTensors> finalModelTensors = createModelTensors(
-                        memory.getId(),
-                        parentInteractionId,
-                        reactAgentMemoryId,
-                        reactParentInteractionId
+                    memory.getId(),
+                    parentInteractionId,
+                    reactAgentMemoryId,
+                    reactParentInteractionId
                 );
                 finalModelTensors
-                        .add(
-                                ModelTensors
-                                        .builder()
-                                        .mlModelTensors(
-                                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
-                                        )
-                                        .build()
-                        );
+                    .add(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            )
+                            .build()
+                    );
                 finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
             }, e -> {
                 log.error("Failed to update interaction with final result", e);
@@ -791,20 +791,20 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             }));
         } else {
             List<ModelTensors> finalModelTensors = createModelTensors(
-                    null,
-                    parentInteractionId,
-                    reactAgentMemoryId,
-                    reactParentInteractionId
+                null,
+                parentInteractionId,
+                reactAgentMemoryId,
+                reactParentInteractionId
             );
             finalModelTensors
-                    .add(
-                            ModelTensors
-                                    .builder()
-                                    .mlModelTensors(
-                                            List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
-                                    )
-                                    .build()
-                    );
+                .add(
+                    ModelTensors
+                        .builder()
+                        .mlModelTensors(
+                            List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                        )
+                        .build()
+                );
             finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
     }
