@@ -94,7 +94,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                 handleExistingDoc(getResponse.getSourceAsMap(), tenantId, listener);
             } else {
                 SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(taskType.name());
-                sdkClient
+            	try (ThreadContext.StoredContext searchContext = client.threadPool().getThreadContext().stashContext()) {
+	    	sdkClient
                     .searchDataObjectAsync(
                         SearchDataObjectRequest
                             .builder()
@@ -104,10 +105,12 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                             .build()
                     )
                     .whenComplete((r, throwable) -> {
+			searchContext.restore();
                         if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            listener.onFailure(cause);
-                        } else {
+			    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to get index insight pattern", cause);
+			    beginGeneration(tenantId, listener);
+			} else {
                             SearchResponse searchResponse = r.searchResponse();
                             SearchHit[] hits = searchResponse.getHits().getHits();
                             Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
@@ -118,7 +121,10 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                             }
                         }
                     });
-            }
+        	 } catch (Exception e) {
+                    listener.onFailure(e);
+                }    
+	}
         }, listener::onFailure));
     }
 
