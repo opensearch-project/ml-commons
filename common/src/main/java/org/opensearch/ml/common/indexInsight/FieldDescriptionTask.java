@@ -218,7 +218,7 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
         List<String> batchFields,
         Map<String, Object> statisticalContentMap,
         String agentId,
-	String tenantId,
+        String tenantId,
         ActionListener<Map<String, Object>> listener
     ) {
         String prompt = generateBatchPrompt(batchFields, statisticalContentMap);
