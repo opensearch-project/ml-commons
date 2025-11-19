@@ -22,9 +22,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
+@Setter
 public class ConnectorClientConfig implements ToXContentObject, Writeable {
 
     public static final String MAX_CONNECTION_FIELD = "max_connection";

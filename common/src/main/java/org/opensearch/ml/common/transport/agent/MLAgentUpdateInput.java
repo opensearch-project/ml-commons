@@ -27,6 +27,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -384,9 +385,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                 String.format("Agent name cannot be empty or exceed max length of %d characters", MLAgent.AGENT_NAME_MAX_LENGTH)
             );
         }
-        if (memoryType != null && !memoryType.equals("conversation_index")) {
-            throw new IllegalArgumentException(String.format("Invalid memory type: %s", memoryType));
-        }
+        MLMemoryType.from(memoryType);
         if (tools != null) {
             Set<String> toolNames = new HashSet<>();
             for (MLToolSpec toolSpec : tools) {

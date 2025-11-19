@@ -41,7 +41,7 @@ public class AgenticConversationMemoryTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        agenticMemory = new AgenticConversationMemory(client, "test_conversation_id", "test_memory_container_id");
+        agenticMemory = new AgenticConversationMemory(client, "test_conversation_id", "test_memory_container_id", null);
     }
 
     @Test
@@ -89,10 +89,9 @@ public class AgenticConversationMemoryTest {
         params.put("app_type", "conversational");
         params.put("memory_container_id", "test_container_id");
 
-        ActionListener<AgenticConversationMemory> listener = ActionListener
-            .wrap(memory -> { assert memory.getId().equals("test_memory_id"); }, e -> {
-                throw new RuntimeException("Should not fail", e);
-            });
+        ActionListener<AgenticConversationMemory> listener = ActionListener.wrap(memory -> {
+            assert memory.getMemoryContainerId().equals("test_container_id");
+        }, e -> { throw new RuntimeException("Should not fail", e); });
 
         factory.create(params, listener);
     }
@@ -114,10 +113,10 @@ public class AgenticConversationMemoryTest {
         params.put("app_type", "conversational");
         params.put("memory_container_id", "test_container_id");
 
-        ActionListener<AgenticConversationMemory> listener = ActionListener
-            .wrap(memory -> { assert memory.getId().equals("new_session_123"); }, e -> {
-                throw new RuntimeException("Should not fail", e);
-            });
+        ActionListener<AgenticConversationMemory> listener = ActionListener.wrap(memory -> {
+            assert memory.getConversationId().equals("new_session_123");
+            assert memory.getMemoryContainerId().equals("test_container_id");
+        }, e -> { throw new RuntimeException("Should not fail", e); });
 
         factory.create(params, listener);
 
@@ -130,7 +129,8 @@ public class AgenticConversationMemoryTest {
         AgenticConversationMemory memoryWithoutContainer = new AgenticConversationMemory(
             client,
             "test_conversation_id",
-            null  // No memory container ID = should fail
+            null,  // No memory container ID = should fail,
+            null
         );
 
         ConversationIndexMessage message = ConversationIndexMessage

@@ -1349,7 +1349,7 @@ public class RemoteMemoryStoreHelper {
     /**
      * Loads connector template from resource file
      * Path format: model-connectors/<provider>/<function>/<model_id>.json
-     * 
+     *
      * @param provider The model provider (e.g., "bedrock", "openai", "cohere")
      * @param modelId The model identifier (e.g., "amazon.titan-embed-text-v2")
      * @return The connector template as a string
