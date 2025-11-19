@@ -98,8 +98,8 @@ import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.jayway.jsonpath.JsonPath;
 import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
