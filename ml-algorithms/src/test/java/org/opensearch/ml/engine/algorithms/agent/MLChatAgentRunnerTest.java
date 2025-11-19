@@ -1341,7 +1341,9 @@ public class MLChatAgentRunnerTest {
             )
             .build();
 
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        Map<String, String> params = new HashMap<>();
+        params.put("llm_response_filter", "$.output.message.content[0].text");
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
         assertEquals("Valid summary text", result);
     }
 
@@ -1364,7 +1366,9 @@ public class MLChatAgentRunnerTest {
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build();
         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
 
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        Map<String, String> params = new HashMap<>();
+        params.put("llm_response_filter", "$.output.message.content[0].text");
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
         assertEquals("Summary from response field", result);
     }
 
@@ -1375,7 +1379,9 @@ public class MLChatAgentRunnerTest {
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build();
         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
 
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        Map<String, String> params = new HashMap<>();
+        params.put("llm_response_filter", "$.output.message.content[0].text");
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
         assertEquals(null, result);
     }
 
@@ -1388,7 +1394,9 @@ public class MLChatAgentRunnerTest {
         ModelTensorOutput output = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(tensors)).build();
         MLTaskResponse response = MLTaskResponse.builder().output(output).build();
 
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response);
+        Map<String, String> params = new HashMap<>();
+        params.put("llm_response_filter", "$.output.message.content[0].text");
+        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
         assertEquals(null, result);
     }
 
