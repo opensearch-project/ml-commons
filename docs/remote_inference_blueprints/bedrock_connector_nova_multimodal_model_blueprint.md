@@ -44,7 +44,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "truncationMode": "<START|END|NONE>"
     },
@@ -53,8 +53,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"GENERIC_INDEX\",\n   \"embeddingDimension\": ${parameters.dimensions},\n    \"text\": {\n      \"truncationMode\": \"${parameters.truncationMode}\",\n      \"value\": \"${parameters.inputText}\"\n    }\n  }\n}",
@@ -76,7 +76,7 @@ POST /_plugins/_ml/connectors/_create
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
-      "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+        "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
     },
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
@@ -86,7 +86,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "truncationMode": "<START|END|NONE>"
     },
@@ -95,8 +95,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"GENERIC_INDEX\",\n   \"embeddingDimension\": ${parameters.dimensions},\n    \"text\": {\n      \"truncationMode\": \"${parameters.truncationMode}\",\n      \"value\": \"${parameters.inputText}\"\n    }\n  }\n}",
@@ -131,7 +131,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+           "float"
         ],
         "imageFormat": "<png|jpeg|gif|webp>",
         "detailLevel": "<STANDARD_IMAGE|DOCUMENT_IMAGE>"
@@ -141,8 +141,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"IMAGE_RETRIEVAL\",\n \"embeddingDimension\": ${parameters.dimensions},\n    \"image\": {\n      \"format\": \"${parameters.imageFormat}\",\n      \"detailLevel\": \"${parameters.detailLevel}\",\n      \"source\": {\n        \"bytes\": \"${parameters.inputImage}\"\n      }\n    }\n  }\n}",
@@ -164,7 +164,7 @@ POST /_plugins/_ml/connectors/_create
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
-      "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+        "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
     },
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
@@ -174,7 +174,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "imageFormat": "<png|jpeg|gif|webp>",
         "detailLevel": "<STANDARD_IMAGE|DOCUMENT_IMAGE>"
@@ -184,8 +184,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"IMAGE_RETRIEVAL\",\n \"embeddingDimension\": ${parameters.dimensions},\n    \"image\": {\n      \"format\": \"${parameters.imageFormat}\",\n      \"detailLevel\": \"${parameters.detailLevel}\",\n      \"source\": {\n        \"bytes\": \"${parameters.inputImage}\"\n      }\n    }\n  }\n}",
@@ -220,7 +220,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "videoFormat": "<mp4|mov|mkv|webm|flv|mpeg|mpg|wmv|3gp>",
         "embeddingMode": "<AUDIO_VIDEO_COMBINED|AUDIO_VIDEO_SEPARATE>"
@@ -230,8 +230,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n \"embeddingPurpose\": \"VIDEO_RETRIEVAL\",       \"embeddingDimension\": ${parameters.dimensions},\n        \"video\": {\n            \"format\": \"${parameters.videoFormat}\",\n            \"embeddingMode\": \"${parameters.embeddingMode}\",\n            \"source\": {\n                \"bytes\": \"${parameters.inputVideo}\"\n            }\n        }\n    }\n}",
@@ -253,7 +253,7 @@ POST /_plugins/_ml/connectors/_create
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
-      "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+        "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
     },
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
@@ -263,7 +263,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "videoFormat": "<mp4|mov|mkv|webm|flv|mpeg|mpg|wmv|3gp>",
         "embeddingMode": "<AUDIO_VIDEO_COMBINED|AUDIO_VIDEO_SEPARATE>"
@@ -273,8 +273,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n \"embeddingPurpose\": \"VIDEO_RETRIEVAL\",       \"embeddingDimension\": ${parameters.dimensions},\n        \"video\": {\n            \"format\": \"${parameters.videoFormat}\",\n            \"embeddingMode\": \"${parameters.embeddingMode}\",\n            \"source\": {\n                \"bytes\": \"${parameters.inputVideo}\"\n            }\n        }\n    }\n}",
@@ -309,7 +309,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "audioFormat": "<mp3|wav|ogg>"
     },
@@ -318,8 +318,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"AUDIO_RETRIEVAL\",      \"embeddingDimension\": ${parameters.dimensions},\n        \"audio\": {\n            \"format\": \"${parameters.audioFormat}\",\n\"source\": {\n                \"bytes\": \"${parameters.inputAudio}\"\n            }\n        }\n    }\n}",
@@ -333,7 +333,7 @@ POST /_plugins/_ml/connectors/_create
 If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
 Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
-#### For AOS 2.17, 2.19, and 3.1
+#### For AOS 2.17, 2.19, and 3.1:
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -343,7 +343,7 @@ POST /_plugins/_ml/connectors/_create
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
-      "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+        "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
     },
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
@@ -353,7 +353,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "audioFormat": "<mp3|wav|ogg>"
     },
@@ -362,8 +362,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"AUDIO_RETRIEVAL\",      \"embeddingDimension\": ${parameters.dimensions},\n        \"audio\": {\n            \"format\": \"${parameters.audioFormat}\",\n\"source\": {\n                \"bytes\": \"${parameters.inputAudio}\"\n            }\n        }\n    }\n}",
@@ -374,7 +374,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-#### For AOS 3.3+
+#### For AOS 3.3+:
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -384,7 +384,7 @@ POST /_plugins/_ml/connectors/_create
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
-      "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+        "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
     },
     "parameters": {
         "region": "<PLEASE ADD YOUR AWS REGION HERE>",
@@ -394,7 +394,7 @@ POST /_plugins/_ml/connectors/_create
         "dimensions": 1024,
         "normalize": true,
         "embeddingTypes": [
-          "float"
+            "float"
         ],
         "audioFormat": "<mp3|wav|ogg>"
     },
@@ -403,8 +403,8 @@ POST /_plugins/_ml/connectors/_create
             "action_type": "predict",
             "method": "POST",
             "headers": {
-              "content-type": "application/json",
-              "x-amz-content-sha256": "required"
+                "content-type": "application/json",
+                "x-amz-content-sha256": "required"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
             "request_body": "{\n  \"taskType\": \"SINGLE_EMBEDDING\",\n  \"singleEmbeddingParams\": {\n  \"embeddingPurpose\": \"AUDIO_RETRIEVAL\",      \"embeddingDimension\": ${parameters.dimensions},\n        \"audio\": {\n            \"format\": \"${parameters.audioFormat}\",\n\"source\": {\n                \"bytes\": \"${parameters.inputAudio}\"\n            }\n        }\n    }\n}",
