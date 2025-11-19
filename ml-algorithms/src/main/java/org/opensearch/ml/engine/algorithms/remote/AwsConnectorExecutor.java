@@ -109,7 +109,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
-                    log.debug("original payload to remote model: " + payload);
+                    log.info("original payload to remote model: " + payload);
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
