@@ -159,7 +159,7 @@ public class MLIndicesHandler {
         initIndexIfAbsent(indexName, mapping, version, listener);
     }
 
-    private String getMapping(String mappingPath) {
+    public String getMapping(String mappingPath) {
         if (mappingPath == null) {
             throw new IllegalArgumentException("Mapping path cannot be null");
         }

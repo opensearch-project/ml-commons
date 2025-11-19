@@ -296,7 +296,9 @@ import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.helper.RemoteMemoryStoreHelper;
 import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobRunner;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -517,6 +519,7 @@ public class MachineLearningPlugin extends Plugin
     private ClusterService clusterService;
     private ThreadPool threadPool;
     private Set<String> indicesToListen;
+    private SdkClient sdkClient;
 
     public static final String ML_ROLE_NAME = "ml";
     private NamedXContentRegistry xContentRegistry;
@@ -538,6 +541,8 @@ public class MachineLearningPlugin extends Plugin
     private Encryptor encryptor;
     private McpToolsHelper mcpToolsHelper;
     private McpStatelessServerHolder statelessServerHolder;
+    private RemoteMemoryStoreHelper remoteMemoryStoreHelper;
+    private MemoryContainerPipelineHelper memoryContainerPipelineHelper;
 
     public MachineLearningPlugin() {}
 
@@ -670,7 +675,7 @@ public class MachineLearningPlugin extends Plugin
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 
-        SdkClient sdkClient = SdkClientFactory
+        this.sdkClient = SdkClientFactory
             .createSdkClient(
                 client,
                 xContentRegistry,
@@ -950,6 +955,16 @@ public class MachineLearningPlugin extends Plugin
         mcpToolsHelper = new McpToolsHelper(client, toolFactoryWrapper);
         statelessServerHolder = new McpStatelessServerHolder(mcpToolsHelper, client, threadPool);
 
+        remoteMemoryStoreHelper = new RemoteMemoryStoreHelper(
+            client,
+            clusterService,
+            scriptService,
+            xContentRegistry,
+            encryptor,
+            mlFeatureEnabledSetting,
+            mlIndicesHandler
+        );
+        memoryContainerPipelineHelper = new MemoryContainerPipelineHelper(client, mlIndicesHandler, remoteMemoryStoreHelper);
         return ImmutableList
             .of(
                 encryptor,
@@ -981,7 +996,9 @@ public class MachineLearningPlugin extends Plugin
                 sdkClient,
                 toolFactoryWrapper,
                 mcpToolsHelper,
-                statelessServerHolder
+                statelessServerHolder,
+                remoteMemoryStoreHelper,
+                memoryContainerPipelineHelper
             );
     }
 

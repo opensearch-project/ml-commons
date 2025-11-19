@@ -32,6 +32,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
@@ -60,7 +61,6 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
-import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -92,7 +92,8 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        helper = new MemoryContainerHelper(client, sdkClient, NamedXContentRegistry.EMPTY);
+        RemoteMemoryStoreHelper remoteMemoryStoreHelper = mock(RemoteMemoryStoreHelper.class);
+        helper = new MemoryContainerHelper(client, sdkClient, NamedXContentRegistry.EMPTY, remoteMemoryStoreHelper);
     }
 
     public void testGetMemoryContainerSuccess() throws Exception {
@@ -248,11 +249,8 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
 
     public void testSearchData() {
         MemoryConfiguration configuration = MemoryConfiguration.builder().indexPrefix("prefix").build();
-        SearchDataObjectRequest request = SearchDataObjectRequest
-            .builder()
-            .indices("index")
-            .searchSourceBuilder(new SearchSourceBuilder())
-            .build();
+        SearchRequest request = new SearchRequest("index");
+        request.source(new SearchSourceBuilder());
 
         SearchResponse searchResponse = createSearchResponse(2);
         SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
@@ -275,11 +273,8 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
     public void testSearchDataWithSystemIndex() {
         // Test search with system index
         MemoryConfiguration systemConfig = MemoryConfiguration.builder().indexPrefix("prefix").useSystemIndex(true).build();
-        SearchDataObjectRequest request = SearchDataObjectRequest
-            .builder()
-            .indices("index")
-            .searchSourceBuilder(new SearchSourceBuilder())
-            .build();
+        SearchRequest request = new SearchRequest("index");
+        request.source(new SearchSourceBuilder());
 
         SearchResponse searchResponse = createSearchResponse(3);
         SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);

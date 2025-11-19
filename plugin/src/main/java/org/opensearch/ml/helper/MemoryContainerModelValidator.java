@@ -32,12 +32,19 @@ public final class MemoryContainerModelValidator {
     /**
      * Validates that the LLM model exists and is of REMOTE type.
      *
+     * @param tenantId      the tenant id. This is necessary for multi-tenancy.
      * @param llmId         The LLM model ID to validate
      * @param modelManager  The ML model manager
      * @param client        The OpenSearch client
      * @param listener      Action listener that receives true on success, or error on failure
      */
-    public static void validateLlmModel(String llmId, MLModelManager modelManager, Client client, ActionListener<Boolean> listener) {
+    public static void validateLlmModel(
+        String tenantId,
+        String llmId,
+        MLModelManager modelManager,
+        Client client,
+        ActionListener<Boolean> listener
+    ) {
         if (llmId == null) {
             listener.onResponse(true);
             return;
@@ -55,7 +62,7 @@ public final class MemoryContainerModelValidator {
                 listener.onFailure(new IllegalArgumentException(String.format(LLM_MODEL_NOT_FOUND_ERROR, llmId)));
             }), context::restore);
 
-            modelManager.getModel(llmId, wrappedListener);
+            modelManager.getModel(llmId, tenantId, wrappedListener);
         }
     }
 
@@ -69,6 +76,7 @@ public final class MemoryContainerModelValidator {
      * @param listener          Action listener that receives true on success, or error on failure
      */
     public static void validateEmbeddingModel(
+        String tenantId,
         String embeddingModelId,
         FunctionName expectedType,
         MLModelManager modelManager,
@@ -99,7 +107,7 @@ public final class MemoryContainerModelValidator {
                 listener.onFailure(new IllegalArgumentException(String.format(EMBEDDING_MODEL_NOT_FOUND_ERROR, embeddingModelId)));
             }), context::restore);
 
-            modelManager.getModel(embeddingModelId, wrappedListener);
+            modelManager.getModel(embeddingModelId, tenantId, wrappedListener);
         }
     }
 }

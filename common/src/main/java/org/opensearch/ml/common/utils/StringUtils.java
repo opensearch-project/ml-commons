@@ -257,7 +257,7 @@ public class StringUtils {
      *         The Map will always contain exactly one entry with the wrapping key.
      * @throws IllegalArgumentException if the JSON string contains unsupported types
      *                                  (primitive values like strings, numbers, booleans, or null)
-     * @throws com.google.gson.JsonSyntaxException if the input string is not valid JSON
+     * @throws JsonSyntaxException if the input string is not valid JSON
      *
      * @see #fromJson(String, String) for parsing with a default key for arrays only
      */
@@ -329,6 +329,29 @@ public class StringUtils {
                     return (String) value;
                 } else {
                     return gson.toJson(value);
+                }
+            });
+        } catch (PrivilegedActionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Converts an object to JSON string using plain number formatting (no scientific notation).
+     * This is particularly useful for serializing documents with timestamp fields that need to be
+     * sent to remote storage systems that expect epoch milliseconds as plain long integers.
+     *
+     * @param value the object to convert to JSON
+     * @return JSON string representation with plain number formatting
+     */
+    @SuppressWarnings("removal")
+    public static String toJsonWithPlainNumbers(Object value) {
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
+                if (value instanceof String) {
+                    return (String) value;
+                } else {
+                    return PLAIN_NUMBER_GSON.toJson(value);
                 }
             });
         } catch (PrivilegedActionException e) {
@@ -477,7 +500,7 @@ public class StringUtils {
      *
      * <p>The JSONPath format is a way to navigate and extract data from JSON documents.
      * It uses a syntax similar to XPath for XML documents. This method attempts to compile
-     * the input string as a JSONPath expression using the {@link com.jayway.jsonpath.JsonPath}
+     * the input string as a JSONPath expression using the {@link JsonPath}
      * library. If the compilation succeeds, it means the input string is a valid JSONPath
      * expression.
      *
