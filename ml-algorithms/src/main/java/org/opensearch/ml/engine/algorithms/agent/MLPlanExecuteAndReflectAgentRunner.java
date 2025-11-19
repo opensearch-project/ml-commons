@@ -284,6 +284,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, String> allParams = new HashMap<>();
         allParams.putAll(apiParams);
         allParams.putAll(mlAgent.getParameters());
+        allParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
 
         setupPromptParameters(allParams);
 
@@ -488,6 +489,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .agentId(reActAgentId)
                     .functionName(FunctionName.AGENT)
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
+                    .tenantId(allParams.get(TENANT_ID_FIELD))
                     .build();
 
                 // Pass hookRegistry to internal agent execution
@@ -548,10 +550,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     if (taskId != null && !taskUpdated) {
                         taskUpdates.put(STATE_FIELD, MLTaskState.RUNNING);
                         taskUpdates.put(RESPONSE_FIELD, memoryUpdates);
-                        updateMLTaskDirectly(taskId, taskUpdates, client, ActionListener.wrap(updateResponse -> {
-                            log.info("Updated task {} with executor memory ID", taskId);
-                            taskUpdated = true;
-                        }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
+                        updateMLTaskDirectly(
+                            taskId,
+                            allParams.get(TENANT_ID_FIELD),
+                            taskUpdates,
+                            client,
+                            sdkClient,
+                            ActionListener.wrap(updateResponse -> {
+                                log.info("Updated task {} with executor memory ID", taskId);
+                                taskUpdated = true;
+                            }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e))
+                        );
                     }
 
                     completedSteps.add(String.format("\n<step-%d>\n%s\n</step-%d>\n", stepsExecuted + 1, stepToExecute, stepsExecuted + 1));

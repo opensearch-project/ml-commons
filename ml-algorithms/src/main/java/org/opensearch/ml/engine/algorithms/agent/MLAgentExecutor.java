@@ -282,6 +282,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                     .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
                                                                 saveRootInteractionAndExecute(
                                                                     listener,
+                                                                    tenantId,
                                                                     memory,
                                                                     inputDataSet,
                                                                     mlTask,
@@ -300,6 +301,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 } else {
                                                     saveRootInteractionAndExecute(
                                                         listener,
+                                                        tenantId,
                                                         memory,
                                                         inputDataSet,
                                                         mlTask,
@@ -330,6 +332,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                 .wrap(
                                                                     createdMemory -> executeAgent(
                                                                         inputDataSet,
+                                                                        tenantId,
                                                                         mlTask,
                                                                         isAsync,
                                                                         memoryId,
@@ -352,6 +355,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                             }
                                             executeAgent(
                                                 inputDataSet,
+                                                tenantId,
                                                 mlTask,
                                                 isAsync,
                                                 memoryId,
@@ -399,6 +403,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
      */
     private void saveRootInteractionAndExecute(
         ActionListener<Output> listener,
+        String tenantId,
         Memory memory,
         RemoteInferenceInputDataSet inputDataSet,
         MLTask mlTask,
@@ -433,6 +438,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             .wrap(
                                 deleted -> executeAgent(
                                     inputDataSet,
+                                    tenantId,
                                     mlTask,
                                     isAsync,
                                     memory.getId(),
@@ -453,6 +459,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             } else {
                 executeAgent(
                     inputDataSet,
+                    tenantId,
                     mlTask,
                     isAsync,
                     memory.getId(),
@@ -691,6 +698,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     private void executeAgent(
         RemoteInferenceInputDataSet inputDataSet,
+        String tenantId,
         MLTask mlTask,
         boolean isAsync,
         String memoryId,
@@ -744,6 +752,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(
                     mlTask,
+                    tenantId,
                     outputs,
                     modelTensors,
                     parentInteractionId,
@@ -803,6 +812,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
     private ActionListener<Object> createAsyncTaskUpdater(
         MLTask mlTask,
+        String tenantId,
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String parentInteractionId,
@@ -825,12 +835,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
             updateMLTaskDirectly(
                 taskId,
+                tenantId,
                 updatedTask,
                 client,
+                sdkClient,
                 ActionListener
                     .wrap(
                         response -> log.info("Updated ML task {} with agent execution results", taskId),
-                        e -> log.error("Failed to update ML task {} with agent execution results", taskId)
+                        e -> log.error("Failed to update ML task {} with agent execution results: {}", taskId, e.getMessage(), e)
                     )
             );
         }, ex -> {
@@ -842,12 +854,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             updateMLTaskDirectly(
                 taskId,
+                tenantId,
                 updatedTask,
                 client,
+                sdkClient,
                 ActionListener
                     .wrap(
                         response -> log.info("Updated ML task {} with agent execution failed reason", taskId),
-                        e -> log.error("Failed to update ML task {} with agent execution results", taskId)
+                        e -> log.error("Failed to update ML task {} with agent execution results: {}", taskId, e.getMessage(), e)
                     )
             );
 
