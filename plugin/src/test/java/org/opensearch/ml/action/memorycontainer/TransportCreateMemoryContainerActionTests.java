@@ -65,8 +65,11 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
+import org.opensearch.ml.helper.RemoteMemoryStoreHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
@@ -200,15 +203,25 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
 
         // Create action
+        ClusterService clusterService = mock(ClusterService.class);
+        MLEngine mlEngine = mock(MLEngine.class);
+        RemoteMemoryStoreHelper remoteMemoryStoreHelper = mock(RemoteMemoryStoreHelper.class);
+        MemoryContainerPipelineHelper pipelineHelper = mock(MemoryContainerPipelineHelper.class);
+
         action = new TransportCreateMemoryContainerAction(
             transportService,
             actionFilters,
             client,
+            clusterService,
+            settings,
             sdkClient,
             mlIndicesHandler,
             connectorAccessControlHelper,
             mlFeatureEnabledSetting,
-            mlModelManager
+            mlModelManager,
+            mlEngine,
+            remoteMemoryStoreHelper,
+            pipelineHelper
         );
     }
 

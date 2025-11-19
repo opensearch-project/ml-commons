@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -28,7 +29,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
-import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -118,16 +118,15 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             memoryContainerHelper.addContainerIdFilter(input.getMemoryContainerId(), input.getSearchSourceBuilder());
 
             // Add owner filter for non-admin users
-            if (!memoryContainerHelper.isAdminUser(user)) {
-                memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
-            }
+            // if (!memoryContainerHelper.isAdminUser(user)) {
+            // memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
+            // }
 
-            SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest
-                .builder()
-                .indices(indexName)
-                .searchSourceBuilder(input.getSearchSourceBuilder())
-                .tenantId(tenantId)
-                .build();
+            SearchRequest searchRequest = new SearchRequest(indexName).source(input.getSearchSourceBuilder());
+            // TODO: add search pipeline support in SearchRequest
+            // if (memoryConfig.getSearchPipeline() != null) {
+            // searchRequest.pipeline(memoryConfig.getSearchPipeline());
+            // }
 
             // Execute search
             ActionListener<SearchResponse> searchResponseActionListener = ActionListener.wrap(response -> {
@@ -141,7 +140,13 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
                 log.error("Search execution failed", e);
                 actionListener.onFailure(new OpenSearchException("Search execution failed: " + e.getMessage(), e));
             });
-            memoryContainerHelper.searchData(container.getConfiguration(), searchDataObjecRequest, searchResponseActionListener);
+
+            if (memoryConfig.getRemoteStore() == null) {
+                memoryContainerHelper.searchData(container.getConfiguration(), searchRequest, searchResponseActionListener);
+            } else {
+                String query = input.getSearchSourceBuilder().toString();
+                memoryContainerHelper.searchDataFromRemoteStorage(memoryConfig, indexName, query, searchResponseActionListener);
+            }
 
         } catch (Exception e) {
             log.error("Failed to build search request", e);

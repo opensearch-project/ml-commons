@@ -7,6 +7,7 @@ package org.opensearch.ml.common.model;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
@@ -125,13 +126,16 @@ public class ModelGuardrail extends Guardrail {
             guardrailModelParams.put("response_filter", responseFilter);
         }
         log.info("Guardrail resFilter: {}", responseFilter);
+        String tenantId = parameters != null ? parameters.get(TENANT_ID_FIELD) : null;
         ActionRequest request = new MLPredictionTaskRequest(
             modelId,
             RemoteInferenceMLInput
                 .builder()
                 .algorithm(FunctionName.REMOTE)
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(guardrailModelParams).build())
-                .build()
+                .build(),
+            null,
+            tenantId
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, new LatchedActionListener(actionListener, latch));
         try {

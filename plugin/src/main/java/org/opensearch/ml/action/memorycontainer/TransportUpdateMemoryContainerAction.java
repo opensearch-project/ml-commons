@@ -66,6 +66,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
     final MLModelManager mlModelManager;
     final MemoryContainerHelper memoryContainerHelper;
     final MLIndicesHandler mlIndicesHandler;
+    final MemoryContainerPipelineHelper memoryContainerPipelineHelper;
 
     @Inject
     public TransportUpdateMemoryContainerAction(
@@ -78,7 +79,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLModelManager mlModelManager,
         MemoryContainerHelper memoryContainerHelper,
-        MLIndicesHandler mlIndicesHandler
+        MLIndicesHandler mlIndicesHandler,
+        MemoryContainerPipelineHelper memoryContainerPipelineHelper
     ) {
         super(MLUpdateMemoryContainerAction.NAME, transportService, actionFilters, MLUpdateMemoryContainerRequest::new);
         this.client = client;
@@ -89,6 +91,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         this.mlModelManager = mlModelManager;
         this.memoryContainerHelper = memoryContainerHelper;
         this.mlIndicesHandler = mlIndicesHandler;
+        this.memoryContainerPipelineHelper = memoryContainerPipelineHelper;
     }
 
     @Override
@@ -281,21 +284,24 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
         String memoryContainerId,
         ActionListener<UpdateResponse> listener
     ) {
+        String tenantId = container.getTenantId();
         // Validate LLM model using helper
-        MemoryContainerModelValidator.validateLlmModel(config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
-            // LLM validated, now validate embedding model
-            MemoryContainerModelValidator
-                .validateEmbeddingModel(
-                    config.getEmbeddingModelId(),
-                    config.getEmbeddingModelType(),
-                    mlModelManager,
-                    client,
-                    ActionListener.wrap(embeddingValid -> {
-                        // Both models validated, proceed to shared index validation and creation
-                        validateSharedIndexAndCreateIndices(container, config, updateFields, memoryContainerId, listener);
-                    }, listener::onFailure)
-                );
-        }, listener::onFailure));
+        MemoryContainerModelValidator
+            .validateLlmModel(tenantId, config.getLlmId(), mlModelManager, client, ActionListener.wrap(llmValid -> {
+                // LLM validated, now validate embedding model
+                MemoryContainerModelValidator
+                    .validateEmbeddingModel(
+                        tenantId,
+                        config.getEmbeddingModelId(),
+                        config.getEmbeddingModelType(),
+                        mlModelManager,
+                        client,
+                        ActionListener.wrap(embeddingValid -> {
+                            // Both models validated, proceed to shared index validation and creation
+                            validateSharedIndexAndCreateIndices(container, config, updateFields, memoryContainerId, listener);
+                        }, listener::onFailure)
+                    );
+            }, listener::onFailure));
     }
 
     /**
@@ -394,6 +400,6 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
      * Creates ingest pipeline and long-term index.
      */
     private void createLongTermMemoryIngestPipeline(String indexName, MemoryConfiguration config, ActionListener<Boolean> listener) {
-        MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline(indexName, config, mlIndicesHandler, client, listener);
+        memoryContainerPipelineHelper.createLongTermMemoryIngestPipeline(indexName, config, listener);
     }
 }

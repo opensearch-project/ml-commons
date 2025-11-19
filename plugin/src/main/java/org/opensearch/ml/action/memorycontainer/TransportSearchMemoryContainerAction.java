@@ -9,6 +9,12 @@ import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionLis
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -19,6 +25,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
@@ -28,6 +35,8 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -92,6 +101,26 @@ public class TransportSearchMemoryContainerAction extends HandledTransportAction
                 memoryContainerHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by {}", user.getBackendRoles());
             }
+
+            // Exclude credential fields from connector in remote_store configuration
+            List<String> excludes = Optional
+                .ofNullable(request.source())
+                .map(SearchSourceBuilder::fetchSource)
+                .map(FetchSourceContext::excludes)
+                .map(x -> Arrays.stream(x).collect(Collectors.toList()))
+                .orElse(new ArrayList<>());
+            excludes.add("configuration.remote_store.connector." + HttpConnector.CREDENTIAL_FIELD);
+            FetchSourceContext rebuiltFetchSourceContext = new FetchSourceContext(
+                Optional
+                    .ofNullable(request.source())
+                    .map(SearchSourceBuilder::fetchSource)
+                    .map(FetchSourceContext::fetchSource)
+                    .orElse(true),
+                Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::includes).orElse(null),
+                excludes.toArray(new String[0])
+            );
+            request.source().fetchSource(rebuiltFetchSourceContext);
+
             SearchDataObjectRequest searchDataObjecRequest = SearchDataObjectRequest
                 .builder()
                 .indices(request.indices())

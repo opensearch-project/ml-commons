@@ -28,6 +28,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.memory.Message;
 import org.opensearch.search.SearchHit;
 
 import lombok.AllArgsConstructor;
@@ -39,7 +40,7 @@ import lombok.Getter;
  */
 @Builder
 @AllArgsConstructor
-public class Interaction implements Writeable, ToXContentObject {
+public class Interaction implements Writeable, ToXContentObject, Message {
 
     @Getter
     private String id;
@@ -275,4 +276,13 @@ public class Interaction implements Writeable, ToXContentObject {
             + "}";
     }
 
+    @Override
+    public String getType() {
+        return "";
+    }
+
+    @Override
+    public String getContent() {
+        return "";
+    }
 }

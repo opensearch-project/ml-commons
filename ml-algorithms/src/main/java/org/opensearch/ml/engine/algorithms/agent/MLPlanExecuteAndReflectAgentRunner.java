@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
@@ -17,10 +18,12 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_ITERATION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
@@ -49,19 +52,22 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -69,8 +75,8 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -92,6 +98,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    private HookRegistry hookRegistry;
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
     private final Map<String, Object> taskUpdates = new HashMap<>();
@@ -155,6 +162,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
 
+    private static final String BODY_FIELD = "body";
+    private static final String BODY_TEMPLATE = "{\"role\":\"user\",\"content\":[{\"text\":\"${parameters.prompt}\"}]}";
+
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
         Settings settings,
@@ -163,7 +173,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
         SdkClient sdkClient,
-        Encryptor encryptor
+        Encryptor encryptor,
+        HookRegistry hookRegistry
     ) {
         this.client = client;
         this.settings = settings;
@@ -173,6 +184,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
+        this.hookRegistry = hookRegistry;
         this.plannerPrompt = DEFAULT_PLANNER_PROMPT;
         this.plannerPromptTemplate = DEFAULT_PLANNER_PROMPT_TEMPLATE;
         this.reflectPrompt = DEFAULT_REFLECT_PROMPT;
@@ -185,6 +197,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
+        // workaround for agent revamp until PER supports messages
+        if (params.containsKey(BODY_FIELD)) {
+            params.put(BODY_FIELD, BODY_TEMPLATE);
+        }
 
         String userPrompt = params.get(QUESTION_FIELD);
         params.put(USER_PROMPT_FIELD, userPrompt);
@@ -276,46 +292,53 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, String> allParams = new HashMap<>();
         allParams.putAll(apiParams);
         allParams.putAll(mlAgent.getParameters());
+        allParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
 
         setupPromptParameters(allParams);
 
         // planner prompt for the first call
         usePlannerPromptTemplate(allParams);
 
+        if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
+            List<String> completedSteps = new ArrayList<>();
+            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, null, listener);
+            return;
+        }
+
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        String memoryType = mlAgent.getMemory().getType();
+        String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
         // todo: use chat history instead of completed steps
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory
-            .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-                memory.getMessages(ActionListener.<List<Interaction>>wrap(interactions -> {
-                    List<String> completedSteps = new ArrayList<>();
-                    for (Interaction interaction : interactions) {
-                        String question = interaction.getInput();
-                        String response = interaction.getResponse();
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
+        Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent, apiParams);
+        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
+            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
+                final List<String> completedSteps = new ArrayList<>();
+                for (Interaction interaction : interactions) {
+                    String question = interaction.getInput();
+                    String response = interaction.getResponse();
 
-                        if (Strings.isNullOrEmpty(response)) {
-                            continue;
-                        }
-
-                        completedSteps.add(question);
-                        completedSteps.add(response);
+                    if (Strings.isNullOrEmpty(response)) {
+                        continue;
                     }
 
-                    if (!completedSteps.isEmpty()) {
-                        addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
-                        usePlannerWithHistoryPromptTemplate(allParams);
-                    }
+                    completedSteps.add(question);
+                    completedSteps.add(response);
+                }
 
-                    setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getConversationId(), listener);
-                }, e -> {
-                    log.error("Failed to get chat history", e);
-                    listener.onFailure(e);
-                }), messageHistoryLimit);
-            }, listener::onFailure));
+                if (!completedSteps.isEmpty()) {
+                    addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
+                    usePlannerWithHistoryPromptTemplate(allParams);
+                }
+
+                setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
+            }, e -> {
+                log.error("Failed to get chat history", e);
+                listener.onFailure(e);
+            }));
+        }, listener::onFailure));
     }
 
     private void setToolsAndRunAgent(
@@ -337,7 +360,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             AtomicInteger traceNumber = new AtomicInteger(0);
 
-            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+            executePlanningLoop(
+                mlAgent.getLlm(),
+                allParams,
+                completedSteps,
+                memory,
+                conversationId,
+                0,
+                traceNumber,
+                mlAgent.getTenantId(),
+                finalListener
+            );
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -358,6 +391,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String conversationId,
         int stepsExecuted,
         AtomicInteger traceNumber,
+        String tenantId,
         ActionListener<Object> finalListener
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
@@ -376,7 +410,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     completedSteps.getLast()
                 );
             saveAndReturnFinalResult(
-                (ConversationIndexMemory) memory,
+                memory,
                 parentInteractionId,
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
@@ -386,8 +420,41 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             );
             return;
         }
+        MLPredictionTaskRequest request;
+        // Planner agent doesn't use INTERACTIONS for now, reusing the INTERACTIONS to pass over
+        // completedSteps to context management.
+        // TODO should refactor the completed steps as message array format, similar to chat agent.
 
-        MLPredictionTaskRequest request = new MLPredictionTaskRequest(
+        allParams.put("_llm_model_id", llm.getModelId());
+        if (hookRegistry != null && !completedSteps.isEmpty()) {
+
+            Map<String, String> requestParams = new HashMap<>(allParams);
+            requestParams.put(INTERACTIONS, ", " + String.join(", ", completedSteps));
+            try {
+                ContextManagerContext contextAfterEvent = AgentContextUtil
+                    .emitPreLLMHook(requestParams, completedSteps, null, memory, hookRegistry);
+
+                // Check if context managers actually modified the interactions
+                List<String> updatedSteps = contextAfterEvent.getToolInteractions();
+                if (updatedSteps != null && !updatedSteps.equals(completedSteps)) {
+                    completedSteps.clear();
+                    completedSteps.addAll(updatedSteps);
+
+                    // Update parameters if context manager set INTERACTIONS
+                    String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                    if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                        allParams.put(COMPLETED_STEPS_FIELD, contextInteractions);
+                        // TODO should I always clear interactions after update the completed steps?
+                        allParams.put(INTERACTIONS, "");
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to emit pre-LLM hook", e);
+            }
+
+        }
+
+        request = new MLPredictionTaskRequest(
             llm.getModelId(),
             RemoteInferenceMLInput
                 .builder()
@@ -395,7 +462,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(allParams).build())
                 .build(),
             null,
-            allParams.get(TENANT_ID_FIELD)
+            tenantId
         );
 
         StepListener<MLTaskResponse> planListener = new StepListener<>();
@@ -407,7 +474,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
                 saveAndReturnFinalResult(
-                    (ConversationIndexMemory) memory,
+                    memory,
                     parentInteractionId,
                     allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                     allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
@@ -435,13 +502,21 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
                         allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
                     );
+                if (allParams.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
+                    reactParams.put(MEMORY_CONTAINER_ID_FIELD, allParams.get(MEMORY_CONTAINER_ID_FIELD));
+                }
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
                     .agentId(reActAgentId)
                     .functionName(FunctionName.AGENT)
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
+                    .tenantId(tenantId)
                     .build();
+
+                // Pass hookRegistry to internal agent execution
+                // TODO need to check if the agentInput already have the hookResgistry?
+                agentInput.setHookRegistry(hookRegistry);
 
                 MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
@@ -497,10 +572,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     if (taskId != null && !taskUpdated) {
                         taskUpdates.put(STATE_FIELD, MLTaskState.RUNNING);
                         taskUpdates.put(RESPONSE_FIELD, memoryUpdates);
-                        updateMLTaskDirectly(taskId, taskUpdates, client, ActionListener.wrap(updateResponse -> {
-                            log.info("Updated task {} with executor memory ID", taskId);
-                            taskUpdated = true;
-                        }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
+                        updateMLTaskDirectly(
+                            taskId,
+                            allParams.get(TENANT_ID_FIELD),
+                            taskUpdates,
+                            client,
+                            sdkClient,
+                            ActionListener.wrap(updateResponse -> {
+                                log.info("Updated task {} with executor memory ID", taskId);
+                                taskUpdated = true;
+                            }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e))
+                        );
                     }
 
                     completedSteps.add(String.format("\n<step-%d>\n%s\n</step-%d>\n", stepsExecuted + 1, stepToExecute, stepsExecuted + 1));
@@ -516,8 +598,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         );
 
                     saveTraceData(
-                        (ConversationIndexMemory) memory,
-                        memory.getType(),
+                        memory,
+                        memory != null ? memory.getType() : null,
                         stepToExecute,
                         results.get(STEP_RESULT_FIELD),
                         conversationId,
@@ -539,6 +621,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         conversationId,
                         stepsExecuted + 1,
                         traceNumber,
+                        tenantId,
                         finalListener
                     );
                 }, e -> {
@@ -673,7 +756,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void saveAndReturnFinalResult(
-        ConversationIndexMemory memory,
+        Memory memory,
         String parentInteractionId,
         String reactAgentMemoryId,
         String reactParentInteractionId,
@@ -681,16 +764,38 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String input,
         ActionListener<Object> finalListener
     ) {
-        Map<String, Object> updateContent = new HashMap<>();
-        updateContent.put(INTERACTIONS_RESPONSE_FIELD, finalResult);
+        if (memory != null) {
+            Map<String, Object> updateContent = new HashMap<>();
+            updateContent.put(INTERACTIONS_RESPONSE_FIELD, finalResult);
 
-        if (input != null) {
-            updateContent.put(INTERACTIONS_INPUT_FIELD, input);
-        }
+            if (input != null) {
+                updateContent.put(INTERACTIONS_INPUT_FIELD, input);
+            }
 
-        memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+            memory.update(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+                List<ModelTensors> finalModelTensors = createModelTensors(
+                    memory.getId(),
+                    parentInteractionId,
+                    reactAgentMemoryId,
+                    reactParentInteractionId
+                );
+                finalModelTensors
+                    .add(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            )
+                            .build()
+                    );
+                finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }, e -> {
+                log.error("Failed to update interaction with final result", e);
+                finalListener.onFailure(e);
+            }));
+        } else {
             List<ModelTensors> finalModelTensors = createModelTensors(
-                memory.getConversationId(),
+                null,
                 parentInteractionId,
                 reactAgentMemoryId,
                 reactParentInteractionId
@@ -705,10 +810,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         .build()
                 );
             finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-        }, e -> {
-            log.error("Failed to update interaction with final result", e);
-            finalListener.onFailure(e);
-        }));
+        }
     }
 
     @VisibleForTesting
@@ -721,8 +823,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         List<ModelTensors> modelTensors = new ArrayList<>();
         List<ModelTensor> tensors = new ArrayList<>();
 
-        tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
-        tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
+        if (sessionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
+        }
+
+        if (parentInteractionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
+        }
 
         if (reactAgentMemoryId != null && !reactAgentMemoryId.isEmpty()) {
             tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build());

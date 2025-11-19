@@ -119,6 +119,10 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
 
     public void testExecute_NoConnectorIndex() {
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+            .build());
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(argCaptor.capture());
@@ -128,6 +132,10 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     public void testExecute_FailedToGetConnector() {
         when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
         when(metaData.hasIndex(anyString())).thenReturn(true);
+        when(request.getMlInput()).thenReturn(org.opensearch.ml.common.input.MLInput.builder()
+            .algorithm(org.opensearch.ml.common.FunctionName.REMOTE)
+            .inputDataset(new org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet(Map.of(), null))
+            .build());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);

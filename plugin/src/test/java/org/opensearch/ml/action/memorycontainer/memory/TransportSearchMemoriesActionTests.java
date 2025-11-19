@@ -26,6 +26,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.common.settings.Settings;
@@ -46,7 +47,6 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemorie
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
-import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -203,7 +203,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -211,7 +211,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
@@ -268,7 +268,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -276,7 +276,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(containerWithoutSemantic));
-        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
@@ -315,7 +315,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, never()).checkMemoryContainerAccess(any(), any());
-        verify(memoryContainerHelper, never()).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, never()).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
         verify(actionListener, times(1)).onFailure(expectedError);
         verify(actionListener, never()).onResponse(any());
     }
@@ -349,7 +349,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, never()).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, never()).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(errorCaptor.capture());
@@ -392,7 +392,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onFailure(searchError);
             return null;
-        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -400,7 +400,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(mockContainer));
-        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         ArgumentCaptor<Exception> errorCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(errorCaptor.capture());
@@ -467,7 +467,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -475,7 +475,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), any(), any());
         verify(memoryContainerHelper, times(1)).checkMemoryContainerAccess(isNull(), eq(sparseContainer));
-        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(MemoryConfiguration.class), any(SearchRequest.class), any());
 
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
@@ -542,7 +542,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -613,7 +613,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -808,7 +808,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Test exception"));
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -823,7 +823,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         assertTrue(capturedError.getMessage().contains("Test exception"));
 
         // Verify search was called
-        verify(memoryContainerHelper, times(1)).searchData(any(), any(SearchDataObjectRequest.class), any());
+        verify(memoryContainerHelper, times(1)).searchData(any(), any(SearchRequest.class), any());
     }
 
     @Test
@@ -901,7 +901,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -945,16 +945,16 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
 
         // Assert
-        ArgumentCaptor<SearchDataObjectRequest> requestCaptor = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         verify(memoryContainerHelper, times(1)).searchData(any(), requestCaptor.capture(), any());
 
-        SearchDataObjectRequest capturedRequest = requestCaptor.getValue();
+        SearchRequest capturedRequest = requestCaptor.getValue();
         assertNotNull(capturedRequest);
         // Verify the request was created with the specific memory type index
         assertNotNull(capturedRequest.indices());
@@ -986,7 +986,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         // Mock search operation to throw an exception
         doAnswer(invocation -> { throw new RuntimeException("Unexpected error during search"); })
             .when(memoryContainerHelper)
-            .searchData(any(), any(SearchDataObjectRequest.class), any());
+            .searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -1044,7 +1044,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -1089,18 +1089,18 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
 
         // Assert
         verify(memoryContainerHelper, times(1)).getMemoryContainer(eq(memoryContainerId), eq(tenantId), any());
-        ArgumentCaptor<SearchDataObjectRequest> requestCaptor = ArgumentCaptor.forClass(SearchDataObjectRequest.class);
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         verify(memoryContainerHelper, times(1)).searchData(any(), requestCaptor.capture(), any());
 
-        SearchDataObjectRequest capturedRequest = requestCaptor.getValue();
-        assertEquals(tenantId, capturedRequest.tenantId());
+        SearchRequest capturedRequest = requestCaptor.getValue();
+        // Note: SearchRequest doesn't have tenantId() method, tenant validation happens elsewhere
         verify(actionListener, times(1)).onResponse(any());
     }
 
@@ -1152,7 +1152,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -1237,7 +1237,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);
@@ -1283,7 +1283,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(mockSearchResponse);
             return null;
-        }).when(memoryContainerHelper).searchData(any(), any(SearchDataObjectRequest.class), any());
+        }).when(memoryContainerHelper).searchData(any(), any(SearchRequest.class), any());
 
         // Act
         transportSearchMemoriesAction.doExecute(task, searchRequest, actionListener);

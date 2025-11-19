@@ -39,6 +39,9 @@ public class MemoryContainerConstants {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String ID_FIELD = "id";
     public static final String ENABLED_FIELD = "enabled";
+    public static final String REMOTE_STORE_FIELD = "remote_store";
+    public static final String INGEST_PIPELINE_FIELD = "ingest_pipeline";
+    public static final String SEARCH_PIPELINE_FIELD = "search_pipeline";
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
@@ -60,6 +63,7 @@ public class MemoryContainerConstants {
     public static final String STRATEGY_CONFIG_FIELD = "configuration";
     public static final String BINARY_DATA_FIELD = "binary_data";
     public static final String STRUCTURED_DATA_FIELD = "structured_data";
+    public static final String STRUCTURED_DATA_BLOB_FIELD = "structured_data_blob";
     public static final String NAMESPACE_SIZE_FIELD = "namespace_size";
     public static final String MEMORY_FIELD = "memory";
     public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";
