@@ -489,4 +489,16 @@ public final class MLCommonsSettings {
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "ag_ui_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AG_UI_DISABLED_MESSAGE =
         "The AG-UI agent feature is not enabled. To enable, please update the setting " + ML_COMMONS_AG_UI_ENABLED.getKey();
+
+    // Feature flag for MCP header passthrough
+    public static final Setting<Boolean> ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED = Setting
+        .boolSetting(
+            ML_PLUGIN_SETTING_PREFIX + "mcp_header_passthrough_enabled",
+            false,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final String ML_COMMONS_MCP_HEADER_PASSTHROUGH_DISABLED_MESSAGE =
+        "The MCP header passthrough feature is not enabled. To enable, please update the setting "
+            + ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED.getKey();
 }

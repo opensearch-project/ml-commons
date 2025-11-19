@@ -767,9 +767,14 @@ public class AgentUtils {
                 connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
 
                 List<MLToolSpec> mcpToolSpecs;
+                if (client == null) {
+                    throw new IllegalArgumentException("Client cannot be null for MCP connector execution");
+                }
+
                 if (connector instanceof McpConnector) {
                     McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;
@@ -777,6 +782,7 @@ public class AgentUtils {
                 if (connector instanceof McpStreamableHttpConnector) {
                     McpStreamableHttpConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setClient(client);
                     mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
                     toolListener.onResponse(mcpToolSpecs);
                     return;

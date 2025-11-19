@@ -243,8 +243,11 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
                     if (isAGUIAgent) {
                         // end current text message before sending tool events
-                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
-                        sendAGUIEvent(textMessageEndEvent, false, listener);
+                        if (textMessageStarted) {
+                            textMessageStarted = false;
+                            BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                            sendAGUIEvent(textMessageEndEvent, false, listener);
+                        }
 
                         BaseEvent toolCallStartEvent = new ToolCallStartEvent(toolUseId.get(), toolName.get(), messageId);
                         sendAGUIEvent(toolCallStartEvent, false, listener);

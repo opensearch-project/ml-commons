@@ -116,7 +116,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequest() throws IOException {
         RestRequest request = getLocalSampleCalculatorRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -125,7 +125,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequestMCorr() throws IOException {
         RestRequest request = getMetricsCorrelationRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -134,7 +134,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequestAgent() throws IOException {
         RestRequest request = getExecuteAgentRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);
@@ -143,7 +143,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
     public void testGetRequestTool() throws IOException {
         RestRequest request = getExecuteToolRestRequest();
-        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request, client);
 
         Input input = executeTaskRequest.getInput();
         assertNotNull(input);

@@ -18,7 +18,9 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
+import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.ByteArrayOutputStream;
@@ -142,6 +144,16 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+
+        // Check MCP header passthrough feature flag
+        if (hasMcpHeaders(request) && !mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()) {
+            throw new IllegalArgumentException(
+                "MCP header passthrough is not enabled. To enable, please update the setting: "
+                    + "plugins.ml_commons.mcp_header_passthrough_enabled"
+            );
+        }
+        putMcpRequestHeaders(request, client);
+
         if (!mlFeatureEnabledSetting.isStreamEnabled()) {
             throw new IllegalStateException(STREAM_DISABLED_ERR_MSG);
         }
@@ -157,6 +169,9 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         }
 
         final StreamingRestChannelConsumer consumer = (channel) -> {
+
+            final ThreadContext.StoredContext storedContext = client.threadPool().getThreadContext().newStoredContext(true);
+
             Map<String, List<String>> headers = Map
                 .of(
                     "Content-Type",
@@ -169,9 +184,11 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             channel.prepareResponse(RestStatus.OK, headers);
 
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
-                try {
+                try (ThreadContext.StoredContext context = storedContext) {
+                    context.restore();
+
                     BytesReference completeContent = combineChunks(chunks);
-                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
+                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent, client);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
 
                     // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
@@ -277,7 +294,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     log.error("Failed to parse or process request", e);
                     return Mono.error(e);
                 }
-            }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
+            }).doOnNext(channel::sendChunk).doFinally(signalType -> { storedContext.close(); }).onErrorResume(ex -> {
                 log.error("Error occurred", ex);
                 try {
                     String errorMessage = ex instanceof IOException
@@ -359,11 +376,14 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     /**
      * Creates a MLExecuteTaskRequest from a RestRequest
      *
+     * @param agentId Agent ID
      * @param request RestRequest
+     * @param content Request content
+     * @param client NodeClient
      * @return MLExecuteTaskRequest
      */
     @VisibleForTesting
-    MLExecuteTaskRequest getRequest(String agentId, RestRequest request, BytesReference content) throws IOException {
+    MLExecuteTaskRequest getRequest(String agentId, RestRequest request, BytesReference content, NodeClient client) throws IOException {
         XContentParser parser = request
             .getMediaType()
             .xContent()
@@ -597,4 +617,5 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             }
         };
     }
+
 }
