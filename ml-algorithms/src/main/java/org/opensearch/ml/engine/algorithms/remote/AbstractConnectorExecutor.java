@@ -39,7 +39,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
         if (getClient() == null) {
             return;
         }
-        
+
         ThreadContext threadContext = getClient().threadPool().getThreadContext();
 
         String accessKeyId = threadContext.getHeader(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID);

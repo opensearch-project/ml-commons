@@ -349,7 +349,7 @@ public class RestActionUtils {
         if (client == null) {
             return;
         }
-        
+
         ThreadContext threadContext = client.threadPool().getThreadContext();
 
         String accessKeyId = request.header(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID);
