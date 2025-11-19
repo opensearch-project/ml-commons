@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.memory;
 
+import static org.opensearch.ml.common.CommonValue.AGENTIC_MEMORY_THREAD_POOL;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
@@ -16,10 +18,12 @@ import java.util.Map;
 
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
@@ -56,18 +60,20 @@ import lombok.extern.log4j.Log4j2;
 @Getter
 public class AgenticConversationMemory implements Memory<Message, CreateInteractionResponse, UpdateResponse> {
 
-    public static final String TYPE = "agentic_conversation";
+    public static final String TYPE = MLMemoryType.AGENTIC_MEMORY.name();
     private static final String SESSION_ID_FIELD = "session_id";
     private static final String CREATED_TIME_FIELD = "created_time";
 
     private final Client client;
     private final String conversationId;
     private final String memoryContainerId;
+    private final String tenantId;
 
-    public AgenticConversationMemory(Client client, String memoryId, String memoryContainerId) {
+    public AgenticConversationMemory(Client client, String memoryId, String memoryContainerId, String tenantId) {
         this.client = client;
         this.conversationId = memoryId;
         this.memoryContainerId = memoryContainerId;
+        this.tenantId = tenantId;
     }
 
     @Override
@@ -154,10 +160,11 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         MLAddMemoriesInput input = MLAddMemoriesInput
             .builder()
             .memoryContainerId(memoryContainerId)
-            .structuredData(structuredData)
+            .structuredDataBlob(structuredData)
             .messageId(traceNum) // Store trace number in messageId field (null for messages)
             .namespace(namespace)
             .metadata(metadata)
+            .tenantId(tenantId)
             .infer(false) // Don't infer long-term memory by default
             .build();
 
@@ -177,9 +184,72 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
     @Override
     public void update(String messageId, Map<String, Object> updateContent, ActionListener<UpdateResponse> updateListener) {
         if (Strings.isNullOrEmpty(memoryContainerId)) {
+            log.error("Update failed: Memory container ID is not configured. MessageId: {}", messageId);
             updateListener.onFailure(new IllegalStateException("Memory container ID is not configured for this AgenticConversationMemory"));
             return;
         }
+
+        // Use retry mechanism for AOSS compatibility (high refresh latency)
+        updateWithRetry(messageId, updateContent, updateListener, 0, tenantId);
+    }
+
+    /**
+     * Determines if an error is retryable based on error type and attempt count
+     */
+    private boolean shouldRetryOnError(Exception e, int attemptNumber, int maxRetries) {
+        if (attemptNumber >= maxRetries) {
+            log.info("Retry limit reached. Attempt: {}, MaxRetries: {}", attemptNumber, maxRetries);
+            return false;
+        }
+
+        String errorMessage = e.getMessage();
+        if (errorMessage == null) {
+            log.info("Error message is null, not retrying. Exception type: {}", e.getClass().getName());
+            return false;
+        }
+
+        // Retry on document not found (404)
+        if (errorMessage.contains("404") || errorMessage.contains("\"found\":false")) {
+            log.info("Detected 404/not found error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Retry on version conflicts (common with AOSS due to refresh latency)
+        if (errorMessage.contains("version_conflict") || errorMessage.contains("VersionConflictEngineException")) {
+            log.info("Detected version conflict error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Retry on timeout errors
+        if (errorMessage.contains("timeout") || errorMessage.contains("TimeoutException")) {
+            log.info("Detected timeout error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Retry on temporary AOSS errors
+        if (errorMessage.contains("ServiceUnavailable") || errorMessage.contains("503")) {
+            log.info("Detected service unavailable error, will retry. Error: {}", errorMessage);
+            return true;
+        }
+
+        // Don't retry on other errors (validation errors, permission errors, etc.)
+        log.info("Error is not retryable. Error: {}", errorMessage);
+        return false;
+    }
+
+    /**
+     * Update with retry mechanism to handle AOSS refresh latency (up to 10s)
+     * Uses exponential backoff: 500ms, 1s, 2s, 4s, 8s
+     */
+    private void updateWithRetry(
+        String messageId,
+        Map<String, Object> updateContent,
+        ActionListener<UpdateResponse> updateListener,
+        int attemptNumber,
+        String tenantId
+    ) {
+        final int maxRetries = 5;
+        final long baseDelayMs = 500;
 
         // Step 1: Get the existing working memory to retrieve current structured_data
         MLGetMemoryRequest getRequest = MLGetMemoryRequest
@@ -187,17 +257,19 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .memoryContainerId(memoryContainerId)
             .memoryType(MemoryType.WORKING)
             .memoryId(messageId)
+            .tenantId(tenantId)
             .build();
 
         client.execute(MLGetMemoryAction.INSTANCE, getRequest, ActionListener.wrap(getResponse -> {
             // Step 2: Extract existing structured_data and merge with updates
             MLWorkingMemory workingMemory = getResponse.getWorkingMemory();
             if (workingMemory == null) {
+                log.error("Working memory is null in GET response. MessageId: {}, Attempt: {}", messageId, attemptNumber + 1);
                 updateListener.onFailure(new IllegalStateException("Working memory not found for id: " + messageId));
                 return;
             }
 
-            Map<String, Object> structuredData = workingMemory.getStructuredData();
+            Map<String, Object> structuredData = workingMemory.getStructuredDataBlob();
             if (structuredData == null) {
                 structuredData = new HashMap<>();
             } else {
@@ -217,7 +289,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
             // Step 4: Create update request with merged structured_data
             Map<String, Object> finalUpdateContent = new HashMap<>();
-            finalUpdateContent.put("structured_data", structuredData);
+            finalUpdateContent.put("structured_data_blob", structuredData);
 
             MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(finalUpdateContent).build();
 
@@ -227,9 +299,10 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 .memoryType(MemoryType.WORKING)
                 .memoryId(messageId)
                 .mlUpdateMemoryInput(input)
+                .tenantId(tenantId)
                 .build();
 
-            // Step 5: Execute the update
+            // Step 5: Execute the update with retry on failure
             client.execute(MLUpdateMemoryAction.INSTANCE, updateRequest, ActionListener.wrap(indexResponse -> {
                 // Convert IndexResponse to UpdateResponse
                 UpdateResponse updateResponse = new UpdateResponse(
@@ -242,13 +315,122 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                     indexResponse.getResult()
                 );
                 updateListener.onResponse(updateResponse);
-            }, e -> {
-                log.error("Failed to update memory in memory container", e);
-                updateListener.onFailure(e);
+            }, updateException -> {
+                // Check if update failed and we should retry
+                boolean shouldRetry = shouldRetryOnError(updateException, attemptNumber, maxRetries);
+
+                if (shouldRetry) {
+                    long delayMs = baseDelayMs * (1L << attemptNumber);
+
+                    log
+                        .warn(
+                            "UPDATE operation failed but is retryable. MessageId: {}, Attempt: {}/{}, RetryAfter: {}ms, ErrorType: {}, ErrorMessage: {}",
+                            messageId,
+                            attemptNumber + 1,
+                            maxRetries + 1,
+                            delayMs,
+                            updateException.getClass().getSimpleName(),
+                            updateException.getMessage()
+                        );
+
+                    // Use ThreadPool for non-blocking async retry
+                    try {
+                        client.threadPool().schedule(() -> {
+                            log.info("Executing scheduled UPDATE retry. MessageId: {}, Attempt: {}", messageId, attemptNumber + 2);
+                            updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1, tenantId);
+                        }, TimeValue.timeValueMillis(delayMs), AGENTIC_MEMORY_THREAD_POOL);
+                    } catch (Exception scheduleException) {
+                        log
+                            .error(
+                                "Failed to schedule retry after UPDATE failure. MessageId: {}, ScheduleError: {}",
+                                messageId,
+                                scheduleException.getMessage(),
+                                scheduleException
+                            );
+                        updateListener.onFailure(scheduleException);
+                    }
+                } else {
+                    log
+                        .error(
+                            "UPDATE operation failed and is NOT retryable. MessageId: {}, TotalAttempts: {}, FinalError: {}",
+                            messageId,
+                            attemptNumber + 1,
+                            updateException.getMessage(),
+                            updateException
+                        );
+                    updateListener.onFailure(updateException);
+                }
             }));
-        }, e -> {
-            log.error("Failed to get existing memory for update", e);
-            updateListener.onFailure(e);
+        }, getException -> {
+            log
+                .error(
+                    "GET memory failed. MessageId: {}, Attempt: {}/{}, ErrorType: {}, ErrorMessage: {}",
+                    messageId,
+                    attemptNumber + 1,
+                    maxRetries + 1,
+                    getException.getClass().getSimpleName(),
+                    getException.getMessage(),
+                    getException
+                );
+
+            // Check if we should retry the GET operation
+            boolean shouldRetry = shouldRetryOnError(getException, attemptNumber, maxRetries);
+
+            if (shouldRetry) {
+                // Calculate delay with exponential backoff
+                long delayMs = baseDelayMs * (1L << attemptNumber); // 500ms, 1s, 2s, 4s, 8s
+
+                log
+                    .warn(
+                        "GET operation failed but is retryable. MessageId: {}, Attempt: {}/{}, RetryAfter: {}ms, ErrorType: {}, ErrorMessage: {}",
+                        messageId,
+                        attemptNumber + 1,
+                        maxRetries + 1,
+                        delayMs,
+                        getException.getClass().getSimpleName(),
+                        getException.getMessage()
+                    );
+
+                // Use ThreadPool for non-blocking async retry
+                try {
+                    log.info("Scheduling GET retry. MessageId: {}, Delay: {}ms, NextAttempt: {}", messageId, delayMs, attemptNumber + 2);
+                    client.threadPool().schedule(() -> {
+                        log.info("Executing scheduled GET retry. MessageId: {}, Attempt: {}", messageId, attemptNumber + 2);
+                        updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1, tenantId);
+                    }, TimeValue.timeValueMillis(delayMs), AGENTIC_MEMORY_THREAD_POOL);
+                    log.info("GET retry scheduled successfully. MessageId: {}", messageId);
+                } catch (Exception scheduleException) {
+                    log
+                        .error(
+                            "Failed to schedule retry after GET failure. MessageId: {}, ScheduleError: {}",
+                            messageId,
+                            scheduleException.getMessage(),
+                            scheduleException
+                        );
+                    updateListener.onFailure(scheduleException);
+                }
+            } else {
+                if (attemptNumber >= maxRetries) {
+                    log
+                        .error(
+                            "GET operation failed after exhausting all retries. MessageId: {}, TotalAttempts: {}, FinalError: {}",
+                            messageId,
+                            attemptNumber + 1,
+                            getException.getMessage(),
+                            getException
+                        );
+                } else {
+                    log
+                        .error(
+                            "GET operation failed and is NOT retryable. MessageId: {}, Attempt: {}, Error: {}",
+                            messageId,
+                            attemptNumber + 1,
+                            getException.getMessage(),
+                            getException
+                        );
+                }
+                updateListener.onFailure(getException);
+            }
         }));
     }
 
@@ -277,7 +459,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
-        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(tenantId).build();
 
         client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
             List<Message> interactions = parseSearchResponseToInteractions(searchResponse);
@@ -295,15 +477,15 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
             // Extract structured_data which contains the interaction data
             @SuppressWarnings("unchecked")
-            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data");
+            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
 
             if (structuredData != null) {
                 String input = (String) structuredData.get("input");
                 String response = (String) structuredData.get("response");
 
-                // Extract timestamps
-                Long createdTimeMs = (Long) sourceMap.get("created_time");
-                Long updatedTimeMs = (Long) sourceMap.get("last_updated_time");
+                // Extract timestamps - handle both Long and Double from OpenSearch
+                Long createdTimeMs = convertToLong(sourceMap.get("created_time"));
+                Long updatedTimeMs = convertToLong(sourceMap.get("last_updated_time"));
 
                 // Parse create_time from structured_data if available
                 String createTimeStr = (String) structuredData.get("create_time");
@@ -405,7 +587,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
-        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(null).build();
+        MLSearchMemoriesRequest request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(searchInput).tenantId(tenantId).build();
 
         client.execute(MLSearchMemoriesAction.INSTANCE, request, ActionListener.wrap(searchResponse -> {
             List<Interaction> traces = parseSearchResponseToTraces(searchResponse);
@@ -423,7 +605,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
             // Extract structured_data which contains the trace data
             @SuppressWarnings("unchecked")
-            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data");
+            Map<String, Object> structuredData = (Map<String, Object>) sourceMap.get("structured_data_blob");
 
             if (structuredData != null) {
                 String input = (String) structuredData.get("input");
@@ -503,8 +685,9 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             String name = (String) map.get(MEMORY_NAME);
             String appType = (String) map.get(APP_TYPE);
             String memoryContainerId = (String) map.get("memory_container_id");
+            String tenantId = (String) map.get(TENANT_ID_FIELD);
 
-            create(name, memoryId, appType, memoryContainerId, listener);
+            create(name, memoryId, appType, memoryContainerId, tenantId, listener);
         }
 
         public void create(
@@ -512,6 +695,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             String memoryId,
             String appType,
             String memoryContainerId,
+            String tenantId,
             ActionListener<AgenticConversationMemory> listener
         ) {
             // Memory container ID is required for AgenticConversationMemory
@@ -528,8 +712,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
             if (Strings.isEmpty(memoryId)) {
                 // Create new session using TransportCreateSessionAction
-                createSessionInMemoryContainer(name, memoryContainerId, ActionListener.wrap(sessionId -> {
-                    create(sessionId, memoryContainerId, listener);
+                createSessionInMemoryContainer(name, memoryContainerId, tenantId, ActionListener.wrap(sessionId -> {
+                    create(sessionId, memoryContainerId, tenantId, listener);
                     log.debug("Created session in memory container, session id: {}", sessionId);
                 }, e -> {
                     log.error("Failed to create session in memory container", e);
@@ -537,15 +721,25 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 }));
             } else {
                 // Use existing session/memory ID
-                create(memoryId, memoryContainerId, listener);
+                create(memoryId, memoryContainerId, tenantId, listener);
             }
         }
 
         /**
          * Create a new session in the memory container using the new session API
          */
-        private void createSessionInMemoryContainer(String summary, String memoryContainerId, ActionListener<String> listener) {
-            MLCreateSessionInput input = MLCreateSessionInput.builder().memoryContainerId(memoryContainerId).summary(summary).build();
+        private void createSessionInMemoryContainer(
+            String summary,
+            String memoryContainerId,
+            String tenantId,
+            ActionListener<String> listener
+        ) {
+            MLCreateSessionInput input = MLCreateSessionInput
+                .builder()
+                .memoryContainerId(memoryContainerId)
+                .tenantId(tenantId)
+                .summary(summary)
+                .build();
 
             MLCreateSessionRequest request = MLCreateSessionRequest.builder().mlCreateSessionInput(input).build();
 
@@ -560,8 +754,24 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 );
         }
 
-        public void create(String memoryId, String memoryContainerId, ActionListener<AgenticConversationMemory> listener) {
-            listener.onResponse(new AgenticConversationMemory(client, memoryId, memoryContainerId));
+        public void create(String memoryId, String memoryContainerId, String tenantId, ActionListener<AgenticConversationMemory> listener) {
+            listener.onResponse(new AgenticConversationMemory(client, memoryId, memoryContainerId, tenantId));
         }
+    }
+
+    /**
+     * Safely converts a Number object to Long, handling both Long and Double types from OpenSearch
+     */
+    private static Long convertToLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Long) {
+            return (Long) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return null;
     }
 }

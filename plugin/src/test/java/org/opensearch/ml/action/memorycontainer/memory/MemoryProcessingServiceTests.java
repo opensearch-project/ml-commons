@@ -96,7 +96,7 @@ public class MemoryProcessingServiceTests {
     public void testExtractFactsFromConversation_NoStorageConfig() {
         List<MessageInput> messages = Arrays.asList(MessageInput.builder().content(testContent).role("user").build());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, null, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, null, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -108,7 +108,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn(null);
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -133,7 +133,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -143,7 +143,7 @@ public class MemoryProcessingServiceTests {
         List<String> facts = Arrays.asList("User name is John");
         List<FactSearchResult> searchResults = Arrays.asList();
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, null, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, null, decisionsListener);
 
         verify(decisionsListener).onFailure(any(IllegalStateException.class));
     }
@@ -156,7 +156,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn(null);
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(IllegalStateException.class));
     }
@@ -183,7 +183,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -194,7 +194,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -211,7 +211,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(Exception.class));
     }
@@ -229,7 +229,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(Exception.class));
     }
@@ -240,7 +240,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -252,7 +252,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -265,7 +265,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -306,7 +306,7 @@ public class MemoryProcessingServiceTests {
         );
         memoryStrategy.getStrategyConfig().put(LLM_RESULT_PATH_FIELD, "$.content[0].text");
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener)
             .onFailure(
@@ -334,7 +334,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -356,7 +356,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -380,7 +380,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -410,7 +410,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(Exception.class));
     }
@@ -440,7 +440,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(Exception.class));
     }
@@ -472,7 +472,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onFailure(any(Exception.class));
     }
@@ -494,7 +494,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(RuntimeException.class));
     }
@@ -517,7 +517,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(RuntimeException.class));
     }
@@ -550,7 +550,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onResponse(any(List.class));
     }
@@ -584,7 +584,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onResponse(any(List.class));
     }
@@ -618,7 +618,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onResponse(any(List.class));
     }
@@ -649,7 +649,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(decisionsListener).onFailure(any(RuntimeException.class));
     }
@@ -682,7 +682,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         verify(factsListener).onResponse(any(List.class));
     }
@@ -704,7 +704,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, userPreferenceStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, userPreferenceStrategy, storageConfig, factsListener);
 
         // Verify that the LLM is called (which means the strategy was accepted)
         verify(client).execute(any(), any(), any());
@@ -727,7 +727,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.runMemoryStrategy(userPreferenceStrategy, messages, storageConfig, factsListener);
+        memoryProcessingService.runMemoryStrategy(null, userPreferenceStrategy, messages, storageConfig, factsListener);
 
         // Verify that the LLM is called (strategy was accepted and processed)
         verify(client).execute(any(), any(), any());
@@ -750,7 +750,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.runMemoryStrategy(semanticStrategy, messages, storageConfig, factsListener);
+        memoryProcessingService.runMemoryStrategy(null, semanticStrategy, messages, storageConfig, factsListener);
 
         // Verify that the LLM is called (strategy was accepted and processed)
         verify(client).execute(any(), any(), any());
@@ -773,7 +773,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.runMemoryStrategy(summaryStrategy, messages, storageConfig, factsListener);
+        memoryProcessingService.runMemoryStrategy(null, summaryStrategy, messages, storageConfig, factsListener);
 
         // Verify that the LLM is called (strategy was accepted and processed)
         verify(client).execute(any(), any(), any());
@@ -796,7 +796,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, summaryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, summaryStrategy, storageConfig, factsListener);
 
         // Verify that the LLM is called (which means the strategy was accepted)
         verify(client).execute(any(), any(), any());
@@ -812,7 +812,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.runMemoryStrategy(invalidStrategy, messages, storageConfig, factsListener);
+        memoryProcessingService.runMemoryStrategy(null, invalidStrategy, messages, storageConfig, factsListener);
 
         // Verify that the listener receives a failure for unsupported strategy type
         verify(factsListener).onFailure(any(IllegalArgumentException.class));
@@ -829,7 +829,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         // Verify that the listener receives a failure for invalid prompt format
         verify(factsListener).onFailure(any(IllegalArgumentException.class));
@@ -846,7 +846,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         // Should execute with default prompt
         verify(client).execute(any(), any(), any());
@@ -866,7 +866,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -885,7 +885,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -910,7 +910,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -918,14 +918,14 @@ public class MemoryProcessingServiceTests {
     @Test
     public void testSummarizeMessages_NullMessages() {
         ActionListener<String> stringListener = mock(ActionListener.class);
-        memoryProcessingService.summarizeMessages(memoryConfig, null, stringListener);
+        memoryProcessingService.summarizeMessages(null, memoryConfig, null, stringListener);
         verify(stringListener).onResponse("");
     }
 
     @Test
     public void testSummarizeMessages_EmptyMessages() {
         ActionListener<String> stringListener = mock(ActionListener.class);
-        memoryProcessingService.summarizeMessages(memoryConfig, Arrays.asList(), stringListener);
+        memoryProcessingService.summarizeMessages(null, memoryConfig, Arrays.asList(), stringListener);
         verify(stringListener).onResponse("");
     }
 
@@ -953,7 +953,7 @@ public class MemoryProcessingServiceTests {
             actionListener.onResponse(mlTaskResponse);
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
-        memoryProcessingService.summarizeMessages(memoryConfig, messages, stringListener);
+        memoryProcessingService.summarizeMessages(null, memoryConfig, messages, stringListener);
         verify(stringListener).onResponse(any(String.class));
     }
 
@@ -968,7 +968,7 @@ public class MemoryProcessingServiceTests {
         MemoryConfiguration storageConfig = mock(MemoryConfiguration.class);
         when(storageConfig.getLlmId()).thenReturn("llm-model-123");
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -1010,7 +1010,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -1132,7 +1132,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         // Verify that 4XX error (BAD_REQUEST) is preserved with its detailed message
         verify(factsListener)
@@ -1159,7 +1159,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation(null, messages, memoryStrategy, storageConfig, factsListener);
 
         // Verify that 5XX error is wrapped in generic "Internal server error"
         verify(factsListener)
@@ -1200,7 +1200,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions(null, facts, searchResults, null, storageConfig, decisionsListener);
 
         // Verify that 4XX error (BAD_REQUEST) is preserved with its detailed message
         verify(decisionsListener)
@@ -1244,7 +1244,7 @@ public class MemoryProcessingServiceTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.summarizeMessages(storageConfig, messages, summaryListener);
+        memoryProcessingService.summarizeMessages(null, storageConfig, messages, summaryListener);
 
         // Verify that 4XX error (BAD_REQUEST) is preserved with its detailed message
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
