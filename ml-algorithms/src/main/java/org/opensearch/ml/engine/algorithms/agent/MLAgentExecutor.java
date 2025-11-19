@@ -667,18 +667,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
             // Create context manager based on type
             switch (type) {
-                case "ToolsOutputTruncateManager":
+                case ToolsOutputTruncateManager.TYPE:
                     return createToolsOutputTruncateManager(managerConfig);
-                case "SummarizationManager":
-                case "SummarizingManager":
+                case SlidingWindowManager.TYPE:
+                    return createSlidingWindowManager(managerConfig);
+                case SummarizationManager.TYPE:
                     return createSummarizationManager(managerConfig);
-                case "MemoryManager":
-                    return createMemoryManager(managerConfig);
-                case "ConversationManager":
-                    return createConversationManager(managerConfig);
                 default:
-                    log.warn("Unknown context manager type: {}", type);
-                    return null;
+                    throw new IllegalArgumentException("Failed to create context manager, unknown manager type:"+type);
             }
         } catch (Exception e) {
             log.error("Failed to create context manager: {}", e.getMessage(), e);
@@ -692,6 +688,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private org.opensearch.ml.common.contextmanager.ContextManager createToolsOutputTruncateManager(Map<String, Object> config) {
         log.debug("Creating ToolsOutputTruncateManager with config: {}", config);
         ToolsOutputTruncateManager manager = new ToolsOutputTruncateManager();
+        manager.initialize(config != null ? config : new HashMap<>());
+        return manager;
+    }
+    /**
+     * Create SlidingWindowManager
+     */
+    private org.opensearch.ml.common.contextmanager.ContextManager createSlidingWindowManager(Map<String, Object> config) {
+        log.debug("Creating SlidingWindowManager with config: {}", config);
+        SlidingWindowManager manager = new SlidingWindowManager();
         manager.initialize(config != null ? config : new HashMap<>());
         return manager;
     }
