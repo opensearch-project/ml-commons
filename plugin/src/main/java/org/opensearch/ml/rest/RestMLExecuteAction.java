@@ -8,10 +8,10 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
@@ -140,6 +140,13 @@ public class RestMLExecuteAction extends BaseRestHandler {
                 );
             } else {
                 input = MLInput.parse(parser, functionName.name());
+
+                if (!(input instanceof AgentMLInput)) {
+                    throw new IllegalArgumentException(
+                        String.format("Invalid input type. Expected: AgentMLInput, Received: %s", input.getClass().getSimpleName())
+                    );
+                }
+
                 ((AgentMLInput) input).setAgentId(agentId);
                 ((AgentMLInput) input).setTenantId(tenantId);
                 ((AgentMLInput) input).setIsAsync(async);

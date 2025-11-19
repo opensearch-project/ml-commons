@@ -12,11 +12,11 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -182,22 +182,41 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
                         HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
                         channel.sendChunk(startChunk);
-                        log.debug("RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
+                        log.debug("AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
                     }
 
                     // Extract backend tool names from agent configuration and add to request for AG-UI filtering
                     List<String> backendToolNames = extractBackendToolNamesFromAgent(agent);
                     if (isAGUI && !backendToolNames.isEmpty()) {
                         // Add backend tool names to request parameters so they're available during streaming
-                        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) mlExecuteTaskRequest
-                            .getInput()).getInputDataset();
-                        inputDataSet.getParameters().put(AGUI_PARAM_BACKEND_TOOL_NAMES, new Gson().toJson(backendToolNames));
-                        log
-                            .info(
-                                "AG-UI: Added {} backend tool names to request for streaming filter: {}",
-                                backendToolNames.size(),
-                                backendToolNames
-                            );
+                        try {
+                            if (!(mlExecuteTaskRequest.getInput() instanceof AgentMLInput)) {
+                                throw new IllegalArgumentException(
+                                    "Invalid input type. Expected: AgentMLInput, Received: "
+                                        + mlExecuteTaskRequest.getInput().getClass().getSimpleName()
+                                );
+                            }
+                            AgentMLInput agentInput = (AgentMLInput) mlExecuteTaskRequest.getInput();
+
+                            if (!(agentInput.getInputDataset() instanceof RemoteInferenceInputDataSet)) {
+                                throw new IllegalArgumentException(
+                                    "Invalid dataset type. Expected: RemoteInferenceInputDataSet, Received: "
+                                        + agentInput.getInputDataset().getClass().getSimpleName()
+                                );
+                            }
+                            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+                            inputDataSet.getParameters().put(AGUI_PARAM_BACKEND_TOOL_NAMES, new Gson().toJson(backendToolNames));
+                            log
+                                .info(
+                                    "AG-UI: Added {} backend tool names to request for streaming filter: {}",
+                                    backendToolNames.size(),
+                                    backendToolNames
+                                );
+                        } catch (ClassCastException e) {
+                            log.error("Failed to cast input types for backend tool names extraction", e);
+                            throw new IllegalArgumentException("Invalid input type configuration for AG-UI request", e);
+                        }
                     }
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();

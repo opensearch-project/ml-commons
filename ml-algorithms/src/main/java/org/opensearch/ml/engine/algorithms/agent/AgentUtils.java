@@ -1066,6 +1066,8 @@ public class AgentUtils {
         }
 
         return wrappedTools;
+    }
+
     public static Map<String, Object> createMemoryParams(
         String question,
         String memoryId,

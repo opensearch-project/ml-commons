@@ -72,7 +72,7 @@ public class AGUIInputConverter {
 
             return true;
         } catch (Exception e) {
-            log.debug("Failed to parse input as JSON for AG-UI detection", e);
+            log.error("Failed to parse input as JSON for AG-UI detection", e);
             return false;
         }
     }

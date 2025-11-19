@@ -37,7 +37,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
-import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
@@ -362,6 +362,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             }
         } catch (Exception e) {
             log.error("Failed to process AG-UI messages to chat history", e);
+            throw new IllegalArgumentException("Failed to process AG-UI messages to chat history", e);
         }
     }
 
@@ -405,6 +406,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
 
         } catch (Exception e) {
             log.error("Failed to process AG-UI context", e);
+            throw new IllegalArgumentException("Failed to process AG-UI context", e);
         }
     }
 }
