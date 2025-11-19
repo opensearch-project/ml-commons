@@ -843,7 +843,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             saveAndReturnFinalResult(
-                (ConversationIndexMemory) memory,
+                memory,
                 parentInteractionId,
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
@@ -853,7 +853,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             );
         }, finalListener::onFailure);
 
-        generateSummary(llm, completedSteps, allParams.get(TENANT_ID_FIELD), ActionListener.wrap(summary -> {
+        generateSummary(llm, completedSteps, allParams, ActionListener.wrap(summary -> {
             log.info("Summary generated successfully");
             responseListener
                 .onResponse(
@@ -876,7 +876,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    private void generateSummary(LLMSpec llmSpec, List<String> completedSteps, String tenantId, ActionListener<String> listener) {
+    private void generateSummary(LLMSpec llmSpec, List<String> completedSteps, Map<String, String> allParams, ActionListener<String> listener) {
         if (completedSteps == null || completedSteps.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Completed steps cannot be null or empty"));
             return;
@@ -887,6 +887,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             if (llmSpec.getParameters() != null) {
                 summaryParams.putAll(llmSpec.getParameters());
             }
+            // Add allParams to ensure LLM_RESPONSE_FILTER is available
+            summaryParams.putAll(allParams);
 
             String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", completedSteps));
             summaryParams.put(PROMPT_FIELD, summaryPrompt);
@@ -900,11 +902,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .inputDataset(RemoteInferenceInputDataSet.builder().parameters(summaryParams).build())
                     .build(),
                 null,
-                tenantId
+                allParams.get(TENANT_ID_FIELD)
             );
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
-                String summary = extractSummaryFromResponse(response);
+                String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null || summary.trim().isEmpty()) {
                     log.error("Extracted summary is empty");
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
@@ -917,7 +919,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
     }
 
-    private String extractSummaryFromResponse(MLTaskResponse response) {
+    private String extractSummaryFromResponse(MLTaskResponse response, Map<String, String> parameters) {
         try {
             ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
             if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
@@ -944,7 +946,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             }
 
             if (dataMap.containsKey("output")) {
-                Object outputObj = JsonPath.read(dataMap, LLM_RESPONSE_FILTER);
+                Object outputObj = JsonPath.read(dataMap, parameters.get(LLM_RESPONSE_FILTER));
                 if (outputObj != null) {
                     return String.valueOf(outputObj).trim();
                 }

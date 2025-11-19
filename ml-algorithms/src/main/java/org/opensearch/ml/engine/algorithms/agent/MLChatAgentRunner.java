@@ -66,13 +66,16 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
+import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -80,6 +83,8 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -537,7 +542,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     // Save trace with processed output
                     // Record tool result for summary
                     String outputSummary = outputToOutputString(filteredOutput);
-                    executionSteps.add(String.format("Result: %s", outputSummary));
 
                     saveTraceData(
                         memory,
@@ -1025,7 +1029,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean verbose,
         boolean traceDisabled,
         List<ModelTensors> traceTensors,
-        ConversationIndexMemory conversationIndexMemory,
+        Memory memory,
         AtomicInteger traceNumber,
         Map<String, Object> additionalInfo,
         AtomicReference<String> lastThought,
@@ -1043,7 +1047,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 verbose,
                 traceDisabled,
                 traceTensors,
-                conversationIndexMemory,
+                memory,
                 traceNumber,
                 additionalInfo,
                 response,
@@ -1143,7 +1147,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tenantId
             );
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
-                String summary = extractSummaryFromResponse(response);
+                String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null) {
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
                     return;
@@ -1155,7 +1159,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    public String extractSummaryFromResponse(MLTaskResponse response) {
+    public String extractSummaryFromResponse(MLTaskResponse response, Map<String, String> params) {
         try {
             ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
             if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
@@ -1182,7 +1186,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
 
             if (dataMap.containsKey("output")) {
-                Object outputObj = JsonPath.read(dataMap, LLM_RESPONSE_FILTER);
+                Object outputObj = JsonPath.read(dataMap, params.get(LLM_RESPONSE_FILTER));
                 if (outputObj != null) {
                     return String.valueOf(outputObj).trim();
                 }
