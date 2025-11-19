@@ -42,7 +42,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutpu
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.wrapFrontendToolsAsToolObjects;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.SUMMARY_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
 import java.lang.reflect.Type;
@@ -1132,9 +1132,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 }
             }
-            String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", stepStrings));
-            summaryParams.put(PROMPT, summaryPrompt);
-            summaryParams.put(SYSTEM_PROMPT_FIELD, SUMMARY_PROMPT_TEMPLATE);
+            String steps = String.format(Locale.ROOT, String.join("\n", stepStrings));
+            summaryParams.put(PROMPT, steps);
+            summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT);
 
             ActionRequest request = new MLPredictionTaskRequest(
                 llmSpec.getModelId(),

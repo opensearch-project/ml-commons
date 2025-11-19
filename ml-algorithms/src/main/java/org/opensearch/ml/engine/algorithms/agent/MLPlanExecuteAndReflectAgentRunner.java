@@ -34,9 +34,9 @@ import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_R
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.EXECUTOR_RESPONSIBILITY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.FINAL_RESULT_RESPONSE_INSTRUCTIONS;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_RESPONSIBILITY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.SUMMARY_PROMPT_TEMPLATE;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -895,9 +895,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             // Add allParams to ensure LLM_RESPONSE_FILTER is available
             summaryParams.putAll(allParams);
 
-            String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", completedSteps));
-            summaryParams.put(PROMPT_FIELD, summaryPrompt);
-            summaryParams.put(SYSTEM_PROMPT_FIELD, SUMMARY_PROMPT_TEMPLATE);
+            String steps = String.format(Locale.ROOT, String.join("\n", completedSteps));
+            summaryParams.put(PROMPT_FIELD, steps);
+            summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT);
 
             MLPredictionTaskRequest request = new MLPredictionTaskRequest(
                 llmSpec.getModelId(),
