@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
@@ -86,7 +87,8 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_STREAM_ENABLED,
                             ML_COMMONS_MAX_JSON_SIZE,
                             ML_COMMONS_UNIFIED_AGENT_API_ENABLED,
-                            ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED
+                            ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
+                            ML_COMMONS_AG_UI_ENABLED
                         )
                 )
             );

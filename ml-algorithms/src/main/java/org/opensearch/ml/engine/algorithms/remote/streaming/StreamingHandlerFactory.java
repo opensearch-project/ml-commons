@@ -9,6 +9,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.lang.reflect.Constructor;
+import java.util.Map;
 
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
@@ -24,23 +25,37 @@ public class StreamingHandlerFactory {
         SdkAsyncHttpClient httpClient,
         ConnectorClientConfig connectorClientConfig
     ) {
+        return createHandler(llmInterface, connector, httpClient, connectorClientConfig, null);
+    }
+
+    public static StreamingHandler createHandler(
+        String llmInterface,
+        Connector connector,
+        SdkAsyncHttpClient httpClient,
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters
+    ) {
         switch (llmInterface.toLowerCase()) {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
-                return createBedrockHandler(httpClient, connector);
+                return createBedrockHandler(httpClient, connector, parameters);
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
-                return createHttpHandler(llmInterface, connector, connectorClientConfig);
+                return createHttpHandler(llmInterface, connector, connectorClientConfig, parameters);
             default:
                 throw new IllegalArgumentException("Unsupported LLM interface: " + llmInterface);
         }
     }
 
-    private static StreamingHandler createBedrockHandler(SdkAsyncHttpClient httpClient, Connector connector) {
+    private static StreamingHandler createBedrockHandler(
+        SdkAsyncHttpClient httpClient,
+        Connector connector,
+        Map<String, String> parameters
+    ) {
         try {
             // Use reflection to avoid hard dependency
             Class<?> handlerClass = Class.forName("org.opensearch.ml.engine.algorithms.remote.streaming.BedrockStreamingHandler");
             Constructor<?> constructor = handlerClass
-                .getConstructor(SdkAsyncHttpClient.class, Class.forName("org.opensearch.ml.common.connector.AwsConnector"));
-            return (StreamingHandler) constructor.newInstance(httpClient, connector);
+                .getConstructor(SdkAsyncHttpClient.class, Class.forName("org.opensearch.ml.common.connector.AwsConnector"), Map.class);
+            return (StreamingHandler) constructor.newInstance(httpClient, connector, parameters);
         } catch (ClassNotFoundException e) {
             throw new MLException("Bedrock streaming not available - Bedrock SDK not found", e);
         } catch (Exception e) {
@@ -51,8 +66,9 @@ public class StreamingHandlerFactory {
     private static StreamingHandler createHttpHandler(
         String llmInterface,
         Connector connector,
-        ConnectorClientConfig connectorClientConfig
+        ConnectorClientConfig connectorClientConfig,
+        Map<String, String> parameters
     ) {
-        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig);
+        return new HttpStreamingHandler(llmInterface, connector, connectorClientConfig, parameters);
     }
 }

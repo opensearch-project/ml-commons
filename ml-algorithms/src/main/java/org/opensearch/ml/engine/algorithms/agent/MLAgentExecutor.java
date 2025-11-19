@@ -1021,6 +1021,17 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     encryptor,
                     hookRegistry
                 );
+            case AG_UI:
+                return new MLAGUIAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             default:
                 throw new IllegalArgumentException("Unsupported agent type");
         }
