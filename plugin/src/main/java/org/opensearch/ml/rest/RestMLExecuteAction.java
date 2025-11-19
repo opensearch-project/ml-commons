@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
@@ -27,6 +28,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agui.AGUIInputConverter;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -124,10 +126,31 @@ public class RestMLExecuteAction extends BaseRestHandler {
             String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
             String agentId = request.param(PARAMETER_AGENT_ID);
             functionName = FunctionName.AGENT;
-            input = MLInput.parse(parser, functionName.name());
-            ((AgentMLInput) input).setAgentId(agentId);
-            ((AgentMLInput) input).setTenantId(tenantId);
-            ((AgentMLInput) input).setIsAsync(async);
+
+            String requestBodyJson = request.contentOrSourceParam().v2().utf8ToString();
+            if (AGUIInputConverter.isAGUIInput(requestBodyJson)) {
+                if (!mlFeatureEnabledSetting.isAGUIEnabled()) {
+                    throw new IllegalStateException(ML_COMMONS_AG_UI_DISABLED_MESSAGE);
+                }
+                throw new IllegalArgumentException(
+                    "AG-UI agents require streaming execution. "
+                        + "Please use the streaming endpoint: POST /_plugins/_ml/agents/"
+                        + agentId
+                        + "/_execute/stream"
+                );
+            } else {
+                input = MLInput.parse(parser, functionName.name());
+
+                if (!(input instanceof AgentMLInput)) {
+                    throw new IllegalArgumentException(
+                        String.format("Invalid input type. Expected: AgentMLInput, Received: %s", input.getClass().getSimpleName())
+                    );
+                }
+
+                ((AgentMLInput) input).setAgentId(agentId);
+                ((AgentMLInput) input).setTenantId(tenantId);
+                ((AgentMLInput) input).setIsAsync(async);
+            }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
                 throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);

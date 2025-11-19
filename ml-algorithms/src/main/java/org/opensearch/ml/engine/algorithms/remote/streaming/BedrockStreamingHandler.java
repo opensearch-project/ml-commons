@@ -21,6 +21,7 @@ import javax.naming.AuthenticationException;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.agui.*;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -66,7 +67,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private final SdkAsyncHttpClient httpClient;
     private final AwsConnector connector;
+    private final boolean isAGUIAgent;
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
+
+    // AG-UI message state for this LLM response (per-request scope)
+    private String messageId;
+    private boolean textMessageStarted = false;
 
     private enum StreamState {
         STREAMING_CONTENT,
@@ -77,8 +83,18 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector) {
+        this(httpClient, connector, null);
+    }
+
+    public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector, Map<String, String> parameters) {
         this.httpClient = httpClient;
         this.connector = connector;
+
+        this.isAGUIAgent = parameters != null && (parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui"));
+
+        if (isAGUIAgent) {
+            log.debug("BedrockStreamingHandler: Detected AG-UI agent");
+        }
     }
 
     @Override
@@ -95,6 +111,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             AtomicReference<String> toolUseId = new AtomicReference<>();
             StringBuilder toolInputAccumulator = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
+
+            // Initialize AG-UI message state for this LLM response
+            if (isAGUIAgent) {
+                messageId = "msg_" + System.currentTimeMillis() + "_" + System.nanoTime();
+                textMessageStarted = false;
+                log.debug("AG-UI: Initialized messageId for LLM response: {}", messageId);
+            }
 
             // Build Bedrock client
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
@@ -157,8 +180,35 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
+            log.debug("AG-UI: Building Bedrock request from payload: {}", payload);
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
+
+            // Log the messages array for debugging
+            if (payloadJson.has("messages")) {
+                JsonNode messagesArray = payloadJson.get("messages");
+                log.debug("AG-UI: Messages array in payload: {}", messagesArray);
+
+                // Check for consecutive messages with the same role (Bedrock doesn't allow this)
+                String previousRole = null;
+                for (int i = 0; i < messagesArray.size(); i++) {
+                    JsonNode msg = messagesArray.get(i);
+                    String currentRole = msg.has("role") ? msg.get("role").asText() : "unknown";
+                    if (previousRole != null && previousRole.equals(currentRole)) {
+                        log
+                            .warn(
+                                "AG-UI: Found consecutive messages with same role '{}' at index {} and {}. Bedrock requires alternating roles!",
+                                currentRole,
+                                i - 1,
+                                i
+                            );
+                    }
+                    previousRole = currentRole;
+                }
+            } else {
+                log.warn("AG-UI: No messages array found in payload!");
+            }
+
             return ConverseStreamRequest
                 .builder()
                 .modelId(parameters.get("model"))
@@ -190,9 +240,44 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 if (isToolUseDetected(event)) {
                     currentState.set(StreamState.TOOL_CALL_DETECTED);
                     extractToolInfo(event, toolName, toolUseId);
+
+                    if (isAGUIAgent) {
+                        // end current text message before sending tool events
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, listener);
+
+                        BaseEvent toolCallStartEvent = new ToolCallStartEvent(toolUseId.get(), toolName.get(), messageId);
+                        sendAGUIEvent(toolCallStartEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_START for messageId: {} and toolUseId: {}", messageId, toolUseId);
+                    }
                 } else if (isContentDelta(event)) {
-                    sendContentResponse(getTextContent(event), false, listener);
+                    String content = getTextContent(event);
+
+                    if (isAGUIAgent) {
+                        if (!textMessageStarted) {
+                            textMessageStarted = true;
+                            BaseEvent textMessageStartEvent = new TextMessageStartEvent(toolName.get(), messageId);
+                            sendAGUIEvent(textMessageStartEvent, false, listener);
+                            log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
+                        }
+
+                        BaseEvent textMessageContentEvent = new TextMessageContentEvent(content, messageId);
+                        sendAGUIEvent(textMessageContentEvent, false, listener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", messageId);
+                    } else {
+                        sendContentResponse(content, false, listener);
+                    }
                 } else if (isStreamComplete(event)) {
+                    if (isAGUIAgent && textMessageStarted) {
+                        BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
+                        sendAGUIEvent(textMessageEndEvent, false, listener);
+                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+
+                        BaseEvent runFinishedEvent = new RunFinishedEvent("", "", null);
+                        sendAGUIEvent(runFinishedEvent, true, listener);
+                        log.debug("RestMLExecuteStreamAction: Added RUN_FINISHED event - ReAct loop completed");
+                    }
+
                     currentState.set(StreamState.COMPLETED);
                     sendCompletionResponse(isStreamClosed, listener);
                 }
@@ -201,31 +286,52 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             case TOOL_CALL_DETECTED:
                 if (isToolInputDelta(event)) {
                     currentState.set(StreamState.ACCUMULATING_TOOL_INPUT);
-                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                    String inputFragment = getToolInputFragment(event);
+                    accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
+
+                    if (isAGUIAgent) {
+                        BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
+                        sendAGUIEvent(toolCallArgsEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
+                    } else {
+                        sendContentResponse(inputFragment, false, listener);
+                    }
                 }
                 break;
 
             case ACCUMULATING_TOOL_INPUT:
                 if (isToolInputDelta(event)) {
-                    accumulateToolInput(getToolInputFragment(event), toolInput, toolInputAccumulator);
+                    String inputFragment = getToolInputFragment(event);
+                    accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
+
+                    if (isAGUIAgent) {
+                        BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
+                        sendAGUIEvent(toolCallArgsEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
+                    } else {
+                        sendContentResponse(inputFragment, false, listener);
+                    }
                 } else if (isToolInputComplete(event)) {
+                    if (isAGUIAgent) {
+                        BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
+                        sendAGUIEvent(toolCallEndEvent, false, listener);
+                        log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}' after args completed", toolName.get());
+                    }
+
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
                     listener.onResponse(createToolUseResponse(toolName, toolInput, toolUseId));
                 }
                 break;
 
             case WAITING_FOR_TOOL_RESULT:
-                // Don't close stream - wait for tool execution
                 log.debug("Waiting for tool result - keeping stream open");
                 break;
 
             case COMPLETED:
-                // Stream already completed
                 break;
         }
     }
 
-    // TODO: refactor the event type checker methods
     private void extractToolInfo(ConverseStreamOutput event, AtomicReference<String> toolName, AtomicReference<String> toolUseId) {
         ContentBlockStartEvent startEvent = (ContentBlockStartEvent) event;
         if (startEvent.start() != null && startEvent.start().toolUse() != null) {
@@ -395,8 +501,29 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private Message buildMessage(JsonNode messageItem) {
         String role = messageItem.has("role") && messageItem.get("role") != null ? messageItem.get("role").asText() : "assistant";
 
+        // Handle AG-UI tool result messages
+        if (isAGUIAgent && "tool".equals(role)) {
+            return buildToolResultMessage(messageItem);
+        }
+
         List<ContentBlock> contentBlocks = buildContentBlocks(messageItem.get("content"));
         return Message.builder().role(role).content(contentBlocks).build();
+    }
+
+    private Message buildToolResultMessage(JsonNode toolMessage) {
+        String toolCallId = toolMessage.has("toolCallId") ? toolMessage.get("toolCallId").asText() : "";
+        String content = toolMessage.has("content") ? toolMessage.get("content").asText() : "";
+
+        ContentBlock toolResultBlock = ContentBlock
+            .builder()
+            .toolResult(
+                ToolResultBlock.builder().toolUseId(toolCallId).content(ToolResultContentBlock.builder().text(content).build()).build()
+            )
+            .build();
+
+        log.debug("AG-UI: Converted tool message to Bedrock format - toolUseId: {}, content length: {}", toolCallId, content.length());
+
+        return Message.builder().role("user").content(List.of(toolResultBlock)).build();
     }
 
     private List<ContentBlock> buildContentBlocks(JsonNode contentArray) {
