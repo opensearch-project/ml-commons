@@ -145,6 +145,7 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(conversationIndexMemory).getMessages(messageHistoryLimitCapture.capture(), memoryInteractionCapture.capture());
         when(conversationIndexMemory.getConversationId()).thenReturn("conversation_id");
+        when(conversationIndexMemory.getId()).thenReturn("conversation_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
         doAnswer(invocation -> {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(1);
@@ -163,6 +164,12 @@ public class MLChatAgentRunnerTest {
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), mlMemoryManagerCapture.capture());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onResponse("success");
+            return null;
+        }).when(conversationIndexMemory).update(any(), any(), any());
 
         mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
@@ -593,7 +600,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(16, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(17, ((Map) argumentCaptor.getValue()).size());
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
@@ -621,7 +628,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(17, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
         assertEquals("raw input", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -687,7 +694,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(17, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
         // The value of input should be "config_value".
         assertEquals("config_value", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
@@ -717,7 +724,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(17, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
         // The value of input should be replaced with the value associated with the key "key2" of the first tool.
         assertEquals("value2", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 

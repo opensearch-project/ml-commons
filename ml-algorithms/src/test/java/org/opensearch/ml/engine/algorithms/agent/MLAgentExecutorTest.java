@@ -171,8 +171,7 @@ public class MLAgentExecutorTest {
 
     @Test
     public void testExecuteWithNullParameters() {
-        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().build();
-        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, dataset);
+        AgentMLInput agentInput = new AgentMLInput("test-agent", null, FunctionName.AGENT, null);
 
         try {
             mlAgentExecutor.execute(agentInput, listener, channel);
@@ -258,7 +257,7 @@ public class MLAgentExecutorTest {
             mlAgentExecutor.getAgentRunner(agent, null);
             fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException exception) {
-            assertEquals("Wrong Agent type", exception.getMessage());
+            assertEquals("UNSUPPORTED_TYPE is not a valid Agent Type", exception.getMessage());
         }
     }
 

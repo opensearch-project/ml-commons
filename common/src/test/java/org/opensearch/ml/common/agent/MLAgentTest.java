@@ -59,6 +59,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             null,
@@ -82,6 +83,7 @@ public class MLAgentTest {
             null,
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             null,
@@ -105,6 +107,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             null,
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             null,
@@ -128,6 +131,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test_description",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec, mlToolSpec),
             null,
             null,
@@ -148,6 +152,7 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0, null),
@@ -178,6 +183,7 @@ public class MLAgentTest {
             "FLOW",
             "test",
             null,
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0, null),
@@ -203,6 +209,7 @@ public class MLAgentTest {
             "FLOW",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0, null),
@@ -228,6 +235,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             null,
             new MLMemorySpec("test", "123", 0, null),
@@ -253,6 +261,7 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
             null,
@@ -278,6 +287,7 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List
                 .of(
                     new MLToolSpec(
@@ -350,6 +360,7 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0, null),
@@ -383,6 +394,7 @@ public class MLAgentTest {
             "INVALID_TYPE",
             "test_description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -404,6 +416,7 @@ public class MLAgentTest {
                 MLAgentType.FLOW.name(),
                 "test_description",
                 null,
+                null, // MLAgentModelSpec model
                 null,
                 null,
                 null,
@@ -428,6 +441,7 @@ public class MLAgentTest {
             "FLOW",
             "test",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -495,6 +509,7 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test description",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List.of(mlToolSpec),
             Map.of("_llm_interface", "bedrock"),
             new MLMemorySpec("conversation_index", "123", 10, null),
@@ -523,6 +538,7 @@ public class MLAgentTest {
             "flow",
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -554,6 +570,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -574,6 +591,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -606,6 +624,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -631,6 +650,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -656,6 +676,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -696,6 +717,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -731,6 +753,7 @@ public class MLAgentTest {
             MLAgentType.FLOW.name(),
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -810,6 +833,7 @@ public class MLAgentTest {
             "FLOW",
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,
@@ -844,6 +868,7 @@ public class MLAgentTest {
             "FLOW",
             "test description",
             null,
+            null, // MLAgentModelSpec model
             null,
             null,
             null,

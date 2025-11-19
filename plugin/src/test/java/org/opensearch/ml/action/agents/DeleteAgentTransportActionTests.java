@@ -333,6 +333,7 @@ public class DeleteAgentTransportActionTests {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            null, // MLAgentModelSpec model
             List
                 .of(
                     new MLToolSpec(
