@@ -897,7 +897,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             String summaryPrompt = String.format(Locale.ROOT, SUMMARY_PROMPT_TEMPLATE, String.join("\n", completedSteps));
             summaryParams.put(PROMPT_FIELD, summaryPrompt);
-            summaryParams.putIfAbsent(SYSTEM_PROMPT_FIELD, SUMMARY_PROMPT_TEMPLATE);
+            summaryParams.put(SYSTEM_PROMPT_FIELD, SUMMARY_PROMPT_TEMPLATE);
 
             MLPredictionTaskRequest request = new MLPredictionTaskRequest(
                 llmSpec.getModelId(),

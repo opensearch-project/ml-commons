@@ -142,5 +142,5 @@ public class PromptTemplate {
             - Break complex searches into simpler queries when appropriate.""";
 
     public static final String SUMMARY_PROMPT_TEMPLATE =
-        "Please provide a concise summary of the following agent execution steps. Focus on what the agent was trying to accomplish and what progress was made:\n\n%s";
+        "Please provide a concise summary of the following agent execution steps. Focus on what the agent was trying to accomplish and what progress was made. Please return your response in plain text, and there should not be any other statements except the summary:\n\n%s";
 }
