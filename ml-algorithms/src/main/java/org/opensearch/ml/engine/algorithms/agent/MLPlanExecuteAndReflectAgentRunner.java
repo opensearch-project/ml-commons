@@ -895,8 +895,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             // Add allParams to ensure LLM_RESPONSE_FILTER is available
             summaryParams.putAll(allParams);
 
+            String userObjective = allParams.get(USER_PROMPT_FIELD);
             String steps = String.format(Locale.ROOT, String.join("\n", completedSteps));
-            summaryParams.put(PROMPT_FIELD, steps);
+            String promptWithObjective = String
+                .format("Objective: %s\n\nCompleted Steps:\n%s", userObjective != null ? userObjective : "", steps);
+            summaryParams.put(PROMPT_FIELD, promptWithObjective);
             summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT);
 
             MLPredictionTaskRequest request = new MLPredictionTaskRequest(

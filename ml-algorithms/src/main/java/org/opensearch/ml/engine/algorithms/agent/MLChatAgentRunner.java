@@ -1059,6 +1059,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             traceTensors,
             llmSpec,
             tenantId,
+            question,
             ActionListener
                 .wrap(
                     summary -> responseListener
@@ -1107,7 +1108,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
         cleanUpResource(tools);
     }
 
-    void generateLLMSummary(List<ModelTensors> stepsSummary, LLMSpec llmSpec, String tenantId, ActionListener<String> listener) {
+    void generateLLMSummary(
+        List<ModelTensors> stepsSummary,
+        LLMSpec llmSpec,
+        String tenantId,
+        String question,
+        ActionListener<String> listener
+    ) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Steps summary cannot be null or empty"));
             return;
@@ -1132,7 +1139,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 }
             }
-            String steps = String.format(Locale.ROOT, String.join("\n", stepStrings));
+            String steps = String.format(Locale.ROOT, "Question: %s\n\nCompleted Steps:\n%s", question, String.join("\n", stepStrings));
             summaryParams.put(PROMPT, steps);
             summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT);
 
