@@ -1126,11 +1126,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 summaryParams.putAll(llmSpec.getParameters());
             }
 
-            // Convert ModelTensors to strings before joining
+            // Convert ModelTensors to strings before joining, skip session/interaction IDs
             List<String> stepStrings = new ArrayList<>();
             for (ModelTensors tensor : stepsSummary) {
                 if (tensor != null && tensor.getMlModelTensors() != null) {
                     for (ModelTensor modelTensor : tensor.getMlModelTensors()) {
+                        String name = modelTensor.getName();
+                        // Skip session_id and parent_interaction_id tensors
+                        if (MLAgentExecutor.MEMORY_ID.equals(name) || MLAgentExecutor.PARENT_INTERACTION_ID.equals(name)) {
+                            continue;
+                        }
                         if (modelTensor.getResult() != null) {
                             stepStrings.add(modelTensor.getResult());
                         } else if (modelTensor.getDataAsMap() != null && modelTensor.getDataAsMap().containsKey("response")) {
