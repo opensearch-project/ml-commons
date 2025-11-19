@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -82,6 +83,10 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't be null");
         }
+        // The 'name' field is an optional identifier for this specific action within a connector.
+        // It allows running a specific action by name when a connector has multiple actions of the same type.
+        // We validate that 'name' is not an action type (PREDICT, EXECUTE, etc.) to avoid ambiguity
+        // when resolving actions.
         if (name != null && ActionType.isValidAction(name)) {
             throw new IllegalArgumentException("name can't be one of action type " + Arrays.toString(ActionType.values()));
         }
@@ -105,7 +110,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.requestBody = input.readOptionalString();
         this.preProcessFunction = input.readOptionalString();
         this.postProcessFunction = input.readOptionalString();
-        this.name = input.readOptionalString();// TODO: add version check
+        if (input.getVersion().onOrAfter(VERSION_3_4_0)) {
+            this.name = input.readOptionalString();
+        }
     }
 
     @Override
@@ -122,7 +129,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         out.writeOptionalString(requestBody);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
-        out.writeOptionalString(name); // TODO: add version check
+        if (out.getVersion().onOrAfter(VERSION_3_4_0)) {
+            out.writeOptionalString(name);
+        }
     }
 
     @Override
