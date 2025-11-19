@@ -54,6 +54,9 @@
     "parameters": {
       "type": "flat_object"
     },
+    "infer": {
+      "type": "boolean"
+    },
     "created_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
