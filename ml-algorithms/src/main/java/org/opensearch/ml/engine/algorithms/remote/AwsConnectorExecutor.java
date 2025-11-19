@@ -132,7 +132,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
                         executionContext,
-                        ActionListener.runBefore(actionListener, storedContext::restore),
+                        ActionListener.runBefore(actionListener, storedContext::restore), // Restore context before calling listener,
                         parameters,
                         connector,
                         scriptService,
