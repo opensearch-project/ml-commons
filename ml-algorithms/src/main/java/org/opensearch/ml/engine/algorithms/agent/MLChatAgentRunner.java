@@ -60,7 +60,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -69,6 +71,7 @@ import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -76,8 +79,6 @@ import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
@@ -135,6 +136,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private SdkClient sdkClient;
     private Encryptor encryptor;
     private StreamingWrapper streamingWrapper;
+    private static HookRegistry hookRegistry;
 
     public MLChatAgentRunner(
         Client client,
@@ -146,6 +148,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
         SdkClient sdkClient,
         Encryptor encryptor
     ) {
+        this(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap, sdkClient, encryptor, null);
+    }
+
+    public MLChatAgentRunner(
+        Client client,
+        Settings settings,
+        ClusterService clusterService,
+        NamedXContentRegistry xContentRegistry,
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, Memory.Factory> memoryFactoryMap,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        HookRegistry hookRegistry
+    ) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
@@ -154,6 +170,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
+        this.hookRegistry = hookRegistry;
     }
 
     @Override
@@ -194,7 +211,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 for (Interaction next : r) {
                     String question = next.getInput();
                     String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when have final answer,
+                    // As we store the conversation with empty response first and then update when
+                    // have final answer,
                     // filter out those in-flight requests when run in parallel
                     if (Strings.isNullOrEmpty(response)) {
                         continue;
@@ -218,7 +236,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
                         params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
+                        // to input params to validate
                         inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                     } else {
                         List<String> chatHistory = new ArrayList<>();
@@ -239,7 +258,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
                         params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
 
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added
+                        // to input params to validate
                         inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
                     }
                 }
@@ -320,7 +340,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StepListener<?> lastStepListener = firstListener;
 
         StringBuilder scratchpadBuilder = new StringBuilder();
-        List<String> interactions = new CopyOnWriteArrayList<>();
+        final List<String> interactions = new CopyOnWriteArrayList<>();
 
         StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
         AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
@@ -336,6 +356,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 if (finalI % 2 == 0) {
                     MLTaskResponse llmResponse = (MLTaskResponse) output;
                     ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
+
                     List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
                     Map<String, String> modelOutput = parseLLMOutput(
                         parameters,
@@ -454,6 +475,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
+                    // output is now the processed output from POST_TOOL hook in runTool
                     Object filteredOutput = filterToolOutput(lastToolParams, output);
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
 
@@ -466,6 +488,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
+                    // Save trace with processed output
                     saveTraceData(
                         conversationIndexMemory,
                         "ReAct",
@@ -482,7 +505,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
                     if (!interactions.isEmpty()) {
-                        tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
+                        String interactionsStr = String.join(", ", interactions);
+                        // Set the interactions parameter - this will be processed by context management
+                        tmpParameters.put(INTERACTIONS, ", " + interactionsStr);
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
@@ -518,6 +543,26 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                         return;
                     }
+                    // Emit PRE_LLM hook event
+                    if (hookRegistry != null && !interactions.isEmpty()) {
+                        List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
+                        ContextManagerContext contextAfterEvent = AgentContextUtil
+                            .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
+
+                        // Check if context managers actually modified the interactions
+                        List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
+
+                        if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                            interactions.clear();
+                            interactions.addAll(updatedInteractions);
+
+                            // Update parameters if context manager set INTERACTIONS
+                            String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                                tmpParameters.put(INTERACTIONS, contextInteractions);
+                            }
+                        }
+                    }
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
@@ -530,8 +575,29 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
         }
 
+        // Emit PRE_LLM hook event for initial LLM call
+        List<MLToolSpec> initialToolSpecs = new ArrayList<>(toolSpecMap.values());
+        tmpParameters.put("_llm_model_id", llm.getModelId());
+        if (hookRegistry != null && !interactions.isEmpty()) {
+            ContextManagerContext contextAfterEvent = AgentContextUtil
+                .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
+
+            // Check if context managers actually modified the interactions
+            List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
+            if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                interactions.clear();
+                interactions.addAll(updatedInteractions);
+
+                // Update parameters if context manager set INTERACTIONS
+                String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                    tmpParameters.put(INTERACTIONS, contextInteractions);
+                }
+            }
+        }
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
+
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
@@ -581,7 +647,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
                 list.add(outputString);
             } else {
-                additionalInfo.put(toolOutputKey, Lists.newArrayList(outputString));
+                List<String> newList = new ArrayList<>();
+                newList.add(outputString);
+                additionalInfo.put(toolOutputKey, newList);
             }
         }
     }
@@ -602,8 +670,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                    // Emit POST_TOOL hook event - common for all tool executions
+                    List<MLToolSpec> postToolSpecs = new ArrayList<>(toolSpecMap.values());
+                    ContextManagerContext contextAfterPostTool = AgentContextUtil
+                        .emitPostToolHook(r, tmpParameters, postToolSpecs, null, hookRegistry);
+
+                    // Extract processed output from POST_TOOL hook
+                    String processedToolOutput = contextAfterPostTool.getParameters().get("_current_tool_output");
+                    Object processedOutput = processedToolOutput != null ? processedToolOutput : r;
+
                     if (functionCalling != null) {
-                        String outputResponse = parseResponse(filterToolOutput(toolParams, r));
+                        String outputResponse = parseResponse(filterToolOutput(toolParams, processedOutput));
                         List<Map<String, Object>> toolResults = List
                             .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
@@ -614,30 +691,30 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             .add(
                                 substitute(
                                     tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
+                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(processedOutput))),
                                     INTERACTIONS_PREFIX
                                 )
                             );
                     }
-                    nextStepListener.onResponse(r);
+                    nextStepListener.onResponse(processedOutput);
                 }, e -> {
                     interactions
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                Map
+                                    .of(
+                                        TOOL_CALL_ID,
+                                        toolCallId,
+                                        "tool_response",
+                                        "Tool " + action + " failed: " + StringUtils.processTextDoc(e.getMessage())
+                                    ),
                                 INTERACTIONS_PREFIX
                             )
                         );
                     nextStepListener
                         .onResponse(
-                            String
-                                .format(
-                                    Locale.ROOT,
-                                    "Failed to run the tool %s with the error message %s.",
-                                    finalAction,
-                                    e.getMessage().replaceAll("\\n", "\n")
-                                )
+                            String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", finalAction, e.getMessage())
                         );
                 });
                 if (tools.get(action) instanceof MLModelTool) {
@@ -666,9 +743,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     /**
-     * In each tool runs, it copies agent parameters, which is tmpParameters into a new set of parameter llmToolTmpParameters,
-     * after the tool runs, normally llmToolTmpParameters will be discarded, but for some special parameters like SCRATCHPAD_NOTES_KEY,
-     * some new llmToolTmpParameters produced by the tool run can opt to be copied back to tmpParameters to share across tools in the same interaction
+     * In each tool runs, it copies agent parameters, which is tmpParameters into a
+     * new set of parameter llmToolTmpParameters,
+     * after the tool runs, normally llmToolTmpParameters will be discarded, but for
+     * some special parameters like SCRATCHPAD_NOTES_KEY,
+     * some new llmToolTmpParameters produced by the tool run can opt to be copied
+     * back to tmpParameters to share across tools in the same interaction
+     * 
      * @param tmpParameters
      * @param llmToolTmpParameters
      */
@@ -863,7 +944,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     ModelTensor
                         .builder()
                         .name("response")
-                        .dataAsMap(ImmutableMap.of("response", finalAnswer2, ADDITIONAL_INFO_FIELD, additionalInfo))
+                        .dataAsMap(Map.of("response", finalAnswer2, ADDITIONAL_INFO_FIELD, additionalInfo))
                         .build()
                 )
         );
@@ -933,4 +1014,5 @@ public class MLChatAgentRunner implements MLAgentRunner {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
         }
     }
+
 }
