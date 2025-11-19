@@ -42,8 +42,8 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutpu
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.wrapFrontendToolsAsToolObjects;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
-import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.SUMMARY_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
 import java.lang.reflect.Type;
 import java.security.PrivilegedActionException;

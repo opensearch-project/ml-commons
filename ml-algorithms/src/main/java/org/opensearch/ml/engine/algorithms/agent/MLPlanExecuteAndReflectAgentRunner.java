@@ -876,7 +876,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    private void generateSummary(LLMSpec llmSpec, List<String> completedSteps, Map<String, String> allParams, ActionListener<String> listener) {
+    private void generateSummary(
+        LLMSpec llmSpec,
+        List<String> completedSteps,
+        Map<String, String> allParams,
+        ActionListener<String> listener
+    ) {
         if (completedSteps == null || completedSteps.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Completed steps cannot be null or empty"));
             return;
