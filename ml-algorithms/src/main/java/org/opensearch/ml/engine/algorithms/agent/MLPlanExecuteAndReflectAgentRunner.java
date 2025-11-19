@@ -550,10 +550,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     if (taskId != null && !taskUpdated) {
                         taskUpdates.put(STATE_FIELD, MLTaskState.RUNNING);
                         taskUpdates.put(RESPONSE_FIELD, memoryUpdates);
-                        updateMLTaskDirectly(taskId, allParams.get(TENANT_ID_FIELD), taskUpdates, client, sdkClient, ActionListener.wrap(updateResponse -> {
-                            log.info("Updated task {} with executor memory ID", taskId);
-                            taskUpdated = true;
-                        }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
+                        updateMLTaskDirectly(
+                            taskId,
+                            allParams.get(TENANT_ID_FIELD),
+                            taskUpdates,
+                            client,
+                            sdkClient,
+                            ActionListener.wrap(updateResponse -> {
+                                log.info("Updated task {} with executor memory ID", taskId);
+                                taskUpdated = true;
+                            }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e))
+                        );
                     }
 
                     completedSteps.add(String.format("\n<step-%d>\n%s\n</step-%d>\n", stepsExecuted + 1, stepToExecute, stepsExecuted + 1));

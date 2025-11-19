@@ -854,7 +854,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
 
-            mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), eq(sdkClient), any()));
+            mlTaskUtilsMockedStatic
+                .verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), any(), eq(taskUpdates), eq(client), eq(sdkClient), any()));
         }
     }
 }

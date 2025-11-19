@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.utils;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,7 +88,7 @@ public class MLTaskUtilsTests {
         UpdateResponse updateResponse = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.UPDATED);
         UpdateDataObjectResponse sdkResponse = mock(UpdateDataObjectResponse.class);
         when(sdkResponse.updateResponse()).thenReturn(updateResponse);
-        
+
         CompletableFuture<UpdateDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
         when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class))).thenReturn(future);
 
@@ -117,7 +116,7 @@ public class MLTaskUtilsTests {
         UpdateResponse updateResponse = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.UPDATED);
         UpdateDataObjectResponse sdkResponse = mock(UpdateDataObjectResponse.class);
         when(sdkResponse.updateResponse()).thenReturn(updateResponse);
-        
+
         CompletableFuture<UpdateDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
         when(sdkClient.updateDataObjectAsync(any(UpdateDataObjectRequest.class))).thenReturn(future);
 
