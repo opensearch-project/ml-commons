@@ -45,6 +45,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryC
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.helper.MemoryContainerPipelineHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
@@ -103,6 +104,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         when(threadPool.getThreadContext())
             .thenReturn(new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.builder().build()));
 
+        MemoryContainerPipelineHelper pipelineHelper = mock(MemoryContainerPipelineHelper.class);
         action = new TransportUpdateMemoryContainerAction(
             transportService,
             actionFilters,
@@ -113,7 +115,8 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             mlFeatureEnabledSetting,
             mlModelManager,
             memoryContainerHelper,
-            mlIndicesHandler
+            mlIndicesHandler,
+            pipelineHelper
         );
     }
 

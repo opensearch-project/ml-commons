@@ -40,6 +40,8 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
     private AdminClient adminClient;
     private ClusterAdminClient clusterAdminClient;
     private IndicesAdminClient indicesAdminClient;
+    private MemoryContainerPipelineHelper pipelineHelper;
+    private RemoteMemoryStoreHelper remoteMemoryStoreHelper;
 
     @Before
     public void setUpTest() {
@@ -48,10 +50,13 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         adminClient = mock(AdminClient.class);
         clusterAdminClient = mock(ClusterAdminClient.class);
         indicesAdminClient = mock(IndicesAdminClient.class);
+        remoteMemoryStoreHelper = mock(RemoteMemoryStoreHelper.class);
 
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.cluster()).thenReturn(clusterAdminClient);
         when(adminClient.indices()).thenReturn(indicesAdminClient);
+
+        pipelineHelper = new MemoryContainerPipelineHelper(client, indicesHandler, remoteMemoryStoreHelper);
     }
 
     public void testCreateLongTermMemoryIngestPipelineCreatesResources() {
@@ -82,7 +87,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(indicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline("index", configuration, indicesHandler, client, future);
+        pipelineHelper.createLongTermMemoryIngestPipeline("index", configuration, future);
 
         assertTrue(future.actionGet());
         verify(indicesHandler).createLongTermMemoryIndex(eq("index-embedding"), eq("index"), eq(configuration), any());
@@ -98,7 +103,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(indicesHandler).createLongTermMemoryIndex(eq(null), eq("index"), eq(configuration), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createLongTermMemoryIngestPipeline("index", configuration, indicesHandler, client, future);
+        pipelineHelper.createLongTermMemoryIngestPipeline("index", configuration, future);
 
         assertTrue(future.actionGet());
     }
@@ -129,7 +134,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, client, future);
+        pipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, future);
 
         assertTrue(future.actionGet());
         assertFalse(putCalled.get());
@@ -157,7 +162,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, client, future);
+        pipelineHelper.createTextEmbeddingPipeline("index-embedding", configuration, future);
 
         OpenSearchStatusException exception = expectThrows(OpenSearchStatusException.class, future::actionGet);
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, exception.status());
@@ -180,7 +185,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(indicesHandler).createLongTermMemoryHistoryIndex(eq("history"), eq(configuration), any());
 
         PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createHistoryIndexIfEnabled(configuration, "history", indicesHandler, future);
+        pipelineHelper.createHistoryIndexIfEnabled(configuration, "history", future);
         assertTrue(future.actionGet());
 
         MemoryConfiguration disabled = MemoryConfiguration.builder().indexPrefix("prefix").disableHistory(true).build();
@@ -194,7 +199,7 @@ public class MemoryContainerPipelineHelperTests extends OpenSearchTestCase {
         }).when(indicesHandler).createLongTermMemoryHistoryIndex(eq("history"), eq(disabled), any());
 
         PlainActionFuture<Boolean> skip = PlainActionFuture.newFuture();
-        MemoryContainerPipelineHelper.createHistoryIndexIfEnabled(disabled, "history", indicesHandler, skip);
+        pipelineHelper.createHistoryIndexIfEnabled(disabled, "history", skip);
         assertTrue(skip.actionGet());
         assertFalse(disabledCalled.get());
     }
