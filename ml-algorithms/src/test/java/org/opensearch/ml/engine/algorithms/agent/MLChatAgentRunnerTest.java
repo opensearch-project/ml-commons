@@ -1262,65 +1262,6 @@ public class MLChatAgentRunnerTest {
         assertEquals("Memory type should be agentic_memory", "agentic_memory", mlAgent.getMemory().getType());
     }
 
-    // TODO: Re-enable these tests when ChatMessage and SimpleChatHistoryTemplateEngine are implemented
-    // @Test
-    // public void testEnhancedChatMessage() {
-    // // Test the enhanced ChatMessage format
-    // ChatMessage userMessage = ChatMessage
-    // .builder()
-    // .id("msg_1")
-    // .timestamp(java.time.Instant.now())
-    // .sessionId("session_123")
-    // .role("user")
-    // .content("Hello, how are you?")
-    // .contentType("text")
-    // .origin("agentic_memory")
-    // .metadata(Map.of("confidence", 0.95))
-    // .build();
-    //
-    // ChatMessage assistantMessage = ChatMessage
-    // .builder()
-    // .id("msg_2")
-    // .timestamp(java.time.Instant.now())
-    // .sessionId("session_123")
-    // .role("assistant")
-    // .content("I'm doing well, thank you!")
-    // .contentType("text")
-    // .origin("agentic_memory")
-    // .metadata(Map.of("confidence", 0.98))
-    // .build();
-    //
-    // // Verify the enhanced ChatMessage structure
-    // assertEquals("user", userMessage.getRole());
-    // assertEquals("text", userMessage.getContentType());
-    // assertEquals("agentic_memory", userMessage.getOrigin());
-    // assertNotNull(userMessage.getMetadata());
-    // assertEquals(0.95, userMessage.getMetadata().get("confidence"));
-    //
-    // assertEquals("assistant", assistantMessage.getRole());
-    // assertEquals("I'm doing well, thank you!", assistantMessage.getContent());
-    // }
-    //
-    // @Test
-    // public void testSimpleChatHistoryTemplateEngine() {
-    // // Test the new template engine
-    // SimpleChatHistoryTemplateEngine templateEngine = new SimpleChatHistoryTemplateEngine();
-    //
-    // List<ChatMessage> messages = List
-    // .of(
-    // ChatMessage.builder().role("user").content("What's the weather?").contentType("text").build(),
-    // ChatMessage.builder().role("assistant").content("It's sunny today!").contentType("text").build(),
-    // ChatMessage.builder().role("system").content("Weather data retrieved from API").contentType("context").build()
-    // );
-    //
-    // String chatHistory = templateEngine.buildSimpleChatHistory(messages);
-    //
-    // assertNotNull("Chat history should not be null", chatHistory);
-    // assertTrue("Should contain user message", chatHistory.contains("Human: What's the weather?"));
-    // assertTrue("Should contain assistant message", chatHistory.contains("Assistant: It's sunny today!"));
-    // assertTrue("Should contain system context", chatHistory.contains("[Context] Weather data retrieved from API"));
-    // }
-
     @Test
     public void testExtractSummaryFromResponse() {
         MLTaskResponse response = MLTaskResponse
