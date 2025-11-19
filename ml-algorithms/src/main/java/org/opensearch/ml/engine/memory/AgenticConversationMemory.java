@@ -285,7 +285,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             }
 
             // Update the timestamp
-            // structuredData.put("updated_time", java.time.Instant.now().toString());
+            structuredData.put("updated_time", java.time.Instant.now().toString());
 
             // Step 4: Create update request with merged structured_data
             Map<String, Object> finalUpdateContent = new HashMap<>();
