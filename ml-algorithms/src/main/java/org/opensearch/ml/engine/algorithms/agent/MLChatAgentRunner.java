@@ -471,7 +471,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             maxIterations,
                             tools,
                             llm,
-                            tenantId
+                            tenantId,
+                            tmpParameters
                         );
                         return;
                     }
@@ -605,7 +606,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             maxIterations,
                             tools,
                             llm,
-                            tenantId
+                            tenantId,
+                            tmpParameters
                         );
                         return;
                     }
@@ -1036,7 +1038,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations,
         Map<String, Tool> tools,
         LLMSpec llmSpec,
-        String tenantId
+        String tenantId,
+        Map<String, String> parameters
     ) {
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             sendTraditionalMaxIterationsResponse(
@@ -1060,6 +1063,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             llmSpec,
             tenantId,
             question,
+            parameters,
             ActionListener
                 .wrap(
                     summary -> responseListener
@@ -1113,6 +1117,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         LLMSpec llmSpec,
         String tenantId,
         String question,
+        Map<String, String> parameter,
         ActionListener<String> listener
     ) {
         if (stepsSummary == null || stepsSummary.isEmpty()) {
@@ -1125,6 +1130,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             if (llmSpec.getParameters() != null) {
                 summaryParams.putAll(llmSpec.getParameters());
             }
+            summaryParams.putAll(parameter);
 
             // Convert ModelTensors to strings before joining, skip session/interaction IDs
             List<String> stepStrings = new ArrayList<>();
