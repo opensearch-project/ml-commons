@@ -25,8 +25,6 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.Strings;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.utils.mergeMetaDataUtils.MergeRuleHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -340,20 +338,12 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
                         String aggregationType = key.substring(0, prefix.length() - 1);
 
-                        Map<String, Object> aggregationResult = gson
-                            .fromJson(Strings.toString(MediaTypeRegistry.JSON, aggregation), Map.class);
+                        Map<String, Object> aggregationResult = gson.fromJson(aggregation.toString(), Map.class);
                         Object targetValue;
-                        String targetKey = key;
-                        for (String aggKey : aggregationResult.keySet()) {
-                            if (aggKey.split("#", 2)[1].equals(key)) {
-                                targetKey = aggKey;
-                                break;
-                            }
-                        }
                         try {
                             if (prefix.equals(UNIQUE_TERM_PREFIX)) {
                                 // assuming result.get(key) is a Map containing "buckets" -> List<Map<String, Object>>
-                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(targetKey);
+                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
                                 List<Map<String, Object>> buckets = aggResult != null
                                     ? (List<Map<String, Object>>) aggResult.get("buckets")
                                     : null;
@@ -363,7 +353,7 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
 
                                 targetValue = buckets.stream().filter(bucket -> bucket != null).map(bucket -> bucket.get("key")).toList();
                             } else {
-                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(targetKey);
+                                Map<String, Object> aggResult = (Map<String, Object>) aggregationResult.get(key);
                                 if (aggResult.containsKey("value_as_string")) {
                                     targetValue = aggResult.get("value_as_string");
                                 } else {

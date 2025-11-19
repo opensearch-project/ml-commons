@@ -214,9 +214,11 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .lastUpdatedTime(Instant.now())
             .build();
 
-        writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, e -> {
-            saveFailedStatus(tenantId, e, listener);
-        }));
+        writeIndexInsight(
+            indexInsight,
+            tenantId,
+            ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, listener::onFailure)
+        );
     }
 
     protected void runWithPrerequisites(String tenantId, ActionListener<IndexInsight> listener) {
@@ -260,6 +262,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .tenantId(tenantId)
             .index(sourceIndex)
             .taskType(taskType)
+            .lastUpdatedTime(Instant.now())
             .status(IndexInsightTaskStatus.FAILED)
             .build();
         writeIndexInsight(

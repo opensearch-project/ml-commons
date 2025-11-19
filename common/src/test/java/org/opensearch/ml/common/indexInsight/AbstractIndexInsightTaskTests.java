@@ -186,7 +186,7 @@ public class AbstractIndexInsightTaskTests {
         task.handleExistingDoc(source, "test-tenant", listener);
 
         // Verify prerequisite task execution: 5 threadPool calls indicate both prerequisite and main task ran
-        verify(client, times(5)).threadPool();
+        verify(client, times(6)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -215,7 +215,7 @@ public class AbstractIndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-tenant", listener);
 
-        verify(client, times(5)).threadPool();
+        verify(client, times(6)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -229,7 +229,7 @@ public class AbstractIndexInsightTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
         task.handleExistingDoc(source, "test-tenant", listener);
 
-        verify(client, times(5)).threadPool();
+        verify(client, times(6)).threadPool();
         verify(listener).onResponse(any(IndexInsight.class));
     }
 
@@ -448,7 +448,7 @@ public class AbstractIndexInsightTaskTests {
             return null;
         }).when(client).execute(any(), any(MLExecuteTaskRequest.class), any(ActionListener.class));
 
-        AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, listener);
+        AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, null, listener);
 
         verify(listener).onResponse("parsed response");
     }
@@ -480,7 +480,7 @@ public class AbstractIndexInsightTaskTests {
             return null;
         }).when(client).execute(any(), any(MLExecuteTaskRequest.class), any(ActionListener.class));
 
-        AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, listener);
+        AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, null, listener);
 
         verify(listener).onResponse(plainResponse);
     }
@@ -500,7 +500,7 @@ public class AbstractIndexInsightTaskTests {
             return null;
         }).when(client).execute(any(), any(MLExecuteTaskRequest.class), any(ActionListener.class));
 
-        AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, listener);
+        AbstractIndexInsightTask.callLLMWithAgent(client, agentId, prompt, sourceIndex, null, listener);
 
         verify(listener).onFailure(expectedException);
     }

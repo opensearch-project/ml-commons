@@ -46,6 +46,7 @@ import org.opensearch.ml.common.indexInsight.StatisticalDataTask;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -92,6 +93,9 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    private MLIndicesHandler mlIndicesHandler;
+
     GetIndexInsightTransportAction getIndexInsightTransportAction;
     MLIndexInsightGetRequest mlIndexInsightGetRequest;
     ThreadContext threadContext;
@@ -113,7 +117,8 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 mlFeatureEnabledSetting,
                 client,
-                sdkClient
+                sdkClient,
+                mlIndicesHandler
             )
         );
 
@@ -131,6 +136,12 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         }).when(indicesAdminClient).getMappings(any(), any());
         when(mlFeatureEnabledSetting.isIndexInsightEnabled()).thenReturn(Boolean.TRUE);
         when(getMappingsResponse.getMappings()).thenReturn(Map.of("demo", mappingMetadata));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLIndexIfAbsent(any(), any());
 
     }
 
@@ -159,49 +170,6 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLIndexInsightGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLIndexInsightGetResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals("test_index", argumentCaptor.getValue().getIndexInsight().getIndex());
-    }
-
-    @Test
-    public void testGetIndexInsight_FailDueToNotEnabled() {
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(true);
-        when(getResponse.getSourceAsString()).thenReturn("{\"is_enable\":false}");
-
-        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
-        when(sdkResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-        IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
-
-        doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
-        IndexInsight insight = new IndexInsight(
-            "test_index",
-            "test content",
-            IndexInsightTaskStatus.COMPLETED,
-            STATISTICAL_DATA,
-            Instant.ofEpochMilli(0),
-            ""
-        );
-        doAnswer(invocation -> {
-            ActionListener<IndexInsight> listener = invocation.getArgument(1);
-            listener.onResponse(insight);
-            return null;
-        }).when(indexInsightTask).execute(any(), any());
-
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
-        assertEquals("You are not enabled to use index insight yet, please firstly enable it.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -244,48 +212,6 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue() instanceof IllegalArgumentException);
         assertEquals("no permissions", argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void testGetIndexInsight_ContainerNotInitialized() {
-        GetResponse getResponse = mock(GetResponse.class);
-        when(getResponse.isExists()).thenReturn(false);
-
-        GetDataObjectResponse sdkResponse = mock(GetDataObjectResponse.class);
-        when(sdkResponse.getResponse()).thenReturn(getResponse);
-
-        CompletableFuture<GetDataObjectResponse> future = CompletableFuture.completedFuture(sdkResponse);
-
-        when(sdkClient.getDataObjectAsync(any())).thenReturn(future);
-        IndexInsightTask indexInsightTask = mock(IndexInsightTask.class);
-
-        doReturn(indexInsightTask).when(getIndexInsightTransportAction).createTask(any());
-        IndexInsight insight = new IndexInsight(
-            "test_index",
-            "test content",
-            IndexInsightTaskStatus.COMPLETED,
-            STATISTICAL_DATA,
-            Instant.ofEpochMilli(0),
-            ""
-        );
-        doAnswer(invocation -> {
-            ActionListener<IndexInsight> listener = invocation.getArgument(1);
-            listener.onResponse(insight);
-            return null;
-        }).when(indexInsightTask).execute(any(), any());
-
-        SearchResponse searchResponse = mock(SearchResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        getIndexInsightTransportAction.doExecute(null, mlIndexInsightGetRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertTrue(argumentCaptor.getValue() instanceof RuntimeException);
-        assertEquals("You are not enabled to use index insight yet, please firstly enable it.", argumentCaptor.getValue().getMessage());
     }
 
     @Test
