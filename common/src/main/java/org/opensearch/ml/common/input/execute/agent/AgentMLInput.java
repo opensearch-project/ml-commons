@@ -8,7 +8,7 @@ package org.opensearch.ml.common.input.execute.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_3_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
 
 import java.io.IOException;
 import java.util.Map;
@@ -108,7 +108,7 @@ public class AgentMLInput extends MLInput {
             out.writeOptionalBoolean(isAsync);
         }
         // Todo: finalize the version
-        if (streamOutputVersion.onOrAfter(VERSION_3_3_0)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_4_0)) {
             out.writeBoolean(agentInput != null);
             if (agentInput != null) {
                 agentInput.writeTo(out);
@@ -125,7 +125,7 @@ public class AgentMLInput extends MLInput {
         if (streamInputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             this.isAsync = in.readOptionalBoolean();
         }
-        if (streamInputVersion.onOrAfter(VERSION_3_3_0)) {
+        if (streamInputVersion.onOrAfter(VERSION_3_4_0)) {
             if (in.readBoolean()) {
                 this.agentInput = new AgentInput(in);
             }

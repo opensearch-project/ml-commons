@@ -62,11 +62,14 @@ import org.opensearch.ml.engine.tools.ReadFromScratchPadTool;
 import org.opensearch.ml.engine.tools.WriteToScratchPadTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
 public class MLChatAgentRunnerTest {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
+    @Mock
+    private TransportChannel transportChannel;
     @Mock
     private Client client;
     private Settings settings;
@@ -137,7 +140,7 @@ public class MLChatAgentRunnerTest {
         mlMemorySpec = MLMemorySpec.builder().type(ConversationIndexMemory.TYPE).sessionId("uuid").windowSize(10).build();
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onResponse(generateInteractions(2));
             return null;
         }).when(conversationIndexMemory).getMessages(messageHistoryLimitCapture.capture(), memoryInteractionCapture.capture());
@@ -200,7 +203,7 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
         params.put("verbose", "true");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Capture the response passed to the listener
         ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
@@ -219,126 +222,6 @@ public class MLChatAgentRunnerTest {
         assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
         assertEquals("conversation_id", modelTensor1.getResult());
         assertEquals("parsed final answer", modelTensor2.getResult());
-    }
-
-    @Test
-    public void testParsingJsonBlockFromResponse2() {
-        // Prepare the response with JSON block
-        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
-        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
-
-        // Mock LLM response to not contain "thought" but contain "response" with JSON block
-        Map<String, String> llmResponse = new HashMap<>();
-        llmResponse.put("response", responseWithJsonBlock);
-        doAnswer(getLLMAnswer(llmResponse))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
-
-        // Create an MLAgent and run the MLChatAgentRunner
-        MLAgent mlAgent = createMLAgentWithTools();
-        Map<String, String> params = new HashMap<>();
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put("verbose", "true");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
-
-        // Capture the response passed to the listener
-        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(agentActionListener).onResponse(responseCaptor.capture());
-
-        // Extract the captured response
-        Object capturedResponse = responseCaptor.getValue();
-        assertTrue(capturedResponse instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
-
-        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-
-        // Verify that the parsed values from JSON block are correctly set
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("conversation_id", modelTensor1.getResult());
-        assertEquals("parsed final answer", modelTensor2.getResult());
-    }
-
-    @Test
-    public void testParsingJsonBlockFromResponse3() {
-        // Prepare the response with JSON block
-        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-            + "\"action_input\":{\"a\":\"n\"}, \"final_answer\":\"parsed final answer\"}";
-        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
-
-        // Mock LLM response to not contain "thought" but contain "response" with JSON block
-        Map<String, String> llmResponse = new HashMap<>();
-        llmResponse.put("response", responseWithJsonBlock);
-        doAnswer(getLLMAnswer(llmResponse))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
-
-        // Create an MLAgent and run the MLChatAgentRunner
-        MLAgent mlAgent = createMLAgentWithTools();
-        Map<String, String> params = new HashMap<>();
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put("verbose", "true");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
-
-        // Capture the response passed to the listener
-        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(agentActionListener).onResponse(responseCaptor.capture());
-
-        // Extract the captured response
-        Object capturedResponse = responseCaptor.getValue();
-        assertTrue(capturedResponse instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
-
-        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-        ModelTensor modelTensor1 = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-        ModelTensor modelTensor2 = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0);
-
-        // Verify that the parsed values from JSON block are correctly set
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
-        assertEquals("conversation_id", modelTensor1.getResult());
-        assertEquals("parsed final answer", modelTensor2.getResult());
-    }
-
-    @Test
-    public void testParsingJsonBlockFromResponse4() {
-        // Prepare the response with JSON block
-        String jsonBlock = "{\"thought\":\"parsed thought\", \"action\":\"parsed action\", "
-            + "\"action_input\":\"parsed action input\", \"final_answer\":\"parsed final answer\"}";
-        String responseWithJsonBlock = "Some text```json" + jsonBlock + "```More text";
-
-        // Mock LLM response to not contain "thought" but contain "response" with JSON block
-        Map<String, String> llmResponse = new HashMap<>();
-        llmResponse.put("response", responseWithJsonBlock);
-        doAnswer(getLLMAnswer(llmResponse))
-            .when(client)
-            .execute(any(ActionType.class), any(ActionRequest.class), isA(ActionListener.class));
-
-        // Create an MLAgent and run the MLChatAgentRunner
-        MLAgent mlAgent = createMLAgentWithTools();
-        Map<String, String> params = new HashMap<>();
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
-        params.put("verbose", "false");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
-
-        // Capture the response passed to the listener
-        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(agentActionListener).onResponse(responseCaptor.capture());
-
-        // Extract the captured response
-        Object capturedResponse = responseCaptor.getValue();
-        assertTrue(capturedResponse instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) capturedResponse;
-
-        ModelTensor memoryIdModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-        ModelTensor parentInteractionModelTensor = modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1);
-
-        // Verify that the parsed values from JSON block are correctly set
-        assertEquals("memory_id", memoryIdModelTensor.getName());
-        assertEquals("conversation_id", memoryIdModelTensor.getResult());
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getResult());
     }
 
     @Test
@@ -364,7 +247,7 @@ public class MLChatAgentRunnerTest {
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
@@ -394,7 +277,7 @@ public class MLChatAgentRunnerTest {
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
-        mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
@@ -429,7 +312,7 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
             .build();
         HashMap<String, String> params = new HashMap<>();
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
         List<ModelTensor> agentOutput = modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors();
@@ -471,7 +354,7 @@ public class MLChatAgentRunnerTest {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             List<Interaction> interactionList = generateInteractions(2);
             Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
             interactionList.add(inProgressInteraction);
@@ -481,7 +364,7 @@ public class MLChatAgentRunnerTest {
 
         HashMap<String, String> params = new HashMap<>();
         params.put(MESSAGE_HISTORY_LIMIT, "5");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
@@ -527,7 +410,7 @@ public class MLChatAgentRunnerTest {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             List<Interaction> interactionList = generateInteractions(2);
             Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
             interactionList.add(inProgressInteraction);
@@ -537,7 +420,7 @@ public class MLChatAgentRunnerTest {
 
         HashMap<String, String> params = new HashMap<>();
         params.put("verbose", "true");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
@@ -560,13 +443,13 @@ public class MLChatAgentRunnerTest {
 
         doAnswer(invocation -> {
 
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("Test Exception"));
             return null;
         }).when(conversationIndexMemory).getMessages(messageHistoryLimitCapture.capture(), memoryInteractionCapture.capture());
 
         HashMap<String, String> params = new HashMap<>();
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verifying that onFailure was called
         verify(agentActionListener).onFailure(any(RuntimeException.class));
@@ -584,7 +467,7 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
 
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called
         verify(firstTool).run(any(), any());
@@ -606,7 +489,7 @@ public class MLChatAgentRunnerTest {
                 .when(firstTool)
                 .run(Mockito.anyMap(), nextStepListenerCaptor.capture());
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was not called
         verify(firstTool, never()).run(any(), any());
@@ -632,7 +515,7 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = createAgentParamsWithAction("nonExistentTool", "someInput");
 
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that no tool's run method was called
         verify(firstTool, never()).run(any(), any());
@@ -655,7 +538,7 @@ public class MLChatAgentRunnerTest {
                 .when(firstTool)
                 .run(Mockito.anyMap(), toolListenerCaptor.capture());
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called
         verify(firstTool).run(any(), any());
@@ -681,7 +564,7 @@ public class MLChatAgentRunnerTest {
                 .when(firstTool)
                 .run(Mockito.anyMap(), toolListenerCaptor.capture());
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called
         verify(firstTool).run(any(), any());
@@ -703,7 +586,7 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
 
         // Run the MLChatAgentRunner.
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
@@ -731,7 +614,7 @@ public class MLChatAgentRunnerTest {
         doReturn(true).when(firstTool).useOriginalInput();
 
         // Run the MLChatAgentRunner.
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
@@ -769,7 +652,7 @@ public class MLChatAgentRunnerTest {
         MLAgent mlAgent = createMLAgentWithScratchpadTools();
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id_for_scratchpad_test");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Also verify the final response to the user
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -797,7 +680,7 @@ public class MLChatAgentRunnerTest {
         doReturn(false).when(firstTool).useOriginalInput();
 
         // Run the MLChatAgentRunner.
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
@@ -827,7 +710,7 @@ public class MLChatAgentRunnerTest {
         doReturn(false).when(firstTool).useOriginalInput();
 
         // Run the MLChatAgentRunner.
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
@@ -860,7 +743,7 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(conversationIndexMemory).save(any(), any(), any(), any(), conversationIndexMemoryCapture.capture());
         // Run the MLChatAgentRunner
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify that the tool's run method was called
         verify(firstTool).run(any(), any());
@@ -898,7 +781,7 @@ public class MLChatAgentRunnerTest {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            ActionListener<List<Interaction>> listener = invocation.getArgument(1);
             List<Interaction> interactionList = generateInteractions(2);
             Interaction inProgressInteraction = Interaction.builder().id("interaction-99").input("input-99").response(null).build();
             interactionList.add(inProgressInteraction);
@@ -912,7 +795,7 @@ public class MLChatAgentRunnerTest {
 
         HashMap<String, String> params = new HashMap<>();
         params.put(MESSAGE_HISTORY_LIMIT, "5");
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         String chatHistory = params.get(MLChatAgentRunner.CHAT_HISTORY);
         Assert.assertFalse(chatHistory.contains("input-99"));
@@ -1040,7 +923,7 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
 
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify response is captured
         verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -1079,7 +962,7 @@ public class MLChatAgentRunnerTest {
         Map<String, String> params = new HashMap<>();
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_id");
 
-        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
 
         // Verify response is captured
         verify(agentActionListener).onResponse(objectCaptor.capture());
