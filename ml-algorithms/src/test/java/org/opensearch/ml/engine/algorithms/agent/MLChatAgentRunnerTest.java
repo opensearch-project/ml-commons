@@ -600,7 +600,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(17, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
@@ -628,7 +628,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
         assertEquals("raw input", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -694,7 +694,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
         // The value of input should be "config_value".
         assertEquals("config_value", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
@@ -724,7 +724,7 @@ public class MLChatAgentRunnerTest {
         // Verify the size of parameters passed in the tool run method.
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
         // The value of input should be replaced with the value associated with the key "key2" of the first tool.
         assertEquals("value2", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 

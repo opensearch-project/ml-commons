@@ -16,6 +16,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
+import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -152,6 +153,14 @@ public class RestMLExecuteAction extends BaseRestHandler {
                 ((AgentMLInput) input).setAgentId(agentId);
                 ((AgentMLInput) input).setTenantId(tenantId);
                 ((AgentMLInput) input).setIsAsync(async);
+
+                // Check MCP header passthrough feature flag
+                if (hasMcpHeaders(request) && !mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()) {
+                    throw new IllegalArgumentException(
+                        "MCP header passthrough is not enabled. To enable, please update the setting: "
+                            + "plugins.ml_commons.mcp_header_passthrough_enabled"
+                    );
+                }
                 putMcpRequestHeaders(request, client);
             }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {

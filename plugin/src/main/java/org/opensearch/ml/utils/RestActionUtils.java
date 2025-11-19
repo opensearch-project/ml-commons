@@ -340,6 +340,21 @@ public class RestActionUtils {
     }
 
     /**
+     * Checks if the REST request contains any MCP (Model Context Protocol) headers.
+     *
+     * @param request RestRequest to check for MCP headers
+     * @return true if any MCP headers are present, false otherwise
+     */
+    public static boolean hasMcpHeaders(RestRequest request) {
+        return request.header(CommonValue.MCP_HEADER_AWS_ACCESS_KEY_ID) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SECRET_ACCESS_KEY) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SESSION_TOKEN) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_REGION) != null
+            || request.header(CommonValue.MCP_HEADER_AWS_SERVICE_NAME) != null
+            || request.header(CommonValue.MCP_HEADER_OPENSEARCH_URL) != null;
+    }
+
+    /**
      * Extracts MCP (Model Context Protocol) request headers from the REST request and puts them in ThreadContext.
      *
      * @param request RestRequest containing the MCP headers

@@ -18,6 +18,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THRE
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.STREAM_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
+import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -144,6 +145,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
 
+        // Check MCP header passthrough feature flag
+        if (hasMcpHeaders(request) && !mlFeatureEnabledSetting.isMcpHeaderPassthroughEnabled()) {
+            throw new IllegalArgumentException(
+                "MCP header passthrough is not enabled. To enable, please update the setting: "
+                    + "plugins.ml_commons.mcp_header_passthrough_enabled"
+            );
+        }
         putMcpRequestHeaders(request, client);
 
         if (!mlFeatureEnabledSetting.isStreamEnabled()) {
