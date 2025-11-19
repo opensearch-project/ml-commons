@@ -176,9 +176,8 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             channel.prepareResponse(RestStatus.OK, headers);
 
             Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
-                try {
-
-                    storedContext.restore();
+                try (ThreadContext.StoredContext context = storedContext) {
+                    context.restore();
 
                     BytesReference completeContent = combineChunks(chunks);
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent, client);
