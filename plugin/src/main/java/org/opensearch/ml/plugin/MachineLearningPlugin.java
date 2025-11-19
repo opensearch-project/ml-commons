@@ -1193,8 +1193,6 @@ public class MachineLearningPlugin extends Plugin
                 restMLRemoveMcpToolsAction,
                 restMLListMcpToolsAction,
                 restMLMcpToolsUpdateAction,
-                restMLPutIndexInsightConfigAction,
-                restMLGetIndexInsightConfigAction,
                 restMLCreateContextManagementTemplateAction,
                 restMLGetContextManagementTemplateAction,
                 restMLListContextManagementTemplatesAction,

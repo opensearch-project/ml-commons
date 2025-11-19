@@ -33,16 +33,6 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
                 "is_enable": true
             }
             """;
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "/_plugins/_ml/index_insight_config",
-                null,
-                TestHelper.toHttpEntity(registerAgentRequestBody),
-                null
-            );
-        assertNotNull(response);
         createIndexAndPutDoc();
 
         Response responseIndexInsight = TestHelper
@@ -78,16 +68,6 @@ public class RestMLGetIndexInsightIT extends RestBaseAgentToolsIT {
                 "is_enable": true
             }
             """;
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "/_plugins/_ml/index_insight_config",
-                null,
-                TestHelper.toHttpEntity(registerAgentRequestBody),
-                null
-            );
-        assertNotNull(response);
         createIndexAndDocWithPattern();
 
         Response responseIndexInsight = TestHelper
