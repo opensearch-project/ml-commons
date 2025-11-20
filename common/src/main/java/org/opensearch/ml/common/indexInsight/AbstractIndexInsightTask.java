@@ -27,6 +27,7 @@ import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.Numbers;
 import org.opensearch.common.regex.Regex;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -93,37 +94,47 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                 handleExistingDoc(getResponse.getSourceAsMap(), tenantId, listener);
             } else {
                 SearchSourceBuilder patternSourceBuilder = buildPatternSourceBuilder(taskType.name());
-                sdkClient
-                    .searchDataObjectAsync(
-                        SearchDataObjectRequest
-                            .builder()
-                            .tenantId(tenantId)
-                            .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
-                            .searchSourceBuilder(patternSourceBuilder)
-                            .build()
-                    )
-                    .whenComplete((r, throwable) -> {
-                        if (throwable != null) {
-                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                            listener.onFailure(cause);
-                        } else {
-                            SearchResponse searchResponse = r.searchResponse();
-                            SearchHit[] hits = searchResponse.getHits().getHits();
-                            Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
-                            if (Objects.isNull(mappedPatternSource)) {
+                try (ThreadContext.StoredContext searchContext = client.threadPool().getThreadContext().stashContext()) {
+                    sdkClient
+                        .searchDataObjectAsync(
+                            SearchDataObjectRequest
+                                .builder()
+                                .tenantId(tenantId)
+                                .indices(ML_INDEX_INSIGHT_STORAGE_INDEX)
+                                .searchSourceBuilder(patternSourceBuilder)
+                                .build()
+                        )
+                        .whenComplete((r, throwable) -> {
+                            searchContext.restore();
+                            if (throwable != null) {
+                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                                log.error("Failed to get index insight pattern", cause);
                                 beginGeneration(tenantId, listener);
                             } else {
-                                handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
+                                SearchResponse searchResponse = r.searchResponse();
+                                SearchHit[] hits = searchResponse.getHits().getHits();
+                                Map<String, Object> mappedPatternSource = matchPattern(hits, sourceIndex);
+                                if (Objects.isNull(mappedPatternSource)) {
+                                    beginGeneration(tenantId, listener);
+                                } else {
+                                    handlePatternMatchedDoc(mappedPatternSource, tenantId, listener);
+                                }
                             }
-                        }
-                    });
+                        });
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
             }
         }, listener::onFailure));
     }
 
     protected void handleExistingDoc(Map<String, Object> source, String tenantId, ActionListener<IndexInsight> listener) {
         String currentStatus = (String) source.get(IndexInsight.STATUS_FIELD);
-        Long lastUpdateTime = (Long) source.get(IndexInsight.LAST_UPDATE_FIELD);
+        Object v = source.get(IndexInsight.LAST_UPDATE_FIELD);
+        Long lastUpdateTime = (v == null) ? null
+            : (v instanceof Number n) ? n.longValue()
+            : (v instanceof CharSequence cs && cs.length() > 0) ? Numbers.toLong(cs.toString(), true)
+            : null;
         long currentTime = Instant.now().toEpochMilli();
 
         IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
@@ -203,9 +214,11 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .lastUpdatedTime(Instant.now())
             .build();
 
-        writeIndexInsight(indexInsight, tenantId, ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, e -> {
-            saveFailedStatus(tenantId, e, listener);
-        }));
+        writeIndexInsight(
+            indexInsight,
+            tenantId,
+            ActionListener.wrap(r -> { runWithPrerequisites(tenantId, listener); }, listener::onFailure)
+        );
     }
 
     protected void runWithPrerequisites(String tenantId, ActionListener<IndexInsight> listener) {
@@ -249,6 +262,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .tenantId(tenantId)
             .index(sourceIndex)
             .taskType(taskType)
+            .lastUpdatedTime(Instant.now())
             .status(IndexInsightTaskStatus.FAILED)
             .build();
         writeIndexInsight(
@@ -468,6 +482,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         String agentId,
         String prompt,
         String sourceIndex,
+        String tenantId,
         ActionListener<String> listener
     ) {
         AgentMLInput agentInput = AgentMLInput
@@ -475,6 +490,7 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
             .agentId(agentId)
             .functionName(FunctionName.AGENT)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(Collections.singletonMap("prompt", prompt)).build())
+            .tenantId(tenantId)
             .build();
 
         MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);

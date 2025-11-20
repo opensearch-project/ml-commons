@@ -132,7 +132,7 @@ public class LogRelatedIndexCheckTask extends AbstractIndexInsightTask {
     private void performLogAnalysis(String agentId, String tenantId, ActionListener<IndexInsight> listener) {
         String prompt = RCA_TEMPLATE.replace("{indexName}", sourceIndex).replace("{samples}", sampleDocString);
 
-        callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {
+        callLLMWithAgent(client, agentId, prompt, sourceIndex, tenantId, ActionListener.wrap(response -> {
             try {
                 Map<String, Object> parsed = parseCheckResponse(response);
                 saveResult(MAPPER.writeValueAsString(parsed), tenantId, ActionListener.wrap(insight -> {

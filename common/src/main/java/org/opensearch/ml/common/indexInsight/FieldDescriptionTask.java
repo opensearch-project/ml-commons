@@ -187,7 +187,7 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
         });
         LatchedActionListener<Map<String, Object>> latchedActionListener = new LatchedActionListener<>(resultListener, countDownLatch);
         for (List<String> batch : batches) {
-            processBatch(batch, statisticalContentMap, agentId, latchedActionListener);
+            processBatch(batch, statisticalContentMap, agentId, tenantId, latchedActionListener);
         }
         try {
             countDownLatch.await(60, SECONDS);
@@ -218,11 +218,12 @@ public class FieldDescriptionTask extends AbstractIndexInsightTask {
         List<String> batchFields,
         Map<String, Object> statisticalContentMap,
         String agentId,
+        String tenantId,
         ActionListener<Map<String, Object>> listener
     ) {
         String prompt = generateBatchPrompt(batchFields, statisticalContentMap);
 
-        callLLMWithAgent(client, agentId, prompt, sourceIndex, ActionListener.wrap(response -> {
+        callLLMWithAgent(client, agentId, prompt, sourceIndex, tenantId, ActionListener.wrap(response -> {
             try {
                 log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), sourceIndex);
                 Map<String, Object> batchResult = parseFieldDescription(response);
