@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.session;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -98,6 +99,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
             .builder()
             .sessionId("session-123")
             .ownerId("owner-456")
+            .tenantId("tenant-123")
             .summary("Test session summary")
             .metadata(metadata)
             .agents(agents)
@@ -148,10 +150,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -214,10 +216,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper to simulate successful flow
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -237,7 +239,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Verify that the flow continues (tenant validation passes in this case)
         // The exact behavior depends on TenantAwareHelper implementation
-        verify(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        verify(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
     }
 
     @Test
@@ -249,6 +251,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         // Create input with blank memory container ID
         MLCreateSessionInput blankInput = MLCreateSessionInput.builder()
             .sessionId("session-123")
+                .tenantId("tenant-123")
             .memoryContainerId("")
             .build();
 
@@ -277,6 +280,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         // Create input with null memory container ID
         MLCreateSessionInput nullInput = MLCreateSessionInput.builder()
             .sessionId("session-123")
+                .tenantId("tenant-123")
             .memoryContainerId(null)
             .build();
 
@@ -304,10 +308,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper to return error
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         // Execute
         transportCreateSessionAction.doExecute(task, request, actionListener);
@@ -329,10 +333,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
 
@@ -357,10 +361,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -395,6 +399,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         MLCreateSessionInput customInput = MLCreateSessionInput.builder()
             .sessionId("custom-session-id")
             .ownerId("owner-456")
+            .tenantId("tenant-123")
             .summary("Test session with custom ID")
             .memoryContainerId("memory-container-abc")
             .build();
@@ -405,10 +410,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -451,6 +456,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         // Create input without session ID
         MLCreateSessionInput noIdInput = MLCreateSessionInput.builder()
             .ownerId("owner-456")
+                .tenantId("tenant-123")
             .summary("Test session without ID")
             .memoryContainerId("memory-container-abc")
             .build();
@@ -461,10 +467,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -508,6 +514,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         MLCreateSessionInput blankIdInput = MLCreateSessionInput.builder()
             .sessionId("   ") // Blank session ID
             .ownerId("owner-456")
+                .tenantId("tenant-123")
             .summary("Test session with blank ID")
             .memoryContainerId("memory-container-abc")
             .build();
@@ -518,10 +525,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");
@@ -585,6 +592,7 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
         MLCreateSessionInput complexInput = MLCreateSessionInput.builder()
             .sessionId("complex-session")
             .ownerId("owner-456")
+                .tenantId("tenant-123")
             .summary("Complex session with nested data")
             .metadata(complexMetadata)
             .agents(complexAgents)
@@ -598,10 +606,10 @@ public class TransportCreateSessionActionTests extends OpenSearchTestCase {
 
         // Mock memory container helper
         doAnswer(invocation -> {
-            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(2);
             listener.onResponse(memoryContainer);
             return null;
-        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), any());
+        }).when(memoryContainerHelper).getMemoryContainer(eq("memory-container-abc"), anyString(), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
         when(memoryContainerHelper.getOwnerId(any())).thenReturn("owner-456");

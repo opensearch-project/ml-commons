@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_PLUGIN_SETTING_PREFIX;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,6 +25,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -46,6 +48,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
@@ -61,6 +64,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategyType;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerRequest;
@@ -119,6 +123,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     private ClusterAdminClient clusterAdminClient;
     @Mock
     private IndicesAdminClient indicesAdminClient;
+    @Mock
+    private RemoteMemoryStoreHelper remoteMemoryStoreHelper;
+    @Mock
+    private MemoryContainerPipelineHelper memoryContainerPipelineHelper;
 
     @Mock
     private ActionListener<MLCreateMemoryContainerResponse> actionListener;
@@ -144,7 +152,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         testUser = new User(USER_NAME, Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
 
         // Setup thread context
-        Settings settings = Settings.builder().build();
+        Settings settings = Settings.builder().put(ML_PLUGIN_SETTING_PREFIX + "trusted_connector_endpoints_regex", true).build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -202,11 +210,15 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
 
-        // Create action
-        ClusterService clusterService = mock(ClusterService.class);
+        // Setup ClusterSettings for the mock clusterService
+        ClusterSettings clusterSettings = new ClusterSettings(
+            settings,
+            Set.of(MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX)
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+
+        // Create action dependencies
         MLEngine mlEngine = mock(MLEngine.class);
-        RemoteMemoryStoreHelper remoteMemoryStoreHelper = mock(RemoteMemoryStoreHelper.class);
-        MemoryContainerPipelineHelper pipelineHelper = mock(MemoryContainerPipelineHelper.class);
 
         action = new TransportCreateMemoryContainerAction(
             transportService,
@@ -221,7 +233,7 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
             mlModelManager,
             mlEngine,
             remoteMemoryStoreHelper,
-            pipelineHelper
+            memoryContainerPipelineHelper
         );
     }
 
@@ -347,10 +359,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(invalidLlmModel.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(invalidLlmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -368,19 +380,19 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Mock invalid embedding model (wrong type)
         MLModel invalidEmbeddingModel = mock(MLModel.class);
         when(invalidEmbeddingModel.getAlgorithm()).thenReturn(FunctionName.KMEANS);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(invalidEmbeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -396,10 +408,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     public void testDoExecuteWithModelNotFound() throws InterruptedException {
         // Mock model not found
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Model not found"));
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -573,18 +585,18 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         MLModel sparseEmbeddingModel = mock(MLModel.class);
         when(sparseEmbeddingModel.getAlgorithm()).thenReturn(FunctionName.SPARSE_ENCODING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(sparseEmbeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("sparse-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("sparse-embedding-model"), anyString(), any());
 
         // Mock successful operations
         doAnswer(invocation -> {
@@ -684,17 +696,17 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Mock embedding model not found
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Embedding model not found"));
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
 
         // Execute
         action.doExecute(task, request, actionListener);
@@ -734,10 +746,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel embeddingModel = mock(MLModel.class);
         when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(embeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
 
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
@@ -788,19 +800,19 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Mock remote embedding model (should be accepted)
         MLModel remoteEmbeddingModel = mock(MLModel.class);
         when(remoteEmbeddingModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(remoteEmbeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("remote-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("remote-embedding-model"), anyString(), any());
 
         // Mock successful operations
         doAnswer(invocation -> {
@@ -970,19 +982,19 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Mock valid embedding model
         MLModel embeddingModel = mock(MLModel.class);
         when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(embeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
 
         // Mock shared index validation (index doesn't exist - validation passes)
         mockSharedIndexValidation();
@@ -1018,12 +1030,12 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock successful index initialization
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(2);
             listener.onResponse(true);
             return null;
         })
-            .when(mlIndicesHandler)
-            .createLongTermMemoryIndex(anyString(), anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
+            .when(memoryContainerPipelineHelper)
+            .createLongTermMemoryIngestPipeline(anyString(), any(MemoryConfiguration.class), isA(ActionListener.class));
 
         // Mock successful index initialization
         doAnswer(invocation -> {
@@ -1189,25 +1201,18 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(client.admin()).thenReturn(adminClient);
         when(adminClient.cluster()).thenReturn(clusterAdminClient);
 
-        // Mock GetPipelineRequest to simulate pipeline doesn't exist
-        doAnswer(invocation -> {
-            ActionListener listener = invocation.getArgument(1);
-            org.opensearch.action.ingest.GetPipelineResponse getPipelineResponse = new org.opensearch.action.ingest.GetPipelineResponse(
-                Collections.emptyList()
-            );
-            listener.onResponse(getPipelineResponse);
-            return null;
-        }).when(clusterAdminClient).getPipeline(any(), any(ActionListener.class));
-
-        // Mock PutPipelineRequest to fail
-        doAnswer(invocation -> {
-            ActionListener<AcknowledgedResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("Pipeline creation failed"));
-            return null;
-        }).when(clusterAdminClient).putPipeline(any(PutPipelineRequest.class), any(ActionListener.class));
-
         mockSuccessfulModelValidation();
         mockSuccessfulIndexCreation();
+
+        // Mock GetPipelineRequest to simulate pipeline doesn't exist
+        doAnswer(invocation -> {
+            ActionListener listener = invocation.getArgument(2);
+            listener.onFailure(new org.opensearch.OpenSearchStatusException(
+                    "Internal server error",
+                    org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR
+            ));
+            return null;
+        }).when(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(anyString(), any(), any(ActionListener.class));
 
         CompletableFuture<PutDataObjectResponse> future = CompletableFuture.completedFuture(putDataObjectResponse);
         when(sdkClient.putDataObjectAsync(any(PutDataObjectRequest.class))).thenReturn(future);
@@ -1323,19 +1328,19 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(),any());
 
         // Mock valid SPARSE_ENCODING embedding model
         MLModel embeddingModel = mock(MLModel.class);
         when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.SPARSE_ENCODING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(embeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(),any());
 
         mockSharedIndexValidation();
         mockSuccessfulIndexCreation();
@@ -1369,10 +1374,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"),anyString(), any());
 
         mockSharedIndexValidation();
         mockSuccessfulIndexCreation();
@@ -1401,10 +1406,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING); // Wrong type
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         mockSharedIndexValidation();
         mockSuccessfulIndexCreation();
@@ -1422,10 +1427,10 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
     public void testCreateContainer_LLMModelNotFound() throws InterruptedException {
         // Test LLM model not found
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Model not found"));
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         mockSharedIndexValidation();
         mockSuccessfulIndexCreation();
@@ -1446,20 +1451,20 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Embedding model with wrong type
         MLModel embeddingModel = mock(MLModel.class);
         when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.SPARSE_ENCODING); // Expected TEXT_EMBEDDING
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(embeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
 
         mockSharedIndexValidation();
         mockSuccessfulIndexCreation();
@@ -1480,16 +1485,16 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Embedding model not found"));
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
 
         mockSharedIndexValidation();
         mockSuccessfulIndexCreation();
@@ -1938,18 +1943,18 @@ public class TransportCreateMemoryContainerActionTests extends OpenSearchTestCas
         MLModel llmModel = mock(MLModel.class);
         when(llmModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-llm-model"), any());
+        }).when(mlModelManager).getModel(eq("test-llm-model"), anyString(), any());
 
         // Mock valid embedding model
         MLModel embeddingModel = mock(MLModel.class);
         when(embeddingModel.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(1);
+            ActionListener<MLModel> listener = invocation.getArgument(2);
             listener.onResponse(embeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq("test-embedding-model"), any());
+        }).when(mlModelManager).getModel(eq("test-embedding-model"), anyString(), any());
     }
 }
