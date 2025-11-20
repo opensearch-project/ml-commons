@@ -1,21 +1,6 @@
 # Bedrock connector blueprint example for Nova MultiModal Model
 
-## 1. Add connector endpoint to trusted URLs:
-
-Note: no need to do this after 2.11.0
-
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
-        ]
-    }
-}
-```
-
-## 2. Create connector for Amazon Bedrock:
+## 1. Create connector for Amazon Bedrock:
 
 Note: Different modality types require separate connectors. Create one connector for each modality you plan to use: text embedding, image embedding, video embedding, or audio embedding.
 
@@ -415,7 +400,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-## 3. Register remote model:
+## 2. Register remote model:
 
 Register a separate model for each connector created in step 2. Use the corresponding connector_id for each modality:
 
@@ -429,7 +414,7 @@ POST /_plugins/_ml/models/_register
 }
 ```
 
-## 4. Test model inference:
+## 3. Test model inference:
 
 ### Text Embedding
 
