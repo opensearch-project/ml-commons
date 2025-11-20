@@ -8,7 +8,7 @@ package org.opensearch.ml.common.transport.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_3_3_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_4_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -110,7 +110,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         Version streamInputVersion = in.getVersion();
         agentId = in.readString();
         name = in.readOptionalString();
-        type = streamInputVersion.onOrAfter(VERSION_3_3_0) ? in.readOptionalString() : null;
+        type = streamInputVersion.onOrAfter(VERSION_3_4_0) ? in.readOptionalString() : null;
         description = in.readOptionalString();
         llmModelId = in.readOptionalString();
         if (in.readBoolean()) {
@@ -194,7 +194,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         Version streamOutputVersion = out.getVersion();
         out.writeString(agentId);
         out.writeOptionalString(name);
-        if (streamOutputVersion.onOrAfter(VERSION_3_3_0)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_4_0)) {
             out.writeOptionalString(type);
         }
         out.writeOptionalString(description);
