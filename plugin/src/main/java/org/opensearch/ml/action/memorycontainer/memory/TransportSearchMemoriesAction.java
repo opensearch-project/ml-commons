@@ -118,9 +118,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             memoryContainerHelper.addContainerIdFilter(input.getMemoryContainerId(), input.getSearchSourceBuilder());
 
             // Add owner filter for non-admin users
-            // if (!memoryContainerHelper.isAdminUser(user)) {
-            // memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
-            // }
+            // TODO: now we don't support owner id in remote store, check if it's necessary to add
+            if (container.getConfiguration().getRemoteStore() == null && !memoryContainerHelper.isAdminUser(user)) {
+                memoryContainerHelper.addOwnerIdFilter(user, input.getSearchSourceBuilder());
+            }
 
             SearchRequest searchRequest = new SearchRequest(indexName).source(input.getSearchSourceBuilder());
             // TODO: add search pipeline support in SearchRequest

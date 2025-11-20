@@ -722,10 +722,11 @@ public class MemoryContainerHelper {
     }
 
     public SearchSourceBuilder addOwnerIdFilter(User user, SearchSourceBuilder searchSourceBuilder) {
-        BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        if (user != null) {
-            boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
+        if (user == null) {
+            return searchSourceBuilder;
         }
+        BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+        boolQueryBuilder.should(QueryBuilders.termsQuery(OWNER_ID_FIELD, user.getName()));
         return applyFilterToSearchSource(searchSourceBuilder, boolQueryBuilder);
     }
 
@@ -799,10 +800,9 @@ public class MemoryContainerHelper {
      * Count memory containers with the specified index prefix
      *
      * @param indexPrefix the index prefix to search for
-     * @param tenantId the tenant ID (optional)
      * @param listener action listener returning the count
      */
-    public void countContainersWithPrefix(String indexPrefix, String tenantId, ActionListener<Long> listener) {
+    public void countContainersWithPrefix(String indexPrefix, ActionListener<Long> listener) {
         if (indexPrefix == null || indexPrefix.isBlank()) {
             listener.onResponse(0L);
             return;
