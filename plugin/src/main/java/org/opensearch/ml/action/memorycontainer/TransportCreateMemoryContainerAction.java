@@ -123,7 +123,7 @@ public class TransportCreateMemoryContainerAction extends
         this.remoteMemoryStoreHelper = remoteMemoryStoreHelper;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         this.memoryContainerPipelineHelper = memoryContainerPipelineHelper;
-        clusterService
+        this.clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
     }
