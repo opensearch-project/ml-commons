@@ -872,13 +872,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock non-admin user
-        org.opensearch.commons.authuser.User nonAdminUser = new org.opensearch.commons.authuser.User(
-            "regular-user",
-            java.util.Collections.emptyList(),
-            java.util.Collections.emptyList(),
-            java.util.Collections.emptyMap()
-        );
-        when(memoryContainerHelper.isAdminUser(nonAdminUser)).thenReturn(false);
+        when(memoryContainerHelper.isAdminUser(any())).thenReturn(false);
 
         // Mock search response
         SearchResponse mockSearchResponse = mock(SearchResponse.class);
@@ -1215,7 +1209,7 @@ public class TransportSearchMemoriesActionTests extends OpenSearchTestCase {
         MLSearchMemoriesRequest searchRequest = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(input).tenantId(null).build();
 
         // Mock isAdminUser to return false
-        when(memoryContainerHelper.isAdminUser(isNull())).thenReturn(false);
+        when(memoryContainerHelper.isAdminUser(any())).thenReturn(false);
 
         // Mock search response
         SearchResponse mockSearchResponse = mock(SearchResponse.class);

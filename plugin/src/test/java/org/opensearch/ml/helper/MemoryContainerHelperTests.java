@@ -61,7 +61,6 @@ import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
-import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -253,16 +252,21 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         request.source(new SearchSourceBuilder());
 
         SearchResponse searchResponse = createSearchResponse(2);
-        SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(response));
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
 
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         helper.searchData(configuration, request, future);
         assertSame(searchResponse, future.actionGet());
 
-        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
-        failed.completeExceptionally(new RuntimeException("search failure"));
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onFailure(new RuntimeException("search failure"));
+            return null;
+        }).when(client).search(any(), any());
 
         PlainActionFuture<SearchResponse> failure = PlainActionFuture.newFuture();
         helper.searchData(configuration, request, failure);
@@ -277,17 +281,23 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
         request.source(new SearchSourceBuilder());
 
         SearchResponse searchResponse = createSearchResponse(3);
-        SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(response));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
 
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
         helper.searchData(systemConfig, request, future);
         assertSame(searchResponse, future.actionGet());
 
         // Test failure with system index
-        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
-        failed.completeExceptionally(new RuntimeException("system index search failure"));
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onFailure(new RuntimeException("system index search failure"));
+            return null;
+        }).when(client).search(any(), any());
 
         PlainActionFuture<SearchResponse> failure = PlainActionFuture.newFuture();
         helper.searchData(systemConfig, request, failure);
@@ -642,33 +652,39 @@ public class MemoryContainerHelperTests extends OpenSearchTestCase {
     public void testCountContainersWithPrefix() {
         // Test with null prefix
         PlainActionFuture<Long> nullFuture = PlainActionFuture.newFuture();
-        helper.countContainersWithPrefix(null, null, nullFuture);
+        helper.countContainersWithPrefix(null, nullFuture);
         assertEquals(0L, nullFuture.actionGet().longValue());
 
         // Test with blank prefix
         PlainActionFuture<Long> blankFuture = PlainActionFuture.newFuture();
-        helper.countContainersWithPrefix("", null, blankFuture);
+        helper.countContainersWithPrefix("", blankFuture);
         assertEquals(0L, blankFuture.actionGet().longValue());
 
         SearchResponse searchResponse = createSearchResponse(3);
-        SearchDataObjectResponse response = new SearchDataObjectResponse(searchResponse);
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(CompletableFuture.completedFuture(response));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
 
         PlainActionFuture<Long> future = PlainActionFuture.newFuture();
-        helper.countContainersWithPrefix("prefix", null, future);
+        helper.countContainersWithPrefix("prefix", future);
         assertEquals(3L, future.actionGet().longValue());
 
         // Test with tenant ID
         PlainActionFuture<Long> tenantFuture = PlainActionFuture.newFuture();
-        helper.countContainersWithPrefix("prefix", "tenant123", tenantFuture);
+        helper.countContainersWithPrefix("prefix", tenantFuture);
         assertEquals(3L, tenantFuture.actionGet().longValue());
 
-        CompletableFuture<SearchDataObjectResponse> failed = new CompletableFuture<>();
-        failed.completeExceptionally(new RuntimeException("fail"));
-        when(sdkClient.searchDataObjectAsync(any())).thenReturn(failed);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onFailure(new RuntimeException("fail"));
+            return null;
+        }).when(client).search(any(), any());
 
         PlainActionFuture<Long> failure = PlainActionFuture.newFuture();
-        helper.countContainersWithPrefix("prefix", null, failure);
+        helper.countContainersWithPrefix("prefix", failure);
         RuntimeException exception = expectThrows(RuntimeException.class, failure::actionGet);
         assertEquals("fail", exception.getMessage());
     }
