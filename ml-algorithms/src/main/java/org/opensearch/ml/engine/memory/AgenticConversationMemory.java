@@ -189,15 +189,6 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             return;
         }
 
-        log
-            .info(
-                "Starting memory update. MessageId: {}, ContainerId: {}, UpdateFields: {}, TenantId: {}",
-                messageId,
-                memoryContainerId,
-                updateContent.keySet(),
-                tenantId
-            );
-
         // Use retry mechanism for AOSS compatibility (high refresh latency)
         updateWithRetry(messageId, updateContent, updateListener, 0, tenantId);
     }
@@ -260,15 +251,6 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
         final int maxRetries = 5;
         final long baseDelayMs = 500;
 
-        log
-            .info(
-                "updateWithRetry called. MessageId: {}, Attempt: {}/{}, ContainerId: {}",
-                messageId,
-                attemptNumber + 1,
-                maxRetries + 1,
-                memoryContainerId
-            );
-
         // Step 1: Get the existing working memory to retrieve current structured_data
         MLGetMemoryRequest getRequest = MLGetMemoryRequest
             .builder()
@@ -278,16 +260,7 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             .tenantId(tenantId)
             .build();
 
-        log
-            .info(
-                "Executing GET memory request. MessageId: {}, ContainerId: {}, MemoryType: WORKING, Attempt: {}",
-                messageId,
-                memoryContainerId,
-                attemptNumber + 1
-            );
-
         client.execute(MLGetMemoryAction.INSTANCE, getRequest, ActionListener.wrap(getResponse -> {
-            log.info("GET memory succeeded. MessageId: {}, Attempt: {}", messageId, attemptNumber + 1);
             // Step 2: Extract existing structured_data and merge with updates
             MLWorkingMemory workingMemory = getResponse.getWorkingMemory();
             if (workingMemory == null) {
@@ -296,26 +269,10 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 return;
             }
 
-            log
-                .info(
-                    "Retrieved working memory. MessageId: {}, HasStructuredData: {}, Attempt: {}",
-                    messageId,
-                    workingMemory.getStructuredDataBlob() != null,
-                    attemptNumber + 1
-                );
-
             Map<String, Object> structuredData = workingMemory.getStructuredDataBlob();
             if (structuredData == null) {
-                log.info("Structured data is null, creating new map. MessageId: {}", messageId);
                 structuredData = new HashMap<>();
             } else {
-                log
-                    .info(
-                        "Existing structured data found with {} fields. MessageId: {}, Fields: {}",
-                        structuredData.size(),
-                        messageId,
-                        structuredData.keySet()
-                    );
                 // Create a mutable copy
                 structuredData = new HashMap<>(structuredData);
             }
@@ -323,34 +280,16 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
             // Step 3: Merge update content into structured_data
             // The updateContent contains fields like "response" and "additional_info"
             // These should be stored in structured_data
-            log.info("Merging update content. MessageId: {}, UpdateFields: {}", messageId, updateContent.keySet());
             for (Map.Entry<String, Object> entry : updateContent.entrySet()) {
                 structuredData.put(entry.getKey(), entry.getValue());
-                log
-                    .info(
-                        "Merged field: {} = {} (type: {})",
-                        entry.getKey(),
-                        entry.getValue() != null
-                            ? entry.getValue().toString().substring(0, Math.min(100, entry.getValue().toString().length()))
-                            : "null",
-                        entry.getValue() != null ? entry.getValue().getClass().getSimpleName() : "null"
-                    );
             }
 
             // Update the timestamp
-            // structuredData.put("updated_time", java.time.Instant.now().toString());
+            structuredData.put("updated_time", java.time.Instant.now().toString());
 
             // Step 4: Create update request with merged structured_data
             Map<String, Object> finalUpdateContent = new HashMap<>();
             finalUpdateContent.put("structured_data_blob", structuredData);
-
-            log
-                .info(
-                    "Creating UPDATE request. MessageId: {}, TotalFields: {}, Attempt: {}",
-                    messageId,
-                    structuredData.size(),
-                    attemptNumber + 1
-                );
 
             MLUpdateMemoryInput input = MLUpdateMemoryInput.builder().updateContent(finalUpdateContent).build();
 
@@ -363,26 +302,8 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 .tenantId(tenantId)
                 .build();
 
-            log
-                .info(
-                    "Executing UPDATE memory request. MessageId: {}, ContainerId: {}, MemoryType: WORKING, Attempt: {}",
-                    messageId,
-                    memoryContainerId,
-                    attemptNumber + 1
-                );
-
             // Step 5: Execute the update with retry on failure
             client.execute(MLUpdateMemoryAction.INSTANCE, updateRequest, ActionListener.wrap(indexResponse -> {
-                log
-                    .info(
-                        "UPDATE memory succeeded! MessageId: {}, Result: {}, Version: {}, SeqNo: {}, Attempt: {}",
-                        messageId,
-                        indexResponse.getResult(),
-                        indexResponse.getVersion(),
-                        indexResponse.getSeqNo(),
-                        attemptNumber + 1
-                    );
-
                 // Convert IndexResponse to UpdateResponse
                 UpdateResponse updateResponse = new UpdateResponse(
                     indexResponse.getShardInfo(),
@@ -395,16 +316,6 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
                 );
                 updateListener.onResponse(updateResponse);
             }, updateException -> {
-                log
-                    .error(
-                        "UPDATE memory failed. MessageId: {}, Attempt: {}/{}, ErrorType: {}, ErrorMessage: {}",
-                        messageId,
-                        attemptNumber + 1,
-                        maxRetries + 1,
-                        updateException.getClass().getSimpleName(),
-                        updateException.getMessage(),
-                        updateException
-                    );
                 // Check if update failed and we should retry
                 boolean shouldRetry = shouldRetryOnError(updateException, attemptNumber, maxRetries);
 
@@ -424,18 +335,10 @@ public class AgenticConversationMemory implements Memory<Message, CreateInteract
 
                     // Use ThreadPool for non-blocking async retry
                     try {
-                        log
-                            .info(
-                                "Scheduling UPDATE retry. MessageId: {}, Delay: {}ms, NextAttempt: {}",
-                                messageId,
-                                delayMs,
-                                attemptNumber + 2
-                            );
                         client.threadPool().schedule(() -> {
                             log.info("Executing scheduled UPDATE retry. MessageId: {}, Attempt: {}", messageId, attemptNumber + 2);
                             updateWithRetry(messageId, updateContent, updateListener, attemptNumber + 1, tenantId);
                         }, TimeValue.timeValueMillis(delayMs), AGENTIC_MEMORY_THREAD_POOL);
-                        log.info("UPDATE retry scheduled successfully. MessageId: {}", messageId);
                     } catch (Exception scheduleException) {
                         log
                             .error(

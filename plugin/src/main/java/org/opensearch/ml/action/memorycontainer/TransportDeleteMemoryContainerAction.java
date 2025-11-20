@@ -117,7 +117,7 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 MemoryConfiguration configuration = container.getConfiguration();
                 String indexPrefix = configuration.getIndexPrefix();
 
-                memoryContainerHelper.countContainersWithPrefix(indexPrefix, tenantId, ActionListener.wrap(count -> {
+                memoryContainerHelper.countContainersWithPrefix(indexPrefix, ActionListener.wrap(count -> {
                     if (count > 1) {
                         // Multiple containers share this prefix - cannot delete indices
                         String error = String

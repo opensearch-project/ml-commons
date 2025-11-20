@@ -393,10 +393,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
         doAnswer(invocation -> {
-            ActionListener<Long> listener = invocation.getArgument(2);
+            ActionListener<Long> listener = invocation.getArgument(1);
             listener.onResponse(1L);
             return null;
-        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any());
 
         // Mock successful deleteIndex operation
         doAnswer(invocation -> {
@@ -466,10 +466,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
         doAnswer(invocation -> {
-            ActionListener<Long> listener = invocation.getArgument(2);
+            ActionListener<Long> listener = invocation.getArgument(1);
             listener.onResponse(1L);
             return null;
-        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any());
 
         // Mock failed deleteIndex operation
         doAnswer(invocation -> {
@@ -613,10 +613,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
         doAnswer(invocation -> {
-            ActionListener<Long> listener = invocation.getArgument(2);
+            ActionListener<Long> listener = invocation.getArgument(1);
             listener.onResponse(1L);
             return null;
-        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any());
 
         // Mock successful deleteIndex operation
         doAnswer(invocation -> {
@@ -684,10 +684,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock countContainersWithPrefix to return 1 (sole owner - safe to delete indices)
         doAnswer(invocation -> {
-            ActionListener<Long> listener = invocation.getArgument(2);
+            ActionListener<Long> listener = invocation.getArgument(1);
             listener.onResponse(1L);
             return null;
-        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any());
 
         // Mock successful deleteIndex operation
         doAnswer(invocation -> {
@@ -789,10 +789,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock countContainersWithPrefix to return 2 (shared prefix - unsafe to delete indices)
         doAnswer(invocation -> {
-            ActionListener<Long> listener = invocation.getArgument(2);
+            ActionListener<Long> listener = invocation.getArgument(1);
             listener.onResponse(2L);
             return null;
-        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any());
 
         // Execute
         transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
@@ -847,7 +847,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             ActionListener<Long> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Failed to count containers"));
             return null;
-        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any(), any());
+        }).when(memoryContainerHelper).countContainersWithPrefix(any(), any());
 
         // Execute
         transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
@@ -903,7 +903,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         transportDeleteMemoryContainerAction.doExecute(null, deleteRequest, actionListener);
 
         // Verify countContainersWithPrefix was NEVER called (no index deletion requested)
-        verify(memoryContainerHelper, timeout(1000).times(0)).countContainersWithPrefix(any(), any(), any());
+        verify(memoryContainerHelper, timeout(1000).times(0)).countContainersWithPrefix(any(), any());
 
         // Verify deleteIndex was NEVER called
         verify(memoryContainerHelper, timeout(1000).times(0)).deleteIndex(any(), any(), any());

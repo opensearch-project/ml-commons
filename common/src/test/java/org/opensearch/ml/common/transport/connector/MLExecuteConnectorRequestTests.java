@@ -67,14 +67,18 @@ public class MLExecuteConnectorRequestTests {
 
     @Test
     public void validateWithNullMLInputException() {
-        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder().build();
+        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder().connectorId("test_connector").build();
         ActionRequestValidationException exception = executeConnectorRequest.validate();
         assertEquals("Validation Failed: 1: ML input can't be null;", exception.getMessage());
     }
 
     @Test
     public void validateWithNullMLInputDataSetException() {
-        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest.builder().mlInput(new MLInput()).build();
+        MLExecuteConnectorRequest executeConnectorRequest = MLExecuteConnectorRequest
+            .builder()
+            .connectorId("test_connector")
+            .mlInput(new MLInput())
+            .build();
         ActionRequestValidationException exception = executeConnectorRequest.validate();
         assertEquals("Validation Failed: 1: input data can't be null;", exception.getMessage());
     }

@@ -84,7 +84,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, memoryStrategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, memoryStrategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
@@ -115,7 +115,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, null, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions("tenant-123", facts, searchResults, null, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
         verify(decisionsListener).onFailure(any(RuntimeException.class));
@@ -147,7 +147,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.makeMemoryDecisions(facts, searchResults, strategy, storageConfig, decisionsListener);
+        memoryProcessingService.makeMemoryDecisions("tenant-123", facts, searchResults, strategy, storageConfig, decisionsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -177,7 +177,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
     }
@@ -213,7 +213,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
@@ -250,7 +250,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
@@ -293,7 +293,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
@@ -330,7 +330,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         // cleanMarkdownFromJson should strip the markdown before ProcessorChain processes it
@@ -368,7 +368,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         verify(factsListener).onResponse(any(List.class));
@@ -409,7 +409,7 @@ public class MemoryProcessingServiceAdditionalTests {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        memoryProcessingService.extractFactsFromConversation(messages, strategy, storageConfig, factsListener);
+        memoryProcessingService.extractFactsFromConversation("tenant-123", messages, strategy, storageConfig, factsListener);
 
         verify(client).execute(any(), any(), any());
         // Should extract only the facts array, ignoring other fields

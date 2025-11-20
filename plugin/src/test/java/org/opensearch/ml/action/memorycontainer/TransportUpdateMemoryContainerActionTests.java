@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
@@ -83,6 +84,9 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
     private MLIndicesHandler mlIndicesHandler;
 
     @Mock
+    private MemoryContainerPipelineHelper memoryContainerPipelineHelper;
+
+    @Mock
     private TransportService transportService;
 
     @Mock
@@ -104,7 +108,6 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         when(threadPool.getThreadContext())
             .thenReturn(new org.opensearch.common.util.concurrent.ThreadContext(org.opensearch.common.settings.Settings.builder().build()));
 
-        MemoryContainerPipelineHelper pipelineHelper = mock(MemoryContainerPipelineHelper.class);
         action = new TransportUpdateMemoryContainerAction(
             transportService,
             actionFilters,
@@ -116,7 +119,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             mlModelManager,
             memoryContainerHelper,
             mlIndicesHandler,
-            pipelineHelper
+            memoryContainerPipelineHelper
         );
     }
 
@@ -163,6 +166,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("old-name")
+            .tenantId("test-tenant-123")
             .owner(
                 new User(
                     "test-user",
@@ -247,6 +251,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("old-name")
+            .tenantId("test-tenant-123")
             .owner(
                 new User(
                     "other-user",
@@ -292,6 +297,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("old-name")
+            .tenantId("test-tenant-123")
             .owner(
                 new User(
                     "test-user",
@@ -374,6 +380,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -462,6 +469,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -544,6 +552,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -622,6 +631,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -699,6 +709,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -770,6 +781,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -857,6 +869,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -930,6 +943,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("old-name")
+            .tenantId("test-tenant-123")
             .configuration(config)
             .owner(
                 new User(
@@ -979,6 +993,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1024,6 +1039,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1080,6 +1096,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1139,6 +1156,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1204,6 +1222,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1273,6 +1292,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1344,6 +1364,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1386,7 +1407,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock LLM model validation
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             org.opensearch.ml.common.MLModel llmModel = org.opensearch.ml.common.MLModel
                 .builder()
                 .modelId(llmId)
@@ -1395,11 +1416,11 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq(llmId), any());
+        }).when(mlModelManager).getModel(eq(llmId), anyString(), any());
 
         // Mock embedding model validation
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             org.opensearch.ml.common.MLModel embeddingModel = org.opensearch.ml.common.MLModel
                 .builder()
                 .modelId(embeddingModelId)
@@ -1408,7 +1429,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(embeddingModel);
             return null;
-        }).when(mlModelManager).getModel(eq(embeddingModelId), any());
+        }).when(mlModelManager).getModel(eq(embeddingModelId), anyString(), any());
 
         // Mock admin clients
         org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
@@ -1479,6 +1500,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             return null;
         }).when(client).update(any(), any());
 
+        doAnswer(invocation -> {
+            ActionListener<Boolean> createPipelineListener = invocation.getArgument(2);
+            createPipelineListener.onResponse(true);
+            return null;
+        }).when(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(anyString(), any(), any());
+
         action.doExecute(task, request, listener);
 
         // Verify success - createHistoryIndexOnly executed successfully
@@ -1507,6 +1534,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1549,7 +1577,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock model validations
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             String modelId = invocation.getArgument(0);
             org.opensearch.ml.common.MLModel model = org.opensearch.ml.common.MLModel
                 .builder()
@@ -1559,7 +1587,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(model);
             return null;
-        }).when(mlModelManager).getModel(any(String.class), any());
+        }).when(mlModelManager).getModel(any(String.class), anyString(), any());
 
         // Mock admin clients
         org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
@@ -1598,10 +1626,10 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock long-term index creation - SUCCESS
         doAnswer(invocation -> {
-            ActionListener<Boolean> longTermListener = invocation.getArgument(3);
+            ActionListener<Boolean> longTermListener = invocation.getArgument(2);
             longTermListener.onResponse(true);
             return null;
-        }).when(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+        }).when(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(any(), any(), any());
 
         // Mock history index creation - SUCCESS
         doAnswer(invocation -> {
@@ -1629,7 +1657,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Verify success - createLongTermAndHistoryIndices executed successfully with all callbacks
         verify(listener).onResponse(updateResponse);
-        verify(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+        verify(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(any(), any(), any());
         verify(mlIndicesHandler).createLongTermMemoryHistoryIndex(any(), any(), any());
     }
 
@@ -1655,6 +1683,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             .builder()
             .name("test-container")
             .configuration(currentConfig)
+            .tenantId("test-tenant-123")
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
 
@@ -1697,7 +1726,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock model validations
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             String modelId = invocation.getArgument(0);
             org.opensearch.ml.common.MLModel model = org.opensearch.ml.common.MLModel
                 .builder()
@@ -1707,7 +1736,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(model);
             return null;
-        }).when(mlModelManager).getModel(any(String.class), any());
+        }).when(mlModelManager).getModel(anyString(), anyString(), any());
 
         // Mock admin clients
         org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
@@ -1751,6 +1780,12 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             return null;
         }).when(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
 
+        doAnswer(invocation -> {
+            ActionListener<Boolean> createPipelineListener = invocation.getArgument(2);
+            createPipelineListener.onResponse(true);
+            return null;
+        }).when(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(anyString(), any(), any());
+
         // Mock final update - SUCCESS
         UpdateResponse updateResponse = new UpdateResponse(
             new ShardId(new Index("test", "uuid"), 0),
@@ -1770,7 +1805,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Verify success - history index NOT created because disabled
         verify(listener).onResponse(updateResponse);
-        verify(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+        verify(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(any(), any(), any());
         verify(mlIndicesHandler, never()).createLongTermMemoryHistoryIndex(any(), any(), any());
     }
 
@@ -1789,6 +1824,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1829,10 +1865,10 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock LLM validation failure
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             modelListener.onFailure(new RuntimeException("LLM model not found"));
             return null;
-        }).when(mlModelManager).getModel(eq(llmId), any());
+        }).when(mlModelManager).getModel(eq(llmId), anyString(), any());
 
         action.doExecute(task, request, listener);
 
@@ -1860,6 +1896,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1900,7 +1937,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock LLM validation success
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             org.opensearch.ml.common.MLModel llmModel = org.opensearch.ml.common.MLModel
                 .builder()
                 .modelId(llmId)
@@ -1909,14 +1946,14 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(llmModel);
             return null;
-        }).when(mlModelManager).getModel(eq(llmId), any());
+        }).when(mlModelManager).getModel(eq(llmId), anyString(), any());
 
         // Mock embedding validation failure
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             modelListener.onFailure(new RuntimeException("Embedding model not found"));
             return null;
-        }).when(mlModelManager).getModel(eq(embeddingModelId), any());
+        }).when(mlModelManager).getModel(eq(embeddingModelId), anyString(), any());
 
         action.doExecute(task, request, listener);
 
@@ -1944,6 +1981,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -1984,7 +2022,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock model validations success
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             String modelId = invocation.getArgument(0);
             org.opensearch.ml.common.MLModel model = org.opensearch.ml.common.MLModel
                 .builder()
@@ -1994,7 +2032,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(model);
             return null;
-        }).when(mlModelManager).getModel(any(String.class), any());
+        }).when(mlModelManager).getModel(any(String.class), anyString(), any());
 
         // Mock admin clients
         org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
@@ -2063,6 +2101,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -2103,7 +2142,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock model validations success
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             String modelId = invocation.getArgument(0);
             org.opensearch.ml.common.MLModel model = org.opensearch.ml.common.MLModel
                 .builder()
@@ -2113,7 +2152,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(model);
             return null;
-        }).when(mlModelManager).getModel(any(String.class), any());
+        }).when(mlModelManager).getModel(any(String.class), anyString(), any());
 
         // Mock admin clients and shared index validation - index doesn't exist
         org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
@@ -2159,7 +2198,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             ActionListener<Boolean> historyListener = invocation.getArgument(2);
             historyListener.onFailure(new RuntimeException("Failed to create history index"));
             return null;
-        }).when(mlIndicesHandler).createLongTermMemoryHistoryIndex(any(), any(), any());
+        }).when(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(any(), any(), any());
 
         action.doExecute(task, request, listener);
 
@@ -2187,6 +2226,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
         MLMemoryContainer container = MLMemoryContainer
             .builder()
             .name("test-container")
+            .tenantId("test-tenant-123")
             .configuration(currentConfig)
             .owner(new User("test-user", Collections.emptyList(), Collections.emptyList(), Collections.emptyMap()))
             .build();
@@ -2227,7 +2267,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
 
         // Mock model validations success
         doAnswer(invocation -> {
-            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(1);
+            ActionListener<org.opensearch.ml.common.MLModel> modelListener = invocation.getArgument(2);
             String modelId = invocation.getArgument(0);
             org.opensearch.ml.common.MLModel model = org.opensearch.ml.common.MLModel
                 .builder()
@@ -2237,7 +2277,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
                 .build();
             modelListener.onResponse(model);
             return null;
-        }).when(mlModelManager).getModel(any(String.class), any());
+        }).when(mlModelManager).getModel(any(String.class), anyString(), any());
 
         // Mock admin clients
         org.opensearch.transport.client.IndicesAdminClient indicesAdmin = mock(org.opensearch.transport.client.IndicesAdminClient.class);
@@ -2277,7 +2317,7 @@ public class TransportUpdateMemoryContainerActionTests extends OpenSearchTestCas
             ActionListener<Boolean> longTermListener = invocation.getArgument(3);
             longTermListener.onFailure(new RuntimeException("Failed to create long-term index"));
             return null;
-        }).when(mlIndicesHandler).createLongTermMemoryIndex(any(), any(), any(), any());
+        }).when(memoryContainerPipelineHelper).createLongTermMemoryIngestPipeline(any(), any(), any());
 
         action.doExecute(task, request, listener);
 
