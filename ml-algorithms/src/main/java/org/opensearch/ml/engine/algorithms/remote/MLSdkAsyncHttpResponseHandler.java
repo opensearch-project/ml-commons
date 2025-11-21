@@ -209,7 +209,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         } catch (IllegalArgumentException e) {
             actionListener.onFailure(e);
         } catch (Exception e) {
-            log.error("Failed to process response body: {}", body, e);
+            log.error("Failed to process response body", e);
             actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
         }
     }
