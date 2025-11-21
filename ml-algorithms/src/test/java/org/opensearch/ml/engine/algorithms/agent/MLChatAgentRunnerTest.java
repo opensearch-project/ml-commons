@@ -692,6 +692,38 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
+    public void testToolExceptionMessageEscaping() {
+        // Mock tool validation to return true
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with tools
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        // Create parameters for the agent
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+
+        // Mock tool to throw exception with problematic characters (quotes, newlines)
+        String problematicMessage = "Invalid payload: { \"system\": [{\"text\": \"You are a precise...\"}] }\n" +
+                "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+        
+        Mockito
+                .doThrow(new IllegalArgumentException(problematicMessage))
+                .when(firstTool)
+                .run(Mockito.anyMap(), toolListenerCaptor.capture());
+
+        // Run the MLChatAgentRunner
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener, null);
+
+        // Verify that the tool's run method was called
+        verify(firstTool).run(any(), any());
+
+        // Verify that the agent completes without throwing JSON parsing exceptions
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull("Agent should complete successfully even with problematic exception messages", modelTensorOutput);
+    }
+
+    @Test
     public void testToolParameters() {
         // Mock tool validation to return false.
         when(firstTool.validate(any())).thenReturn(true);
