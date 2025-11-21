@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
@@ -499,6 +500,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 action,
                                 actionInput
                             );
+                            toolParams.put(TENANT_ID_FIELD, tenantId);
                             lastToolParams.clear();
                             lastToolParams.putAll(toolParams);
                             runTool(
