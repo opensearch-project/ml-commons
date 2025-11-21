@@ -1101,6 +1101,10 @@ public class AgentUtils {
             }
 
             // Check if parameters are wrapped in memory_configuration
+            // In current implementation, agent memory processing method will be overridden to remote agentic memory
+            // if the agent receive the memory config field, no matter what its previous memory type is.
+            // In long run, memory configuration should only be expected for remote agentic memory type.
+            // TODO: Add a memory type check to restrict memory config to remote agentic memory only
             String memoryConfigStr = requestParameters.get("memory_configuration");
             if (!Strings.isNullOrEmpty(memoryConfigStr)) {
                 // Parse the memory_configuration JSON
