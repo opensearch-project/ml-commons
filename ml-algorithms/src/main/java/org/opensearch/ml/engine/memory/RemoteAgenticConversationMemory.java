@@ -1155,9 +1155,6 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
             // Extract tenant ID from role ARN if applicable
             String tenantId = extractTenantIdFromRoleArn(serviceName, credentials);
 
-            // Extract tenant ID from role ARN if applicable
-            String tenantId = extractTenantIdFromRoleArn(serviceName, credentials);
-
             // Create Memory Container API actions
             List<ConnectorAction> actions = createMemoryContainerActions();
 

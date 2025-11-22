@@ -253,6 +253,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
         mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -283,6 +284,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
         mlChatAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener, transportChannel);
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -317,6 +319,7 @@ public class MLChatAgentRunnerTest {
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
         HashMap<String, String> params = new HashMap<>();
         mlChatAgentRunner.run(mlAgent, params, agentActionListener, transportChannel);
@@ -358,6 +361,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .description("mlagent description")
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         doAnswer(invocation -> {
@@ -414,6 +418,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .description("mlagent description")
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         doAnswer(invocation -> {
@@ -446,6 +451,7 @@ public class MLChatAgentRunnerTest {
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         doAnswer(invocation -> {
@@ -516,6 +522,7 @@ public class MLChatAgentRunnerTest {
             .memory(mlMemorySpec)
             .llm(llmSpec)
             .name("TestAgent")
+            .tenantId("test_tenant")
             .build();
 
         // Create parameters for the agent with a non-existent tool
@@ -598,9 +605,10 @@ public class MLChatAgentRunnerTest {
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
         // Verify the size of parameters passed in the tool run method.
+        // Note: size is 19 because tenant_id is now passed to tools
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(18, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
@@ -626,9 +634,10 @@ public class MLChatAgentRunnerTest {
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
         // Verify the size of parameters passed in the tool run method.
+        // Note: size is 20 because tenant_id is now passed to tools
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(20, ((Map) argumentCaptor.getValue()).size());
         assertEquals("raw input", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
         Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
@@ -692,9 +701,10 @@ public class MLChatAgentRunnerTest {
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
         // Verify the size of parameters passed in the tool run method.
+        // Note: size is 20 because tenant_id is now passed to tools
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(20, ((Map) argumentCaptor.getValue()).size());
         // The value of input should be "config_value".
         assertEquals("config_value", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
@@ -722,9 +732,10 @@ public class MLChatAgentRunnerTest {
         // Verify that the tool's run method was called.
         verify(firstTool).run(any(), any());
         // Verify the size of parameters passed in the tool run method.
+        // Note: size is 20 because tenant_id is now passed to tools
         ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
-        assertEquals(19, ((Map) argumentCaptor.getValue()).size());
+        assertEquals(20, ((Map) argumentCaptor.getValue()).size());
         // The value of input should be replaced with the value associated with the key "key2" of the first tool.
         assertEquals("value2", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
 
@@ -785,6 +796,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .description("mlagent description")
             .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         doAnswer(invocation -> {
@@ -826,6 +838,7 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec))
             .memory(mlMemorySpec)
             .llm(llmSpec)
+            .tenantId("test_tenant")
             .build();
     }
 
@@ -845,6 +858,7 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec))
             .memory(mlMemorySpec)
             .llm(llmSpec)
+            .tenantId("test_tenant")
             .build();
     }
 
@@ -919,6 +933,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         // Reset client mock for this test
@@ -972,6 +987,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         // Reset client mock for this test
@@ -1067,6 +1083,7 @@ public class MLChatAgentRunnerTest {
             .tools(Arrays.asList(writeToolSpec, readToolSpec))
             .memory(mlMemorySpec)
             .llm(llmSpec)
+            .tenantId("test_tenant")
             .build();
     }
 
@@ -1096,6 +1113,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         // Reset and setup fresh mocks
@@ -1157,6 +1175,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         // Reset client mock for this test
@@ -1199,6 +1218,7 @@ public class MLChatAgentRunnerTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(llmSpec)
             .memory(memorySpec)
+            .tenantId("test_tenant")
             .build();
 
         Map<String, String> params = new HashMap<>();
@@ -1249,6 +1269,7 @@ public class MLChatAgentRunnerTest {
             .type(MLAgentType.CONVERSATIONAL.name())
             .llm(llmSpec)
             .memory(memorySpec)
+            .tenantId("test_tenant")
             .build();
 
         Map<String, String> params = new HashMap<>();
@@ -1352,6 +1373,7 @@ public class MLChatAgentRunnerTest {
             .llm(llmSpec)
             .memory(mlMemorySpec)
             .tools(Arrays.asList(firstToolSpec))
+            .tenantId("test_tenant")
             .build();
 
         Mockito.reset(client);
