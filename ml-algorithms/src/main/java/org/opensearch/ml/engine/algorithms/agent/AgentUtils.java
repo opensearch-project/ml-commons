@@ -75,6 +75,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -82,9 +84,15 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.connector.McpStreamableHttpConnector;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -1176,6 +1184,113 @@ public class AgentUtils {
         } catch (IOException ex) {
             log.warn("Failed to parse {} field; ignoring value", fieldName, ex);
             return null;
+        }
+    }
+
+    public static String extractSummaryFromResponse(MLTaskResponse response, Map<String, String> parameters) {
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
+            throw new IllegalStateException("No model output available in response");
+        }
+
+        ModelTensors tensors = output.getMlModelOutputs().getFirst();
+        if (tensors == null || tensors.getMlModelTensors() == null || tensors.getMlModelTensors().isEmpty()) {
+            throw new IllegalStateException("No model tensors available in response");
+        }
+
+        ModelTensor tensor = tensors.getMlModelTensors().getFirst();
+        if (tensor.getResult() != null) {
+            return tensor.getResult().trim();
+        }
+
+        if (tensor.getDataAsMap() == null) {
+            throw new IllegalStateException("No data map available in tensor");
+        }
+
+        Map<String, ?> dataMap = tensor.getDataAsMap();
+        if (dataMap.containsKey(RESPONSE_FIELD)) {
+            return String.valueOf(dataMap.get(RESPONSE_FIELD)).trim();
+        }
+
+        if (dataMap.containsKey("output")) {
+            try {
+                Object outputObj = JsonPath.read(dataMap, parameters.get(LLM_RESPONSE_FILTER));
+                if (outputObj != null) {
+                    return String.valueOf(outputObj).trim();
+                }
+            } catch (PathNotFoundException e) {
+                throw new IllegalStateException("Failed to extract output using filter path", e);
+            }
+        }
+
+        throw new IllegalStateException("No result/response field found. Available fields: " + dataMap.keySet());
+    }
+
+    /**
+     * Generates a summary using LLM when max steps/iterations are reached.
+     * Common method used by both MLChatAgentRunner and MLPlanExecuteAndReflectAgentRunner.
+     *
+     * @param client The client to execute the prediction request
+     * @param llmSpec The LLM specification
+     * @param promptContent The content to be summarized (steps or interactions)
+     * @param systemPrompt The system prompt for the LLM
+     * @param allParams Additional parameters from the agent
+     * @param tenantId The tenant ID
+     * @param listener The listener to handle the summary response
+     */
+    public static void generateMaxStepSummary(
+        Client client,
+        LLMSpec llmSpec,
+        String promptContent,
+        String systemPrompt,
+        Map<String, String> allParams,
+        String tenantId,
+        ActionListener<String> listener
+    ) {
+        if (promptContent == null || promptContent.isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("Prompt content cannot be null or empty"));
+            return;
+        }
+
+        try {
+            Map<String, String> summaryParams = new HashMap<>();
+            if (llmSpec.getParameters() != null) {
+                summaryParams.putAll(llmSpec.getParameters());
+            }
+            summaryParams.putAll(allParams);
+            summaryParams.put(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD, promptContent);
+            summaryParams.put(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD, systemPrompt);
+
+            MLPredictionTaskRequest request = new MLPredictionTaskRequest(
+                llmSpec.getModelId(),
+                RemoteInferenceMLInput
+                    .builder()
+                    .algorithm(FunctionName.REMOTE)
+                    .inputDataset(RemoteInferenceInputDataSet.builder().parameters(summaryParams).build())
+                    .build(),
+                null,
+                tenantId
+            );
+
+            client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
+                try {
+                    String summary = extractSummaryFromResponse(response, summaryParams);
+                    if (summary == null || summary.isEmpty()) {
+                        listener.onFailure(new RuntimeException("Empty LLM summary response"));
+                        return;
+                    }
+                    listener.onResponse(summary);
+                } catch (IllegalStateException e) {
+                    log.error("Failed to extract summary, using fallback", e);
+                    listener.onFailure(e);
+                }
+            }, listener::onFailure));
+        } catch (IllegalStateException e) {
+            log.error("Failed to generate summary", e);
+            listener.onFailure(e);
+        } catch (Exception e) {
+            log.error("Unexpected error during summary generation", e);
+            listener.onFailure(e);
         }
     }
 }

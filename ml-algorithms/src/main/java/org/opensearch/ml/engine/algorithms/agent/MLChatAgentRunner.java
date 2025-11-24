@@ -19,7 +19,6 @@ import static org.opensearch.ml.common.utils.ToolUtils.getToolName;
 import static org.opensearch.ml.common.utils.ToolUtils.parseResponse;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTIONS_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_CHAT_HISTORY_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
@@ -67,16 +66,13 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLMemoryType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
 import org.opensearch.ml.common.conversation.Interaction;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
-import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -84,8 +80,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -100,7 +94,6 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.reflect.TypeToken;
-import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -502,7 +495,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             );
                             toolParams.put(TENANT_ID_FIELD, tenantId);
                             lastToolParams.clear();
-                            lastToolParams.putAll(toolParams);
+                            toolParams
+                                .entrySet()
+                                .stream()
+                                .filter(e -> e.getValue() != null)
+                                .forEach(e -> lastToolParams.put(e.getKey(), e.getValue()));
                             runTool(
                                 tools,
                                 toolSpecMap,
@@ -1128,12 +1125,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         try {
-            Map<String, String> summaryParams = new HashMap<>();
-            if (llmSpec.getParameters() != null) {
-                summaryParams.putAll(llmSpec.getParameters());
-            }
-            summaryParams.putAll(parameter);
-
             // Convert ModelTensors to strings before joining, skip session/interaction IDs
             List<String> stepStrings = new ArrayList<>();
             for (ModelTensors tensor : stepsSummary) {
@@ -1152,71 +1143,21 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
                 }
             }
-            String steps = String.format(Locale.ROOT, "Question: %s\n\nCompleted Steps:\n%s", question, String.join("\n", stepStrings));
-            summaryParams.put(PROMPT, steps);
-            summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT);
+            String promptContent = String
+                .format(Locale.ROOT, "Question: %s\n\nCompleted Steps:\n%s", question, String.join("\n", stepStrings));
 
-            ActionRequest request = new MLPredictionTaskRequest(
-                llmSpec.getModelId(),
-                RemoteInferenceMLInput
-                    .builder()
-                    .algorithm(FunctionName.REMOTE)
-                    .inputDataset(RemoteInferenceInputDataSet.builder().parameters(summaryParams).build())
-                    .build(),
-                null,
-                tenantId
-            );
-            client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
-                String summary = extractSummaryFromResponse(response, summaryParams);
-                if (summary == null) {
-                    listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
-                    return;
-                }
-                listener.onResponse(summary);
-            }, listener::onFailure));
+            AgentUtils
+                .generateMaxStepSummary(
+                    client,
+                    llmSpec,
+                    promptContent,
+                    MAX_STEP_SUMMARY_CHAT_AGENT_SYSTEM_PROMPT,
+                    parameter,
+                    tenantId,
+                    listener
+                );
         } catch (Exception e) {
             listener.onFailure(e);
-        }
-    }
-
-    public String extractSummaryFromResponse(MLTaskResponse response, Map<String, String> params) {
-        try {
-            ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
-            if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
-                return null;
-            }
-
-            ModelTensors tensors = output.getMlModelOutputs().getFirst();
-            if (tensors == null || tensors.getMlModelTensors() == null || tensors.getMlModelTensors().isEmpty()) {
-                return null;
-            }
-
-            ModelTensor tensor = tensors.getMlModelTensors().getFirst();
-            if (tensor.getResult() != null) {
-                return tensor.getResult().trim();
-            }
-
-            if (tensor.getDataAsMap() == null) {
-                return null;
-            }
-
-            Map<String, ?> dataMap = tensor.getDataAsMap();
-            if (dataMap.containsKey("response")) {
-                return String.valueOf(dataMap.get("response")).trim();
-            }
-
-            if (dataMap.containsKey("output")) {
-                Object outputObj = JsonPath.read(dataMap, params.get(LLM_RESPONSE_FILTER));
-                if (outputObj != null) {
-                    return String.valueOf(outputObj).trim();
-                }
-            }
-
-            log.error("Summary generate error. No result/response field found. Available fields: {}", dataMap.keySet());
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to extract summary from response", e);
-            throw new RuntimeException("Failed to extract summary from response", e);
         }
     }
 
