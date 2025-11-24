@@ -1288,9 +1288,6 @@ public class AgentUtils {
         } catch (IllegalStateException e) {
             log.error("Failed to generate summary", e);
             listener.onFailure(e);
-        } catch (Exception e) {
-            log.error("Unexpected error during summary generation", e);
-            listener.onFailure(e);
         }
     }
 }
