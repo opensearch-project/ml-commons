@@ -1226,18 +1226,6 @@ public class AgentUtils {
         throw new IllegalStateException("No result/response field found. Available fields: " + dataMap.keySet());
     }
 
-    /**
-     * Generates a summary using LLM when max steps/iterations are reached.
-     * Common method used by both MLChatAgentRunner and MLPlanExecuteAndReflectAgentRunner.
-     *
-     * @param client The client to execute the prediction request
-     * @param llmSpec The LLM specification
-     * @param promptContent The content to be summarized (steps or interactions)
-     * @param systemPrompt The system prompt for the LLM
-     * @param allParams Additional parameters from the agent
-     * @param tenantId The tenant ID
-     * @param listener The listener to handle the summary response
-     */
     public static void generateMaxStepSummary(
         Client client,
         LLMSpec llmSpec,

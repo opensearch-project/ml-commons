@@ -874,21 +874,21 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         ActionListener<String> listener
     ) {
         if (completedSteps == null || completedSteps.isEmpty()) {
-            listener.onResponse(fallbackResult);
+            listener.onFailure(new IllegalArgumentException("Completed steps cannot be null or empty"));
             return;
         }
 
         try {
             String userObjective = allParams.get(USER_PROMPT_FIELD);
             String steps = String.format(Locale.ROOT, String.join("\n", completedSteps));
-            String promptContent = String
+            String promptWithObjective = String
                 .format("Objective: %s\n\nCompleted Steps:\n%s", userObjective != null ? userObjective : "", steps);
 
             AgentUtils
                 .generateMaxStepSummary(
                     client,
                     llmSpec,
-                    promptContent,
+                    promptWithObjective,
                     MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT,
                     allParams,
                     allParams.get(TENANT_ID_FIELD),
