@@ -188,14 +188,17 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                     updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, currentConfig);
                 } catch (Exception e) {
                     log.error("Failed to update configuration for container {}", memoryContainerId, e);
-                    actionListener.onFailure(e);
+                    actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     return;
                 }
             }
 
             updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
             performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, actionListener);
-        }, actionListener::onFailure));
+        }, e -> {
+            log.error("Failed to get memory container for update", e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+        }));
     }
 
     /**
@@ -263,7 +266,7 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
             client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
         } catch (Exception e) {
             log.error("Failed to update memory container {}", memoryContainerId, e);
-            listener.onFailure(e);
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -341,8 +344,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                 updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
                 performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
             }, e -> {
-                log.error("Failed to create history index '{}': {}", historyIndexName, e.getMessage(), e);
-                listener.onFailure(new IllegalStateException("Failed to create history index: " + e.getMessage()));
+                log.error("Failed to create history index '{}'", historyIndexName, e);
+                listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }));
         } else {
             updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
@@ -373,8 +376,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                     updateFields.put(LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
                     performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
                 }, e -> {
-                    log.error("Failed to create history index '{}': {}", historyIndexName, e.getMessage(), e);
-                    listener.onFailure(new IllegalStateException("Failed to create history index: " + e.getMessage()));
+                    log.error("Failed to create history index '{}'", historyIndexName, e);
+                    listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                 }));
             } else {
                 updateFields.put(MEMORY_STORAGE_CONFIG_FIELD, config);
@@ -382,8 +385,8 @@ public class TransportUpdateMemoryContainerAction extends HandledTransportAction
                 performUpdate(ML_MEMORY_CONTAINER_INDEX, memoryContainerId, updateFields, listener);
             }
         }, e -> {
-            log.error("Failed to create long-term index '{}': {}", longTermIndexName, e.getMessage(), e);
-            listener.onFailure(new IllegalStateException("Failed to create long-term index: " + e.getMessage()));
+            log.error("Failed to create long-term index '{}'", longTermIndexName, e);
+            listener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }));
     }
 
