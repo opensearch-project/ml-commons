@@ -6,6 +6,10 @@
 package org.opensearch.ml.engine.algorithms.remote.streaming;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_MESSAGE_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAGE_STARTED;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,12 +71,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private final SdkAsyncHttpClient httpClient;
     private final AwsConnector connector;
+    private final Map<String, String> parameters;
     private final boolean isAGUIAgent;
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
-
-    // AG-UI message state for this LLM response (per-request scope)
-    private String messageId;
-    private boolean textMessageStarted = false;
 
     private enum StreamState {
         STREAMING_CONTENT,
@@ -89,6 +90,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     public BedrockStreamingHandler(SdkAsyncHttpClient httpClient, AwsConnector connector, Map<String, String> parameters) {
         this.httpClient = httpClient;
         this.connector = connector;
+        this.parameters = parameters;
 
         this.isAGUIAgent = parameters != null && (parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui"));
 
@@ -111,13 +113,6 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             AtomicReference<String> toolUseId = new AtomicReference<>();
             StringBuilder toolInputAccumulator = new StringBuilder();
             AtomicReference<StreamState> currentState = new AtomicReference<>(StreamState.STREAMING_CONTENT);
-
-            // Initialize AG-UI message state for this LLM response
-            if (isAGUIAgent) {
-                messageId = "msg_" + System.currentTimeMillis() + "_" + System.nanoTime();
-                textMessageStarted = false;
-                log.debug("AG-UI: Initialized messageId for LLM response: {}", messageId);
-            }
 
             // Build Bedrock client
             BedrockRuntimeAsyncClient bedrockClient = buildBedrockRuntimeAsyncClient();
@@ -235,6 +230,9 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         StringBuilder toolInputAccumulator,
         AtomicReference<StreamState> currentState
     ) {
+        String messageId = (isAGUIAgent && parameters != null) ? parameters.get(AGUI_PARAM_MESSAGE_ID) : null;
+        boolean textMessageStarted = (isAGUIAgent && parameters != null) && "true".equals(parameters.get(AGUI_PARAM_TEXT_MESSAGE_STARTED));
+
         switch (currentState.get()) {
             case STREAMING_CONTENT:
                 if (isToolUseDetected(event)) {
@@ -244,7 +242,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     if (isAGUIAgent) {
                         // end current text message before sending tool events
                         if (textMessageStarted) {
-                            textMessageStarted = false;
+                            parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                             BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
                             sendAGUIEvent(textMessageEndEvent, false, listener);
                         }
@@ -258,13 +256,16 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
                     if (isAGUIAgent) {
                         if (!textMessageStarted) {
-                            textMessageStarted = true;
-                            BaseEvent textMessageStartEvent = new TextMessageStartEvent(toolName.get(), messageId);
+                            messageId = "msg_" + System.nanoTime();
+                            parameters.put(AGUI_PARAM_MESSAGE_ID, messageId);
+                            parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "true");
+
+                            BaseEvent textMessageStartEvent = new TextMessageStartEvent(messageId, "assistant");
                             sendAGUIEvent(textMessageStartEvent, false, listener);
                             log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
                         }
 
-                        BaseEvent textMessageContentEvent = new TextMessageContentEvent(content, messageId);
+                        BaseEvent textMessageContentEvent = new TextMessageContentEvent(messageId, content);
                         sendAGUIEvent(textMessageContentEvent, false, listener);
                         log.debug("AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", messageId);
                     } else {
@@ -272,11 +273,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     }
                 } else if (isStreamComplete(event)) {
                     if (isAGUIAgent && textMessageStarted) {
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                         BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
                         sendAGUIEvent(textMessageEndEvent, false, listener);
                         log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
 
-                        BaseEvent runFinishedEvent = new RunFinishedEvent("", "", null);
+                        String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+                        String runId = parameters.get(AGUI_PARAM_RUN_ID);
+                        BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
                         sendAGUIEvent(runFinishedEvent, true, listener);
                         log.debug("RestMLExecuteStreamAction: Added RUN_FINISHED event - ReAct loop completed");
                     }
@@ -291,8 +295,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     currentState.set(StreamState.ACCUMULATING_TOOL_INPUT);
                     String inputFragment = getToolInputFragment(event);
                     accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
-
                     if (isAGUIAgent) {
+                        parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                         BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
                         sendAGUIEvent(toolCallArgsEvent, false, listener);
                         log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
