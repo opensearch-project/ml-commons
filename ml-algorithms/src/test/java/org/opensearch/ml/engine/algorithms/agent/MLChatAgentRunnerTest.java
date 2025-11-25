@@ -1305,7 +1305,7 @@ public class MLChatAgentRunnerTest {
 
         Map<String, String> params = new HashMap<>();
         params.put("llm_response_filter", "$.output.message.content[0].text");
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
+        String result = AgentUtils.extractSummaryFromResponse(response, params);
         assertEquals("Valid summary text", result);
     }
 
@@ -1330,7 +1330,7 @@ public class MLChatAgentRunnerTest {
 
         Map<String, String> params = new HashMap<>();
         params.put("llm_response_filter", "$.output.message.content[0].text");
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
+        String result = AgentUtils.extractSummaryFromResponse(response, params);
         assertEquals("Summary from response field", result);
     }
 
@@ -1343,8 +1343,12 @@ public class MLChatAgentRunnerTest {
 
         Map<String, String> params = new HashMap<>();
         params.put("llm_response_filter", "$.output.message.content[0].text");
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
-        assertEquals(null, result);
+        try {
+            AgentUtils.extractSummaryFromResponse(response, params);
+            Assert.fail("Expected IllegalStateException");
+        } catch (IllegalStateException e) {
+            Assert.assertTrue(e.getMessage().contains("No data map available in tensor"));
+        }
     }
 
     @Test
@@ -1358,8 +1362,12 @@ public class MLChatAgentRunnerTest {
 
         Map<String, String> params = new HashMap<>();
         params.put("llm_response_filter", "$.output.message.content[0].text");
-        String result = mlChatAgentRunner.extractSummaryFromResponse(response, params);
-        assertEquals(null, result);
+        try {
+            AgentUtils.extractSummaryFromResponse(response, params);
+            Assert.fail("Expected IllegalStateException");
+        } catch (IllegalStateException e) {
+            Assert.assertTrue(e.getMessage().contains("No result/response field found"));
+        }
     }
 
     @Test

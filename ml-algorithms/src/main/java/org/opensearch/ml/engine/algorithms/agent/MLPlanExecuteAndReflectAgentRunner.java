@@ -853,6 +853,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             );
         }, finalListener::onFailure);
 
+        String fallbackResult = generateFallbackResult(maxSteps, completedSteps);
         generateSummary(llm, completedSteps, allParams, ActionListener.wrap(summary -> {
             log.info("Summary generated successfully");
             responseListener
@@ -861,17 +862,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 );
         }, e -> {
             log.error("Summary generation failed, using fallback", e);
-            String fallbackResult = completedSteps.isEmpty() || completedSteps.size() < 2
-                ? String.format("Max Steps Limit (%d) Reached. Use memory_id with same task to restart.", maxSteps)
-                : String
-                    .format(
-                        "Max Steps Limit (%d) Reached. Use memory_id with same task to restart. \n "
-                            + "Last executed step: %s, \n "
-                            + "Last executed step result: %s",
-                        maxSteps,
-                        completedSteps.get(completedSteps.size() - 2),
-                        completedSteps.getLast()
-                    );
             responseListener.onResponse(fallbackResult);
         }));
     }
@@ -888,83 +878,39 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         try {
-            Map<String, String> summaryParams = new HashMap<>();
-            if (llmSpec.getParameters() != null) {
-                summaryParams.putAll(llmSpec.getParameters());
-            }
-            // Add allParams to ensure LLM_RESPONSE_FILTER is available
-            summaryParams.putAll(allParams);
-
             String userObjective = allParams.get(USER_PROMPT_FIELD);
             String steps = String.format(Locale.ROOT, String.join("\n", completedSteps));
             String promptWithObjective = String
                 .format("Objective: %s\n\nCompleted Steps:\n%s", userObjective != null ? userObjective : "", steps);
-            summaryParams.put(PROMPT_FIELD, promptWithObjective);
-            summaryParams.put(SYSTEM_PROMPT_FIELD, MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT);
 
-            MLPredictionTaskRequest request = new MLPredictionTaskRequest(
-                llmSpec.getModelId(),
-                RemoteInferenceMLInput
-                    .builder()
-                    .algorithm(FunctionName.REMOTE)
-                    .inputDataset(RemoteInferenceInputDataSet.builder().parameters(summaryParams).build())
-                    .build(),
-                null,
-                allParams.get(TENANT_ID_FIELD)
-            );
-
-            client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
-                String summary = extractSummaryFromResponse(response, summaryParams);
-                if (summary == null || summary.trim().isEmpty()) {
-                    log.error("Extracted summary is empty");
-                    listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
-                    return;
-                }
-                listener.onResponse(summary);
-            }, listener::onFailure));
+            AgentUtils
+                .generateMaxStepSummary(
+                    client,
+                    llmSpec,
+                    promptWithObjective,
+                    MAX_STEP_SUMMARY_PER_SYSTEM_PROMPT,
+                    allParams,
+                    allParams.get(TENANT_ID_FIELD),
+                    listener
+                );
         } catch (Exception e) {
             listener.onFailure(e);
         }
     }
 
-    private String extractSummaryFromResponse(MLTaskResponse response, Map<String, String> parameters) {
-        try {
-            ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
-            if (output == null || output.getMlModelOutputs() == null || output.getMlModelOutputs().isEmpty()) {
-                return null;
-            }
-
-            ModelTensors tensors = output.getMlModelOutputs().getFirst();
-            if (tensors == null || tensors.getMlModelTensors() == null || tensors.getMlModelTensors().isEmpty()) {
-                return null;
-            }
-
-            ModelTensor tensor = tensors.getMlModelTensors().getFirst();
-            if (tensor.getResult() != null) {
-                return tensor.getResult().trim();
-            }
-
-            if (tensor.getDataAsMap() == null) {
-                return null;
-            }
-
-            Map<String, ?> dataMap = tensor.getDataAsMap();
-            if (dataMap.containsKey(RESPONSE_FIELD)) {
-                return String.valueOf(dataMap.get(RESPONSE_FIELD)).trim();
-            }
-
-            if (dataMap.containsKey("output")) {
-                Object outputObj = JsonPath.read(dataMap, parameters.get(LLM_RESPONSE_FILTER));
-                if (outputObj != null) {
-                    return String.valueOf(outputObj).trim();
-                }
-            }
-
-            log.error("Summary generate error. No result/response field found. Available fields: {}", dataMap.keySet());
-            return null;
-        } catch (Exception e) {
-            log.error("Summary extraction failed", e);
-            throw new RuntimeException("Failed to extract summary from response", e);
-        }
+    @VisibleForTesting
+    String generateFallbackResult(int maxSteps, List<String> completedSteps) {
+        return completedSteps.isEmpty() || completedSteps.size() < 2
+            ? String.format("Max Steps Limit (%d) Reached. Use memory_id with same task to restart.", maxSteps)
+            : String
+                .format(
+                    "Max Steps Limit (%d) Reached. Use memory_id with same task to restart. \n "
+                        + "Last executed step: %s, \n "
+                        + "Last executed step result: %s",
+                    maxSteps,
+                    completedSteps.get(completedSteps.size() - 2),
+                    completedSteps.getLast()
+                );
     }
+
 }
