@@ -105,6 +105,7 @@ configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
     resolutionStrategy.force group: 'software.amazon.awssdk', name:'bom', version:"${versions.aws}"
+    resolutionStrategy.force group: 'software.amazon.awssdk', name:'sts', version:"${versions.aws}"
 }
 
 jacocoTestReport {
