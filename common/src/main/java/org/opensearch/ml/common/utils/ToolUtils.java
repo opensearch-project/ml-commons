@@ -39,8 +39,6 @@ public class ToolUtils {
     public static final String TOOL_REQUIRED_PARAMS = "required_parameters";
     public static final String NO_ESCAPE_PARAMS = "no_escape_params";
     public static final String TOOL_OUTPUT_KEY = "output";
-    public static final String CMK_ROLE_FIELD = "cmk_role";
-    public static final String CMK_ASSUME_ROLE_FIELD = "cmk_assume_role";
 
     /**
      * Extracts required parameters based on tool attributes specification.

@@ -7,8 +7,8 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
-import static org.opensearch.ml.common.utils.ToolUtils.CMK_ASSUME_ROLE_FIELD;
-import static org.opensearch.ml.common.utils.ToolUtils.CMK_ROLE_FIELD;
+import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
+import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
 
 import java.util.Map;
 

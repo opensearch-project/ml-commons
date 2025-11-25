@@ -37,4 +37,6 @@ public class Constants {
     public static final String AD_ANOMALY_SCORE_THRESHOLD = "anomalyScoreThreshold";
     public static final String AD_DATE_FORMAT = "dateFormat";
     public static final String TENANT_ID_HEADER = "x-tenant-id";
+    public static final String CMK_ROLE_FIELD = "x-cmk-role";
+    public static final String CMK_ASSUME_ROLE_FIELD = "x-cmk-assume-role";
 }
