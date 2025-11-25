@@ -71,12 +71,23 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
     protected final String sourceIndex;
     protected final Client client;
     protected final SdkClient sdkClient;
+    protected final String cmkRoleArn;
+    protected final String cmkAssumeRoleArn;
 
-    protected AbstractIndexInsightTask(MLIndexInsightType taskType, String sourceIndex, Client client, SdkClient sdkClient) {
+    protected AbstractIndexInsightTask(
+        MLIndexInsightType taskType,
+        String sourceIndex,
+        Client client,
+        SdkClient sdkClient,
+        String cmkRoleArn,
+        String cmkAssumeRoleArn
+    ) {
         this.taskType = taskType;
         this.sourceIndex = sourceIndex;
         this.client = client;
         this.sdkClient = sdkClient;
+        this.cmkRoleArn = cmkRoleArn;
+        this.cmkAssumeRoleArn = cmkAssumeRoleArn;
     }
 
     /**
@@ -327,7 +338,14 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .getDataObjectAsync(
-                    GetDataObjectRequest.builder().tenantId(tenantId).index(ML_INDEX_INSIGHT_STORAGE_INDEX).id(docId).build()
+                    GetDataObjectRequest
+                        .builder()
+                        .tenantId(tenantId)
+                        .index(ML_INDEX_INSIGHT_STORAGE_INDEX)
+                        .id(docId)
+                        .cmkRoleArn(cmkRoleArn)
+                        .assumeRoleArn(cmkAssumeRoleArn)
+                        .build()
                 )
                 .whenComplete((r, throwable) -> {
                     context.restore();
@@ -361,6 +379,8 @@ public abstract class AbstractIndexInsightTask implements IndexInsightTask {
                         .index(ML_INDEX_INSIGHT_STORAGE_INDEX)
                         .dataObject(indexInsight)
                         .id(docId)
+                        .cmkRoleArn(cmkRoleArn)
+                        .assumeRoleArn(cmkAssumeRoleArn)
                         .build()
                 )
                 .whenComplete((r, throwable) -> {

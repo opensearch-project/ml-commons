@@ -105,7 +105,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testTaskType() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         assertEquals(MLIndexInsightType.STATISTICAL_DATA, task.taskType);
     }
@@ -113,7 +113,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testSourceIndex() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         assertEquals("test-index", task.sourceIndex);
     }
@@ -121,7 +121,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testClient() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         assertEquals(client, task.client);
     }
@@ -129,7 +129,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testGetPrerequisites() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         assertTrue(task.getPrerequisites().isEmpty());
     }
@@ -137,7 +137,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testCreatePrerequisiteTask_ThrowsException() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("StatisticalDataTask has no prerequisites");
@@ -147,7 +147,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testBuildQuery() {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         Map<String, String> fields = new HashMap<>();
         fields.put("text_field", "text");
@@ -168,7 +168,7 @@ public class StatisticalDataTaskTests {
 
         doAnswer(invocation -> { return null; }).when(indicesAdminClient).getMappings(any(GetMappingsRequest.class), any());
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
 
         task.runTask("tenant-id", listener);
@@ -185,7 +185,7 @@ public class StatisticalDataTaskTests {
         when(getMappingsResponse.getMappings()).thenReturn(new HashMap<>());
         setupGetMappingsCall(client, getMappingsResponse);
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
         task.runTask("tenant-id", listener);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
@@ -210,7 +210,7 @@ public class StatisticalDataTaskTests {
         mockGetSuccess(sdkClient, "");
         mockUpdateSuccess(sdkClient);
 
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
         task.runTask("tenant-id", listener);
 
         verify(listener).onFailure(any(RuntimeException.class));
@@ -235,7 +235,7 @@ public class StatisticalDataTaskTests {
             return null;
         }).when(client).search(any(SearchRequest.class), any());
 
-        StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient));
+        StatisticalDataTask task = spy(new StatisticalDataTask("test-index", client, sdkClient, null, null));
         task.handlePatternMatchedDoc(patternSource, "tenant-id", listener);
 
         verify(task).runTask(eq("tenant-id"), eq(listener), eq(false));
@@ -244,7 +244,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testParseSearchResult_WithEmptyAggregations() throws Exception {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         Map<String, String> fieldsToType = Map.of("field1", "text");
         Set<String> filteredNames = Set.of("field1");
@@ -268,7 +268,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testFilterColumns_WithFiltersAggregation() throws Exception {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
 
         Map<String, String> fieldsToType = Map.of("field1", "text");
 
@@ -295,7 +295,7 @@ public class StatisticalDataTaskTests {
     @Test
     public void testFilterSamplesColumns_WithFiltersAggregation() throws Exception {
         Client client = mock(Client.class);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
         Map<String, Object> listOriginal = Map.of("a", List.of(Map.of("b", 5, "c", 6)));
         List<Map<String, Object>> result = task.filterSampleColumns(List.of(listOriginal), List.of("a.b", "a.c"));
         assertEquals(result, List.of(listOriginal));
@@ -318,7 +318,7 @@ public class StatisticalDataTaskTests {
         ActionListener<IndexInsight> listener = mock(ActionListener.class);
 
         setupGetMappingsCall(client, getMappingsResponse);
-        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient);
+        StatisticalDataTask task = new StatisticalDataTask("test-index", client, sdkClient, null, null);
         SearchResponse searchResponse = mock(SearchResponse.class);
 
         XContentBuilder sourceContent = XContentBuilder

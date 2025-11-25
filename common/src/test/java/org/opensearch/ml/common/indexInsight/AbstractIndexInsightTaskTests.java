@@ -509,7 +509,7 @@ public class AbstractIndexInsightTaskTests {
     private static class TestIndexInsightTask extends AbstractIndexInsightTask {
 
         TestIndexInsightTask(Client client, SdkClient sdkClient) {
-            super(MLIndexInsightType.FIELD_DESCRIPTION, "test-index", client, sdkClient);
+            super(MLIndexInsightType.FIELD_DESCRIPTION, "test-index", client, sdkClient, null, null);
         }
 
         @Override
@@ -532,7 +532,7 @@ public class AbstractIndexInsightTaskTests {
     private static class SimpleTestTask extends AbstractIndexInsightTask {
 
         SimpleTestTask(Client client, SdkClient sdkClient) {
-            super(MLIndexInsightType.STATISTICAL_DATA, "test-index", client, sdkClient);
+            super(MLIndexInsightType.STATISTICAL_DATA, "test-index", client, sdkClient, null, null);
         }
 
         @Override

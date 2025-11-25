@@ -13,11 +13,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.rest.RestRequest;
 
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
@@ -36,6 +39,8 @@ public class ToolUtils {
     public static final String TOOL_REQUIRED_PARAMS = "required_parameters";
     public static final String NO_ESCAPE_PARAMS = "no_escape_params";
     public static final String TOOL_OUTPUT_KEY = "output";
+    public static final String CMK_ROLE_FIELD = "cmk_role";
+    public static final String CMK_ASSUME_ROLE_FIELD = "cmk_assume_role";
 
     /**
      * Extracts required parameters based on tool attributes specification.
@@ -249,4 +254,24 @@ public class ToolUtils {
         }
         return modelTensor;
     }
+
+    /**
+     * Fetch the attribute value from rest request's header.
+     * @param targetKey The key we want to fetch
+     * @param restRequest The rest request
+     * @return The value in the rest request
+     */
+    public static String getAttributeFromHeader(String targetKey, RestRequest restRequest) {
+        Map<String, List<String>> headers = restRequest.getHeaders();
+        if (headers == null) {
+            throw new OpenSearchStatusException("Rest request headers can't be null", RestStatus.FORBIDDEN);
+        }
+
+        List<String> resultList = headers.get(targetKey);
+        if (resultList == null) {
+            return null;
+        }
+        return resultList.getFirst();
+    }
+
 }
