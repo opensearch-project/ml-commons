@@ -18,11 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.output.model.ModelTensor;
