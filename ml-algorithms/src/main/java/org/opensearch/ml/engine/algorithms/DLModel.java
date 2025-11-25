@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.io.FileUtils;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLException;
@@ -342,4 +343,11 @@ public abstract class DLModel implements Predictable {
         return tensorOutput;
     }
 
+    public Settings getClusterSettings() {
+        if (mlEngine.getClusterService() != null) {
+            // QUESTION: removing the constructor will make cluster settings non-null
+            return mlEngine.getClusterService().getSettings();
+        }
+        return Settings.EMPTY;
+    }
 }
