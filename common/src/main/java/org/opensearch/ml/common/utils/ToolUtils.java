@@ -266,7 +266,7 @@ public class ToolUtils {
         }
 
         List<String> resultList = headers.get(targetKey);
-        if (resultList == null) {
+        if (resultList == null || resultList.isEmpty()) {
             return null;
         }
         return resultList.getFirst();
