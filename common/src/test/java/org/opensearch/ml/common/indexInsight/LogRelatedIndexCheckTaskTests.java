@@ -46,7 +46,7 @@ public class LogRelatedIndexCheckTaskTests {
     public void setUp() {
         client = mock(Client.class);
         sdkClient = mock(SdkClient.class);
-        task = new LogRelatedIndexCheckTask("test-index", client, sdkClient);
+        task = new LogRelatedIndexCheckTask("test-index", client, sdkClient, null, null);
         threadPool = mock(ThreadPool.class);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);

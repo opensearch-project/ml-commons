@@ -13,13 +13,20 @@ import static org.opensearch.ml.common.utils.ToolUtils.TOOL_REQUIRED_PARAMS;
 import static org.opensearch.ml.common.utils.ToolUtils.filterToolOutput;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchModule;
+import org.opensearch.test.rest.FakeRestRequest;
 
 public class ToolUtilsTest {
 
@@ -504,5 +511,24 @@ public class ToolUtilsTest {
         expectedMap.put(ToolUtils.TOOL_OUTPUT_KEY, null);
         assertEquals(expectedMap, result.getDataAsMap());
         assertEquals(null, result.getDataAsMap().get(ToolUtils.TOOL_OUTPUT_KEY));
+    }
+
+    @Test
+    public void testGetAttributeFromHeader() {
+        String cmkRoleArn = "test-cmk-role";
+        String cmkAssumeRoleArn = "test-assume-cmk-role";
+
+        Map<String, List<String>> headers = new HashMap<>();
+        SearchModule searchModule = new SearchModule(Settings.EMPTY, Collections.emptyList());
+        NamedXContentRegistry xContentRegistry = new NamedXContentRegistry(searchModule.getNamedXContents());
+        headers.put(Constants.CMK_ROLE_FIELD, Collections.singletonList(cmkRoleArn));
+        headers.put(Constants.CMK_ASSUME_ROLE_FIELD, Collections.singletonList(cmkAssumeRoleArn));
+        RestRequest restRequest = new FakeRestRequest.Builder(xContentRegistry).withHeaders(headers).build();
+
+        String resultCMKRoleArn = ToolUtils.getAttributeFromHeader(Constants.CMK_ROLE_FIELD, restRequest);
+        String resultCMKAssumeRoleArn = ToolUtils.getAttributeFromHeader(Constants.CMK_ASSUME_ROLE_FIELD, restRequest);
+        assertEquals(cmkRoleArn, resultCMKRoleArn);
+        assertEquals(cmkAssumeRoleArn, resultCMKAssumeRoleArn);
+
     }
 }

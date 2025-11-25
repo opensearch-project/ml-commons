@@ -55,7 +55,7 @@ public class FieldDescriptionTaskTests {
     public void setUp() {
         client = mock(Client.class);
         sdkClient = mock(SdkClient.class);
-        task = new FieldDescriptionTask("test-index", client, sdkClient);
+        task = new FieldDescriptionTask("test-index", client, sdkClient, null, null);
         listener = mock(ActionListener.class);
         threadPool = mock(ThreadPool.class);
         Settings settings = Settings.builder().build();
