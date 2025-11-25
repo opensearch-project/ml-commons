@@ -854,7 +854,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }, finalListener::onFailure);
 
         String fallbackResult = generateFallbackResult(maxSteps, completedSteps);
-        generateSummary(llm, completedSteps, allParams, fallbackResult, ActionListener.wrap(summary -> {
+        generateSummary(llm, completedSteps, allParams, ActionListener.wrap(summary -> {
             log.info("Summary generated successfully");
             responseListener
                 .onResponse(
@@ -870,7 +870,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         LLMSpec llmSpec,
         List<String> completedSteps,
         Map<String, String> allParams,
-        String fallbackResult,
         ActionListener<String> listener
     ) {
         if (completedSteps == null || completedSteps.isEmpty()) {
