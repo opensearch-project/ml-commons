@@ -49,7 +49,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-Note: Replace all `<placeholders>` in the preceding code snippet with appropriate values, while preserving `${curly braces}` syntax exactly as shown. Short-lived [bearer tokens](https://yandex.cloud/en/docs/iam/concepts/authorization/iam-token) (valid ~12 hours) may be used as an alternative to [API keys](https://yandex.cloud/en/docs/iam/concepts/authorization/api-key). API keys must be granted either `yc.ai.languageModels.execute` or `yc.ai.foundationModels.execute` roles. Also refer to [the guide](https://yandex.cloud/en/docs/ai-studio/security/). Additionally, due to distinct [models](https://yandex.cloud/en/docs/ai-studio/concepts/embeddings) being employed for query processing versus document processing, two dedicated connectors are required.   
+Note: Replace all `<placeholders>` in the preceding code snippet with appropriate values, while preserving `${curly braces}` syntax exactly as shown. Short-lived [bearer tokens](https://yandex.cloud/en/docs/iam/concepts/authorization/iam-token) (valid ~12 hours) may be used as an alternative to [API keys](https://yandex.cloud/en/docs/iam/concepts/authorization/api-key). API keys must be granted either `yc.ai.languageModels.execute` or `yc.ai.foundationModels.execute` roles. Also refer to [the guide](https://yandex.cloud/en/docs/ai-studio/security/). Additionally, due to distinct [models](https://yandex.cloud/en/docs/ai-studio/concepts/embeddings) being employed for query processing versus document processing, two dedicated connectors are required. Using these particular pre/post processing functions is crucial.  
 
 Sample response:
 ```json
@@ -62,13 +62,10 @@ Sample response:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
-Content-Type: application/json
-
 {
   "name": "yc_remote_model_group",
   "description": "A model group for external YC AI Studio models"
 }
-
 ```
 
 Sample response:
@@ -80,8 +77,6 @@ Sample response:
 
 ```json
 POST /_plugins/_ml/models/_register
-Content-Type: application/json
-
 {
     "name": "yc-embedding",
     "function_name": "remote",
@@ -93,7 +88,7 @@ Content-Type: application/json
 
 
 ```json
-POST /_plugins/_ml/models/_register?deploy=true
+POST /_plugins/_ml/models/_register
 {
   "name": "Bedrock text embedding model",
   "function_name": "remote",
@@ -111,22 +106,6 @@ Sample response:
 }
 ```
 
-Model should be deployed already. in this demo the model id is `CzEou5oBdUNOOrVA10Db`
-If we still need to deploy the model
-
-```json
-POST /_plugins/_ml/models/CzEou5oBdUNOOrVA10Db/_deploy
-```
-
-```json
-{
-    "task_id": "IQ-ojJUB_BtQcl4FyMhB",
-    "task_type": "DEPLOY_MODEL",
-    "status": "COMPLETED"
-}
-```
-
-
 ## 4. Test model inference
 
 ```json
@@ -138,7 +117,7 @@ POST /_plugins/_ml/models/CzEou5oBdUNOOrVA10Db/_predict
 }
 ```
 
-Sample response of Yadex Cloud AI Studio Embeddings:
+Sample response of Yadex Cloud AI Studio Embedding:
 
 ```json
 {
