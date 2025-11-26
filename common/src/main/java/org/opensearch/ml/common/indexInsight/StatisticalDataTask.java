@@ -88,8 +88,8 @@ public class StatisticalDataTask extends AbstractIndexInsightTask {
         detailed information: %s
         """;
 
-    public StatisticalDataTask(String sourceIndex, Client client, SdkClient sdkClient) {
-        super(MLIndexInsightType.STATISTICAL_DATA, sourceIndex, client, sdkClient);
+    public StatisticalDataTask(String sourceIndex, Client client, SdkClient sdkClient, String cmkRoleArn, String cmkAssumeRoleArn) {
+        super(MLIndexInsightType.STATISTICAL_DATA, sourceIndex, client, sdkClient, cmkRoleArn, cmkAssumeRoleArn);
     }
 
     @Override

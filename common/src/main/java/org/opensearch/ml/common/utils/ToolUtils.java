@@ -13,11 +13,14 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.rest.RestRequest;
 
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
@@ -249,4 +252,24 @@ public class ToolUtils {
         }
         return modelTensor;
     }
+
+    /**
+     * Fetch the attribute value from rest request's header.
+     * @param targetKey The key we want to fetch
+     * @param restRequest The rest request
+     * @return The value in the rest request
+     */
+    public static String getAttributeFromHeader(String targetKey, RestRequest restRequest) {
+        Map<String, List<String>> headers = restRequest.getHeaders();
+        if (headers == null) {
+            throw new OpenSearchStatusException("Rest request headers can't be null", RestStatus.FORBIDDEN);
+        }
+
+        List<String> resultList = headers.get(targetKey);
+        if (resultList == null || resultList.isEmpty()) {
+            return null;
+        }
+        return resultList.getFirst();
+    }
+
 }
