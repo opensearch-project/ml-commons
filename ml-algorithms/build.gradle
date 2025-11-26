@@ -54,9 +54,7 @@ dependencies {
     // Multi-tenant SDK Client
     implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
     implementation 'commons-beanutils:commons-beanutils:1.11.0'
-    implementation ("org.opensearch:opensearch-remote-metadata-sdk-ddb-client:${opensearch_build}") {
-        exclude group: "software.amazon.awssdk", module: "sts"
-    }
+    implementation "org.opensearch:opensearch-remote-metadata-sdk-ddb-client:${opensearch_build}"
 
     def os = DefaultNativePlatform.currentOperatingSystem
     //arm/macos doesn't support GPU
