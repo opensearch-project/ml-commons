@@ -39,8 +39,11 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String SKIP_SSL_VERIFICATION_FIELD = "skip_ssl_verification";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    // Connection time out value of MLHttpFactory created instances, unit is second.
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = 1;
+    // Read time out value of MLHttpFactory created instances, unit is second. 10 is a relative big value which is to
+    // adapt to LLM high latency case.
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = 10;
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;

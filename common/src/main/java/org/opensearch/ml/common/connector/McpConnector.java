@@ -32,7 +32,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,7 +59,7 @@ import lombok.extern.log4j.Log4j2;
 @EqualsAndHashCode
 @Getter
 @org.opensearch.ml.common.annotation.Connector(MCP_SSE)
-public class McpConnector implements Connector {
+public class McpConnector extends AbstractConnector {
 
     protected String name;
     protected String description;
@@ -204,28 +203,8 @@ public class McpConnector implements Connector {
         return decryptedHeaders;
     }
 
-    @Override
-    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
-        if (credential != null) {
-            Map<String, String> decrypted = new HashMap<>();
-            for (String key : credential.keySet()) {
-                decrypted.put(key, function.apply(credential.get(key), tenantId));
-            }
-            this.decryptedCredential = decrypted;
-        } else {
-            this.decryptedCredential = new HashMap<>();
-        }
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
-    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
-        if (credential != null) {
-            for (String key : credential.keySet()) {
-                String encrypted = function.apply(credential.get(key), tenantId);
-                credential.put(key, encrypted);
-            }
-        }
+    protected Map<String, String> getAllHeaders(String action) {
+        return headers;
     }
 
     @Override
@@ -338,7 +317,7 @@ public class McpConnector implements Connector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function) {
+    public void update(MLCreateConnectorInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -353,7 +332,6 @@ public class McpConnector implements Connector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function, this.tenantId);
         }
         if (updateContent.getBackendRoles() != null) {
             this.backendRoles = updateContent.getBackendRoles();
