@@ -513,7 +513,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             );
                             toolParams.put(TENANT_ID_FIELD, tenantId);
                             lastToolParams.clear();
-                            lastToolParams.putAll(toolParams);
+                            toolParams.forEach((key, value) -> {
+                                // For the case like tenant id is null
+                                if (key != null && value != null) {
+                                    lastToolParams.put(key, value);
+                                }
+                            });
                             runTool(
                                 tools,
                                 toolSpecMap,
