@@ -22,6 +22,8 @@ These blueprints use the ML inference processor to handle input/output mapping, 
   - image embedding: [embed-multimodal-v3.0 & embed-multimodal-v2.0](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/cohere_connector_image_embedding_blueprint.md)
 - OpenAI:
   - [text-embedding-ada-002](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/openai_connector_embedding_standard_blueprint.md)
+- Yandex Cloud:
+  - text embedding: [text-search-doc & text-search-query](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/yandexcloud_connector_embedding_standard_blueprint.md) 
 
 ## Legacy Blueprints (With Pre/Post Processing)
 For existing implementations or specific customization needs
