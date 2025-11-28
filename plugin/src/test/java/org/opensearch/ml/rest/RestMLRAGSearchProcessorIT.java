@@ -716,8 +716,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.timeout = 60;
         requestParameters.imageFormat = "jpeg";
         requestParameters.imageType = "url";
-        requestParameters.imageData =
-            "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"; // imageContent;
+        requestParameters.imageData = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800";
         Response response3 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
@@ -1070,8 +1069,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         requestParameters.conversationId = conversationId;
         requestParameters.imageFormat = "jpeg";
         requestParameters.imageType = "url";
-        requestParameters.imageData =
-            "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg";
+        requestParameters.imageData = "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800";
         Response response2 = performSearch(INDEX_NAME, "pipeline_test", 5, requestParameters);
         assertEquals(200, response2.getStatusLine().getStatusCode());
 
