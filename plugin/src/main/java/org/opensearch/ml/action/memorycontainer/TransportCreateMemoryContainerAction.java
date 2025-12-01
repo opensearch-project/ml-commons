@@ -769,7 +769,7 @@ public class TransportCreateMemoryContainerAction extends
                     .builder()
                     .actionType(ConnectorAction.ActionType.EXECUTE)
                     .name(SEARCH_INDEX_ACTION)
-                    .method("POST")
+                    .method("GET")
                     .url(endpoint + "/${parameters.index_name}/_search${parameters.search_pipeline:-}")
                     .headers(jsonHeaders)
                     .requestBody("${parameters.input}")
