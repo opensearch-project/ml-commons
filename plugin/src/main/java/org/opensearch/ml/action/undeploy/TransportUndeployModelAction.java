@@ -213,7 +213,7 @@ public class TransportUndeployModelAction extends
                         wrappedListener.onFailure(cause);
                     } else {
                         try {
-                            BulkResponse bulkResponse = BulkResponse.fromXContent(r.parser());
+                            BulkResponse bulkResponse = r.bulkResponse();
                             log
                                 .info(
                                     "Executed {} bulk operations with {} failures, Took: {}",
