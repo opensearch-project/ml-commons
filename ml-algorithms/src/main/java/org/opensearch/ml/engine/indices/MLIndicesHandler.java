@@ -174,19 +174,28 @@ public class MLIndicesHandler {
 
     public void createSessionMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_MEMORY_SESSION_INDEX_MAPPING_PATH);
-        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SESSION_INDEX);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(SESSION_INDEX) == null
+            || configuration.getMemoryIndexMapping(SESSION_INDEX).isEmpty()
+                ? ALL_NODES_REPLICA_INDEX_SETTINGS
+                : configuration.getMemoryIndexMapping(SESSION_INDEX);
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
     public void createWorkingMemoryDataIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_WORKING_MEMORY_INDEX_MAPPING_PATH);
-        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX) == null
+            || configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX).isEmpty()
+                ? ALL_NODES_REPLICA_INDEX_SETTINGS
+                : configuration.getMemoryIndexMapping(WORKING_MEMORY_INDEX);
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
     public void createLongTermMemoryHistoryIndex(String indexName, MemoryConfiguration configuration, ActionListener<Boolean> listener) {
         String indexMappings = getMapping(ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH);
-        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX);
+        Map<String, Object> indexSettings = configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX) == null
+            || configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX).isEmpty()
+                ? ALL_NODES_REPLICA_INDEX_SETTINGS
+                : configuration.getMemoryIndexMapping(LONG_TERM_MEMORY_HISTORY_INDEX);
         initIndexIfAbsent(indexName, StringUtils.toJson(indexMappings), indexSettings, 1, listener);
     }
 
@@ -268,6 +277,8 @@ public class MLIndicesHandler {
             if (!memoryConfig.getIndexSettings().isEmpty() && memoryConfig.getIndexSettings().containsKey(LONG_TERM_MEMORY_INDEX)) {
                 Map<String, Object> configuredIndexSettings = memoryConfig.getMemoryIndexMapping(LONG_TERM_MEMORY_INDEX);
                 indexSettings.putAll(configuredIndexSettings);
+            } else {
+                indexSettings.putAll(ALL_NODES_REPLICA_INDEX_SETTINGS);
             }
 
             // Initialize index with mapping and settings
