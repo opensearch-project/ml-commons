@@ -156,8 +156,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
                 }
 
                 // Pass cmk related role to parameters so index insight could use
-                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) input)
-                        .getInputDataset();
+                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) input).getInputDataset();
                 String cmkRoleArn = getAttributeFromHeader(CMK_ROLE_FIELD, request);
                 String assumeRoleArn = getAttributeFromHeader(CMK_ASSUME_ROLE_FIELD, request);
                 Map<String, String> requestParameters = inputDataSet.getParameters();
