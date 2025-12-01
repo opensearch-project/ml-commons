@@ -208,7 +208,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         // Build request body for add_memory action
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("memory_container_id", memoryContainerId);
-        requestBody.put("structured_data", structuredData);
+        requestBody.put("structured_data_blob", structuredData);
         requestBody.put("message_id", traceNum); // Store trace number in messageId field (null for messages)
         requestBody.put("namespace", namespace);
         requestBody.put("metadata", metadata);
@@ -289,7 +289,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
 
             // Step 4: Create update request with merged structured_data
             Map<String, Object> finalUpdateContent = new HashMap<>();
-            finalUpdateContent.put("structured_data", structuredData);
+            finalUpdateContent.put("structured_data_blob", structuredData);
 
             Map<String, Object> updateRequest = new HashMap<>();
             updateRequest.put("memory_container_id", memoryContainerId);
@@ -476,7 +476,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         must.add(Map.of("term", sessionTerm));
 
         // Must not have trace_number (exclude traces)
-        mustNot.add(Map.of("exists", Map.of("field", "structured_data.trace_number")));
+        mustNot.add(Map.of("exists", Map.of("field", "structured_data_blob.trace_number")));
 
         bool.put("must", must);
         bool.put("must_not", mustNot);
@@ -799,8 +799,8 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
         String id = hit.getId();
         Map<String, Object> source = hit.getSourceAsMap();
 
-        if (source != null && source.containsKey("structured_data")) {
-            Map<String, Object> structuredData = (Map<String, Object>) source.get("structured_data");
+        if (source != null && source.containsKey("structured_data_blob")) {
+            Map<String, Object> structuredData = (Map<String, Object>) source.get("structured_data_blob");
 
             String input = (String) structuredData.getOrDefault("input", "");
             String responseText = (String) structuredData.getOrDefault("response", "");
@@ -1260,7 +1260,7 @@ public class RemoteAgenticConversationMemory implements Memory<Message, CreateIn
                         .builder()
                         .actionType(ConnectorAction.ActionType.EXECUTE)
                         .name("search_memories")
-                        .method("POST")
+                        .method("GET")
                         .url(
                             "${parameters.endpoint}/_plugins/_ml/memory_containers/${parameters.memory_container_id}/memories/${parameters.memory_type}/_search"
                         )
