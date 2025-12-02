@@ -145,6 +145,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+    public static final String MEMORY_CONFIGURATION_FIELD = "memory_configuration";
 
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
@@ -1105,7 +1106,7 @@ public class AgentUtils {
             // if the agent receive the memory config field, no matter what its previous memory type is.
             // In long run, memory configuration should only be expected for remote agentic memory type.
             // TODO: Add a memory type check to restrict memory config to remote agentic memory only
-            String memoryConfigStr = requestParameters.get("memory_configuration");
+            String memoryConfigStr = requestParameters.get(MEMORY_CONFIGURATION_FIELD);
             if (!Strings.isNullOrEmpty(memoryConfigStr)) {
                 // Parse the memory_configuration JSON
                 try (
@@ -1116,7 +1117,7 @@ public class AgentUtils {
                     Map<String, Object> memoryConfig = parser.map();
 
                     // Extract endpoint
-                    String endpointParam = (String) memoryConfig.get(ENDPOINT_FIELD);
+                    String endpointParam = (String) memoryConfig.get("memory_endpoint");
                     if (!Strings.isNullOrEmpty(endpointParam)) {
                         memoryParams.put(ENDPOINT_FIELD, endpointParam);
                     }
@@ -1137,7 +1138,7 @@ public class AgentUtils {
                     }
 
                     // Check for direct roleArn field - if present, override credential map
-                    String roleArnParam = (String) memoryConfig.get("roleArn");
+                    String roleArnParam = (String) memoryConfig.get("role_arn");
                     if (!Strings.isNullOrEmpty(roleArnParam)) {
                         // Override credential with roleArn
                         Map<String, String> roleArnCredential = new HashMap<>();

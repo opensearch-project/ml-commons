@@ -17,6 +17,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.MEMORY_CONFIGURATION_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createMemoryParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
@@ -294,6 +295,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         allParams.putAll(apiParams);
         allParams.putAll(mlAgent.getParameters());
         allParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
+        log.debug("MLPlanExecuteAndReflectAgentRunner called with allParams: {}", allParams);
 
         setupPromptParameters(allParams);
 
@@ -312,8 +314,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
 
         // todo: use chat history instead of completed steps
-        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory = memoryFactoryMap.get(memoryType);
         Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent, apiParams);
+        log.debug("Called MLPlanExecuteAndReflectAgentRunner with memoryParams: {}", memoryParams);
+        Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
+        if (memoryParams != null && memoryParams.containsKey("endpoint")) {
+            // Use RemoteAgenticConversationMemory when inline connector metadata is detected
+            memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
+            log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+        } else {
+            // Use the originally specified memory factory
+            memoryFactory = memoryFactoryMap.get(memoryType);
+        }
+
         memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
             memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
                 final List<String> completedSteps = new ArrayList<>();
@@ -486,6 +498,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     );
                 if (allParams.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
                     reactParams.put(MEMORY_CONTAINER_ID_FIELD, allParams.get(MEMORY_CONTAINER_ID_FIELD));
+                }
+                if (allParams.containsKey(MEMORY_CONFIGURATION_FIELD)) {
+                    reactParams.put(MEMORY_CONFIGURATION_FIELD, allParams.get(MEMORY_CONFIGURATION_FIELD));
                 }
 
                 AgentMLInput agentInput = AgentMLInput

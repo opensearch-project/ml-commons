@@ -230,7 +230,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
         Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
-
+        log.debug("MLChatAgentRunner called with memoryParams: {}", memoryParams);
         // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey("endpoint")) {
@@ -502,7 +502,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             );
                             toolParams.put(TENANT_ID_FIELD, tenantId);
                             lastToolParams.clear();
-                            lastToolParams.putAll(toolParams);
+                            toolParams.forEach((key, value) -> {
+                                // For the case like tenant id is null
+                                if (key != null && value != null) {
+                                    lastToolParams.put(key, value);
+                                }
+                            });
                             runTool(
                                 tools,
                                 toolSpecMap,
