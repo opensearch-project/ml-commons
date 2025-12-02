@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.IndexInsight;
 
+import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
+import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED;
 
 import java.time.Instant;
@@ -13,6 +15,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLIndex;
@@ -185,31 +188,16 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
     }
 
     IndexInsightTask createTask(MLIndexInsightGetRequest request) {
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        String cmkRoleArn = threadContext.getHeader(CMK_ROLE_FIELD);
+        String cmkAssumeRoleArn = threadContext.getHeader(CMK_ASSUME_ROLE_FIELD);
         switch (request.getTargetIndexInsight()) {
             case STATISTICAL_DATA:
-                return new StatisticalDataTask(
-                    request.getIndexName(),
-                    client,
-                    sdkClient,
-                    request.getCmkRoleArn(),
-                    request.getAssumeRoleArn()
-                );
+                return new StatisticalDataTask(request.getIndexName(), client, sdkClient, cmkRoleArn, cmkAssumeRoleArn);
             case FIELD_DESCRIPTION:
-                return new FieldDescriptionTask(
-                    request.getIndexName(),
-                    client,
-                    sdkClient,
-                    request.getCmkRoleArn(),
-                    request.getAssumeRoleArn()
-                );
+                return new FieldDescriptionTask(request.getIndexName(), client, sdkClient, cmkRoleArn, cmkAssumeRoleArn);
             case LOG_RELATED_INDEX_CHECK:
-                return new LogRelatedIndexCheckTask(
-                    request.getIndexName(),
-                    client,
-                    sdkClient,
-                    request.getCmkRoleArn(),
-                    request.getAssumeRoleArn()
-                );
+                return new LogRelatedIndexCheckTask(request.getIndexName(), client, sdkClient, cmkRoleArn, cmkAssumeRoleArn);
             default:
                 throw new IllegalArgumentException("Unsupported task type: " + request.getTargetIndexInsight());
         }

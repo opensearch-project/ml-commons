@@ -10,8 +10,6 @@ import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
-import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
-import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -486,13 +484,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
                         allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
                     );
-                // For index insight
-                if (allParams.containsKey(CMK_ROLE_FIELD)) {
-                    reactParams.put(CMK_ROLE_FIELD, allParams.get(CMK_ROLE_FIELD));
-                }
-                if (allParams.containsKey(CMK_ASSUME_ROLE_FIELD)) {
-                    reactParams.put(CMK_ASSUME_ROLE_FIELD, allParams.get(CMK_ASSUME_ROLE_FIELD));
-                }
 
                 if (allParams.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
                     reactParams.put(MEMORY_CONTAINER_ID_FIELD, allParams.get(MEMORY_CONTAINER_ID_FIELD));

@@ -7,6 +7,9 @@ package org.opensearch.ml.utils;
 
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
+import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
+import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
+import static org.opensearch.ml.common.utils.ToolUtils.getAttributeFromHeader;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -352,6 +355,25 @@ public class RestActionUtils {
             || request.header(CommonValue.MCP_HEADER_AWS_REGION) != null
             || request.header(CommonValue.MCP_HEADER_AWS_SERVICE_NAME) != null
             || request.header(CommonValue.MCP_HEADER_OPENSEARCH_URL) != null;
+    }
+
+    /**
+     * Extracts CMK related role from request headers from the REST request and puts them in ThreadContext.
+     *
+     * @param request RestRequest containing the CMK headers
+     * @param client Client to access ThreadContext
+     */
+    public static void putCMKRelatedRoleFromHeaders(RestRequest request, Client client) {
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        String cmkRoleArn = getAttributeFromHeader(CMK_ROLE_FIELD, request);
+        String assumeRoleArn = getAttributeFromHeader(CMK_ASSUME_ROLE_FIELD, request);
+        if (cmkRoleArn != null && !cmkRoleArn.isEmpty()) {
+            threadContext.putHeader(CMK_ROLE_FIELD, cmkRoleArn);
+        }
+        if (assumeRoleArn != null && !assumeRoleArn.isEmpty()) {
+            threadContext.putHeader(CMK_ASSUME_ROLE_FIELD, assumeRoleArn);
+        }
+
     }
 
     /**

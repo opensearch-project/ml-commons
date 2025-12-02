@@ -8,11 +8,8 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
-import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.utils.ToolUtils.getAttributeFromHeader;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
@@ -21,13 +18,13 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
 import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.putCMKRelatedRoleFromHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -35,7 +32,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.agui.AGUIInputConverter;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -155,15 +151,6 @@ public class RestMLExecuteAction extends BaseRestHandler {
                     );
                 }
 
-                // Pass cmk related role to parameters so index insight could use
-                RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) ((AgentMLInput) input).getInputDataset();
-                String cmkRoleArn = getAttributeFromHeader(CMK_ROLE_FIELD, request);
-                String assumeRoleArn = getAttributeFromHeader(CMK_ASSUME_ROLE_FIELD, request);
-                Map<String, String> requestParameters = inputDataSet.getParameters();
-                requestParameters.put(CMK_ROLE_FIELD, cmkRoleArn);
-                requestParameters.put(CMK_ASSUME_ROLE_FIELD, assumeRoleArn);
-                inputDataSet.setParameters(requestParameters);
-                ((AgentMLInput) input).setInputDataset(inputDataSet);
                 ((AgentMLInput) input).setAgentId(agentId);
                 ((AgentMLInput) input).setTenantId(tenantId);
                 ((AgentMLInput) input).setIsAsync(async);
@@ -176,6 +163,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
                     );
                 }
                 putMcpRequestHeaders(request, client);
+                putCMKRelatedRoleFromHeaders(request, client);
+
             }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {

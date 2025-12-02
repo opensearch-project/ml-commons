@@ -28,7 +28,7 @@ public class MLIndexInsightGetRequestTests {
     public void constructor() {
         indexName = "test-abc";
         mlIndexInsightType = FIELD_DESCRIPTION;
-        MLIndexInsightGetRequest mlConfigGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId, null, null);
+        MLIndexInsightGetRequest mlConfigGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
         assertEquals(mlConfigGetRequest.getIndexName(), indexName);
         assertEquals(mlConfigGetRequest.getTargetIndexInsight(), mlIndexInsightType);
     }
@@ -37,13 +37,7 @@ public class MLIndexInsightGetRequestTests {
     public void writeTo() throws IOException {
         indexName = "test-abc";
         mlIndexInsightType = FIELD_DESCRIPTION;
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
         BytesStreamOutput output = new BytesStreamOutput();
         mlIndexInsightGetRequest.writeTo(output);
 
@@ -60,13 +54,7 @@ public class MLIndexInsightGetRequestTests {
         indexName = "test-abc";
         mlIndexInsightType = FIELD_DESCRIPTION;
         String tenantId = "demo_id";
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
         BytesStreamOutput output = new BytesStreamOutput();
         mlIndexInsightGetRequest.writeTo(output);
 
@@ -84,13 +72,7 @@ public class MLIndexInsightGetRequestTests {
     public void validate_Success() {
         indexName = "not-null";
         mlIndexInsightType = FIELD_DESCRIPTION;
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
 
         assertEquals(null, mlIndexInsightGetRequest.validate());
     }
@@ -99,13 +81,7 @@ public class MLIndexInsightGetRequestTests {
     public void validate_Failure_index() {
         indexName = null;
         mlIndexInsightType = FIELD_DESCRIPTION;
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
         assertEquals(null, mlIndexInsightGetRequest.getIndexName());
 
         ActionRequestValidationException exception = addValidationError("Index insight's target index can't be null", null);
@@ -116,13 +92,7 @@ public class MLIndexInsightGetRequestTests {
     public void validate_Failure_type() {
         indexName = "not-null";
         mlIndexInsightType = null;
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
         assertEquals(null, mlIndexInsightGetRequest.getTargetIndexInsight());
 
         ActionRequestValidationException exception = addValidationError("Index insight's target type can't be null", null);
@@ -133,13 +103,7 @@ public class MLIndexInsightGetRequestTests {
     public void fromActionRequest_Success() throws IOException {
         indexName = "test-abc";
         mlIndexInsightType = FIELD_DESCRIPTION;
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
         assertEquals(mlIndexInsightGetRequest.fromActionRequest(mlIndexInsightGetRequest), mlIndexInsightGetRequest);
     }
 
@@ -147,13 +111,7 @@ public class MLIndexInsightGetRequestTests {
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
         indexName = "test-abc";
         mlIndexInsightType = FIELD_DESCRIPTION;
-        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(
-            indexName,
-            mlIndexInsightType,
-            tenantId,
-            null,
-            null
-        );
+        MLIndexInsightGetRequest mlIndexInsightGetRequest = new MLIndexInsightGetRequest(indexName, mlIndexInsightType, tenantId);
 
         ActionRequest actionRequest = new ActionRequest() {
             @Override
