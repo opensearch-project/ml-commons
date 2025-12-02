@@ -52,6 +52,7 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.spec.McpClientTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -60,21 +61,13 @@ public class McpStreamableHttpConnectorExecutor extends AbstractConnectorExecuto
 
     @Getter
     private McpStreamableHttpConnector connector;
+    @Getter
+    @Setter
     private Client client;
 
     public McpStreamableHttpConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (McpStreamableHttpConnector) connector;
-    }
-
-    @Override
-    public void setClient(Client client) {
-        this.client = client;
-    }
-
-    @Override
-    public Client getClient() {
-        return this.client;
     }
 
     public List<MLToolSpec> getMcpToolSpecs() {
