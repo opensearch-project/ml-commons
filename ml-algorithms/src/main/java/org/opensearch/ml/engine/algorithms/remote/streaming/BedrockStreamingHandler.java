@@ -481,17 +481,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private BedrockRuntimeAsyncClient buildBedrockRuntimeAsyncClient() {
-        AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
-            ? StaticCredentialsProvider
-                .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
-            : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
+        return java.security.AccessController.doPrivileged((java.security.PrivilegedAction<BedrockRuntimeAsyncClient>) () -> {
+            AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
+                ? StaticCredentialsProvider
+                    .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
+                : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
 
-        return BedrockRuntimeAsyncClient
-            .builder()
-            .region(Region.of(connector.getRegion()))
-            .credentialsProvider(awsCredentialsProvider)
-            .httpClient(httpClient)
-            .build();
+            return BedrockRuntimeAsyncClient
+                .builder()
+                .region(Region.of(connector.getRegion()))
+                .credentialsProvider(awsCredentialsProvider)
+                .httpClient(httpClient)
+                .build();
+        });
     }
 
     private List<SystemContentBlock> parseSystemMessages(JsonNode systemArray) {
