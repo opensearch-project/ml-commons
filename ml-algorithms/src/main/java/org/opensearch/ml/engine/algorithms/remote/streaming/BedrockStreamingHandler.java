@@ -319,6 +319,11 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         sendContentResponse(inputFragment, false, listener);
                     }
                 } else if (isToolInputComplete(event)) {
+                    // Ensure toolInput is set even if it's empty
+                    if (toolInput.get() == null) {
+                        toolInput.set(Map.of());
+                    }
+                    
                     if (isAGUIAgent) {
                         BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
                         sendAGUIEvent(toolCallEndEvent, false, listener);
