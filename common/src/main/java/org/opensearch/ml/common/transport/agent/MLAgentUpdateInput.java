@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_3_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
