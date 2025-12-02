@@ -59,13 +59,13 @@ public class StreamingWrapperTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        streamingWrapper = new StreamingWrapper(channel, client);
-        nonStreamingWrapper = new StreamingWrapper(null, client);
+        streamingWrapper = new StreamingWrapper(channel, client, null);
+        nonStreamingWrapper = new StreamingWrapper(null, client, null);
     }
 
     @Test
     public void testConstructor() {
-        StreamingWrapper wrapper = new StreamingWrapper(channel, client);
+        StreamingWrapper wrapper = new StreamingWrapper(channel, client, null);
         assertNotNull(wrapper);
     }
 

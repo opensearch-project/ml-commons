@@ -68,6 +68,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
@@ -565,13 +566,22 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             log.debug("RestMLExecuteStreamAction: Processing content: '{}'", content);
 
             try {
-                JsonElement element = JsonParser.parseString(content);
-                sseResponse.append("data: ").append(element).append("\n\n");
-                log.debug("RestMLExecuteStreamAction: Processing json element: '{}'", element);
+                if (StringUtils.isJson(content)) {
+                    JsonElement element = JsonParser.parseString(content);
+                    sseResponse.append("data: ").append(element).append("\n\n");
+                    log.debug("RestMLExecuteStreamAction: Processing json element: '{}'", element);
+                } else {
+                    // catch unexpected content chunks such as Bedrock error
+                    log.warn("Unexpected content received - not valid JSON: {}", content);
+                    BaseEvent runErrorEvent = new RunErrorEvent("Unexpected chunk: " + content, null);
+                    sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
+                    isLast = true;
+                }
             } catch (Exception e) {
                 log.error("Failed to process AG-UI events chunk content {}", content, e);
-                BaseEvent runErrorEvent = new RunErrorEvent(e.getMessage(), null);
+                BaseEvent runErrorEvent = new RunErrorEvent("Unexpected error: " + e.getMessage(), null);
                 sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
+                isLast = true;
             }
         } else {
             log.warn("Received null or empty AG-UI content chunk");

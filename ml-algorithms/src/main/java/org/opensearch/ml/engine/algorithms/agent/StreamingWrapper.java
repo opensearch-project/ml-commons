@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.returnFinalResponse;
 
@@ -40,10 +42,12 @@ public class StreamingWrapper {
     private final TransportChannel channel;
     private boolean isStreaming;
     private Client client;
+    private final Map<String, String> parameters;
 
-    public StreamingWrapper(TransportChannel channel, org.opensearch.transport.client.Client client) {
+    public StreamingWrapper(TransportChannel channel, Client client, Map<String, String> parameters) {
         this.channel = channel;
         this.client = client;
+        this.parameters = parameters;
         this.isStreaming = (channel != null);
     }
 
@@ -139,7 +143,10 @@ public class StreamingWrapper {
 
     public void sendRunFinishedAndCloseStream(String sessionId, String parentInteractionId) {
 
-        BaseEvent runFinishedEvent = new RunFinishedEvent(sessionId, parentInteractionId, null);
+        String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
+        String runId = parameters.get(AGUI_PARAM_RUN_ID);
+
+        BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
         List<ModelTensor> modelTensors = new ArrayList<>();
         Map<String, Object> dataMap = Map.of("content", runFinishedEvent.toJsonString(), "is_last", true);
 

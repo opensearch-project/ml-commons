@@ -60,6 +60,12 @@ public final class AGUIConstants {
     /** Parameter key for backend tool names (used for filtering) */
     public static final String AGUI_PARAM_BACKEND_TOOL_NAMES = "backend_tool_names";
 
+    /** Parameter key for current AG-UI message id */
+    public static final String AGUI_PARAM_MESSAGE_ID = "agui_message_id";
+
+    /** Parameter key for AG-UI text message started flag */
+    public static final String AGUI_PARAM_TEXT_MESSAGE_STARTED = "agui_text_message_started";
+
     // ========== Field Names (External API) ==========
 
     /** Field name for thread identifier in AG-UI input */
