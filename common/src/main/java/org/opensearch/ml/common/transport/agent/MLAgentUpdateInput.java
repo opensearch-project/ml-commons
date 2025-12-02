@@ -194,7 +194,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         Version streamOutputVersion = out.getVersion();
         out.writeString(agentId);
         out.writeOptionalString(name);
-        if (streamOutputVersion.onOrAfter(VERSION_3_4_0)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_3_0)) {
             out.writeOptionalString(type);
         }
         out.writeOptionalString(description);
