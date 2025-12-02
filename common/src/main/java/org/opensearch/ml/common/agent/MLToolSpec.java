@@ -147,10 +147,10 @@ public class MLToolSpec implements ToXContentObject {
         if (type != null) {
             builder.field(TOOL_TYPE_FIELD, type);
         }
-        if (name != null) {
+        if (name != null && !name.isEmpty()) {
             builder.field(TOOL_NAME_FIELD, name);
         }
-        if (description != null) {
+        if (description != null && !description.isEmpty()) {
             builder.field(DESCRIPTION_FIELD, description);
         }
         if (attributes != null && !attributes.isEmpty()) {
