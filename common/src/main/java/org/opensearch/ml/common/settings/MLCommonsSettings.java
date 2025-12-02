@@ -52,7 +52,7 @@ public final class MLCommonsSettings {
             ML_PLUGIN_SETTING_PREFIX + "max_batch_inference_tasks",
             100,
             0,
-            Integer.MAX_VALUE,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -62,7 +62,7 @@ public final class MLCommonsSettings {
             ML_PLUGIN_SETTING_PREFIX + "max_batch_ingestion_tasks",
             100,
             0,
-            Integer.MAX_VALUE,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
