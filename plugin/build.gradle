@@ -297,6 +297,67 @@ def securityPluginFile = resolvePluginFile("opensearch-security")
 testClusters.integTest {
     testDistribution = "ARCHIVE"
     if (_numNodes > 1) numberOfNodes = _numNodes
+
+    // Streaming setup - enable with -Dstreaming=true
+    if (System.getProperty("streaming") == "true") {
+        setting 'opensearch.experimental.feature.transport.stream.enabled', 'true'
+        setting 'http.type', securityEnabled ? 'reactor-netty4-secure' : 'reactor-netty4'
+
+        if (_numNodes > 1) {
+            setting 'arrow.flight.publish_host', '127.0.0.1'
+            setting 'arrow.flight.bind_host', '127.0.0.1'
+        }
+
+        if (securityEnabled) {
+            setting 'transport.stream.type.default', 'FLIGHT-SECURE'
+            setting 'flight.ssl.enable', 'true'
+        }
+
+        systemProperty 'io.netty.allocator.numDirectArenas', '1'
+        systemProperty 'io.netty.noUnsafe', 'false'
+        systemProperty 'io.netty.tryUnsafe', 'true'
+        systemProperty 'io.netty.tryReflectionSetAccessible', 'true'
+        jvmArgs '--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED'
+
+        // Required streaming plugins
+        def opensearchCore = System.getenv("OPENSEARCH_CORE_PATH") ?: { throw new GradleException("OPENSEARCH_CORE_PATH environment variable must be set") }()
+        def transportPluginDir = file("${opensearchCore}/plugins/transport-reactor-netty4/build/distributions")
+        def arrowPluginDir = file("${opensearchCore}/plugins/arrow-flight-rpc/build/distributions")
+
+        def transportPlugin = transportPluginDir.exists() ? transportPluginDir.listFiles()?.find { it.name.endsWith('.zip') } : null
+        def arrowPlugin = arrowPluginDir.exists() ? arrowPluginDir.listFiles()?.find { it.name.endsWith('.zip') } : null
+
+        if (!transportPlugin) {
+            throw new GradleException("transport-reactor-netty4 plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:transport-reactor-netty4:assemble")
+        }
+        if (!arrowPlugin) {
+            throw new GradleException("arrow-flight-rpc plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:arrow-flight-rpc:assemble")
+        }
+
+        plugin(provider(new Callable<RegularFile>() {
+            @Override
+            RegularFile call() throws Exception {
+                return new RegularFile() {
+                    @Override
+                    File getAsFile() {
+                        return transportPlugin
+                    }
+                }
+            }
+        }))
+        plugin(provider(new Callable<RegularFile>() {
+            @Override
+            RegularFile call() throws Exception {
+                return new RegularFile() {
+                    @Override
+                    File getAsFile() {
+                        return arrowPlugin
+                    }
+                }
+            }
+        }))
+    }
+
     configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)
 }
 
