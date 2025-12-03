@@ -75,6 +75,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private final boolean isAGUIAgent;
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
 
+    // Retry configuration
+    private static final int DEFAULT_MAX_RETRIES = 3;
+    private static final long DEFAULT_INITIAL_BACKOFF_MS = 1000;
+    private static final long DEFAULT_MAX_BACKOFF_MS = 10000;
+    private final int maxRetries;
+    private final long initialBackoffMs;
+    private final long maxBackoffMs;
+
     private enum StreamState {
         STREAMING_CONTENT,
         TOOL_CALL_DETECTED,
@@ -94,8 +102,42 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
         this.isAGUIAgent = parameters != null && (parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui"));
 
+        // Initialize retry configuration from parameters or use defaults
+        this.maxRetries = parseIntParameter(parameters, "max_retry_times", DEFAULT_MAX_RETRIES);
+        this.initialBackoffMs = parseLongParameter(parameters, "retry_backoff_millis", DEFAULT_INITIAL_BACKOFF_MS);
+        this.maxBackoffMs = parseLongParameter(parameters, "max_backoff_millis", DEFAULT_MAX_BACKOFF_MS);
+
         if (isAGUIAgent) {
             log.debug("BedrockStreamingHandler: Detected AG-UI agent");
+        }
+        log
+            .debug(
+                "BedrockStreamingHandler: Retry config - maxRetries={}, initialBackoffMs={}, maxBackoffMs={}",
+                maxRetries,
+                initialBackoffMs,
+                maxBackoffMs
+            );
+    }
+
+    private int parseIntParameter(Map<String, String> params, String key, int defaultValue) {
+        if (params == null || !params.containsKey(key)) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(params.get(key));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private long parseLongParameter(Map<String, String> params, String key, long defaultValue) {
+        if (params == null || !params.containsKey(key)) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(params.get(key));
+        } catch (NumberFormatException e) {
+            return defaultValue;
         }
     }
 
@@ -105,6 +147,16 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         Map<String, String> parameters,
         String payload,
         StreamPredictActionListener<MLTaskResponse, ?> listener
+    ) {
+        startStreamWithRetry(action, parameters, payload, listener, 0);
+    }
+
+    private void startStreamWithRetry(
+        String action,
+        Map<String, String> parameters,
+        String payload,
+        StreamPredictActionListener<MLTaskResponse, ?> listener,
+        int retryAttempt
     ) {
         try {
             AtomicBoolean isStreamClosed = new AtomicBoolean(false);
@@ -122,22 +174,31 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             ConverseStreamRequest request = buildConverseStreamRequest(payload, parameters);
 
             ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder().onResponse(response -> {}).onError(error -> {
-                log.error("Converse stream error: {}", error.getMessage());
+                log.error("Converse stream error (attempt {}/{}): {}", retryAttempt + 1, maxRetries + 1, error.getMessage());
                 if (isThrottlingError(error)) {
-                    listener
-                        .onFailure(
-                            new RemoteConnectorThrottlingException(
-                                REMOTE_SERVICE_ERROR
-                                    + "The request was denied due to remote server throttling. "
-                                    + "To change the retry policy and behavior, please update the connector client_config.",
-                                RestStatus.BAD_REQUEST
-                            )
-                        );
+                    if (retryAttempt < maxRetries) {
+                        long backoffMs = calculateBackoff(retryAttempt);
+                        log.info("Throttling error detected, will retry in {}ms (attempt {}/{})", backoffMs, retryAttempt + 1, maxRetries);
+                        scheduleRetry(action, parameters, payload, listener, retryAttempt + 1, backoffMs);
+                    } else {
+                        log.error("Max retries ({}) exceeded for throttling error", maxRetries);
+                        listener
+                            .onFailure(
+                                new RemoteConnectorThrottlingException(
+                                    REMOTE_SERVICE_ERROR
+                                        + "The request was denied due to remote server throttling after "
+                                        + (maxRetries + 1)
+                                        + " attempts. "
+                                        + "To change the retry policy and behavior, please update the connector client_config.",
+                                    RestStatus.TOO_MANY_REQUESTS
+                                )
+                            );
+                    }
                 } else if (isClientError(error)) {
-                    // 4XX errors
+                    // 4XX errors - don't retry
                     listener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + error.getMessage(), RestStatus.BAD_REQUEST));
                 } else {
-                    // 5xx errors
+                    // 5xx errors - don't retry for non-throttling server errors
                     listener.onFailure(new MLException(REMOTE_SERVICE_ERROR + error.getMessage(), error));
                 }
             }).onComplete(() -> {
@@ -162,11 +223,53 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             }).build();
 
             // Start streaming
+            if (retryAttempt > 0) {
+                log.info("Retrying Bedrock stream (attempt {}/{})", retryAttempt + 1, maxRetries + 1);
+            }
             bedrockClient.converseStream(request, handler);
         } catch (Exception e) {
             log.error("Failed to execute Bedrock streaming", e);
             handleError(e, listener);
         }
+    }
+
+    /**
+     * Calculate exponential backoff with jitter.
+     * @param retryAttempt The current retry attempt (0-based)
+     * @return The backoff time in milliseconds
+     */
+    private long calculateBackoff(int retryAttempt) {
+        // Exponential backoff: initialBackoff * 2^retryAttempt
+        long exponentialBackoff = initialBackoffMs * (1L << retryAttempt);
+        // Cap at max backoff
+        long cappedBackoff = Math.min(exponentialBackoff, maxBackoffMs);
+        // Add jitter (random value between 0 and 50% of the backoff)
+        long jitter = (long) (cappedBackoff * 0.5 * Math.random());
+        return cappedBackoff + jitter;
+    }
+
+    /**
+     * Schedule a retry after the specified backoff time.
+     */
+    private void scheduleRetry(
+        String action,
+        Map<String, String> parameters,
+        String payload,
+        StreamPredictActionListener<MLTaskResponse, ?> listener,
+        int nextRetryAttempt,
+        long backoffMs
+    ) {
+        // Use a separate thread to avoid blocking
+        new Thread(() -> {
+            try {
+                Thread.sleep(backoffMs);
+                startStreamWithRetry(action, parameters, payload, listener, nextRetryAttempt);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Retry interrupted", e);
+                listener.onFailure(new MLException("Retry was interrupted", e));
+            }
+        }, "bedrock-stream-retry-" + nextRetryAttempt).start();
     }
 
     @Override
@@ -176,9 +279,16 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private boolean isThrottlingError(Throwable error) {
-        return error.getMessage().contains("throttling")
-            || error.getMessage().contains("TooManyRequestsException")
-            || error.getMessage().contains("Rate exceeded");
+        String message = error.getMessage();
+        if (message == null) {
+            return false;
+        }
+        return message.contains("throttling")
+            || message.contains("TooManyRequestsException")
+            || message.contains("Rate exceeded")
+            || message.contains("Too many connections")
+            || message.contains("Status Code: 503")
+            || message.contains("ServiceUnavailableException");
     }
 
     private boolean isClientError(Throwable error) {
