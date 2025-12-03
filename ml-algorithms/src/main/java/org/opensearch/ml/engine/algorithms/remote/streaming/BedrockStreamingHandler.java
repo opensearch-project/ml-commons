@@ -12,6 +12,8 @@ import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TEXT_MESSAG
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 
 import java.io.IOException;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -481,12 +483,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
             : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
 
-        return BedrockRuntimeAsyncClient
+        return AccessController.doPrivileged((PrivilegedAction<BedrockRuntimeAsyncClient>) () -> BedrockRuntimeAsyncClient
             .builder()
             .region(Region.of(connector.getRegion()))
             .credentialsProvider(awsCredentialsProvider)
             .httpClient(httpClient)
-            .build();
+            .build());
     }
 
     private List<SystemContentBlock> parseSystemMessages(JsonNode systemArray) {
