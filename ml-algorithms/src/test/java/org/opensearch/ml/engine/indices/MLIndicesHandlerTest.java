@@ -291,7 +291,7 @@ public class MLIndicesHandlerTest {
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        indicesHandler.initIndexWithContext("test-index", "{}", null, 1, listener);
+        indicesHandler.initIndexWithThreadContext("test-index", "{}", null, 1, listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -308,7 +308,7 @@ public class MLIndicesHandlerTest {
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        indicesHandler.initIndexWithContext("test-index", "{}", null, 1, listener);
+        indicesHandler.initIndexWithThreadContext("test-index", "{}", null, 1, listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -325,7 +325,7 @@ public class MLIndicesHandlerTest {
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        indicesHandler.initIndexWithContext("test-index", "{}", null, 1, listener);
+        indicesHandler.initIndexWithThreadContext("test-index", "{}", null, 1, listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -343,7 +343,7 @@ public class MLIndicesHandlerTest {
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        indicesHandler.initIndexWithContext("test-index", "{}", null, 1, listener);
+        indicesHandler.initIndexWithThreadContext("test-index", "{}", null, 1, listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -375,7 +375,7 @@ public class MLIndicesHandlerTest {
             return null;
         }).when(indicesAdminClient).create(any(), any());
 
-        indicesHandler.initIndexWithContext("test-index", "{}", null, 1, listener);
+        indicesHandler.initIndexWithThreadContext("test-index", "{}", null, 1, listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -394,7 +394,7 @@ public class MLIndicesHandlerTest {
 
         Map<String, Object> customSettings = new HashMap<>();
         customSettings.put("index.number_of_replicas", "1");
-        indicesHandler.initIndexWithContext("test-index", "{}", customSettings, 1, listener);
+        indicesHandler.initIndexWithThreadContext("test-index", "{}", customSettings, 1, listener);
 
         ArgumentCaptor<CreateIndexRequest> requestCaptor = ArgumentCaptor.forClass(CreateIndexRequest.class);
         verify(indicesAdminClient).create(requestCaptor.capture(), any());
@@ -597,5 +597,87 @@ public class MLIndicesHandlerTest {
         verify(indicesAdminClient).create(requestCaptor.capture(), any());
         // Verify pipeline was set in the index settings
         assertTrue(requestCaptor.getValue().settings().get("default_pipeline") != null);
+    }
+
+    @Test
+    public void testInitIndexIfAbsent_WithIsSystemIndexTrue() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        when(metadata.hasIndex(anyString())).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new CreateIndexResponse(true, true, "test-index"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        // When isSystemIndex=true, should use initIndexWithoutThreadContext (stash context)
+        indicesHandler.initIndexIfAbsent("test-index", "{}", null, 1, listener, true);
+
+        verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue());
+    }
+
+    @Test
+    public void testInitIndexIfAbsent_WithIsSystemIndexFalse() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new CreateIndexResponse(true, true, "test-index"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        // When isSystemIndex=false, should use initIndexWithThreadContext (keep context)
+        indicesHandler.initIndexIfAbsent("test-index", "{}", null, 1, listener, false);
+
+        verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(listener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue());
+    }
+
+    @Test
+    public void testInitIndexIfAbsent_WithIndexSettings_IsSystemIndexTrue() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        when(metadata.hasIndex(anyString())).thenReturn(false);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new CreateIndexResponse(true, true, "test-index"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        Map<String, Object> customSettings = new HashMap<>();
+        customSettings.put("index.number_of_replicas", "1");
+
+        // When isSystemIndex=true with custom settings
+        indicesHandler.initIndexIfAbsent("test-index", "{}", customSettings, 1, listener, true);
+
+        ArgumentCaptor<CreateIndexRequest> requestCaptor = ArgumentCaptor.forClass(CreateIndexRequest.class);
+        verify(indicesAdminClient).create(requestCaptor.capture(), any());
+        assertEquals("test-index", requestCaptor.getValue().index());
+    }
+
+    @Test
+    public void testInitIndexIfAbsent_WithIndexSettings_IsSystemIndexFalse() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new CreateIndexResponse(true, true, "test-index"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+
+        Map<String, Object> customSettings = new HashMap<>();
+        customSettings.put("index.number_of_replicas", "1");
+
+        // When isSystemIndex=false with custom settings
+        indicesHandler.initIndexIfAbsent("test-index", "{}", customSettings, 1, listener, false);
+
+        ArgumentCaptor<CreateIndexRequest> requestCaptor = ArgumentCaptor.forClass(CreateIndexRequest.class);
+        verify(indicesAdminClient).create(requestCaptor.capture(), any());
+        assertEquals("test-index", requestCaptor.getValue().index());
     }
 }
