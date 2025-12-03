@@ -77,8 +77,11 @@ jobs:
       - name: Remove unnecessary files Linux
         if: ${{ runner.os == 'Linux' }}
         run: |
+          echo "Listing 100 largest packages"
+          dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -n | tail -n 100
+          df -h
           rm -rf /usr/share/dotnet
-          rm -rf /usr/share/dotnet
+          rm -rf "$AGENT_TOOLSDIRECTORY"
 
       - name: Build and Run Tests
         id: step-build-test-linux
