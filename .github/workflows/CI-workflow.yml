@@ -77,8 +77,8 @@ jobs:
       - name: Remove unnecessary files Linux
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          rm -rf /usr/share/dotnet
+          rm -rf "$AGENT_TOOLSDIRECTORY"
           
       - name: Build and Run Tests
         id: step-build-test-linux
