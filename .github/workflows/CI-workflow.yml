@@ -77,6 +77,8 @@ jobs:
       - name: Remove unnecessary files Linux
         if: ${{ runner.os == 'Linux' }}
         run: |
+          yum remove -y golang
+          yum remove -y golang-src
           rm -rf /usr/share/dotnet
           rm -rf "$AGENT_TOOLSDIRECTORY"
           
