@@ -9,9 +9,6 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -23,6 +20,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.engine.annotation.Ingester;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -72,7 +70,7 @@ public class OpenAIDataIngestion extends AbstractIngestion {
 
             try (
                 InputStreamReader inputStreamReader = AccessController
-                    .doPrivileged((PrivilegedExceptionAction<InputStreamReader>) () -> new InputStreamReader(connection.getInputStream()));
+                    .doPrivilegedChecked(() -> new InputStreamReader(connection.getInputStream()));
                 BufferedReader reader = new BufferedReader(inputStreamReader)
             ) {
                 List<String> linesBuffer = new ArrayList<>();
@@ -125,8 +123,6 @@ public class OpenAIDataIngestion extends AbstractIngestion {
                 int totalBatches = successfulBatches.get() + failedBatches.get();
                 successRate = (totalBatches == 0) ? 100 : (double) successfulBatches.get() / totalBatches * 100;
             }
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException("Failed to read from OpenAI file API: ", e);
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new OpenSearchStatusException("Failed to batch ingest: " + e.getMessage(), RestStatus.INTERNAL_SERVER_ERROR);

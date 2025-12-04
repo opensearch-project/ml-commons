@@ -14,9 +14,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +31,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.secure_sm.AccessController;
 
 import com.google.gson.stream.JsonReader;
 
@@ -58,7 +56,6 @@ public class ModelHelper {
         this.mlEngine = mlEngine;
     }
 
-    @SuppressWarnings("removal")
     public void downloadPrebuiltModelConfig(
         String taskId,
         MLRegisterModelInput registerModelInput,
@@ -74,7 +71,7 @@ public class ModelHelper {
         String modelGroupId = registerModelInput.getModelGroupId();
         MLDeploySetting mlDeploySetting = registerModelInput.getDeploySetting();
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            AccessController.doPrivilegedChecked(() -> {
 
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
                 String configCacheFilePath = registerModelPath.resolve("config.json").toString();
@@ -223,12 +220,11 @@ public class ModelHelper {
         return false;
     }
 
-    @SuppressWarnings("removal")
-    public List downloadPrebuiltModelMetaList(String taskId, MLRegisterModelInput registerModelInput) throws PrivilegedActionException {
+    public List downloadPrebuiltModelMetaList(String taskId, MLRegisterModelInput registerModelInput) throws IOException {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
         try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<List>) () -> {
+            return AccessController.doPrivilegedChecked(() -> {
 
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
                 String cacheFilePath = registerModelPath.resolve("model_meta_list.json").toString();
@@ -257,7 +253,6 @@ public class ModelHelper {
      * @param modelContentHash model content hash value
      * @param listener action listener
      */
-    @SuppressWarnings("removal")
     public void downloadAndSplit(
         MLModelFormat modelFormat,
         String taskId,
@@ -269,7 +264,7 @@ public class ModelHelper {
         ActionListener<Map<String, Object>> listener
     ) {
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            AccessController.doPrivilegedChecked(() -> {
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
                 String modelPath = registerModelPath + ".zip";
                 Path modelPartsPath = registerModelPath.resolve("chunks");

@@ -36,7 +36,6 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
 import static org.opensearch.ml.engine.tools.ReadFromScratchPadTool.SCRATCHPAD_NOTES_KEY;
 
-import java.security.PrivilegedActionException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -546,7 +545,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastActionInput,
         AtomicReference<String> lastToolSelectionResponse,
         Object output
-    ) throws PrivilegedActionException {
+    ) {
         String toolResponse = tmpParameters.get(TOOL_RESPONSE);
         StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(
             Map
@@ -572,7 +571,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastAction,
         Map<String, Object> additionalInfo,
         Object output
-    ) throws PrivilegedActionException {
+    ) {
         MLToolSpec toolSpec = toolSpecMap.get(lastAction.get());
         if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
             String outputString = outputToOutputString(output);

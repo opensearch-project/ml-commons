@@ -15,7 +15,6 @@ import static org.mockito.Mockito.verify;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
-import java.security.PrivilegedActionException;
 import java.util.List;
 import java.util.Map;
 
@@ -71,7 +70,6 @@ public class ModelHelperTest {
             .downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
     }
 
     @Test
@@ -177,7 +175,6 @@ public class ModelHelperTest {
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(registerModelListener).onFailure(argumentCaptor.capture());
-        assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
     }
 
     @Test
@@ -202,7 +199,7 @@ public class ModelHelperTest {
     }
 
     @Test
-    public void testDownloadPrebuiltModelMetaList() throws PrivilegedActionException {
+    public void testDownloadPrebuiltModelMetaList() throws IOException {
         String taskId = "test_task_id";
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -218,7 +215,7 @@ public class ModelHelperTest {
     }
 
     @Test
-    public void testIsModelAllowed_true() throws PrivilegedActionException {
+    public void testIsModelAllowed_true() throws IOException {
         String taskId = "test_task_id";
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -234,7 +231,7 @@ public class ModelHelperTest {
     }
 
     @Test
-    public void testIsModelAllowed_WrongModelName() throws PrivilegedActionException {
+    public void testIsModelAllowed_WrongModelName() throws IOException {
         String taskId = "test_task_id";
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -250,7 +247,7 @@ public class ModelHelperTest {
     }
 
     @Test
-    public void testIsModelAllowed_WrongModelVersion() throws PrivilegedActionException {
+    public void testIsModelAllowed_WrongModelVersion() throws IOException {
         String taskId = "test_task_id";
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()

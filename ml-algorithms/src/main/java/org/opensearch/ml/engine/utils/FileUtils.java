@@ -14,8 +14,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -23,6 +21,7 @@ import java.util.Queue;
 import java.util.Set;
 
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.secure_sm.AccessController;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
@@ -153,13 +152,9 @@ public class FileUtils {
         deleteFileQuietly(new File(path.toUri()));
     }
 
-    @SuppressWarnings("removal")
     public static void deleteFileQuietly(File file) {
         if (file.exists()) {
-            AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
-                org.apache.commons.io.FileUtils.deleteQuietly(file);
-                return null;
-            });
+            AccessController.doPrivileged(() -> { org.apache.commons.io.FileUtils.deleteQuietly(file); });
         }
     }
 

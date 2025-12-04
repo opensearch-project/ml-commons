@@ -57,8 +57,8 @@ import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
-import java.security.PrivilegedActionException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -768,7 +768,7 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws PrivilegedActionException {
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws IOException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE || registerModelInput.getConnectorId() != null) {
@@ -945,8 +945,7 @@ public class MLModelManager {
             );
     }
 
-    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion)
-        throws PrivilegedActionException {
+    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws IOException {
         String taskId = mlTask.getTaskId();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         if (!modelHelper.isModelAllowed(registerModelInput, modelMetaList)) {

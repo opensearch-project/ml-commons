@@ -7,10 +7,8 @@ package org.opensearch.ml.engine.algorithms.rcf;
 
 import static org.opensearch.ml.engine.utils.ModelSerDeSer.decodeBase64;
 
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.secure_sm.AccessController;
 
 import com.amazon.randomcutforest.parkservices.state.ThresholdedRandomCutForestState;
 import com.amazon.randomcutforest.state.RandomCutForestState;
@@ -22,15 +20,12 @@ import io.protostuff.runtime.RuntimeSchema;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
-@SuppressWarnings("removal")
 public class RCFModelSerDeSer {
     private static final int SERIALIZATION_BUFFER_BYTES = 512;
     private static final Schema<RandomCutForestState> rcfSchema = AccessController
-        .doPrivileged((PrivilegedAction<Schema<RandomCutForestState>>) () -> RuntimeSchema.getSchema(RandomCutForestState.class));
+        .doPrivileged(() -> RuntimeSchema.getSchema(RandomCutForestState.class));
     private static final Schema<ThresholdedRandomCutForestState> trcfSchema = AccessController
-        .doPrivileged(
-            (PrivilegedAction<Schema<ThresholdedRandomCutForestState>>) () -> RuntimeSchema.getSchema(ThresholdedRandomCutForestState.class)
-        );
+        .doPrivileged(() -> RuntimeSchema.getSchema(ThresholdedRandomCutForestState.class));
 
     public static byte[] serializeRCF(RandomCutForestState model) {
         return serialize(model, rcfSchema);
@@ -56,20 +51,15 @@ public class RCFModelSerDeSer {
         return deserialize(bytes, trcfSchema);
     }
 
-    @SuppressWarnings("removal")
     private static <T> byte[] serialize(T model, Schema<T> schema) {
         LinkedBuffer buffer = LinkedBuffer.allocate(SERIALIZATION_BUFFER_BYTES);
-        byte[] bytes = AccessController.doPrivileged((PrivilegedAction<byte[]>) () -> ProtostuffIOUtil.toByteArray(model, schema, buffer));
+        byte[] bytes = AccessController.doPrivileged(() -> ProtostuffIOUtil.toByteArray(model, schema, buffer));
         return bytes;
     }
 
-    @SuppressWarnings("removal")
     private static <T> T deserialize(byte[] bytes, Schema<T> schema) {
         T model = schema.newMessage();
-        AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
-            ProtostuffIOUtil.mergeFrom(bytes, model, schema);
-            return null;
-        });
+        AccessController.doPrivileged(() -> { ProtostuffIOUtil.mergeFrom(bytes, model, schema); });
         return model;
     }
 }
