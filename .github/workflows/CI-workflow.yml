@@ -17,11 +17,6 @@ jobs:
   Get-Require-Approval:
     uses: ./.github/workflows/require-approval.yml
 
-  Get-CI-Image-Tag:
-    uses: opensearch-project/opensearch-build/.github/workflows/get-ci-image-tag.yml@main
-    with:
-      product: opensearch
-
   spotless:
     if: github.repository == 'opensearch-project/ml-commons'
     runs-on: ubuntu-latest
@@ -39,7 +34,7 @@ jobs:
         run: ./gradlew spotlessCheck
 
   Build-ml-linux:
-    needs: [Get-Require-Approval, Get-CI-Image-Tag, spotless]
+    needs: [Get-Require-Approval, spotless]
     strategy:
       matrix:
         java: [21, 25]
@@ -47,18 +42,10 @@ jobs:
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
     environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
-    outputs:
-      build-test-linux: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
     runs-on: ubuntu-latest
-    container:
-      # using the same image which is used by opensearch-build team to build the OpenSearch Distribution
-      # this image tag is subject to change as more dependencies and updates will arrive over time
-      image: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-version-linux }}
-      options: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-options }}
 
     steps:
       - name: Run start commands
-        run: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-command }}
       - name: Setup Java ${{ matrix.java }}
         uses: actions/setup-java@v1
         with:
@@ -77,8 +64,8 @@ jobs:
       - name: Remove unnecessary files Linux
         if: ${{ runner.os == 'Linux' }}
         run: |
-          rm -rf /usr/share/dotnet
-          rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           
       - name: Build and Run Tests
         id: step-build-test-linux
