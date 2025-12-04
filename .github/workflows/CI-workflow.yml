@@ -50,11 +50,6 @@ jobs:
     outputs:
       build-test-linux: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
     runs-on: ubuntu-latest
-    container:
-      # using the same image which is used by opensearch-build team to build the OpenSearch Distribution
-      # this image tag is subject to change as more dependencies and updates will arrive over time
-      image: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-version-linux }}
-      options: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-options }}
 
     steps:
       - name: Run start commands
@@ -79,15 +74,7 @@ jobs:
         run: |
           df -h
           echo "Removing large packages"
-          ls /usr/bin
-          apt remove -y '^ghc-8.*'
-          apt remove -y '^dotnet-.*'
-          apt remove -y '^llvm-.*'
-          apt remove -y 'php.*'
-          apt remove -y azure-cli google-cloud-sdk hhvm google-chrome-stable firefox powershell mono-devel
-          apt autoremove -y
-          apt clean
-          df -h
+          ls /usr/share
           rm -rf /usr/share/dotnet
           rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
