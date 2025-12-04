@@ -79,7 +79,7 @@ jobs:
         run: |
           df -h
           echo "Removing large packages"
-          ls /usr/share
+          rpm -qa --queryformat '%10{size} - %-25{name} \t %{version}\n' | sort -n
           rm -rf /usr/share/dotnet
           rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
