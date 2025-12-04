@@ -80,6 +80,7 @@ jobs:
           df -h
           echo "Removing large packages"
           rpm -qa --queryformat '%10{size} - %-25{name} \t %{version}\n' | sort -n
+          yum remove -y golang
           rm -rf /usr/share/dotnet
           rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
