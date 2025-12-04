@@ -6,13 +6,11 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.indexInsight.MLIndexInsightType.STATISTICAL_DATA;
-import static org.opensearch.ml.common.input.Constants.CMK_ASSUME_ROLE_FIELD;
-import static org.opensearch.ml.common.input.Constants.CMK_ROLE_FIELD;
-import static org.opensearch.ml.common.utils.ToolUtils.getAttributeFromHeader;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_INDEX_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.RestActionUtils.putCMKRelatedRoleFromHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
@@ -31,6 +29,9 @@ import org.opensearch.transport.client.node.NodeClient;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class RestMLGetIndexInsightAction extends BaseRestHandler {
     private static final String ML_GET_INDEX_INSIGHT_ACTION = "ml_get_index_insight_action";
 
@@ -58,6 +59,7 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest restRequest, NodeClient client) throws IOException {
+        putCMKRelatedRoleFromHeaders(restRequest, client);
         MLIndexInsightGetRequest mlIndexInsightGetRequest = getRequest(restRequest);
         return channel -> client.execute(MLIndexInsightGetAction.INSTANCE, mlIndexInsightGetRequest, new RestToXContentListener<>(channel));
     }
@@ -73,9 +75,7 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
         if (insightType == null) {
             insightType = STATISTICAL_DATA.name();
         }
-        String cmkRoleArn = getAttributeFromHeader(CMK_ROLE_FIELD, request);
-        String assumeRoleArn = getAttributeFromHeader(CMK_ASSUME_ROLE_FIELD, request);
         MLIndexInsightType type = MLIndexInsightType.fromString(insightType);
-        return new MLIndexInsightGetRequest(indexName, type, tenantId, cmkRoleArn, assumeRoleArn);
+        return new MLIndexInsightGetRequest(indexName, type, tenantId);
     }
 }

@@ -496,6 +496,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
                         allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
                     );
+
                 if (allParams.containsKey(MEMORY_CONTAINER_ID_FIELD)) {
                     reactParams.put(MEMORY_CONTAINER_ID_FIELD, allParams.get(MEMORY_CONTAINER_ID_FIELD));
                 }

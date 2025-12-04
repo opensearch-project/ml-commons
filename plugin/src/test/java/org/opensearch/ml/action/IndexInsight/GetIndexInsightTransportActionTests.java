@@ -216,17 +216,17 @@ public class GetIndexInsightTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testCreateTask() {
-        MLIndexInsightGetRequest statisticalRequest = new MLIndexInsightGetRequest("test_index", STATISTICAL_DATA, null, null, null);
+        MLIndexInsightGetRequest statisticalRequest = new MLIndexInsightGetRequest("test_index", STATISTICAL_DATA, null);
         IndexInsightTask statisticalTask = getIndexInsightTransportAction.createTask(statisticalRequest);
         assertNotNull(statisticalTask);
         assertTrue(statisticalTask instanceof StatisticalDataTask);
 
-        MLIndexInsightGetRequest fieldRequest = new MLIndexInsightGetRequest("test_index", FIELD_DESCRIPTION, null, null, null);
+        MLIndexInsightGetRequest fieldRequest = new MLIndexInsightGetRequest("test_index", FIELD_DESCRIPTION, null);
         IndexInsightTask fieldTask = getIndexInsightTransportAction.createTask(fieldRequest);
         assertNotNull(fieldTask);
         assertTrue(fieldTask instanceof FieldDescriptionTask);
 
-        MLIndexInsightGetRequest logRequest = new MLIndexInsightGetRequest("test_index", LOG_RELATED_INDEX_CHECK, null, null, null);
+        MLIndexInsightGetRequest logRequest = new MLIndexInsightGetRequest("test_index", LOG_RELATED_INDEX_CHECK, null);
         IndexInsightTask logTask = getIndexInsightTransportAction.createTask(logRequest);
         assertNotNull(logTask);
         assertTrue(logTask instanceof LogRelatedIndexCheckTask);

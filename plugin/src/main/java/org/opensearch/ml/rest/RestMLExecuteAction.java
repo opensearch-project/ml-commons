@@ -18,6 +18,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TOOL_NAME;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
 import static org.opensearch.ml.utils.RestActionUtils.hasMcpHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
+import static org.opensearch.ml.utils.RestActionUtils.putCMKRelatedRoleFromHeaders;
 import static org.opensearch.ml.utils.RestActionUtils.putMcpRequestHeaders;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
@@ -162,6 +163,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
                     );
                 }
                 putMcpRequestHeaders(request, client);
+                putCMKRelatedRoleFromHeaders(request, client);
+
             }
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
             if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {

@@ -29,21 +29,11 @@ public class MLIndexInsightGetRequest extends ActionRequest {
     String indexName;
     MLIndexInsightType targetIndexInsight;
     String tenantId;
-    String cmkRoleArn;
-    String assumeRoleArn;
 
-    public MLIndexInsightGetRequest(
-        String indexName,
-        MLIndexInsightType targetIndexInsight,
-        String tenantId,
-        String cmkRoleArn,
-        String assumeRoleArn
-    ) {
+    public MLIndexInsightGetRequest(String indexName, MLIndexInsightType targetIndexInsight, String tenantId) {
         this.indexName = indexName;
         this.targetIndexInsight = targetIndexInsight;
         this.tenantId = tenantId;
-        this.cmkRoleArn = cmkRoleArn;
-        this.assumeRoleArn = assumeRoleArn;
     }
 
     public MLIndexInsightGetRequest(StreamInput in) throws IOException {
@@ -51,8 +41,6 @@ public class MLIndexInsightGetRequest extends ActionRequest {
         this.indexName = in.readString();
         this.targetIndexInsight = MLIndexInsightType.fromString(in.readString());
         this.tenantId = in.readOptionalString();
-        this.cmkRoleArn = in.readOptionalString();
-        this.assumeRoleArn = in.readOptionalString();
     }
 
     @Override
@@ -61,8 +49,6 @@ public class MLIndexInsightGetRequest extends ActionRequest {
         out.writeString(this.indexName);
         out.writeString(this.targetIndexInsight.name());
         out.writeOptionalString(tenantId);
-        out.writeOptionalString(cmkRoleArn);
-        out.writeOptionalString(assumeRoleArn);
     }
 
     @Override
