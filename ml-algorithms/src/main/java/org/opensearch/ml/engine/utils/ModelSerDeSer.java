@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.utils;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Base64;
 
@@ -90,12 +89,11 @@ public class ModelSerDeSer {
     public static Object deserialize(byte[] modelBin) {
         try (
             ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
-            ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream);
-            ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(modelBin))
+            ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream)
         ) {
             // Validate the model class type to avoid deserialization attack.
             validatingObjectInputStream.accept(ACCEPT_CLASS_PATTERNS).reject(REJECT_CLASS_PATTERNS);
-            return objectInputStream.readObject();
+            return validatingObjectInputStream.readObject();
         } catch (Throwable e) {
             log.error("Failed to deserialize model", e);
             throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
