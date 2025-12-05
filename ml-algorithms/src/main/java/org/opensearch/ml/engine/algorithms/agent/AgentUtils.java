@@ -124,6 +124,7 @@ public class AgentUtils {
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
+    public static final String AGENT_LLM_MODEL_ID = "agent_llm_model_id";
 
     public static final String TOOLS = "_tools";
     public static final String TOOL_TEMPLATE = "tool_template";
@@ -856,6 +857,10 @@ public class AgentUtils {
     ) {
         if (toolSpecs == null) {
             return;
+        }
+        // Add agent's model_id for tools that may need it like QPT
+        if (mlAgent.getLlm() != null && mlAgent.getLlm().getModelId() != null) {
+            params.put(AGENT_LLM_MODEL_ID, mlAgent.getLlm().getModelId());
         }
         for (MLToolSpec toolSpec : toolSpecs) {
             Map<String, String> toolParams = buildToolParameters(params, toolSpec, mlAgent.getTenantId());

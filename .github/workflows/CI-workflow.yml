@@ -2,10 +2,10 @@ name: Build and Test ml-commons
 # This workflow is triggered on pull requests and push to any branches
 on:
   push:
-    branches-ignore:
-      - 'backport/**'
-      - 'create-pull-request/**'
-      - 'dependabot/**'
+    branches:
+      - 'main'
+      - '[0-9]+.[0-9]+'
+      - '[0-9]+.x'
   pull_request_target:
     types: [opened, synchronize, reopened]
 
@@ -42,7 +42,7 @@ jobs:
     needs: [Get-Require-Approval, Get-CI-Image-Tag, spotless]
     strategy:
       matrix:
-        java: [21, 24]
+        java: [21, 25]
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
@@ -68,11 +68,12 @@ jobs:
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
+
       - name: Checkout MLCommons
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
+          
       - name: Build and Run Tests
         id: step-build-test-linux
         run: |
@@ -107,7 +108,7 @@ jobs:
     needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
       matrix:
-        java: [21, 24]
+        java: [21, 25]
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
@@ -203,7 +204,7 @@ jobs:
   Build-ml-windows:
     strategy:
       matrix:
-        java: [21, 24]
+        java: [21, 25]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     needs: [Get-Require-Approval, spotless]

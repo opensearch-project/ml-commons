@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.AGENT_LLM_MODEL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_FORMAT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
@@ -420,6 +421,10 @@ public class QueryPlanningTool implements WithModelTool {
 
         @Override
         public QueryPlanningTool create(Map<String, Object> params) {
+            // Use agent's Agent model_id if tool doesn't have its own model_id
+            if (!params.containsKey(MODEL_ID_FIELD) && params.containsKey(AGENT_LLM_MODEL_ID)) {
+                params.put(MODEL_ID_FIELD, params.get(AGENT_LLM_MODEL_ID));
+            }
 
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(params);
 

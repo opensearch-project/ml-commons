@@ -88,7 +88,7 @@ public class TransportSearchMemoryContainerAction extends HandledTransportAction
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
-            if (!memoryContainerHelper.isAdminUser(user)) {
+            if (user != null && !memoryContainerHelper.isAdminUser(user)) {
                 memoryContainerHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by {}", user.getBackendRoles());
             }

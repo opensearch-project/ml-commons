@@ -20,6 +20,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.AGENT_LLM_MODEL_ID;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY_PLANNING_SYSTEM_PROMPT;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
@@ -1497,4 +1498,41 @@ public class QueryPlanningToolTests {
         assertEquals("{\"query\":{\"match\":{\"title\":\"test\"}}}", result);
     }
 
+    @Test
+    public void testFactoryCreate_UsesAgentLlmModelIdAsFallback() {
+        Map<String, Object> params = new HashMap<>();
+        params.put(AGENT_LLM_MODEL_ID, "agent_model_123");
+        // No model_id specified - should use agent_llm_model_id
+
+        Tool tool = QueryPlanningTool.Factory.getInstance().create(params);
+        assertNotNull(tool);
+        assertEquals(QueryPlanningTool.TYPE, tool.getName());
+
+        assertTrue(params.containsKey(MODEL_ID_FIELD));
+        assertEquals("agent_model_123", params.get(MODEL_ID_FIELD));
+    }
+
+    @Test
+    public void testFactoryCreate_ToolModelIdTakesPrecedence() {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ID_FIELD, "tool_model_456");
+        params.put(AGENT_LLM_MODEL_ID, "agent_model_123");
+
+        Tool tool = QueryPlanningTool.Factory.getInstance().create(params);
+        assertNotNull(tool);
+        assertEquals(QueryPlanningTool.TYPE, tool.getName());
+
+        assertEquals("tool_model_456", params.get(MODEL_ID_FIELD));
+    }
+
+    @Test
+    public void testFactoryCreate_NoModelIdProvided() {
+        Map<String, Object> params = new HashMap<>();
+
+        Exception exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> { QueryPlanningTool.Factory.getInstance().create(params); }
+        );
+        assertEquals("Model ID can't be null or empty", exception.getMessage());
+    }
 }
