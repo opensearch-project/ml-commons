@@ -11,13 +11,11 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.secure_sm.AccessController;
 
 import com.google.gson.reflect.TypeToken;
 
@@ -33,8 +31,8 @@ public class DJLUtils {
     @Setter
     private static MLEngine mlEngine;
 
-    private static <T> T withDJLContext(Callable<T> action) throws PrivilegedActionException {
-        return AccessController.doPrivileged((PrivilegedExceptionAction<T>) () -> {
+    private static <T> T withDJLContext(Callable<T> action) throws Exception {
+        return AccessController.doPrivilegedChecked(() -> {
             ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
             try {
                 System.setProperty("java.library.path", mlEngine.getMlCachePath().toAbsolutePath().toString());
@@ -57,7 +55,7 @@ public class DJLUtils {
     public static HuggingFaceTokenizer buildHuggingFaceTokenizer(Path resourcePath) {
         try {
             return withDJLContext(() -> { return HuggingFaceTokenizer.newInstance(resourcePath); });
-        } catch (PrivilegedActionException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Failed to initialize Hugging Face tokenizer. " + e);
         }
     }

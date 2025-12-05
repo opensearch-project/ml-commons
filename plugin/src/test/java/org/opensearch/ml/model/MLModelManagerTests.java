@@ -55,7 +55,6 @@ import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.security.PrivilegedActionException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -434,7 +433,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any(), any());
     }
 
-    public void testRegisterMLModel_RegisterPreBuildModel() throws PrivilegedActionException, IOException {
+    public void testRegisterMLModel_RegisterPreBuildModel() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
@@ -481,7 +480,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testRegisterMLRemoteModel() throws PrivilegedActionException, IOException {
+    public void testRegisterMLRemoteModel() throws IOException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -512,7 +511,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testRegisterMLRemoteModelModelGroupNotFoundException() throws PrivilegedActionException, IOException {
+    public void testRegisterMLRemoteModelModelGroupNotFoundException() throws IOException {
         // Create listener and capture the failure
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
@@ -585,7 +584,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testIndexRemoteModel() throws PrivilegedActionException, IOException {
+    public void testIndexRemoteModel() throws IOException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);

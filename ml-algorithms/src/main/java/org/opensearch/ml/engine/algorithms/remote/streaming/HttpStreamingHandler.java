@@ -9,8 +9,6 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +23,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
+import org.opensearch.secure_sm.AccessController;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -54,13 +53,12 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
 
         // Initialize OkHttp client for SSE
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            AccessController.doPrivileged(() -> {
                 this.okHttpClient = new OkHttpClient.Builder()
                     .connectTimeout(connectionTimeout)
                     .readTimeout(readTimeout)
                     .retryOnConnectionFailure(true)
                     .build();
-                return null;
             });
         } catch (Exception e) {
             throw new RuntimeException("Failed to build OkHttpClient", e);
@@ -79,10 +77,7 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
             EventSourceListener listener = new HTTPEventSourceListener(actionListener, llmInterface);
             Request request = ConnectorUtils.buildOKHttpStreamingRequest(action, connector, parameters, payload);
 
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                EventSources.createFactory(okHttpClient).newEventSource(request, listener);
-                return null;
-            });
+            AccessController.doPrivileged(() -> { EventSources.createFactory(okHttpClient).newEventSource(request, listener); });
 
         } catch (Exception e) {
             log.error("Failed to start HTTP streaming", e);

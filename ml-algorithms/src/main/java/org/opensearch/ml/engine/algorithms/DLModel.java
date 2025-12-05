@@ -14,9 +14,6 @@ import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +34,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
+import org.opensearch.secure_sm.AccessController;
 
 import ai.djl.Application;
 import ai.djl.Device;
@@ -74,14 +72,13 @@ public abstract class DLModel implements Predictable {
         throw new IllegalArgumentException("model not deployed");
     }
 
-    @SuppressWarnings("removal")
     @Override
     public MLOutput predict(MLInput mlInput) {
         if (modelHelper == null || modelId == null) {
             throw new IllegalArgumentException("model not deployed");
         }
         try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {
+            return AccessController.doPrivilegedChecked(() -> {
                 Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
                 if (!isModelReady()) {
                     throw new MLException("model not deployed.");
@@ -249,7 +246,7 @@ public abstract class DLModel implements Predictable {
             }
             List<Predictor<Input, Output>> predictorList = new ArrayList<>();
             List<ZooModel<Input, Output>> modelList = new ArrayList<>();
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            AccessController.doPrivilegedChecked(() -> {
                 ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
                 try {
                     System.setProperty("PYTORCH_PRECXX11", "true");
@@ -303,7 +300,7 @@ public abstract class DLModel implements Predictable {
                     Thread.currentThread().setContextClassLoader(contextClassLoader);
                 }
             });
-        } catch (PrivilegedActionException e) {
+        } catch (Exception e) {
             String errorMsg = "Failed to deploy model " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);

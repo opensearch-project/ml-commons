@@ -10,8 +10,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,6 +36,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -225,7 +224,7 @@ public class LocalRegexGuardrail extends Guardrail {
         Map<String, Object> queryBodyMap = Map.of("query", Map.of("percolate", Map.of("field", "query", "document", documentMap)));
         CountDownLatch latch = new CountDownLatch(1);
         try {
-            queryBody = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(queryBodyMap));
+            queryBody = AccessController.doPrivileged(() -> gson.toJson(queryBodyMap));
             SearchDataObjectRequest searchDataObjectRequest = buildSearchDataObjectRequest(indexName, queryBody);
             var responseListener = new LatchedActionListener<>(ActionListener.<SearchResponse>wrap(r -> {
                 if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {

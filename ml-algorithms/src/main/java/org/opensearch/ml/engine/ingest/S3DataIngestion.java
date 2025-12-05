@@ -13,9 +13,6 @@ import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +25,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.engine.annotation.Ingester;
 import org.opensearch.ml.engine.utils.S3Utils;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -82,8 +80,7 @@ public class S3DataIngestion extends AbstractIngestion {
         double successRate = 0;
 
         try (
-            ResponseInputStream<GetObjectResponse> s3is = AccessController
-                .doPrivileged((PrivilegedExceptionAction<ResponseInputStream<GetObjectResponse>>) () -> s3.getObject(getObjectRequest));
+            ResponseInputStream<GetObjectResponse> s3is = AccessController.doPrivilegedChecked(() -> s3.getObject(getObjectRequest));
             BufferedReader reader = new BufferedReader(new InputStreamReader(s3is, StandardCharsets.UTF_8))
         ) {
             List<String> linesBuffer = new ArrayList<>();
@@ -141,8 +138,6 @@ public class S3DataIngestion extends AbstractIngestion {
         } catch (S3Exception e) {
             log.error("Error reading from S3: " + e.awsErrorDetails().errorMessage());
             throw e;
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException("Failed to get S3 Object: ", e);
         } catch (Exception e) {
             log.error(e.getMessage());
             throw new OpenSearchStatusException("Failed to batch ingest: " + e.getMessage(), RestStatus.INTERNAL_SERVER_ERROR);

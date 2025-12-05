@@ -6,9 +6,6 @@
 package org.opensearch.ml.engine;
 
 import java.lang.reflect.Constructor;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -23,6 +20,7 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.annotation.Ingester;
 import org.opensearch.ml.engine.annotation.Processor;
 import org.opensearch.ml.engine.processor.MLProcessorType;
+import org.opensearch.secure_sm.AccessController;
 import org.reflections.Reflections;
 
 @SuppressWarnings("removal")
@@ -43,16 +41,11 @@ public class MLEngineClassLoader {
     private static Map<Enum<?>, Object> mlObjects = new HashMap<>();
 
     static {
-        try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                loadClassMapping();
-                loadIngestClassMapping();
-                loadMLProcessorClassMapping();
-                return null;
-            });
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException("Can't load class mapping in ML engine", e);
-        }
+        AccessController.doPrivileged(() -> {
+            loadClassMapping();
+            loadIngestClassMapping();
+            loadMLProcessorClassMapping();
+        });
     }
 
     /**

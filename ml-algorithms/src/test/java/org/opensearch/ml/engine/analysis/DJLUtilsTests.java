@@ -23,13 +23,7 @@ public class DJLUtilsTests extends HFModelAnalyzerTestCase {
             RuntimeException.class,
             () -> DJLUtils.buildHuggingFaceTokenizer(mlEngine.getAnalysisRootPath().resolve("test2").resolve("tokenizer.json"))
         );
-        assertTrue(
-            exception
-                .getMessage()
-                .contains(
-                    "Failed to initialize Hugging Face tokenizer. java.security.PrivilegedActionException: java.nio.file.NoSuchFileException:"
-                )
-        );
+        assertTrue(exception.getMessage().contains("Failed to initialize Hugging Face tokenizer. java.nio.file.NoSuchFileException:"));
     }
 
     @Test
