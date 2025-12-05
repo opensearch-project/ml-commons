@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_SSL_VERIFICATION_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +64,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isStreamEnabled;
 
+    private volatile Boolean isConnectorSslVerificationEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -83,6 +86,7 @@ public class MLFeatureEnabledSetting {
         isAgenticMemoryEnabled = ML_COMMONS_AGENTIC_MEMORY_ENABLED.get(settings);
         isIndexInsightEnabled = ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED.get(settings);
         isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
+        isConnectorSslVerificationEnabled = ML_COMMONS_CONNECTOR_SSL_VERIFICATION_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -109,6 +113,7 @@ public class MLFeatureEnabledSetting {
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> isMcpConnectorEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_MEMORY_ENABLED, it -> isAgenticMemoryEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_SSL_VERIFICATION_ENABLED, it -> isConnectorSslVerificationEnabled = it);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED, it -> isIndexInsightEnabled = it);
@@ -244,5 +249,9 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isStreamEnabled() {
         return isStreamEnabled;
+    }
+
+    public boolean isConnectorSslVerificationEnabled() {
+        return isConnectorSslVerificationEnabled;
     }
 }
