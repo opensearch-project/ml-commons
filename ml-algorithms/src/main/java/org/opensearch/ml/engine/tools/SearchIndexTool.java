@@ -62,6 +62,7 @@ public class SearchIndexTool implements Tool {
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";
     public static final String QUERY_FIELD = "query";
+    public static final String SIZE_FIELD = "size";
     public static final String INPUT_SCHEMA_FIELD = "input_schema";
     public static final String STRICT_FIELD = "strict";
 
@@ -131,10 +132,13 @@ public class SearchIndexTool implements Tool {
         return true;
     }
 
-    private SearchRequest getSearchRequest(String index, String query) throws IOException {
+    private SearchRequest getSearchRequest(String index, String query, Integer size) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
         searchSourceBuilder.parseXContent(queryParser);
+        if (size != null && size > 0) {
+            searchSourceBuilder.size(size);
+        }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
 
@@ -176,6 +180,7 @@ public class SearchIndexTool implements Tool {
             String input = parameters.get(INPUT_FIELD);
             String index = null;
             String query = null;
+            Integer size = null;
             boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_RAW_RESPONSE, "false"));
             if (!StringUtils.isEmpty(input)) {
                 try {
@@ -187,6 +192,10 @@ public class SearchIndexTool implements Tool {
                         if (queryElement != null) {
                             Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
                             query = PLAIN_NUMBER_GSON.toJson(queryObject);
+                        }
+
+                        if (jsonObject.has(SIZE_FIELD)) {
+                            size = jsonObject.get(SIZE_FIELD).getAsInt();
                         }
                     }
                 } catch (JsonSyntaxException e) {
@@ -202,6 +211,14 @@ public class SearchIndexTool implements Tool {
                 query = parameters.get(QUERY_FIELD);
             }
 
+            if (StringUtils.isNotEmpty(parameters.get(SIZE_FIELD))) {
+                try {
+                    size = Math.min(size == null ? 100 : size, Integer.parseInt(parameters.get(SIZE_FIELD)));
+                } catch (NumberFormatException e) {
+                    log.warn("Invalid size parameter: {}", parameters.get(SIZE_FIELD));
+                }
+            }
+
             if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
                 listener
                     .onFailure(
@@ -212,7 +229,7 @@ public class SearchIndexTool implements Tool {
                 return;
             }
 
-            SearchRequest searchRequest = getSearchRequest(index, query);
+            SearchRequest searchRequest = getSearchRequest(index, query, size);
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
                 SearchHit[] hits = r.getHits().getHits();
