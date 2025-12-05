@@ -159,7 +159,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
                 } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                    throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
                 }
                 if (!isUserInitiatedDeployRequest) {
                     deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);

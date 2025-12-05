@@ -27,6 +27,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -164,7 +165,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testRegisterModelRequestLocalInferenceDisabled() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expect(OpenSearchStatusException.class);
         exceptionRule.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
