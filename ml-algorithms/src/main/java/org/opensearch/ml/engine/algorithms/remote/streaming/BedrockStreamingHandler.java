@@ -148,7 +148,17 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 }
             }).subscriber(event -> {
                 log.debug("BEDROCK_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event);
-                handleStreamEvent(event, listener, isStreamClosed, firstToolSent, toolName, toolInput, toolUseId, toolInputAccumulator, currentState);
+                handleStreamEvent(
+                    event,
+                    listener,
+                    isStreamClosed,
+                    firstToolSent,
+                    toolName,
+                    toolInput,
+                    toolUseId,
+                    toolInputAccumulator,
+                    currentState
+                );
             }).build();
 
             // Start streaming
@@ -332,7 +342,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     if (toolInput.get() == null) {
                         toolInput.set(Map.of());
                     }
-                    
+
                     if (isAGUIAgent) {
                         BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
                         sendAGUIEvent(toolCallEndEvent, false, listener);
