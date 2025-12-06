@@ -34,12 +34,14 @@ import java.util.Map;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.AgentLoggingContext;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -135,7 +137,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             conversationalRunner.run(mlAgent, params, listener, channel);
 
         } catch (Exception e) {
-            log.error("Error starting AG-UI agent execution", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Error starting AG-UI agent execution", e);
             listener.onFailure(e);
         }
     }
@@ -150,7 +152,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             JsonElement messagesElement = gson.fromJson(aguiMessagesJson, JsonElement.class);
 
             if (!messagesElement.isJsonArray()) {
-                log.warn("AG-UI messages is not a JSON array");
+                AgentLoggingContext.warn(log, getThreadContext(), "AG-UI messages is not a JSON array");
                 return;
             }
 
@@ -164,8 +166,10 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                     String content = getStringField(msg, "content");
                     boolean hasToolCalls = msg.has("toolCalls");
                     boolean hasToolCallId = msg.has("toolCallId");
-                    log
+                    AgentLoggingContext
                         .debug(
+                            log,
+                            getThreadContext(),
                             "AG-UI: Message[{}] - role: {}, hasToolCalls: {}, hasToolCallId: {}, content preview: {}",
                             i,
                             role,
@@ -210,14 +214,21 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                             if (functionCalling != null) {
                                 // Use FunctionCalling to format the message in the correct LLM format
                                 assistantMessage = functionCalling.formatAGUIToolCalls(toolCallsJson);
-                                log.debug("AG-UI: Formatted assistant message using {}", functionCalling.getClass().getSimpleName());
+                                AgentLoggingContext
+                                    .debug(
+                                        log,
+                                        getThreadContext(),
+                                        "AG-UI: Formatted assistant message using {}",
+                                        functionCalling.getClass().getSimpleName()
+                                    );
                             } else {
-                                log.error("AG-UI: Invalid function calling configuration: {}", llmInterface);
+                                AgentLoggingContext
+                                    .error(log, getThreadContext(), "AG-UI: Invalid function calling configuration: {}", llmInterface);
                             }
 
                             assistantToolCallMessages.add(assistantMessage);
-                            log.debug("AG-UI: Extracted assistant message at index {}", i);
-                            log.debug("AG-UI: Assistant message JSON: {}", assistantMessage);
+                            AgentLoggingContext.debug(log, getThreadContext(), "AG-UI: Extracted assistant message at index {}", i);
+                            AgentLoggingContext.debug(log, getThreadContext(), "AG-UI: Assistant message JSON: {}", assistantMessage);
                         }
                     }
 
@@ -379,7 +390,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to process AG-UI messages to chat history", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to process AG-UI messages to chat history", e);
             throw new IllegalArgumentException("Failed to process AG-UI messages to chat history", e);
         }
     }
@@ -395,7 +406,7 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             JsonElement contextElement = gson.fromJson(aguiContextJson, JsonElement.class);
 
             if (!contextElement.isJsonArray()) {
-                log.warn("AG-UI context is not a JSON array");
+                AgentLoggingContext.warn(log, getThreadContext(), "AG-UI context is not a JSON array");
                 return;
             }
 
@@ -423,8 +434,18 @@ public class MLAGUIAgentRunner implements MLAgentRunner {
             }
 
         } catch (Exception e) {
-            log.error("Failed to process AG-UI context", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to process AG-UI context", e);
             throw new IllegalArgumentException("Failed to process AG-UI context", e);
         }
+    }
+
+    /**
+     * Gets the ThreadContext from the client's thread pool.
+     */
+    private ThreadContext getThreadContext() {
+        if (client == null || client.threadPool() == null) {
+            return null;
+        }
+        return client.threadPool().getThreadContext();
     }
 }

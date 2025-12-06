@@ -188,15 +188,52 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                     MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent, client);
                     boolean isAGUI = isAGUIAgent(mlExecuteTaskRequest);
 
+                    // Extract run_id and thread_id for logging prefix
+                    String threadId = extractThreadId(mlExecuteTaskRequest);
+                    String runId = extractRunId(mlExecuteTaskRequest);
+                    String logPrefix = buildLogPrefix(runId, threadId);
+
                     // Send RUN_STARTED event immediately for AG-UI agents (ReAct cycle begins)
                     if (isAGUI) {
-                        String threadId = extractThreadId(mlExecuteTaskRequest);
-                        String runId = extractRunId(mlExecuteTaskRequest);
-
                         BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
                         HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
                         channel.sendChunk(startChunk);
-                        log.debug("AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", threadId, runId);
+                        log.debug("{}AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", logPrefix, threadId, runId);
+                    }
+
+                    // Extract backend tool names from agent configuration and add to request for AG-UI filtering
+                    List<String> backendToolNames = extractBackendToolNamesFromAgent(agent);
+                    if (isAGUI && !backendToolNames.isEmpty()) {
+                        // Add backend tool names to request parameters so they're available during streaming
+                        try {
+                            if (!(mlExecuteTaskRequest.getInput() instanceof AgentMLInput)) {
+                                throw new IllegalArgumentException(
+                                    "Invalid input type. Expected: AgentMLInput, Received: "
+                                        + mlExecuteTaskRequest.getInput().getClass().getSimpleName()
+                                );
+                            }
+                            AgentMLInput agentInput = (AgentMLInput) mlExecuteTaskRequest.getInput();
+
+                            if (!(agentInput.getInputDataset() instanceof RemoteInferenceInputDataSet)) {
+                                throw new IllegalArgumentException(
+                                    "Invalid dataset type. Expected: RemoteInferenceInputDataSet, Received: "
+                                        + agentInput.getInputDataset().getClass().getSimpleName()
+                                );
+                            }
+                            RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+
+                            inputDataSet.getParameters().put(AGUI_PARAM_BACKEND_TOOL_NAMES, new Gson().toJson(backendToolNames));
+                            log
+                                .info(
+                                    "{}AG-UI: Added {} backend tool names to request for streaming filter: {}",
+                                    logPrefix,
+                                    backendToolNames.size(),
+                                    backendToolNames
+                                );
+                        } catch (ClassCastException e) {
+                            log.error("{}Failed to cast input types for backend tool names extraction", logPrefix, e);
+                            throw new IllegalArgumentException("Invalid input type configuration for AG-UI request", e);
+                        }
                     }
 
                     final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
@@ -207,7 +244,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                 MLTaskResponse response = streamResponse.nextResponse();
 
                                 if (response != null) {
-                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI);
+                                    HttpChunk responseChunk = convertToHttpChunk(response, isAGUI, logPrefix);
                                     channel.sendChunk(responseChunk);
 
                                     // Recursively handle the next response
@@ -216,13 +253,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                                         .executor(STREAM_EXECUTE_THREAD_POOL)
                                         .execute(() -> handleStreamResponse(streamResponse));
                                 } else {
-                                    log.info("No more responses, closing stream");
+                                    log.info("{}No more responses, closing stream", logPrefix);
                                     future.complete(XContentHttpChunk.last());
                                     streamResponse.close();
                                 }
                             } catch (Exception e) {
                                 future.completeExceptionally(e);
-                                log.error("Error in stream handling", e);
+                                log.error("{}Error in stream handling", logPrefix, e);
                             }
                         }
 
@@ -393,6 +430,18 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return false;
     }
 
+    private List<String> extractBackendToolNamesFromAgent(MLAgent agent) {
+        List<String> backendToolNames = new ArrayList<>();
+        if (agent != null && agent.getTools() != null) {
+            for (MLToolSpec toolSpec : agent.getTools()) {
+                if (toolSpec.getName() != null) {
+                    backendToolNames.add(toolSpec.getName());
+                }
+            }
+        }
+        return backendToolNames;
+    }
+
     private String extractThreadId(MLExecuteTaskRequest request) {
         if (request.getInput() instanceof AgentMLInput) {
             AgentMLInput agentInput = (AgentMLInput) request.getInput();
@@ -413,7 +462,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return "run_" + System.currentTimeMillis();
     }
 
-    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent) throws IOException {
+    private HttpChunk convertToHttpChunk(MLTaskResponse response, boolean isAGUIAgent, String logPrefix) throws IOException {
         String memoryId = "";
         String parentInteractionId = "";
         String content = "";
@@ -435,7 +484,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 isLast = dataMap.containsKey("is_last") && Boolean.TRUE.equals(dataMap.get("is_last"));
             }
         } catch (Exception e) {
-            log.error("Failed to process response", e);
+            log.error("{}Failed to process response", logPrefix, e);
             content = "Processing failed";
             isLast = true;
         }
@@ -445,7 +494,7 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         // If this is an AG-UI agent, convert to AG-UI event format
         if (isAGUIAgent) {
-            return convertToAGUIEvent(content, isLast);
+            return convertToAGUIEvent(content, isLast, logPrefix);
         }
 
         // Create ordered tensors
@@ -503,10 +552,11 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         return Map.of();
     }
 
-    private HttpChunk convertToAGUIEvent(String content, boolean isLast) {
+    private HttpChunk convertToAGUIEvent(String content, boolean isLast, String logPrefix) {
         log
             .debug(
-                "RestMLExecuteStreamAction: convertToAGUIEvent() called - contentLength={}, isLast={}",
+                "{}RestMLExecuteStreamAction: convertToAGUIEvent() called - contentLength={}, isLast={}",
+                logPrefix,
                 content != null ? content.length() : "null",
                 isLast
             );
@@ -514,32 +564,32 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
         StringBuilder sseResponse = new StringBuilder();
 
         if (content != null && !content.isEmpty()) {
-            log.debug("RestMLExecuteStreamAction: Processing content: '{}'", content);
+            log.debug("{}RestMLExecuteStreamAction: Processing content: '{}'", logPrefix, content);
 
             try {
                 if (StringUtils.isJson(content)) {
                     JsonElement element = JsonParser.parseString(content);
                     sseResponse.append("data: ").append(element).append("\n\n");
-                    log.debug("RestMLExecuteStreamAction: Processing json element: '{}'", element);
+                    log.debug("{}RestMLExecuteStreamAction: Processing json element: '{}'", logPrefix, element);
                 } else {
                     // catch unexpected content chunks such as Bedrock error
-                    log.warn("Unexpected content received - not valid JSON: {}", content);
+                    log.warn("{}Unexpected content received - not valid JSON: {}", logPrefix, content);
                     BaseEvent runErrorEvent = new RunErrorEvent("Unexpected chunk: " + content, null);
                     sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
                     isLast = true;
                 }
             } catch (Exception e) {
-                log.error("Failed to process AG-UI events chunk content {}", content, e);
+                log.error("{}Failed to process AG-UI events chunk content {}", logPrefix, content, e);
                 BaseEvent runErrorEvent = new RunErrorEvent("Unexpected error: " + e.getMessage(), null);
                 sseResponse.append("data: ").append(runErrorEvent.toJsonString()).append("\n\n");
                 isLast = true;
             }
         } else {
-            log.warn("Received null or empty AG-UI content chunk");
+            log.warn("{}Received null or empty AG-UI content chunk", logPrefix);
         }
 
         String finalSse = sseResponse.toString();
-        log.debug("RestMLExecuteStreamAction: Returning chunk - length={}", finalSse.length());
+        log.debug("{}RestMLExecuteStreamAction: Returning chunk - length={}", logPrefix, finalSse.length());
         return createHttpChunk(finalSse, isLast);
     }
 
@@ -555,6 +605,17 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
             log.error("Failed to combine chunks", e);
             throw new OpenSearchStatusException("Failed to combine request chunks", RestStatus.INTERNAL_SERVER_ERROR, e);
         }
+    }
+
+    private String buildLogPrefix(String runId, String threadId) {
+        StringBuilder prefix = new StringBuilder();
+        if (runId != null && !runId.isEmpty()) {
+            prefix.append("[run_id=").append(runId).append("]");
+        }
+        if (threadId != null && !threadId.isEmpty()) {
+            prefix.append("[thread_id=").append(threadId).append("]");
+        }
+        return prefix.toString();
     }
 
     private HttpChunk createHttpChunk(String sseData, boolean isLast) {

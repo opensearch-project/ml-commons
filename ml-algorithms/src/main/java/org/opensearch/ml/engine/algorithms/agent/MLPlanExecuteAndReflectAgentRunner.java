@@ -51,6 +51,7 @@ import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
@@ -76,6 +77,8 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.AgentLoggingContext;
+import org.opensearch.ml.common.utils.ContextAwareActionListener;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -295,7 +298,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         allParams.putAll(apiParams);
         allParams.putAll(mlAgent.getParameters());
         allParams.put(TENANT_ID_FIELD, mlAgent.getTenantId());
-        log.debug("MLPlanExecuteAndReflectAgentRunner called with allParams: {}", allParams);
+        AgentLoggingContext.debug(log, getThreadContext(), "MLPlanExecuteAndReflectAgentRunner called with allParams: {}", allParams);
 
         setupPromptParameters(allParams);
 
@@ -315,19 +318,19 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         // todo: use chat history instead of completed steps
         Map<String, Object> memoryParams = createMemoryParams(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, mlAgent, apiParams);
-        log.debug("Called MLPlanExecuteAndReflectAgentRunner with memoryParams: {}", memoryParams);
+        AgentLoggingContext.debug(log, getThreadContext(), "Called MLPlanExecuteAndReflectAgentRunner with memoryParams: {}", memoryParams);
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey("endpoint")) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
             memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
-            log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+            AgentLoggingContext.info(log, getThreadContext(), "Detected inline connector metadata, using RemoteAgenticConversationMemory");
         } else {
             // Use the originally specified memory factory
             memoryFactory = memoryFactoryMap.get(memoryType);
         }
 
-        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
-            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(interactions -> {
+        memoryFactory.create(memoryParams, ContextAwareActionListener.wrap(ActionListener.wrap(memory -> {
+            memory.getMessages(messageHistoryLimit, ContextAwareActionListener.wrap(ActionListener.<List<Interaction>>wrap(interactions -> {
                 final List<String> completedSteps = new ArrayList<>();
                 for (Interaction interaction : interactions) {
                     String question = interaction.getInput();
@@ -348,17 +351,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to get chat history", e);
                 listener.onFailure(e);
-            }));
-        }, listener::onFailure));
+            }), getThreadContext()));
+        }, listener::onFailure), getThreadContext()));
     }
 
     private void setToolsAndRunAgent(
         MLAgent mlAgent,
         Map<String, String> allParams,
         List<String> completedSteps,
-        Memory memory,
+        Memory<Interaction, ?, ?> memory,
         String conversationId,
         ActionListener<Object> finalListener
     ) {
@@ -391,7 +394,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             toolSpecs.addAll(mcpTools);
             processTools.accept(toolSpecs);
         }, e -> {
-            log.warn("Failed to get MCP tools, continuing with base tools only", e);
+            AgentLoggingContext.warn(log, getThreadContext(), "Failed to get MCP tools, continuing with base tools only", e);
             processTools.accept(toolSpecs);
         }));
     }
@@ -400,7 +403,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         LLMSpec llm,
         Map<String, String> allParams,
         List<String> completedSteps,
-        Memory memory,
+        Memory<Interaction, ?, ?> memory,
         String conversationId,
         int stepsExecuted,
         AtomicInteger traceNumber,
@@ -443,7 +446,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     }
                 }
             } catch (Exception e) {
-                log.error("Failed to emit pre-LLM hook", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to emit pre-LLM hook", e);
             }
 
         }
@@ -576,9 +579,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             client,
                             sdkClient,
                             ActionListener.wrap(updateResponse -> {
-                                log.info("Updated task {} with executor memory ID", taskId);
+                                AgentLoggingContext.info(log, getThreadContext(), "Updated task {} with executor memory ID", taskId);
                                 taskUpdated = true;
-                            }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e))
+                            },
+                                e -> AgentLoggingContext
+                                    .errorWithException(
+                                        log,
+                                        getThreadContext(),
+                                        "Failed to update task " + taskId + " with executor memory ID",
+                                        e
+                                    )
+                            )
                         );
                     }
 
@@ -622,12 +633,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         finalListener
                     );
                 }, e -> {
-                    log.error("Failed to execute ReAct agent", e);
+                    AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to execute ReAct agent", e);
                     finalListener.onFailure(e);
                 }));
             }
         }, e -> {
-            log.error("Failed to run deep research agent", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run deep research agent", e);
             finalListener.onFailure(e);
         });
 
@@ -753,7 +764,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void saveAndReturnFinalResult(
-        Memory memory,
+        Memory<Interaction, ?, ?> memory,
         String parentInteractionId,
         String reactAgentMemoryId,
         String reactParentInteractionId,
@@ -787,7 +798,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     );
                 finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
             }, e -> {
-                log.error("Failed to update interaction with final result", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to update interaction with final result", e);
                 finalListener.onFailure(e);
             }));
         } else {
@@ -849,12 +860,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         LLMSpec llm,
         Map<String, String> allParams,
         List<String> completedSteps,
-        Memory memory,
+        Memory<Interaction, ?, ?> memory,
         String parentInteractionId,
         ActionListener<Object> finalListener
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
-        log.info("[SUMMARY] Max steps reached. Completed steps: {}", completedSteps.size());
+        AgentLoggingContext.info(log, getThreadContext(), "[SUMMARY] Max steps reached. Completed steps: {}", completedSteps.size());
 
         ActionListener<String> responseListener = ActionListener.wrap(response -> {
             saveAndReturnFinalResult(
@@ -869,13 +880,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }, finalListener::onFailure);
 
         generateSummary(llm, completedSteps, allParams, ActionListener.wrap(summary -> {
-            log.info("Summary generated successfully");
+            AgentLoggingContext.info(log, getThreadContext(), "Summary generated successfully");
             responseListener
                 .onResponse(
                     String.format("Max Steps Limit (%d) Reached. Here's a summary of the steps completed so far:\n\n%s", maxSteps, summary)
                 );
         }, e -> {
-            log.error("Summary generation failed, using fallback", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Summary generation failed, using fallback", e);
             String fallbackResult = completedSteps.isEmpty() || completedSteps.size() < 2
                 ? String.format("Max Steps Limit (%d) Reached. Use memory_id with same task to restart.", maxSteps)
                 : String
@@ -931,7 +942,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(response -> {
                 String summary = extractSummaryFromResponse(response, summaryParams);
                 if (summary == null || summary.trim().isEmpty()) {
-                    log.error("Extracted summary is empty");
+                    AgentLoggingContext.error(log, getThreadContext(), "Extracted summary is empty");
                     listener.onFailure(new RuntimeException("Empty or invalid LLM summary response"));
                     return;
                 }
@@ -975,11 +986,27 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 }
             }
 
-            log.error("Summary generate error. No result/response field found. Available fields: {}", dataMap.keySet());
+            AgentLoggingContext
+                .error(
+                    log,
+                    getThreadContext(),
+                    "Summary generate error. No result/response field found. Available fields: {}",
+                    dataMap.keySet()
+                );
             return null;
         } catch (Exception e) {
-            log.error("Summary extraction failed", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Summary extraction failed", e);
             throw new RuntimeException("Failed to extract summary from response", e);
         }
+    }
+
+    /**
+     * Gets the ThreadContext from the client's thread pool.
+     */
+    private ThreadContext getThreadContext() {
+        if (client == null || client.threadPool() == null) {
+            return null;
+        }
+        return client.threadPool().getThreadContext();
     }
 }

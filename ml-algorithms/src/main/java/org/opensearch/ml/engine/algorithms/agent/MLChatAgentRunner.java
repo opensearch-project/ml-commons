@@ -65,6 +65,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -87,6 +88,8 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.AgentLoggingContext;
+import org.opensearch.ml.common.utils.ContextAwareActionListener;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -231,20 +234,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
         Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
-        log.debug("MLChatAgentRunner called with memoryParams: {}", memoryParams);
+        AgentLoggingContext.debug(log, getThreadContext(), "MLChatAgentRunner called with memoryParams: {}", memoryParams);
         // Check if inline connector metadata is present to use RemoteAgenticConversationMemory
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey("endpoint")) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
             memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
-            log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+            AgentLoggingContext.info(log, getThreadContext(), "Detected inline connector metadata, using RemoteAgenticConversationMemory");
         } else {
             // Use the originally specified memory factory
             memoryFactory = memoryFactoryMap.get(memoryType);
         }
-        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
+        memoryFactory.create(memoryParams, ContextAwareActionListener.wrap(ActionListener.wrap(memory -> {
             // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
+            memory.getMessages(messageHistoryLimit, ContextAwareActionListener.wrap(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {
                     String question = next.getInput();
@@ -304,10 +307,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                 runAgent(mlAgent, params, listener, memory, memory.getId(), functionCalling);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to get chat history", e);
                 listener.onFailure(e);
-            }));
-        }, listener::onFailure));
+            }), getThreadContext()));
+        }, listener::onFailure), getThreadContext()));
     }
 
     private void runAgent(
@@ -484,7 +487,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         // If it's NOT a backend tool, it must be a frontend tool, so break out of the loop
                         boolean isBackendTool = backendTools != null && backendTools.containsKey(action);
 
-                        log.info("AG-UI: Tool execution request - action: {}, isBackendTool: {}", action, isBackendTool);
+                        AgentLoggingContext
+                            .info(
+                                log,
+                                getThreadContext(),
+                                "AG-UI: Tool execution request - action: {}, isBackendTool: {}",
+                                action,
+                                isBackendTool
+                            );
 
                         if (!isBackendTool) {
                             // For frontend tool use, we close the response stream and wait for frontend tool result
@@ -643,7 +653,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
-                log.error("Failed to run chat agent", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run chat agent", e);
                 listener.onFailure(e);
             });
             if (nextStepListener != null) {
@@ -808,6 +818,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     updateParametersAcrossTools(tmpParameters, parameters);
                 }
             } catch (Exception e) {
+                // TODO: Propagate run id and thread id for this log
                 log.error("Failed to run tool {}", action, e);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
@@ -1077,7 +1088,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     summary -> responseListener
                         .onResponse(String.format(Locale.ROOT, MAX_ITERATIONS_SUMMARY_MESSAGE, maxIterations, summary)),
                     e -> {
-                        log.error("Failed to generate LLM summary, using fallback strategy", e);
+                        AgentLoggingContext
+                            .errorWithException(log, getThreadContext(), "Failed to generate LLM summary, using fallback strategy", e);
                         String fallbackResponse = (lastThought.get() != null
                             && !lastThought.get().isEmpty()
                             && !"null".equals(lastThought.get()))
@@ -1218,10 +1230,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             }
 
-            log.error("Summary generate error. No result/response field found. Available fields: {}", dataMap.keySet());
+            AgentLoggingContext
+                .error(
+                    log,
+                    getThreadContext(),
+                    "Summary generate error. No result/response field found. Available fields: {}",
+                    dataMap.keySet()
+                );
             return null;
         } catch (Exception e) {
-            log.error("Failed to extract summary from response", e);
+            AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to extract summary from response", e);
             throw new RuntimeException("Failed to extract summary from response", e);
         }
     }
@@ -1258,6 +1276,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     private boolean isAGUIAgent(Map<String, String> parameters) {
         return parameters != null && parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui");
+    }
+
+    /**
+     * Gets the ThreadContext from the client's thread pool.
+     *
+     * @return the ThreadContext or null if not available
+     */
+    private ThreadContext getThreadContext() {
+        if (client == null || client.threadPool() == null) {
+            return null;
+        }
+        return client.threadPool().getThreadContext();
     }
 
     /**

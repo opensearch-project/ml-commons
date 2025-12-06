@@ -13,6 +13,8 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
@@ -72,6 +74,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.AgentLoggingContext;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.algorithms.contextmanager.SlidingWindowManager;
 import org.opensearch.ml.engine.algorithms.contextmanager.SummarizationManager;
@@ -247,6 +250,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
                                         String appType = finalMlAgent.getAppType();
                                         String question = inputDataSet.getParameters().get(QUESTION);
+
+                                        // Set agent logging context for run_id and thread_id
+                                        setAgentLoggingContext(requestParameters, memoryId);
 
                                         if (parentInteractionId != null && regenerateInteractionId != null) {
                                             throw new IllegalArgumentException(
@@ -475,7 +481,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             .sessionId(memory.getId())
             .build();
         memory.save(msg, null, null, null, ActionListener.<CreateInteractionResponse>wrap(interaction -> {
-            log.info("Created parent interaction ID: {}", interaction.getId());
+            AgentLoggingContext.info(log, getThreadContext(), "Created parent interaction ID: {}", interaction.getId());
             inputDataSet.getParameters().put(PARENT_INTERACTION_ID, interaction.getId());
             // only delete previous interaction when new interaction created
             if (regenerateInteractionId != null) {
@@ -816,11 +822,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 try {
                     mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
                 } catch (Exception e) {
-                    log.error("Failed to run agent", e);
+                    AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run agent", e);
                     agentActionListener.onFailure(e);
                 }
             }, e -> {
-                log.error("Failed to create task for agent async execution", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to create task for agent async execution", e);
                 listener.onFailure(e);
             }));
         } else {
@@ -835,7 +841,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             try {
                 mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener, channel);
             } catch (Exception e) {
-                log.error("Failed to run agent", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run agent", e);
                 agentActionListener.onFailure(e);
             }
         }
@@ -1025,12 +1031,19 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     context.restore();
                     if (throwable != null) {
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        log.error("Failed to index ML task", cause);
+                        AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to index ML task", cause);
                         listener.onFailure(cause);
                     } else {
                         try {
                             IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
-                            log.info("Task creation result: {}, Task id: {}", indexResponse.getResult(), indexResponse.getId());
+                            AgentLoggingContext
+                                .info(
+                                    log,
+                                    getThreadContext(),
+                                    "Task creation result: {}, Task id: {}",
+                                    indexResponse.getResult(),
+                                    indexResponse.getId()
+                                );
                             listener.onResponse(indexResponse);
                         } catch (Exception e) {
                             listener.onFailure(e);
@@ -1038,7 +1051,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     }
                 });
         } catch (Exception e) {
-            log.error("Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
+            AgentLoggingContext
+                .error(log, getThreadContext(), "Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
             listener.onFailure(e);
         }
     }
@@ -1149,5 +1163,45 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log.error("Failed to process standardized input for agent {}", mlAgent.getName(), e);
             throw new IllegalArgumentException("Failed to process standardized agent input: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Sets the agent logging context with run_id and thread_id.
+     * These values will be included in all subsequent log messages during agent execution.
+     *
+     * @param requestParameters the request parameters containing potential run_id and thread_id
+     * @param memoryId the memory ID to use as fallback thread_id if not provided
+     */
+    private void setAgentLoggingContext(Map<String, String> requestParameters, String memoryId) {
+        ThreadContext threadContext = getThreadContext();
+        if (threadContext == null) {
+            return;
+        }
+
+        String runId = requestParameters.get(AGUI_PARAM_RUN_ID);
+        String threadId = requestParameters.get(AGUI_PARAM_THREAD_ID);
+
+        // Use memory_id as thread_id fallback (conversation context)
+        if (threadId == null && memoryId != null) {
+            threadId = memoryId;
+        }
+
+        AgentLoggingContext.setContext(threadContext, runId, threadId);
+
+        if (runId != null || threadId != null) {
+            AgentLoggingContext.debug(log, threadContext, "Agent logging context set - starting agent execution");
+        }
+    }
+
+    /**
+     * Gets the ThreadContext from the client's thread pool.
+     *
+     * @return the ThreadContext or null if not available
+     */
+    private ThreadContext getThreadContext() {
+        if (client == null || client.threadPool() == null) {
+            return null;
+        }
+        return client.threadPool().getThreadContext();
     }
 }

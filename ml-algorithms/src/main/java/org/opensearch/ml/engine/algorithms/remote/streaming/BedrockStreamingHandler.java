@@ -73,6 +73,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     private final AwsConnector connector;
     private final Map<String, String> parameters;
     private final boolean isAGUIAgent;
+    private final String logPrefix;
     private static final String STOP_REASON_TOOL_USE = "StopReason=tool_use";
 
     // Retry configuration
@@ -101,6 +102,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         this.parameters = parameters;
 
         this.isAGUIAgent = parameters != null && (parameters.containsKey("agent_type") && parameters.get("agent_type").equals("ag_ui"));
+        this.logPrefix = buildLogPrefix(parameters);
 
         // Initialize retry configuration from parameters or use defaults
         this.maxRetries = parseIntParameter(parameters, "max_retry_times", DEFAULT_MAX_RETRIES);
@@ -108,15 +110,32 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         this.maxBackoffMs = parseLongParameter(parameters, "max_backoff_millis", DEFAULT_MAX_BACKOFF_MS);
 
         if (isAGUIAgent) {
-            log.debug("BedrockStreamingHandler: Detected AG-UI agent");
+            log.debug("{}BedrockStreamingHandler: Detected AG-UI agent", logPrefix);
         }
         log
             .debug(
-                "BedrockStreamingHandler: Retry config - maxRetries={}, initialBackoffMs={}, maxBackoffMs={}",
+                "{}BedrockStreamingHandler: Retry config - maxRetries={}, initialBackoffMs={}, maxBackoffMs={}",
+                logPrefix,
                 maxRetries,
                 initialBackoffMs,
                 maxBackoffMs
             );
+    }
+
+    private String buildLogPrefix(Map<String, String> params) {
+        if (params == null) {
+            return "";
+        }
+        StringBuilder prefix = new StringBuilder();
+        String runId = params.get(AGUI_PARAM_RUN_ID);
+        String threadId = params.get(AGUI_PARAM_THREAD_ID);
+        if (runId != null && !runId.isEmpty()) {
+            prefix.append("[run_id=").append(runId).append("]");
+        }
+        if (threadId != null && !threadId.isEmpty()) {
+            prefix.append("[thread_id=").append(threadId).append("]");
+        }
+        return prefix.toString();
     }
 
     private int parseIntParameter(Map<String, String> params, String key, int defaultValue) {
@@ -174,14 +193,21 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             ConverseStreamRequest request = buildConverseStreamRequest(payload, parameters);
 
             ConverseStreamResponseHandler handler = ConverseStreamResponseHandler.builder().onResponse(response -> {}).onError(error -> {
-                log.error("Converse stream error (attempt {}/{}): {}", retryAttempt + 1, maxRetries + 1, error.getMessage());
+                log.error("{}Converse stream error (attempt {}/{}): {}", logPrefix, retryAttempt + 1, maxRetries + 1, error.getMessage());
                 if (isThrottlingError(error)) {
                     if (retryAttempt < maxRetries) {
                         long backoffMs = calculateBackoff(retryAttempt);
-                        log.info("Throttling error detected, will retry in {}ms (attempt {}/{})", backoffMs, retryAttempt + 1, maxRetries);
+                        log
+                            .info(
+                                "{}Throttling error detected, will retry in {}ms (attempt {}/{})",
+                                logPrefix,
+                                backoffMs,
+                                retryAttempt + 1,
+                                maxRetries
+                            );
                         scheduleRetry(action, parameters, payload, listener, retryAttempt + 1, backoffMs);
                     } else {
-                        log.error("Max retries ({}) exceeded for throttling error", maxRetries);
+                        log.error("{}Max retries ({}) exceeded for throttling error", logPrefix, maxRetries);
                         listener
                             .onFailure(
                                 new RemoteConnectorThrottlingException(
@@ -205,7 +231,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 if (currentState.get() != StreamState.WAITING_FOR_TOOL_RESULT) {
                     sendCompletionResponse(isStreamClosed, listener);
                 } else {
-                    log.debug("Tool execution in progress - keeping stream open");
+                    log.debug("{}Tool execution in progress - keeping stream open", logPrefix);
                 }
             }).subscriber(event -> {
                 log.debug("BEDROCK_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event);
@@ -224,11 +250,11 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
             // Start streaming
             if (retryAttempt > 0) {
-                log.info("Retrying Bedrock stream (attempt {}/{})", retryAttempt + 1, maxRetries + 1);
+                log.info("{}Retrying Bedrock stream (attempt {}/{})", logPrefix, retryAttempt + 1, maxRetries + 1);
             }
             bedrockClient.converseStream(request, handler);
         } catch (Exception e) {
-            log.error("Failed to execute Bedrock streaming", e);
+            log.error("{}Failed to execute Bedrock streaming", logPrefix, e);
             handleError(e, listener);
         }
     }
@@ -266,7 +292,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 startStreamWithRetry(action, parameters, payload, listener, nextRetryAttempt);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.error("Retry interrupted", e);
+                log.error("{}Retry interrupted", logPrefix, e);
                 listener.onFailure(new MLException("Retry was interrupted", e));
             }
         }, "bedrock-stream-retry-" + nextRetryAttempt).start();
@@ -274,7 +300,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     @Override
     public void handleError(Throwable error, StreamPredictActionListener<MLTaskResponse, ?> listener) {
-        log.error("HTTP streaming error", error);
+        log.error("{}HTTP streaming error", logPrefix, error);
         listener.onFailure(new MLException("Fail to execute streaming", error));
     }
 
@@ -297,14 +323,14 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private ConverseStreamRequest buildConverseStreamRequest(String payload, Map<String, String> parameters) {
         try {
-            log.debug("AG-UI: Building Bedrock request from payload: {}", payload);
+            log.debug("{}AG-UI: Building Bedrock request from payload: {}", logPrefix, payload);
             ObjectMapper mapper = new ObjectMapper();
             JsonNode payloadJson = mapper.readTree(payload);
 
             // Log the messages array for debugging
             if (payloadJson.has("messages")) {
                 JsonNode messagesArray = payloadJson.get("messages");
-                log.debug("AG-UI: Messages array in payload: {}", messagesArray);
+                log.debug("{}AG-UI: Messages array in payload: {}", logPrefix, messagesArray);
 
                 // Check for consecutive messages with the same role (Bedrock doesn't allow this)
                 String previousRole = null;
@@ -314,7 +340,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     if (previousRole != null && previousRole.equals(currentRole)) {
                         log
                             .warn(
-                                "AG-UI: Found consecutive messages with same role '{}' at index {} and {}. Bedrock requires alternating roles!",
+                                "{}AG-UI: Found consecutive messages with same role '{}' at index {} and {}. Bedrock requires alternating roles!",
+                                logPrefix,
                                 currentRole,
                                 i - 1,
                                 i
@@ -323,7 +350,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     previousRole = currentRole;
                 }
             } else {
-                log.warn("AG-UI: No messages array found in payload!");
+                log.warn("{}AG-UI: No messages array found in payload!", logPrefix);
             }
 
             return ConverseStreamRequest
@@ -372,7 +399,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
                         BaseEvent toolCallStartEvent = new ToolCallStartEvent(toolUseId.get(), toolName.get(), messageId);
                         sendAGUIEvent(toolCallStartEvent, false, listener);
-                        log.debug("AG-UI: Sent TOOL_CALL_START for messageId: {} and toolUseId: {}", messageId, toolUseId);
+                        log.debug("{}AG-UI: Sent TOOL_CALL_START for messageId: {} and toolUseId: {}", logPrefix, messageId, toolUseId);
                     }
                 } else if (isContentDelta(event)) {
                     String content = getTextContent(event);
@@ -385,12 +412,12 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
                             BaseEvent textMessageStartEvent = new TextMessageStartEvent(messageId, "assistant");
                             sendAGUIEvent(textMessageStartEvent, false, listener);
-                            log.debug("AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", messageId);
+                            log.debug("{}AG-UI: Sent TEXT_MESSAGE_START for messageId: {}", logPrefix, messageId);
                         }
 
                         BaseEvent textMessageContentEvent = new TextMessageContentEvent(messageId, content);
                         sendAGUIEvent(textMessageContentEvent, false, listener);
-                        log.debug("AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", messageId);
+                        log.debug("{}AG-UI: Sent TEXT_MESSAGE_CONTENT for messageId: {}", logPrefix, messageId);
                     } else {
                         sendContentResponse(content, false, listener);
                     }
@@ -399,13 +426,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                         BaseEvent textMessageEndEvent = new TextMessageEndEvent(messageId);
                         sendAGUIEvent(textMessageEndEvent, false, listener);
-                        log.debug("AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", messageId);
+                        log.debug("{}AG-UI: Sent TEXT_MESSAGE_END for messageId: {}", logPrefix, messageId);
 
                         String threadId = parameters.get(AGUI_PARAM_THREAD_ID);
                         String runId = parameters.get(AGUI_PARAM_RUN_ID);
                         BaseEvent runFinishedEvent = new RunFinishedEvent(threadId, runId, null);
                         sendAGUIEvent(runFinishedEvent, true, listener);
-                        log.debug("RestMLExecuteStreamAction: Added RUN_FINISHED event - ReAct loop completed");
+                        log.debug("{}RestMLExecuteStreamAction: Added RUN_FINISHED event - ReAct loop completed", logPrefix);
                     }
 
                     currentState.set(StreamState.COMPLETED);
@@ -422,7 +449,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                         parameters.put(AGUI_PARAM_TEXT_MESSAGE_STARTED, "false");
                         BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
                         sendAGUIEvent(toolCallArgsEvent, false, listener);
-                        log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
+                        log.debug("{}AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", logPrefix, messageId);
                     } else {
                         sendContentResponse(inputFragment, false, listener);
                     }
@@ -438,7 +465,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     if (isAGUIAgent) {
                         BaseEvent toolCallArgsEvent = new ToolCallArgsEvent(toolUseId.get(), inputFragment);
                         sendAGUIEvent(toolCallArgsEvent, false, listener);
-                        log.debug("AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", messageId);
+                        log.debug("{}AG-UI: Sent TOOL_CALL_ARGS for messageId: {}", logPrefix, messageId);
                     } else {
                         sendContentResponse(inputFragment, false, listener);
                     }
@@ -456,6 +483,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     if (isAGUIAgent) {
                         BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
                         sendAGUIEvent(toolCallEndEvent, false, listener);
+                        log.debug("{}AG-UI: Sent TOOL_CALL_END event for tool '{}' after args completed", logPrefix, toolName.get());
                         log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}'", toolName.get());
                     }
 
@@ -465,7 +493,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 break;
 
             case WAITING_FOR_TOOL_RESULT:
-                log.debug("Waiting for tool result - keeping stream open");
+                log.debug("{}Waiting for tool result - keeping stream open", logPrefix);
                 break;
 
             case COMPLETED:
@@ -573,7 +601,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
             // Check if it starts with an object
             if (firstToken != JsonToken.START_OBJECT) {
-                log.debug("Input does not start with an object: {}", accumulated);
+                log.debug("{}Input does not start with an object: {}", logPrefix, accumulated);
                 return;
             }
 
@@ -591,25 +619,25 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 if (objectDepth == 0) {
                     // Check if there's any remaining content
                     if (parser.nextToken() != null) {
-                        log.debug("Extra content after JSON object: {}", accumulated);
+                        log.debug("{}Extra content after JSON object: {}", logPrefix, accumulated);
                         return;
                     }
 
                     // Valid and complete JSON object found
                     Map<String, Object> parsedInput = objectMapper.readValue(accumulated, Map.class);
                     toolInput.set(parsedInput);
-                    log.debug("Successfully parsed tool input: {}", parsedInput);
+                    log.debug("{}Successfully parsed tool input: {}", logPrefix, parsedInput);
                     return;
                 }
             }
 
             // JSON is incomplete
-            log.debug("Incomplete JSON object: {}", accumulated);
+            log.debug("{}Incomplete JSON object: {}", logPrefix, accumulated);
 
         } catch (JsonParseException e) {
-            log.debug("Invalid or incomplete JSON: {}", accumulated);
+            log.debug("{}Invalid or incomplete JSON: {}", logPrefix, accumulated);
         } catch (IOException e) {
-            log.error("Error parsing JSON input", e);
+            log.error("{}Error parsing JSON input", logPrefix, e);
         }
     }
 
@@ -668,7 +696,13 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
             )
             .build();
 
-        log.debug("AG-UI: Converted tool message to Bedrock format - toolUseId: {}, content length: {}", toolCallId, content.length());
+        log
+            .debug(
+                "{}AG-UI: Converted tool message to Bedrock format - toolUseId: {}, content length: {}",
+                logPrefix,
+                toolCallId,
+                content.length()
+            );
 
         return Message.builder().role("user").content(List.of(toolResultBlock)).build();
     }

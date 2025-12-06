@@ -23,6 +23,7 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -33,6 +34,7 @@ import org.opensearch.ml.common.memory.Memory;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.AgentLoggingContext;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -138,10 +140,16 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                             listener.onResponse(flowAgentOutput);
                         } else {
                             ActionListener<UpdateResponse> updateListener = ActionListener.wrap(updateResponse -> {
-                                log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
+                                AgentLoggingContext
+                                    .info(
+                                        log,
+                                        getThreadContext(),
+                                        "Updated additional info for interaction ID: {} in the flow agent.",
+                                        updateResponse.getId()
+                                    );
                                 listener.onResponse(flowAgentOutput);
                             }, e -> {
-                                log.error("Failed to update root interaction", e);
+                                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to update root interaction", e);
                                 listener.onResponse(flowAgentOutput);
                             });
                             updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
@@ -157,7 +165,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                 }, e -> {
-                    log.error("Failed to run flow agent", e);
+                    AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run flow agent", e);
                     listener.onFailure(e);
                 });
                 previousStepListener = nextStepListener;
@@ -207,7 +215,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> updateInteractionWithListener(additionalInfo, interactionId, memory, listener),
-                        e -> log.error("Failed create memory from id: {}", memoryId, e)
+                        e -> AgentLoggingContext.error(log, getThreadContext(), "Failed create memory from id: {}", memoryId, e)
                     )
             );
     }
@@ -220,9 +228,19 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 interactionId,
                 ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
                 ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                    log.info("Updated additional info for interaction ID: {}", interactionId);
-                }, e -> log.error("Failed to update root interaction", e))
+                    AgentLoggingContext.info(log, getThreadContext(), "Updated additional info for interaction ID: {}", interactionId);
+                }, e -> AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to update root interaction", e))
             );
+    }
+
+    /**
+     * Gets the ThreadContext from the client's thread pool.
+     */
+    private ThreadContext getThreadContext() {
+        if (client == null || client.threadPool() == null) {
+            return null;
+        }
+        return client.threadPool().getThreadContext();
     }
 
     @VisibleForTesting

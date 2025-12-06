@@ -32,6 +32,7 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -46,6 +47,8 @@ import org.opensearch.ml.common.memory.Message;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.AgentLoggingContext;
+import org.opensearch.ml.common.utils.ContextAwareActionListener;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.common.utils.ToolUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -111,18 +114,18 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         int messageHistoryLimit = getMessageHistoryLimit(params);
 
         Map<String, Object> memoryParams = createMemoryParams(title, memoryId, appType, mlAgent, params);
-        log.debug("Called MLConversationalFlowAgentRunner with memoryParams: {}", memoryParams);
+        AgentLoggingContext.debug(log, getThreadContext(), "Called MLConversationalFlowAgentRunner with memoryParams: {}", memoryParams);
         Memory.Factory<Memory<Interaction, ?, ?>> memoryFactory;
         if (memoryParams != null && memoryParams.containsKey("endpoint")) {
             // Use RemoteAgenticConversationMemory when inline connector metadata is detected
             memoryFactory = memoryFactoryMap.get(MLMemoryType.REMOTE_AGENTIC_MEMORY.name());
-            log.info("Detected inline connector metadata, using RemoteAgenticConversationMemory");
+            AgentLoggingContext.info(log, getThreadContext(), "Detected inline connector metadata, using RemoteAgenticConversationMemory");
         } else {
             // Use the originally specified memory factory
             memoryFactory = memoryFactoryMap.get(memoryType);
         }
-        memoryFactory.create(memoryParams, ActionListener.wrap(memory -> {
-            memory.getMessages(messageHistoryLimit, ActionListener.<List<Interaction>>wrap(r -> {
+        memoryFactory.create(memoryParams, ContextAwareActionListener.wrap(ActionListener.wrap(memory -> {
+            memory.getMessages(messageHistoryLimit, ContextAwareActionListener.wrap(ActionListener.<List<Interaction>>wrap(r -> {
                 List<Message> messageList = new ArrayList<>();
                 for (Interaction next : r) {
                     String question = next.getInput();
@@ -154,10 +157,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
                 runAgent(mlAgent, params, listener, memory, memory.getId(), parentInteractionId);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to get chat history", e);
                 listener.onFailure(e);
-            }));
-        }, listener::onFailure));
+            }), getThreadContext()));
+        }, listener::onFailure), getThreadContext()));
     }
 
     private void runAgent(
@@ -219,7 +222,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         nextStepListener
                     );
                 }, e -> {
-                    log.error("Failed to run flow agent", e);
+                    AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run flow agent", e);
                     listener.onFailure(e);
                 });
                 previousStepListener = nextStepListener;
@@ -294,10 +297,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
         if (finalI == toolSpecs.size()) {
             ActionListener updateListener = ActionListener.<UpdateResponse>wrap(r -> {
-                log.info("Updated additional info for interaction {} of flow agent.", r.getId());
+                AgentLoggingContext.info(log, getThreadContext(), "Updated additional info for interaction {} of flow agent.", r.getId());
                 listener.onResponse(flowAgentOutput);
             }, e -> {
-                log.error("Failed to update root interaction", e);
+                AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to update root interaction", e);
                 listener.onResponse(flowAgentOutput);
             });
             if (memory == null) {
@@ -317,12 +320,13 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     traceNumber,
                     traceDisabled,
                     ActionListener.wrap(r -> {
-                        log.info("saved last trace for interaction " + parentInteractionId + " of flow agent");
+                        AgentLoggingContext
+                            .info(log, getThreadContext(), "saved last trace for interaction " + parentInteractionId + " of flow agent");
                         Map<String, Object> updateContent = Map
                             .of(AI_RESPONSE_FIELD, filteredOutput, ADDITIONAL_INFO_FIELD, additionalInfo);
                         memory.update(parentInteractionId, updateContent, updateListener);
                     }, e -> {
-                        log.error("Failed to update root interaction ", e);
+                        AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to update root interaction ", e);
                         listener.onFailure(e);
                     })
                 );
@@ -343,7 +347,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                     ActionListener.wrap(r -> {
                         runNextStep(params, toolSpecs, finalI, tenantId, nextStepListener);
                     }, e -> {
-                        log.error("Failed to update root interaction ", e);
+                        AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to update root interaction ", e);
                         listener.onFailure(e);
                     })
                 );
@@ -410,9 +414,19 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> memory.update(interactionId, Map.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo), listener),
-                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                        e -> AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed create memory from id: " + memoryId, e)
                     )
             );
+    }
+
+    /**
+     * Gets the ThreadContext from the client's thread pool.
+     */
+    private ThreadContext getThreadContext() {
+        if (client == null || client.threadPool() == null) {
+            return null;
+        }
+        return client.threadPool().getThreadContext();
     }
 
 }
