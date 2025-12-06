@@ -345,7 +345,6 @@ public abstract class DLModel implements Predictable {
 
     public Settings getClusterSettings() {
         if (mlEngine.getClusterService() != null) {
-            // QUESTION: removing the constructor will make cluster settings non-null
             return mlEngine.getClusterService().getSettings();
         }
         return Settings.EMPTY;
