@@ -63,7 +63,11 @@ public class MLEngine {
         this.clusterService = clusterService;
     }
 
-    // QUESTION: May we remove this constructor?
+    /**
+     * @deprecated Retained for backward compatibility. Scheduled for removal. <br/>
+     * Use {@link #MLEngine(Path, Encryptor, ClusterService)} instead.
+     */
+    @Deprecated(forRemoval = true)
     public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
         this(opensearchDataFolder, encryptor, null);
     }

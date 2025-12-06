@@ -66,7 +66,7 @@ public class TextSimilarityCrossEncoderModel extends DLModel {
 
             List<Output> batchOutputs = getPredictor().batchPredict(batchInputs);
 
-            for (Output output: batchOutputs) {
+            for (Output output : batchOutputs) {
                 ModelTensors outputTensors = ModelTensors.fromBytes(output.getData().getAsBytes());
                 tensorOutputs.add(outputTensors);
             }
