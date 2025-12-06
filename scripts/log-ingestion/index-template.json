@@ -1,0 +1,34 @@
+{
+  "index_patterns": ["ml-commons-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.refresh_interval": "1s"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "yyyy-MM-dd'T'HH:mm:ss,SSS||yyyy-MM-dd'T'HH:mm:ss.SSS||epoch_millis"
+        },
+        "level": {
+          "type": "keyword"
+        },
+        "logger": {
+          "type": "keyword"
+        },
+        "node": {
+          "type": "keyword"
+        },
+        "message": {
+          "type": "text"
+        },
+        "source_file": {
+          "type": "keyword"
+        }
+      }
+    }
+  },
+  "priority": 100
+}

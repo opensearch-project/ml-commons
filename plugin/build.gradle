@@ -463,6 +463,27 @@ run {
     useCluster testClusters.integTest
 }
 
+// Task to run log ingestion script (use with ./gradlew run in another terminal)
+task ingestLogs(type: Exec) {
+    description = 'Starts log ingestion into ml-commons-logs-* index (run after cluster is up)'
+    group = 'verification'
+
+    def scriptPath = "${rootProject.projectDir}/scripts/log-ingestion/ingest-logs.sh"
+    def logDir = "${project.buildDir}/testclusters/integTest-0/logs"
+
+    commandLine 'bash', scriptPath, logDir
+
+    doFirst {
+        println "\n=========================================="
+        println "Starting log ingestion..."
+        println "Logs directory: ${logDir}"
+        println "Index: ml-commons-logs-*"
+        println "=========================================="
+        println "Make sure ./gradlew run is running in another terminal!"
+        println "Press Ctrl+C to stop log ingestion\n"
+    }
+}
+
 // Re-write WaitForHttpResource with updated code to support security plugin use case
 class WaitForClusterYellow {
 
