@@ -105,7 +105,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler implements RestRe
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         mlInput.setTenantId(tenantId);
         if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         } else if (FunctionName.isDLModel(mlInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }

@@ -156,7 +156,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testRegisterModelRequestRemoteInferenceDisabled() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expect(OpenSearchStatusException.class);
         exceptionRule.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);

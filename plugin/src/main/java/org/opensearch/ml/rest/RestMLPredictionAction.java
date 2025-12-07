@@ -145,7 +145,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
         if (FunctionName.REMOTE.name().equals(modelType) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         } else if (FunctionName.isDLModel(FunctionName.from(modelType.toUpperCase(Locale.ROOT)))
             && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);

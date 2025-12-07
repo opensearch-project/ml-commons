@@ -380,9 +380,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
         assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     public void testDoExecuteLocalInferenceDisabled() {
