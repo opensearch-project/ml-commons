@@ -370,7 +370,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             // Simulate async success with some accessible IDs
             l.onResponse(Set.of("model_group_IT"));
             return null;
-        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        }).when(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
 
         // The final remote search goes through client.search(...); return a normal response
         doAnswer(inv -> {
@@ -385,7 +385,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
 
         // Verify RSC path was taken
-        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), any());
+        verify(rsc, times(1)).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE), any());
 
         // Verify we executed the final search and returned
         verify(client, times(1)).search(any(), any());

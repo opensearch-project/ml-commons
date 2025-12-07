@@ -36,7 +36,7 @@ jacocoTestReport {
     reports {
         xml.required = false
         csv.required = false
-        html.destination file("${buildDir}/jacoco/")
+        html.outputLocation.set(file("${buildDir}/jacoco/"))
     }
 }
 check.dependsOn jacocoTestReport

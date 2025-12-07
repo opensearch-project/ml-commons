@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_RESOURCE_TYPE;
 
 import java.util.Collections;
 import java.util.Set;
@@ -283,7 +284,7 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
 
         searchModelGroupTransportAction.doExecute(null, req, actionListener);
 
-        verify(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        verify(rsc).getAccessibleResourceIds(eq(ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
         rscListenerCaptor.getValue().onResponse(Set.of("idA", "idB"));
         future.complete(emptySearchDataObjectResponse());
 
@@ -317,7 +318,7 @@ public class SearchModelGroupTransportActionTests extends OpenSearchTestCase {
         searchModelGroupTransportAction.doExecute(null, req, actionListener);
 
         // Simulate failure -> deny-all (empty set)
-        verify(rsc).getAccessibleResourceIds(eq(CommonValue.ML_MODEL_GROUP_INDEX), rscListenerCaptor.capture());
+        verify(rsc).getAccessibleResourceIds(eq(ML_MODEL_GROUP_RESOURCE_TYPE), rscListenerCaptor.capture());
         rscListenerCaptor.getValue().onFailure(new RuntimeException("boom"));
 
         future.complete(emptySearchDataObjectResponse());
