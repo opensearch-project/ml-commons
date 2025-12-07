@@ -6,6 +6,7 @@
 package org.opensearch.ml.action;
 
 import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_THRESHOLD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
@@ -28,6 +29,8 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.unit.ByteSizeUnit;
+import org.opensearch.core.common.unit.ByteSizeValue;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
@@ -439,6 +442,8 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
             .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), false)
             // Set native memory threshold as 100 to prevent IT failures
             .put(ML_COMMONS_NATIVE_MEM_THRESHOLD.getKey(), 100)
+            // Set disk free space threshold to 100MB - low enough for CI environments
+            .put(ML_COMMONS_DISK_FREE_SPACE_THRESHOLD.getKey(), new ByteSizeValue(100L, ByteSizeUnit.MB))
             .build();
     }
 }
