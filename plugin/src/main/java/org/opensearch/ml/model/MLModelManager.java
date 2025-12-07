@@ -42,7 +42,6 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
-import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_SSL_VERIFICATION_ENABLED;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_ZIP_FILE;
@@ -1510,7 +1509,6 @@ public class MLModelManager {
             log.info("Setting up ML guard parameter for ML predictor.");
         }
         params.put(CONNECTOR_PRIVATE_IP_ENABLED, mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-        params.put(CONNECTOR_SSL_VERIFICATION_ENABLED, mlFeatureEnabledSetting.isConnectorSslVerificationEnabled());
         params.put(SDK_CLIENT, sdkClient);
         params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);

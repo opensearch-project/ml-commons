@@ -74,8 +74,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     private MLGuard mlGuard;
     @Setter
     private volatile boolean connectorPrivateIpEnabled;
-    @Setter
-    private boolean connectorSslVerificationEnabled;
 
     private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
@@ -182,10 +180,15 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
             Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
+            boolean skipSslVerification = false;
+            if (connector.getParameters() != null && connector.getParameters().containsKey(SKIP_SSL_VERIFICATION)) {
+                skipSslVerification = Boolean.parseBoolean(connector.getParameters().get(SKIP_SSL_VERIFICATION));
+            }
             this.httpClientRef
                 .compareAndSet(
                     null,
-                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled, connectorSslVerificationEnabled)
+                    MLHttpClientFactory
+                        .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled, skipSslVerification)
                 );
         }
         return httpClientRef.get();

@@ -48,8 +48,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
                     MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_CONNECTOR_SSL_VERIFICATION_ENABLED
+                    MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -75,7 +74,6 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.agentic_search_enabled", true)
             .put("plugins.ml_commons.agentic_memory_enabled", true)
             .put("plugins.ml_commons.stream_enabled", true)
-            .put("plugins.ml_commons.connector.ssl_verification_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -95,7 +93,6 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isMcpConnectorEnabled());
         assertTrue(setting.isAgenticMemoryEnabled());
         assertTrue(setting.isStreamEnabled());
-        assertTrue(setting.isConnectorSslVerificationEnabled());
     }
 
     @Test
@@ -118,7 +115,6 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.agentic_search_enabled", false)
             .put("plugins.ml_commons.agentic_memory_enabled", false)
             .put("plugins.ml_commons.stream_enabled", false)
-            .put("plugins.ml_commons.connector.ssl_verification_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -138,7 +134,6 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isMcpConnectorEnabled());
         assertFalse(setting.isAgenticMemoryEnabled());
         assertFalse(setting.isStreamEnabled());
-        assertFalse(setting.isConnectorSslVerificationEnabled());
     }
 
     @Test

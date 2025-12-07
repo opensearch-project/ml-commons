@@ -23,7 +23,7 @@ public class MLHttpClientFactory {
         Duration readTimeout,
         int maxConnections,
         boolean connectorPrivateIpEnabled,
-        boolean connectorSslVerificationEnabled
+        boolean skipSslVerification
     ) {
         return doPrivileged(() -> {
             log
@@ -38,9 +38,9 @@ public class MLHttpClientFactory {
                 .connectionTimeout(connectionTimeout)
                 .readTimeout(readTimeout)
                 .maxConcurrency(maxConnections)
-                .buildWithDefaults(AttributeMap.builder()
-                .put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, !connectorSslVerificationEnabled)
-                .build());
+                .buildWithDefaults(
+                    AttributeMap.builder().put(SdkHttpConfigurationOption.TRUST_ALL_CERTIFICATES, skipSslVerification).build()
+                );
             return new MLValidatableAsyncHttpClient(delegate, connectorPrivateIpEnabled);
         });
     }

@@ -65,6 +65,7 @@ import lombok.Builder;
 public interface RemoteConnectorExecutor {
 
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
+    String SKIP_SSL_VERIFICATION = "skip_ssl_verification";
 
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         executeAction(action, mlInput, actionListener, null);
@@ -183,8 +184,6 @@ public interface RemoteConnectorExecutor {
     default void setClient(Client client) {}
 
     default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
-
-    default void setConnectorSslVerificationEnabled(boolean connectorSslVerificationEnabled) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 

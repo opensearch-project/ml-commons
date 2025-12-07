@@ -84,7 +84,6 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                     RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
-                    connectorExecutor.setConnectorSslVerificationEnabled(mlFeatureEnabledSetting.isConnectorSslVerificationEnabled());
                     connectorExecutor.setScriptService(scriptService);
                     connectorExecutor.setClusterService(clusterService);
                     connectorExecutor.setClient(client);

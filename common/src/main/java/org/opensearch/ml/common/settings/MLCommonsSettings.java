@@ -50,9 +50,9 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INFERENCE_TASKS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_batch_inference_tasks",
-            10,
+            100,
             0,
-            500,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -60,9 +60,9 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INGESTION_TASKS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_batch_ingestion_tasks",
-            10,
+            100,
             0,
-            500,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -483,8 +483,4 @@ public final class MLCommonsSettings {
     // Feature flag for streaming feature
     public static final Setting<Boolean> ML_COMMONS_STREAM_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "stream_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
-    // Feature flag to enable or disable SSL verification of remote llm connectors
-    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_SSL_VERIFICATION_ENABLED = Setting
-            .boolSetting(ML_PLUGIN_SETTING_PREFIX + "connector.ssl_verification_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
