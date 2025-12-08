@@ -192,7 +192,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     }
                     log.error(errMsgBuilder.toString());
                     StringBuilder respErrMsgBuilder = new StringBuilder(
-                        String.format("Failed to persist %s mcp tool(s) into system index", indexFailedTools.get().size())
+                        String.format(Locale.ROOT, "Failed to persist %s mcp tool(s) into system index", indexFailedTools.get().size())
                     );
                     if (!indexSucceedTools.get().isEmpty()) {
                         registerMcpToolsOnNodes(

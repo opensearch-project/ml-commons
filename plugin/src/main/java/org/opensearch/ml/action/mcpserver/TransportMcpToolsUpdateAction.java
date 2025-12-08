@@ -210,7 +210,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     }
                     log.error(errMsgBuilder.toString());
                     StringBuilder responseErrorBuilder = new StringBuilder(
-                        String.format("Failed to update %d tool(s) in system index", updateFailedTools.get().size())
+                        String.format(Locale.ROOT, "Failed to update %d tool(s) in system index", updateFailedTools.get().size())
                     );
                     if (!updateSucceedTools.get().isEmpty()) {
                         updateMcpToolsOnNodes(

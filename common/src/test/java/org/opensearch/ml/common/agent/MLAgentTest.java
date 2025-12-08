@@ -9,7 +9,6 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -354,7 +353,7 @@ public class MLAgentTest {
     @Test
     public void constructor_InvalidAgentType() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Invalid Agent Type, Please use one of " + Arrays.toString(MLAgentType.values()));
+        exceptionRule.expectMessage("Invalid Agent Type");
 
         new MLAgent(
             "test_name",

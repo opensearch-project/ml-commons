@@ -13,7 +13,6 @@ import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -139,7 +138,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 MLAgentType.valueOf(agentType.toUpperCase(Locale.ROOT)); // Use toUpperCase() to allow case-insensitive matching
             } catch (IllegalArgumentException e) {
                 // The typeStr does not match any MLAgentType, so throw a new exception with a clearer message.
-                throw new IllegalArgumentException("Invalid Agent Type, Please use one of " + Arrays.toString(MLAgentType.values()));
+                throw new IllegalArgumentException("Invalid Agent Type");
             }
         }
     }
