@@ -269,10 +269,11 @@ public class RestMLPredictionActionTests {
         
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict");
         
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             restAction.getRequest("test-model", "REMOTE", "REMOTE", request);
         });
         assertEquals("Remote Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.remote_inference_enabled\" to true.", exception.getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, exception.status());
     }
 
     @Test
