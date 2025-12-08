@@ -2,10 +2,10 @@ name: Build and Test ml-commons
 # This workflow is triggered on pull requests and push to any branches
 on:
   push:
-    branches-ignore:
-      - 'backport/**'
-      - 'create-pull-request/**'
-      - 'dependabot/**'
+    branches:
+      - 'main'
+      - '[0-9]+.[0-9]+'
+      - '[0-9]+.x'
   pull_request_target:
     types: [opened, synchronize, reopened]
 
