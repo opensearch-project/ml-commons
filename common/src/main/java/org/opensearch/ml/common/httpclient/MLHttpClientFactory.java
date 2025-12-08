@@ -26,12 +26,20 @@ public class MLHttpClientFactory {
         boolean skipSslVerification
     ) {
         return doPrivileged(() -> {
+            if (skipSslVerification) {
+                log
+                    .warn(
+                        "SSL certificate verification is DISABLED. This connection is vulnerable to man-in-the-middle"
+                            + " attacks. Only use this setting in trusted environments."
+                    );
+            }
             log
                 .debug(
-                    "Creating MLHttpClient with connectionTimeout: {}, readTimeout: {}, maxConnections: {}",
+                    "Creating MLHttpClient with connectionTimeout: {}, readTimeout: {}, maxConnections: {}," + " skipSslVerification: {}",
                     connectionTimeout,
                     readTimeout,
-                    maxConnections
+                    maxConnections,
+                    skipSslVerification
                 );
             SdkAsyncHttpClient delegate = NettyNioAsyncHttpClient
                 .builder()
