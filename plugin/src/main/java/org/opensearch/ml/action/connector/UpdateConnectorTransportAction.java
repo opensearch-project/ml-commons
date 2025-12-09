@@ -142,7 +142,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                 log.error("Failed to encrypt credentials in connector", e);
                                 listener.onFailure(e);
                             });
-                            connector.encrypt(mlEngine::encrypt, tenantId, encryptCredentialListener);
+                            connector.encrypt(mlEngine.getEncryptor()::encrypt, tenantId, encryptCredentialListener);
                         } else {
                             listener
                                 .onFailure(

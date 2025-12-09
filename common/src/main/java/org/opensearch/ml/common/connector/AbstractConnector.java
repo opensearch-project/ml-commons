@@ -175,9 +175,11 @@ public abstract class AbstractConnector implements Connector {
             orderedToEncrypt.add(credential.get(key));
         }
         ActionListener<List<String>> updateEncryptedCredentialsListener = ActionListener.wrap(r -> {
+            Map<String, String> encryptedCredentials = new HashMap<>();
             for (int i = 0; i < r.size(); i++) {
-                credential.put(orderedEncryptKeys.get(i), r.get(i));
+                encryptedCredentials.put(orderedEncryptKeys.get(i), r.get(i));
             }
+            credential = encryptedCredentials;
             listener.onResponse(true);
         }, e -> {
             log.error("Failed to encrypt credentials in connector", e);

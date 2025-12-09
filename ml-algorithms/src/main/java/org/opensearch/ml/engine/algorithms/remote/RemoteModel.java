@@ -110,8 +110,20 @@ public class RemoteModel implements Predictable {
             if (throwable != null) {
                 log.error("Failed to init remote model.", throwable);
                 listener.onFailure(new MLException(throwable));
-                return;
+            } else {
+                innerInitModelAsync(model, params, encryptor, isGlobalResource, listener);
             }
+        });
+    }
+
+    private void innerInitModelAsync(
+        MLModel model,
+        Map<String, Object> params,
+        Encryptor encryptor,
+        Boolean isGlobalResource,
+        ActionListener<Predictable> listener
+    ) {
+        try {
             String decryptTenantId = Boolean.TRUE.equals(isGlobalResource)
                 ? REMOTE_METADATA_GLOBAL_TENANT_ID.get((Settings) params.get(SETTINGS))
                 : model.getTenantId();
@@ -136,6 +148,9 @@ public class RemoteModel implements Predictable {
                 listener.onFailure(new MLException(e));
             });
             connector.decrypt(PREDICT.name(), encryptor::decrypt, decryptTenantId, decryptSuccessfulListener);
-        });
+        } catch (Throwable e) {
+            log.error("Failed to init remote model", e);
+            listener.onFailure(new MLException(e));
+        }
     }
 }

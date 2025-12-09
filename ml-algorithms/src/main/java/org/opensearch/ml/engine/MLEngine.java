@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -50,6 +49,7 @@ public class MLEngine {
     private final Path mlCachePath;
     private final Path mlModelsCachePath;
 
+    @Getter
     private Encryptor encryptor;
 
     public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
@@ -230,10 +230,6 @@ public class MLEngine {
         if (input.getFunctionName() == null) {
             throw new IllegalArgumentException("Function name should not be null");
         }
-    }
-
-    public void encrypt(List<String> credentials, String tenantId, ActionListener<List<String>> listener) {
-        encryptor.encrypt(credentials, tenantId, listener);
     }
 
 }

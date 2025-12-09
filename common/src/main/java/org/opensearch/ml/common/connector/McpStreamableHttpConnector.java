@@ -59,30 +59,6 @@ import lombok.extern.log4j.Log4j2;
 @org.opensearch.ml.common.annotation.Connector(MCP_STREAMABLE_HTTP)
 public class McpStreamableHttpConnector extends AbstractConnector {
 
-    protected String name;
-    protected String description;
-    protected String version;
-    protected String protocol;
-
-    protected Map<String, String> credential;
-    protected Map<String, String> decryptedHeaders;
-    protected Map<String, String> parameters;
-    @Setter
-    protected Map<String, String> decryptedCredential;
-    @Setter
-    protected List<String> backendRoles;
-    @Setter
-    protected User owner;
-    @Setter
-    protected AccessMode access;
-    @Setter
-    protected Instant createdTime;
-    @Setter
-    protected Instant lastUpdateTime;
-    @Setter
-    protected ConnectorClientConfig connectorClientConfig;
-    @Setter
-    protected String tenantId;
     @Setter
     @Getter
     protected String url;

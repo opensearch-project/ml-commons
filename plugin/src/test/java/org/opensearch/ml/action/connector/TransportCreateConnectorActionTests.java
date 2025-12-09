@@ -51,6 +51,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -80,6 +81,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     private SdkClient sdkClient;
     @Mock
     private MLEngine mlEngine;
+    @Mock
+    private Encryptor encryptor;
     @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
     @Mock
@@ -133,7 +136,12 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-
+        when(mlEngine.getEncryptor()).thenReturn(encryptor);
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(2);
+            listener.onResponse(List.of("mock"));
+            return null;
+        }).when(encryptor).encrypt(any(), any(), any());
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)

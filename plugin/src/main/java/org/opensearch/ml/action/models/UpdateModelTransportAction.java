@@ -358,7 +358,17 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         log.error("Failed to encrypt connector settings for model {}", modelId, e);
                         wrappedListener.onFailure(e);
                     });
-                    connector.encrypt(mlEngine::encrypt, tenantId, encryptSuccessfulListener);
+                    connector.encrypt(mlEngine.getEncryptor()::encrypt, tenantId, encryptSuccessfulListener);
+                } else {
+                    updateModelWithRegisteringToAnotherModelGroup(
+                        modelId,
+                        newModelGroupId,
+                        tenantId,
+                        user,
+                        updateModelInput,
+                        wrappedListener,
+                        isPredictorUpdate
+                    );
                 }
             } else {
                 updateModelWithNewStandAloneConnector(

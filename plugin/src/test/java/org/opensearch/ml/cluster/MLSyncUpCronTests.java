@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
-import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -161,7 +160,6 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
         syncUpCron.initMLConfig();
         verify(encryptor, times(1)).setMasterKey(any(), any());
     }
@@ -179,7 +177,6 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         syncUpCron.initMLConfig();
-        Assert.assertNotNull(encryptor.encrypt("test", null));
         syncUpCron.initMLConfig();
         verify(encryptor, times(1)).setMasterKey(any(), any());
     }

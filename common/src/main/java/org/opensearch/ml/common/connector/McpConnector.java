@@ -6,22 +6,12 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
-import static org.opensearch.ml.common.CommonValue.CLIENT_CONFIG_FIELD;
-import static org.opensearch.ml.common.CommonValue.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.CREDENTIAL_FIELD;
-import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.CommonValue.HEADERS_FIELD;
-import static org.opensearch.ml.common.CommonValue.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.CommonValue.NAME_FIELD;
-import static org.opensearch.ml.common.CommonValue.OWNER_FIELD;
-import static org.opensearch.ml.common.CommonValue.PARAMETERS_FIELD;
-import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.URL_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 
@@ -61,30 +51,6 @@ import lombok.extern.log4j.Log4j2;
 @org.opensearch.ml.common.annotation.Connector(MCP_SSE)
 public class McpConnector extends AbstractConnector {
 
-    protected String name;
-    protected String description;
-    protected String version;
-    protected String protocol;
-
-    protected Map<String, String> credential;
-    protected Map<String, String> decryptedHeaders;
-    protected Map<String, String> parameters;
-    @Setter
-    protected Map<String, String> decryptedCredential;
-    @Setter
-    protected List<String> backendRoles;
-    @Setter
-    protected User owner;
-    @Setter
-    protected AccessMode access;
-    @Setter
-    protected Instant createdTime;
-    @Setter
-    protected Instant lastUpdateTime;
-    @Setter
-    protected ConnectorClientConfig connectorClientConfig;
-    @Setter
-    protected String tenantId;
     @Setter
     @Getter
     protected String url;

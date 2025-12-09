@@ -13,6 +13,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -1292,7 +1294,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
     private void mockMcpConnector(MockedStatic<Connector> connectorStatic) {
         McpConnector mockConnector = mock(McpConnector.class);
         when(mockConnector.getProtocol()).thenReturn("mcp_sse");
-        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
 
@@ -1333,7 +1339,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1365,7 +1371,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1397,7 +1403,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1927,7 +1933,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
 
             // run and verify
-            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
             verify(listener).onResponse(expected);
         }
     }
@@ -1939,7 +1945,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
             // Mock an unsupported connector type (neither McpConnector nor McpStreamableHttpConnector)
             HttpConnector mockConnector = mock(HttpConnector.class);
             when(mockConnector.getProtocol()).thenReturn("http");
-            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+            doNothing().when(mockConnector).decrypt(anyString(), any(), anyString(), isA(ActionListener.class));
             connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
 
             MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
@@ -2001,7 +2007,11 @@ public class AgentUtilsTest extends MLStaticMockBase {
     private void mockMcpStreamableHttpConnector(MockedStatic<Connector> connectorStatic) {
         McpStreamableHttpConnector mockConnector = mock(McpStreamableHttpConnector.class);
         when(mockConnector.getProtocol()).thenReturn("mcp_streamable_http");
-        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(mockConnector).decrypt(anyString(), any(), anyString(), any(ActionListener.class));
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
 

@@ -196,7 +196,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             log.error("Failed to encrypt credentials in connector", e);
             listener.onFailure(e);
         });
-        connector.encrypt(mlEngine::encrypt, connector.getTenantId(), encryptSuccessfulListener);
+        connector.encrypt(mlEngine.getEncryptor()::encrypt, connector.getTenantId(), encryptSuccessfulListener);
     }
 
     private void validateRequest4AccessControl(MLCreateConnectorInput input, User user) {

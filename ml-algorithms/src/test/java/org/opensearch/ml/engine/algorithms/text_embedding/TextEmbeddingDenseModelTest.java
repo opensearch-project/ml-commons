@@ -93,7 +93,7 @@ public class TextEmbeddingDenseModelTest {
             .frameworkType(SENTENCE_TRANSFORMERS)
             .build();
         model = MLModel
-            .builder()
+            .builder(/**/)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .name("test_model_name")
             .modelId("test_model_id")
@@ -559,7 +559,7 @@ public class TextEmbeddingDenseModelTest {
     public void test_initModelAsync_throwIllegalStateException() {
         exceptionRule.expect(IllegalStateException.class);
         exceptionRule.expectMessage("Method is not implemented");
-        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor);
+        textEmbeddingDenseModel.initModelAsync(model, new HashMap<>(), encryptor, mock(ActionListener.class));
     }
 
     @Test

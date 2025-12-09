@@ -82,6 +82,7 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -176,6 +177,9 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     MLEngine mlEngine;
 
     @Mock
+    Encryptor encryptor;
+
+    @Mock
     NamedXContentRegistry xContentRegistry;
 
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
@@ -183,6 +187,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        when(mlEngine.getEncryptor()).thenReturn(encryptor);
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(2);
+            listener.onResponse(List.of("mock"));
+            return null;
+        }).when(encryptor).encrypt(any(), any(), any());
         settings = Settings
             .builder()
             .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)

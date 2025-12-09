@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.mockito.Mockito.mock;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.io.IOException;
@@ -19,13 +20,14 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -39,8 +41,12 @@ public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    TriConsumer<List<String>, String, ActionListener<List<String>>> encryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "encrypted: " + x.toLowerCase(Locale.ROOT)).toArray(String[]::new)));
+    TriConsumer<List<String>, String, ActionListener<List<String>>> decryptFunction = (s, v, t) -> t
+        .onResponse(List.of(s.stream().map(x -> "decrypted: " + x.toUpperCase(Locale.ROOT)).toArray(String[]::new)));
+
+    ActionListener<Boolean> listener = mock(ActionListener.class);
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
@@ -53,12 +59,6 @@ public class HttpConnectorTest {
         + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
         + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
-
-    @Before
-    public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
-    }
 
     @Test
     public void constructor_InvalidProtocol() {
@@ -125,7 +125,7 @@ public class HttpConnectorTest {
     @Test
     public void decrypt() {
         HttpConnector connector = createHttpConnector();
-        connector.decrypt(PREDICT.name(), decryptFunction, null);
+        TestHelper.endecryptCredentials(connector, decryptFunction, false);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -142,7 +142,7 @@ public class HttpConnectorTest {
     @Test
     public void encrypted() {
         HttpConnector connector = createHttpConnector();
-        connector.encrypt(encryptFunction, null);
+        TestHelper.endecryptCredentials(connector, encryptFunction, true);
         Map<String, String> credential = connector.getCredential();
         Assert.assertEquals(1, credential.size());
         Assert.assertEquals("encrypted: test_key_value", credential.get("key"));

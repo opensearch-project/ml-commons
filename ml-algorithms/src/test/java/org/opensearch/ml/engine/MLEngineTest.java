@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -79,6 +78,8 @@ public class MLEngineTest extends MLStaticMockBase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private MLEngine mlEngine;
+
+    private ActionListener<List<String>> endecryptListener = mock(ActionListener.class);
 
     @Before
     public void setUp() {
@@ -474,123 +475,132 @@ public class MLEngineTest extends MLStaticMockBase {
 
     @Test
     public void testEncryptMethod() {
-        String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString, null);
-        assertNotNull(encryptedString);
-        assertNotEquals(testString, encryptedString);
+        List<String> testStrings = List.of("testString1", "testString2");
+        mlEngine.getEncryptor().encrypt(testStrings, null, endecryptListener);
+        verify(endecryptListener).onResponse(any(List.class));
     }
 
     @Test
     public void testGetConnectorCredential() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
-        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
-            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-            + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
-            + encryptedValue
-            + "\"},"
-            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
-            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
-            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
-            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            mlEngine.getEncryptor().encrypt(List.of("test_key_value"), null, endecryptListener);
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
+                + r.getFirst()
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                test_connector_string
-            );
-        parser.nextToken();
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
 
-        HttpConnector connector = new HttpConnector("http", parser);
-        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
-        assertNotNull(decryptedCredential);
-        assertEquals(decryptedCredential.get("key"), "test_key_value");
-        assertEquals(decryptedCredential.get("region"), "test region");
+            HttpConnector connector = new HttpConnector("http", parser);
+            ActionListener<Map<String, String>> credentialListener = ActionListener.wrap(credential -> {
+                assertNotNull(credential);
+                assertEquals(credential.get("key"), "test_key_value");
+                assertEquals(credential.get("region"), "test region");
+            }, e -> { fail("Failed to get credential"); });
+            mlEngine.getConnectorCredential(connector, credentialListener);
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.getEncryptor().encrypt(List.of("test_key_value"), null, resultListener);
     }
 
     @Test
     public void testGetConnectorCredentialWithoutRegion() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value", null);
-        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
-            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
-            + "\"parameters\":{},\"credential\":{\"key\":\""
-            + encryptedValue
-            + "\"},"
-            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
-            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
-            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
-            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+                + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+                + "\"parameters\":{},\"credential\":{\"key\":\""
+                + r.getFirst()
+                + "\"},"
+                + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+                + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                test_connector_string
-            );
-        parser.nextToken();
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    test_connector_string
+                );
+            parser.nextToken();
 
-        HttpConnector connector = new HttpConnector("http", parser);
-        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
-        assertNotNull(decryptedCredential);
-        assertEquals("test_key_value", decryptedCredential.get("key"));
-        assertEquals(null, decryptedCredential.get("region"));
+            HttpConnector connector = new HttpConnector("http", parser);
+            ActionListener<Map<String, String>> credentialListener = ActionListener.wrap(credential -> {
+                assertNotNull(credential);
+                assertEquals(credential.get("key"), "test_key_value");
+                assertEquals(credential.get("region"), null);
+            }, e -> { fail("Failed to get credential"); });
+            mlEngine.getConnectorCredential(connector, credentialListener);
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.getEncryptor().encrypt(List.of("test_key_value"), null, resultListener);
     }
 
     @Test
     public void testDeploy_withPredictableActionListener_successful() throws IOException {
-        String encryptedAccessKey = mlEngine.encrypt("access-key", null);
-        String encryptedSecretKey = mlEngine.encrypt("secret-key", null);
-        String testConnector = String.format(Locale.ROOT, """
-            {
-                "name": "sagemaker: t2ppl",
-                "description": "t2ppl model",
-                "version": 1,
-                "protocol": "aws_sigv4",
-                "credential": {
-                    "access_key": "%s",
-                    "secret_key": "%s"
-                },
-                "parameters": {
-                    "region": "us-east-1",
-                    "service_name": "sagemaker",
-                    "input_type": "search_document"
-                },
-                "actions": [
-                    {
-                        "action_type": "predict",
-                        "method": "POST",
-                        "headers": {
-                            "content-type": "application/json",
-                            "x-amz-content-sha256": "required"
-                        },
-                        "url": "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/my-endpoint/invocations",
-                        "request_body": "{\\"prompt\\":\\"${parameters.prompt}\\"}"
-                    }
-                ]
-            }
-            """, encryptedAccessKey, encryptedSecretKey);
+        ActionListener<List<String>> resultListener = ActionListener.wrap(r -> {
+            String testConnector = String.format(Locale.ROOT, """
+                {
+                    "name": "sagemaker: t2ppl",
+                    "description": "t2ppl model",
+                    "version": 1,
+                    "protocol": "aws_sigv4",
+                    "credential": {
+                        "access_key": "%s",
+                        "secret_key": "%s"
+                    },
+                    "parameters": {
+                        "region": "us-east-1",
+                        "service_name": "sagemaker",
+                        "input_type": "search_document"
+                    },
+                    "actions": [
+                        {
+                            "action_type": "predict",
+                            "method": "POST",
+                            "headers": {
+                                "content-type": "application/json",
+                                "x-amz-content-sha256": "required"
+                            },
+                            "url": "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/my-endpoint/invocations",
+                            "request_body": "{\\"prompt\\":\\"${parameters.prompt}\\"}"
+                        }
+                    ]
+                }
+                """, r.get(0), r.get(1));
 
-        XContentParser parser = XContentType.JSON
-            .xContent()
-            .createParser(
-                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                null,
-                testConnector
-            );
-        parser.nextToken();
+            XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                    new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                    null,
+                    testConnector
+                );
+            parser.nextToken();
 
-        MLModel model = mock(MLModel.class);
-        AwsConnector connector = new AwsConnector("aws_sigv4", parser);
-        when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
-        when(model.getConnector()).thenReturn(connector);
-        ActionListener<Predictable> actionListener = mock(ActionListener.class);
-        SdkClient sdkClient = mock(SdkClient.class);
-        when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
-        Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
-        mlEngine.deploy(model, params, actionListener);
-        verify(actionListener).onResponse(any(Predictable.class));
+            MLModel model = mock(MLModel.class);
+            AwsConnector connector = new AwsConnector("aws_sigv4", parser);
+            when(model.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+            when(model.getConnector()).thenReturn(connector);
+            ActionListener<Predictable> actionListener = mock(ActionListener.class);
+            SdkClient sdkClient = mock(SdkClient.class);
+            when(sdkClient.isGlobalResource(any(), any())).thenReturn(CompletableFuture.completedFuture(false));
+            Map<String, Object> params = ImmutableMap.of(SDK_CLIENT, sdkClient, SETTINGS, Settings.EMPTY);
+            mlEngine.deploy(model, params, actionListener);
+            verify(actionListener).onResponse(any(Predictable.class));
+        }, e -> { fail("Failed to encrypt"); });
+        mlEngine.getEncryptor().encrypt(List.of("access-key", "secret-key"), null, resultListener);
     }
 
     @Test

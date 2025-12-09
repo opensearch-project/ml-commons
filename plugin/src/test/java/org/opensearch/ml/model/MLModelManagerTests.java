@@ -95,7 +95,6 @@ import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
-import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -583,38 +582,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
-    }
-
-    public void testIndexRemoteModel() throws PrivilegedActionException, IOException {
-        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
-        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
-        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
-        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
-        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
-        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
-        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
-        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
-
-        GetResponse getResponse = prepareMLModelGroup();
-
-        IndexResponse indexResponse = new IndexResponse(new ShardId("test", "test", 1), "mockIndexId", 1l, 1l, 1l, true);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
-            getModelGrouplistener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
-            indexResponseActionListener.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-        modelManager.indexRemoteModel(pretrainedInput, pretrainedTask, "1.0.0");
-        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
-        verify(modelManager).deployModelAfterRegistering(any(), anyString());
-
     }
 
     @Ignore

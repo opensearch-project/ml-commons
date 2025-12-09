@@ -38,6 +38,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.engine.VersionConflictEngineException;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
@@ -168,7 +169,11 @@ public class EncryptorImpl implements Encryptor {
             }
         }, e -> {
             log.error("Failed to encrypt the credentials in connector body!", e);
-            listener.onFailure(e);
+            if (e instanceof RuntimeException) {
+                listener.onFailure(e);
+            } else {
+                listener.onFailure(new MLException(e));
+            }
         });
         initMasterKey(tenantId, masterKeyInitiatedListener);
     }
@@ -191,7 +196,11 @@ public class EncryptorImpl implements Encryptor {
             }
         }, e -> {
             log.error("Failed to decrypt the credentials in connector body!", e);
-            listener.onFailure(e);
+            if (e instanceof RuntimeException) {
+                listener.onFailure(e);
+            } else {
+                listener.onFailure(new MLException(e));
+            }
         });
         initMasterKey(tenantId, masterKeyInitiatedListener);
     }
@@ -228,8 +237,8 @@ public class EncryptorImpl implements Encryptor {
                     );
             }
         }, e -> {
-            log.error("Failed to init master key for tenant {}", tenantId, e);
-            listener.onFailure(e);
+            log.error("Failed to init ML config index for tenant {}", tenantId, e);
+            listener.onFailure(new RuntimeException("No response to create ML Config index"));
         });
         mlIndicesHandler.initMLConfigIndex(mlConfigIndexInitiatedListener);
     }
@@ -284,6 +293,7 @@ public class EncryptorImpl implements Encryptor {
                     listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
                 }
             } else {
+                log.debug("Starting to initialize master key for tenant: {}!", tenantId);
                 initializeNewMasterKey(tenantId, masterKeyId, context, listener);
             }
         } catch (Exception e) {
@@ -354,10 +364,12 @@ public class EncryptorImpl implements Encryptor {
         if (throwable != null) {
             handlePutDataObjectFailure(tenantId, masterKeyId, context, throwable, listener);
         } else {
+            System.out.println("put data object response received!");
             IndexResponse indexResponse = IndexResponse.fromXContent(putDataObjectResponse.parser());
             log.info("Master key creation result: {}, Master key id: {}", indexResponse.getResult(), indexResponse.getId());
             this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), generatedMasterKey);
             log.info("ML encryption master key initialized successfully");
+            listener.onResponse(generatedMasterKey);
         }
     }
 
