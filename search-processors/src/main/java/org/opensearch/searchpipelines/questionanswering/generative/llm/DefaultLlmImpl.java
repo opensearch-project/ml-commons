@@ -52,6 +52,9 @@ public class DefaultLlmImpl implements Llm {
     private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
     private static final String CONNECTOR_OUTPUT_MESSAGE_CONTENT = "content";
     private static final String CONNECTOR_OUTPUT_ERROR = "error";
+    private static final String BEDROCK_COMPLETION_FIELD = "completion";
+    private static final String BEDROCK_CONTENT_FIELD = "content";
+    private static final String BEDROCK_TEXT_FIELD = "text";
 
     private final String openSearchModelId;
 
@@ -191,8 +194,38 @@ public class DefaultLlmImpl implements Llm {
                 answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
             }
         } else if (provider == ModelProvider.BEDROCK) {
-            answerField = "completion";
-            fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);
+            // Handle Bedrock model responses (supports both legacy completion and newer content/text formats)
+
+            Object contentObj = dataAsMap.get(BEDROCK_CONTENT_FIELD);
+            if (contentObj == null) {
+                // Legacy completion-style format
+                Object completion = dataAsMap.get(BEDROCK_COMPLETION_FIELD);
+                if (completion != null) {
+                    answers.add(completion.toString());
+                } else {
+                    errors.add("Unsupported Bedrock response format: " + dataAsMap.keySet());
+                    log.error("Unknown Bedrock response format: {}", dataAsMap);
+                }
+            } else {
+                // Fail-fast checks for new content/text format
+                if (!(contentObj instanceof List<?> contentList)) {
+                    errors.add("Unexpected type for '" + BEDROCK_CONTENT_FIELD + "' in Bedrock response.");
+                } else if (contentList.isEmpty()) {
+                    errors.add("Empty content list in Bedrock response.");
+                } else {
+                    Object first = contentList.get(0);
+                    if (!(first instanceof Map<?, ?> firstMap)) {
+                        errors.add("Unexpected content format in Bedrock response.");
+                    } else {
+                        Object text = firstMap.get(BEDROCK_TEXT_FIELD);
+                        if (text == null) {
+                            errors.add("Bedrock content response missing '" + BEDROCK_TEXT_FIELD + "' field.");
+                        } else {
+                            answers.add(text.toString());
+                        }
+                    }
+                }
+            }
         } else if (provider == ModelProvider.COHERE) {
             answerField = "text";
             fillAnswersOrErrors(dataAsMap, answers, errors, answerField, errorField, defaultErrorMessageField);

@@ -470,26 +470,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "  }\n"
         + "}";
 
-    private static final String BM25_SEARCH_REQUEST_WITH_CONVO_WITH_LLM_RESPONSE_TEMPLATE = "{\n"
-        + "  \"_source\": [\"%s\"],\n"
-        + "  \"query\" : {\n"
-        + "    \"match\": {\"%s\": \"%s\"}\n"
-        + "  },\n"
-        + "   \"ext\": {\n"
-        + "      \"generative_qa_parameters\": {\n"
-        + "        \"llm_model\": \"%s\",\n"
-        + "        \"llm_question\": \"%s\",\n"
-        + "        \"memory_id\": \"%s\",\n"
-        + "        \"system_prompt\": \"%s\",\n"
-        + "        \"user_instructions\": \"%s\",\n"
-        + "        \"context_size\": %d,\n"
-        + "        \"message_size\": %d,\n"
-        + "        \"timeout\": %d,\n"
-        + "        \"llm_response_field\": \"%s\"\n"
-        + "      }\n"
-        + "  }\n"
-        + "}";
-
     private static final String BM25_SEARCH_REQUEST_WITH_CONVO_AND_IMAGE_TEMPLATE = "{\n"
         + "  \"_source\": [\"%s\"],\n"
         + "  \"query\" : {\n"
