@@ -2,9 +2,6 @@
 
 Compatible with OpenSearch and OpenSearch Dashboards version 3.4.0
 
-### Features
-* Nova mme support ([#4360](https://github.com/opensearch-project/ml-commons/pull/4360))
-
 ### Enhancements
 * Declare credential and *.Authorization as sensitive param in create connector API ([#4308](https://github.com/opensearch-project/ml-commons/pull/4308))
 * Pass resourceType instead of resourceIndex to resourceSharingClient ([#4333](https://github.com/opensearch-project/ml-commons/pull/4333))
