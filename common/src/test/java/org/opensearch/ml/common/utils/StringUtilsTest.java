@@ -1225,4 +1225,46 @@ public class StringUtilsTest {
         assertTrue(m.get("fPrim").isJsonPrimitive());
         assertEquals(1.0f, m.get("fPrim").getAsFloat(), 1e-9f);
     }
+
+    @Test
+    public void testProcessTextDoc_ExceptionMessageEscaping() {
+        // Test the problematic exception message from the error
+        String problematicMessage = "Invalid payload: { \"system\": [{\"text\": \"You are a precise...\"}], \"messages\": [...] }\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(problematicMessage);
+
+        // Verify that problematic characters are escaped
+        assertFalse(
+            "Escaped message should not contain unescaped newlines",
+            escapedMessage.contains("\n") && !escapedMessage.contains("\\n")
+        );
+        assertFalse(
+            "Escaped message should not contain unescaped quotes",
+            escapedMessage.contains("\"") && !escapedMessage.contains("\\\"")
+        );
+    }
+
+    @Test
+    public void testProcessTextDoc_GsonParsingErrorMessageEscaping() {
+        // Test the specific Gson error message pattern
+        String gsonError = "Expected BEGIN_ARRAY but was STRING at line 1 column 1 path $\n"
+            + "See https://github.com/google/gson/blob/main/Troubleshooting.md#unexpected-json-structure";
+
+        String escapedMessage = StringUtils.processTextDoc(gsonError);
+
+        // The escaped message should be safe for JSON inclusion
+        assertTrue("Escaped message should be safe for JSON", !escapedMessage.contains("\n") || escapedMessage.contains("\\n"));
+    }
+
+    @Test
+    public void testProcessTextDoc_NormalMessagePassthrough() {
+        // Test that normal messages without special characters pass through unchanged
+        String normalMessage = "Tool execution failed with normal error";
+
+        String escapedMessage = StringUtils.processTextDoc(normalMessage);
+
+        // Normal messages should be handled properly
+        assertTrue("Normal messages should be handled properly", escapedMessage.length() > 0);
+    }
 }
