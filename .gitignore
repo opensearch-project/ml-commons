@@ -11,3 +11,4 @@ plugin/build/
 .DS_Store
 */bin/
 **/*.factorypath
+**/out
