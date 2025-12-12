@@ -36,7 +36,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String RETRY_BACKOFF_POLICY_FIELD = "retry_backoff_policy";
 
     public static final Integer MAX_CONNECTION_DEFAULT_VALUE = 30;
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = 1;
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = 1000;
     public static final Integer READ_TIMEOUT_DEFAULT_VALUE = 10;
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
@@ -44,8 +44,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final RetryBackoffPolicy RETRY_BACKOFF_POLICY_DEFAULT_VALUE = RetryBackoffPolicy.CONSTANT;
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RETRY = Version.V_2_15_0;
     private Integer maxConnections;
-    private Integer connectionTimeout;
-    private Integer readTimeout;
+    private Integer connectionTimeoutMillis;
+    private Integer readTimeoutSeconds;
     private Integer retryBackoffMillis;
     private Integer retryTimeoutSeconds;
     private Integer maxRetryTimes;
@@ -54,16 +54,16 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     @Builder(toBuilder = true)
     public ConnectorClientConfig(
         Integer maxConnections,
-        Integer connectionTimeout,
-        Integer readTimeout,
+        Integer connectionTimeoutMillis,
+        Integer readTimeoutSeconds,
         Integer retryBackoffMillis,
         Integer retryTimeoutSeconds,
         Integer maxRetryTimes,
         RetryBackoffPolicy retryBackoffPolicy
     ) {
         this.maxConnections = maxConnections;
-        this.connectionTimeout = connectionTimeout;
-        this.readTimeout = readTimeout;
+        this.connectionTimeoutMillis = connectionTimeoutMillis;
+        this.readTimeoutSeconds = readTimeoutSeconds;
         this.retryBackoffMillis = retryBackoffMillis;
         this.retryTimeoutSeconds = retryTimeoutSeconds;
         this.maxRetryTimes = maxRetryTimes;
@@ -73,8 +73,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public ConnectorClientConfig(StreamInput input) throws IOException {
         Version streamInputVersion = input.getVersion();
         this.maxConnections = input.readOptionalInt();
-        this.connectionTimeout = input.readOptionalInt();
-        this.readTimeout = input.readOptionalInt();
+        this.connectionTimeoutMillis = input.readOptionalInt();
+        this.readTimeoutSeconds = input.readOptionalInt();
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRY)) {
             this.retryBackoffMillis = input.readOptionalInt();
             this.retryTimeoutSeconds = input.readOptionalInt();
@@ -87,8 +87,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
 
     public ConnectorClientConfig() {
         this.maxConnections = MAX_CONNECTION_DEFAULT_VALUE;
-        this.connectionTimeout = CONNECTION_TIMEOUT_DEFAULT_VALUE;
-        this.readTimeout = READ_TIMEOUT_DEFAULT_VALUE;
+        this.connectionTimeoutMillis = CONNECTION_TIMEOUT_DEFAULT_VALUE;
+        this.readTimeoutSeconds = READ_TIMEOUT_DEFAULT_VALUE;
         this.retryBackoffMillis = RETRY_BACKOFF_MILLIS_DEFAULT_VALUE;
         this.retryTimeoutSeconds = RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE;
         this.maxRetryTimes = MAX_RETRY_TIMES_DEFAULT_VALUE;
@@ -99,8 +99,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         Version streamOutputVersion = out.getVersion();
         out.writeOptionalInt(maxConnections);
-        out.writeOptionalInt(connectionTimeout);
-        out.writeOptionalInt(readTimeout);
+        out.writeOptionalInt(connectionTimeoutMillis);
+        out.writeOptionalInt(readTimeoutSeconds);
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRY)) {
             out.writeOptionalInt(retryBackoffMillis);
             out.writeOptionalInt(retryTimeoutSeconds);
@@ -120,11 +120,11 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         if (maxConnections != null) {
             builder.field(MAX_CONNECTION_FIELD, maxConnections);
         }
-        if (connectionTimeout != null) {
-            builder.field(CONNECTION_TIMEOUT_FIELD, connectionTimeout);
+        if (connectionTimeoutMillis != null) {
+            builder.field(CONNECTION_TIMEOUT_FIELD, connectionTimeoutMillis);
         }
-        if (readTimeout != null) {
-            builder.field(READ_TIMEOUT_FIELD, readTimeout);
+        if (readTimeoutSeconds != null) {
+            builder.field(READ_TIMEOUT_FIELD, readTimeoutSeconds);
         }
         if (retryBackoffMillis != null) {
             builder.field(RETRY_BACKOFF_MILLIS_FIELD, retryBackoffMillis);
@@ -190,8 +190,8 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         return ConnectorClientConfig
             .builder()
             .maxConnections(maxConnections)
-            .connectionTimeout(connectionTimeout)
-            .readTimeout(readTimeout)
+            .connectionTimeoutMillis(connectionTimeout)
+            .readTimeoutSeconds(readTimeout)
             .retryBackoffMillis(retryBackoffMillis)
             .retryTimeoutSeconds(retryTimeoutSeconds)
             .maxRetryTimes(maxRetryTimes)
