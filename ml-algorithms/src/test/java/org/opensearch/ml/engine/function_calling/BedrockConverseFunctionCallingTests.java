@@ -82,4 +82,91 @@ public class BedrockConverseFunctionCallingTests {
         Assert.assertEquals("test_tool_call_id", result.getToolUseId());
         Assert.assertEquals("test result for bedrock converse", result.getContent().get(0));
     }
+
+    @Test
+    public void filterToFirstToolCall_multipleToolCalls() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        Map<String, Object> output = new HashMap<>();
+        Map<String, Object> message = new HashMap<>();
+        List<Object> content = Arrays.asList(
+            ImmutableMap.of("text", "Some text"),
+            ImmutableMap.of("toolUse", ImmutableMap.of("name", "tool1")),
+            ImmutableMap.of("toolUse", ImmutableMap.of("name", "tool2"))
+        );
+        message.put("content", content);
+        output.put("message", message);
+        dataAsMap.put("output", output);
+        
+        Map<String, ?> result = functionCalling.filterToFirstToolCall(dataAsMap, new HashMap<>());
+        List<Object> resultContent = (List<Object>) ((Map<?, ?>) ((Map<?, ?>) result.get("output")).get("message")).get("content");
+        
+        assertEquals(2, resultContent.size());
+        assertEquals("Some text", ((Map<?, ?>) resultContent.get(0)).get("text"));
+        assertEquals("tool1", ((Map<?, ?>) ((Map<?, ?>) resultContent.get(1)).get("toolUse")).get("name"));
+    }
+
+    @Test
+    public void filterToFirstToolCall_singleToolCall() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        Map<String, Object> output = new HashMap<>();
+        Map<String, Object> message = new HashMap<>();
+        List<Object> content = Arrays.asList(
+            ImmutableMap.of("toolUse", ImmutableMap.of("name", "tool1"))
+        );
+        message.put("content", content);
+        output.put("message", message);
+        dataAsMap.put("output", output);
+        
+        Map<String, ?> result = functionCalling.filterToFirstToolCall(dataAsMap, new HashMap<>());
+        List<Object> resultContent = (List<Object>) ((Map<?, ?>) ((Map<?, ?>) result.get("output")).get("message")).get("content");
+        assertEquals(1, resultContent.size());
+    }
+
+    @Test
+    public void filterToFirstToolCall_noToolCalls() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        Map<String, Object> output = new HashMap<>();
+        Map<String, Object> message = new HashMap<>();
+        List<Object> content = Arrays.asList(
+            ImmutableMap.of("text", "Just text")
+        );
+        message.put("content", content);
+        output.put("message", message);
+        dataAsMap.put("output", output);
+        
+        Map<String, ?> result = functionCalling.filterToFirstToolCall(dataAsMap, new HashMap<>());
+        List<Object> resultContent = (List<Object>) ((Map<?, ?>) ((Map<?, ?>) result.get("output")).get("message")).get("content");
+        assertEquals(1, resultContent.size());
+    }
+
+    @Test
+    public void filterToFirstToolCall_invalidStructure() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("invalid", "structure");
+        
+        Map<String, ?> result = functionCalling.filterToFirstToolCall(dataAsMap, new HashMap<>());
+        assertEquals(dataAsMap, result);
+    }
+
+    @Test
+    public void filterToFirstToolCall_immutableMap() {
+        Map<String, Object> dataAsMap = ImmutableMap.of(
+            "output", ImmutableMap.of(
+                "message", ImmutableMap.of(
+                    "content", Arrays.asList(
+                        ImmutableMap.of("text", "Some text"),
+                        ImmutableMap.of("toolUse", ImmutableMap.of("name", "tool1")),
+                        ImmutableMap.of("toolUse", ImmutableMap.of("name", "tool2"))
+                    )
+                )
+            )
+        );
+        
+        Map<String, ?> result = functionCalling.filterToFirstToolCall(dataAsMap, new HashMap<>());
+        List<Object> resultContent = (List<Object>) ((Map<?, ?>) ((Map<?, ?>) result.get("output")).get("message")).get("content");
+        
+        assertEquals(2, resultContent.size());
+        assertEquals("Some text", ((Map<?, ?>) resultContent.get(0)).get("text"));
+        assertEquals("tool1", ((Map<?, ?>) ((Map<?, ?>) resultContent.get(1)).get("toolUse")).get("name"));
+    }
 }
