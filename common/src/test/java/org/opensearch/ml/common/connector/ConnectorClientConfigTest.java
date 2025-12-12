@@ -160,8 +160,8 @@ public class ConnectorClientConfigTest {
         ConnectorClientConfig config = new ConnectorClientConfig();
 
         Assert.assertEquals(Integer.valueOf(30), config.getMaxConnections());
-        Assert.assertEquals(Integer.valueOf(30000), config.getConnectionTimeout());
-        Assert.assertEquals(Integer.valueOf(30000), config.getReadTimeout());
+        Assert.assertEquals(Integer.valueOf(1), config.getConnectionTimeout());
+        Assert.assertEquals(Integer.valueOf(10), config.getReadTimeout());
         Assert.assertEquals(Integer.valueOf(200), config.getRetryBackoffMillis());
         Assert.assertEquals(Integer.valueOf(30), config.getRetryTimeoutSeconds());
         Assert.assertEquals(Integer.valueOf(0), config.getMaxRetryTimes());
