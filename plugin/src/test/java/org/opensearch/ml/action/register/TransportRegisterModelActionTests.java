@@ -36,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
@@ -46,6 +47,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -276,14 +278,15 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         MLRegisterModelRequest mlRegisterModelRequest = new MLRegisterModelRequest(registerModelInput);
 
-        IllegalStateException e = assertThrows(
-                IllegalStateException.class,
+        OpenSearchStatusException e = assertThrows(
+                OpenSearchStatusException.class,
                 () -> transportRegisterModelAction.doExecute(task, mlRegisterModelRequest, actionListener)
         );
         assertEquals(
                 e.getMessage(),
                 LOCAL_MODEL_DISABLED_ERR_MSG
         );
+        assertEquals(RestStatus.BAD_REQUEST, e.status());
     }
 
     @Test

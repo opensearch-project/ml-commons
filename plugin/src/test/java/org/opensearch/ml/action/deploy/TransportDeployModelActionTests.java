@@ -55,6 +55,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -379,9 +380,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
         assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     public void testDoExecuteLocalInferenceDisabled() {
@@ -396,9 +398,10 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
         assertEquals(LOCAL_MODEL_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, ((OpenSearchStatusException) argumentCaptor.getValue()).status());
     }
 
     public void test_ValidationFailedException() {

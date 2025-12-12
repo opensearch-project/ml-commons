@@ -18,6 +18,8 @@ import java.util.Locale;
 import java.util.Set;
 
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -60,7 +62,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler implements Rest
     @VisibleForTesting
     private MLUpdateConnectorRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
 
         if (!request.hasContent()) {

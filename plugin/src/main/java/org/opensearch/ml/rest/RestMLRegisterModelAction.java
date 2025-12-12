@@ -19,8 +19,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -103,9 +105,9 @@ public class RestMLRegisterModelAction extends BaseRestHandler implements RestRe
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         mlInput.setTenantId(tenantId);
         if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         } else if (FunctionName.isDLModel(mlInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
         return new MLRegisterModelRequest(mlInput);
     }

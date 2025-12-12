@@ -27,6 +27,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -131,7 +132,7 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testPrepareRequestFeatureDisabled() throws Exception {
-        thrown.expect(IllegalStateException.class);
+        thrown.expect(OpenSearchStatusException.class);
         thrown.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
