@@ -35,9 +35,9 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
     public static final String MAX_RETRY_TIMES_FIELD = "max_retry_times";
     public static final String RETRY_BACKOFF_POLICY_FIELD = "retry_backoff_policy";
 
-    public static final Integer MAX_CONNECTION_DEFAULT_VALUE = Integer.valueOf(30);
-    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
-    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = Integer.valueOf(30000);
+    public static final Integer MAX_CONNECTION_DEFAULT_VALUE = 30;
+    public static final Integer CONNECTION_TIMEOUT_DEFAULT_VALUE = 1;
+    public static final Integer READ_TIMEOUT_DEFAULT_VALUE = 10;
     public static final Integer RETRY_BACKOFF_MILLIS_DEFAULT_VALUE = 200;
     public static final Integer RETRY_TIMEOUT_SECONDS_DEFAULT_VALUE = 30;
     public static final Integer MAX_RETRY_TIMES_DEFAULT_VALUE = 0;
