@@ -25,17 +25,21 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.utils.StringUtils;
 
+import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
 
+@Log4j2
 public class BedrockConverseFunctionCalling implements FunctionCalling {
     public static final String FINISH_REASON_PATH = "$.stopReason";
     public static final String FINISH_REASON = "tool_use";
@@ -119,6 +123,62 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         }
 
         return List.of(toolMessage);
+    }
+
+    @Override
+    public Map<String, ?> filterToFirstToolCall(Map<String, ?> dataAsMap, Map<String, String> parameters) {
+        try {
+            Map<String, Object> mutableCopy = new HashMap<>();
+            copyMapRecursively(dataAsMap, mutableCopy);
+            
+            DocumentContext context = JsonPath.parse(mutableCopy);
+            List<Object> contentList = JsonPath.read(mutableCopy, "$.output.message.content");
+
+            if (contentList == null || contentList.size() <= 1) {
+                return dataAsMap;
+            }
+
+            // Keep only text and first toolUse
+            List<Object> filteredContent = new ArrayList<>();
+            boolean foundFirstToolUse = false;
+
+            for (Object item : contentList) {
+                if (item instanceof Map && ((Map<?, ?>) item).containsKey("toolUse")) {
+                    if (!foundFirstToolUse) {
+                        filteredContent.add(item);
+                        foundFirstToolUse = true;
+                    }
+                } else {
+                    filteredContent.add(item);
+                }
+            }
+
+            if (!foundFirstToolUse) {
+                return dataAsMap;
+            }
+
+            context.set("$.output.message.content", filteredContent);
+            return context.json();
+        } catch (Exception e) {
+            log.error("Failed to filter out first tool call", e);
+            return dataAsMap;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void copyMapRecursively(Map<String, ?> source, Map<String, Object> target) {
+        for (Map.Entry<String, ?> entry : source.entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof Map) {
+                Map<String, Object> nestedMap = new HashMap<>();
+                copyMapRecursively((Map<String, ?>) value, nestedMap);
+                target.put(entry.getKey(), nestedMap);
+            } else if (value instanceof List) {
+                target.put(entry.getKey(), new ArrayList<>((List<?>) value));
+            } else {
+                target.put(entry.getKey(), value);
+            }
+        }
     }
 
     @Data
