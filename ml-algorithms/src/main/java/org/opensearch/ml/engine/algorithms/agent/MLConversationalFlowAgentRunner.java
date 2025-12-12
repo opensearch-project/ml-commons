@@ -20,7 +20,6 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHis
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 
-import java.security.PrivilegedActionException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -240,7 +239,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         }
     }
 
-    @SuppressWarnings("removal")
     private void processOutput(
         Map<String, String> params,
         ActionListener<Object> listener,
@@ -257,7 +255,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Object output,
         String tenantId,
         StepListener<Object> nextStepListener
-    ) throws PrivilegedActionException {
+    ) {
         String toolName = getToolName(previousToolSpec);
         String outputKey = toolName + ".output";
         Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, tenantId);

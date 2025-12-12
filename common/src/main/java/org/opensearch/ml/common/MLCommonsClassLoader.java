@@ -7,9 +7,6 @@ package org.opensearch.ml.common;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +23,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLOutputType;
+import org.opensearch.secure_sm.AccessController;
 import org.reflections.Reflections;
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -43,14 +41,7 @@ public class MLCommonsClassLoader {
     private static Map<String, Class<?>> connectorClassMap = new HashMap<>();
 
     static {
-        try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                loadClassMapping();
-                return null;
-            });
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException("Can't load class mapping in ML commons", e);
-        }
+        AccessController.doPrivileged(MLCommonsClassLoader::loadClassMapping);
     }
 
     public static void loadClassMapping() {

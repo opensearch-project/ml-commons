@@ -12,11 +12,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.AccessController;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -38,6 +35,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.secure_sm.AccessController;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -248,79 +246,56 @@ public class StringUtils {
         filteredKeys.retainAll(allowedList);
         for (String key : filteredKeys) {
             Object value = parameterObjs.get(key);
-            try {
-                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    if (value instanceof String) {
-                        parameters.put(key, (String) value);
-                    } else {
-                        parameters.put(key, gson.toJson(value));
-                    }
-                    return null;
-                });
-            } catch (PrivilegedActionException e) {
-                throw new RuntimeException(e);
-            }
+            AccessController.doPrivileged(() -> {
+                if (value instanceof String) {
+                    parameters.put(key, (String) value);
+                } else {
+                    parameters.put(key, gson.toJson(value));
+                }
+            });
         }
         return parameters;
     }
 
-    @SuppressWarnings("removal")
     public static Map<String, String> getParameterMap(Map<String, ?> parameterObjs) {
         Map<String, String> parameters = new HashMap<>();
         if (parameterObjs == null)
             return parameters;
         for (String key : parameterObjs.keySet()) {
             Object value = parameterObjs.get(key);
-            try {
-                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    if (value instanceof String) {
-                        parameters.put(key, (String) value);
-                    } else {
-                        parameters.put(key, gson.toJson(value));
-                    }
-                    return null;
-                });
-            } catch (PrivilegedActionException e) {
-                throw new RuntimeException(e);
-            }
+            AccessController.doPrivileged(() -> {
+                if (value instanceof String) {
+                    parameters.put(key, (String) value);
+                } else {
+                    parameters.put(key, gson.toJson(value));
+                }
+            });
         }
         return parameters;
     }
 
-    @SuppressWarnings("removal")
     public static String toJson(Object value) {
-        try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                if (value instanceof String) {
-                    return (String) value;
-                } else {
-                    return gson.toJson(value);
-                }
-            });
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException(e);
-        }
+        return AccessController.doPrivileged(() -> {
+            if (value instanceof String) {
+                return (String) value;
+            } else {
+                return gson.toJson(value);
+            }
+        });
     }
 
-    @SuppressWarnings("removal")
     public static Map<String, String> convertScriptStringToJsonString(Map<String, Object> processedInput) {
         Map<String, String> parameterStringMap = new HashMap<>();
-        try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                Map<String, Object> parametersMap = (Map<String, Object>) processedInput.getOrDefault("parameters", Map.of());
-                for (String key : parametersMap.keySet()) {
-                    if (parametersMap.get(key) instanceof String) {
-                        parameterStringMap.put(key, (String) parametersMap.get(key));
-                    } else {
-                        parameterStringMap.put(key, gson.toJson(parametersMap.get(key)));
-                    }
+        AccessController.doPrivileged(() -> {
+            Map<String, Object> parametersMap = (Map<String, Object>) processedInput.getOrDefault("parameters", Map.of());
+            for (String key : parametersMap.keySet()) {
+                if (parametersMap.get(key) instanceof String) {
+                    parameterStringMap.put(key, (String) parametersMap.get(key));
+                } else {
+                    parameterStringMap.put(key, gson.toJson(parametersMap.get(key)));
                 }
-                return null;
-            });
-        } catch (PrivilegedActionException e) {
-            log.error("Error processing parameters", e);
-            throw new RuntimeException(e);
-        }
+            }
+        });
         return parameterStringMap;
     }
 

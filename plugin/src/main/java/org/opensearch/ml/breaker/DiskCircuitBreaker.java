@@ -8,9 +8,6 @@ package org.opensearch.ml.breaker;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_THRESHOLD;
 
 import java.io.File;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.Optional;
 
 import org.opensearch.cluster.service.ClusterService;
@@ -18,6 +15,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.secure_sm.AccessController;
 
 /**
  * A circuit breaker for disk usage.
@@ -38,14 +36,13 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<ByteSizeValue> {
         return ML_DISK_CB;
     }
 
-    @SuppressWarnings("removal")
     @Override
     public boolean isOpen() {
         try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
+            return AccessController.doPrivilegedChecked(() -> {
                 return new ByteSizeValue(diskDir.getFreeSpace(), ByteSizeUnit.BYTES).compareTo(getThreshold()) < 0;  // in GB
             });
-        } catch (PrivilegedActionException e) {
+        } catch (Exception e) {
             throw new MLException("Failed to run disk circuit breaker");
         }
     }

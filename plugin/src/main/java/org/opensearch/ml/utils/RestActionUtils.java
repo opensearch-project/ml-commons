@@ -8,9 +8,6 @@ package org.opensearch.ml.utils;
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -45,8 +42,10 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.client.Client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
@@ -227,7 +226,6 @@ public class RestActionUtils {
     }
 
     // TODO: Integration test needs to be added (MUST)
-    @SuppressWarnings("removal")
     public static boolean isSuperAdminUser(ClusterService clusterService, Client client) {
 
         final List<String> adminDnsA = clusterService.getSettings().getAsList(SECURITY_AUTHCZ_ADMIN_DN, Collections.emptyList());
@@ -246,14 +244,14 @@ public class RestActionUtils {
         if (userObject == null)
             return false;
         try {
-            return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
+            return AccessController.doPrivilegedChecked(() -> {
                 String userContext = objectMapper.writeValueAsString(userObject);
                 final JsonNode node = objectMapper.readTree(userContext);
                 final String userName = node.get("name").asText();
 
                 return isAdminDN(userName);
             });
-        } catch (PrivilegedActionException e) {
+        } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
     }

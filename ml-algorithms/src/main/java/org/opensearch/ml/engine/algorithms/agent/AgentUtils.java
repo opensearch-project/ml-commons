@@ -33,9 +33,6 @@ import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INT
 
 import java.io.IOException;
 import java.lang.reflect.Type;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -88,6 +85,7 @@ import org.opensearch.ml.engine.tools.McpStreamableHttpTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.reflect.TypeToken;
@@ -630,21 +628,19 @@ public class AgentUtils {
         return null;
     }
 
-    @SuppressWarnings("removal")
-    public static String outputToOutputString(Object output) throws PrivilegedActionException {
+    public static String outputToOutputString(Object output) {
         String outputString;
         if (output instanceof ModelTensorOutput) {
             ModelTensor outputModel = ((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors().get(0);
             if (outputModel.getDataAsMap() != null) {
-                outputString = AccessController
-                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
+                outputString = AccessController.doPrivileged(() -> gson.toJson(outputModel.getDataAsMap()));
             } else {
                 outputString = outputModel.getResult();
             }
         } else if (output instanceof String) {
             outputString = (String) output;
         } else {
-            outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+            outputString = AccessController.doPrivileged(() -> gson.toJson(output));
         }
         return outputString;
     }

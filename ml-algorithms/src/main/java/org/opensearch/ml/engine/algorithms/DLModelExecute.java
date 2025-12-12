@@ -7,9 +7,6 @@ import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +25,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.utils.ZipUtils;
+import org.opensearch.secure_sm.AccessController;
 
 import ai.djl.Application;
 import ai.djl.Device;
@@ -122,12 +120,11 @@ public abstract class DLModelExecute implements MLExecutable {
      * @param version version of the model
      * @param engine engine where model will be run. For now, we are supporting only pytorch engine only.
      */
-    @SuppressWarnings("removal")
     private void loadModel(File modelZipFile, String modelId, String modelName, String version, String engine) {
         try {
             List<Predictor<ai.djl.modality.Input, ai.djl.modality.Output>> predictorList = new ArrayList<>();
             List<ZooModel<ai.djl.modality.Input, ai.djl.modality.Output>> modelList = new ArrayList<>();
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            AccessController.doPrivilegedChecked(() -> {
                 ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
                 try {
                     System.setProperty("PYTORCH_PRECXX11", "true");
@@ -210,7 +207,7 @@ public abstract class DLModelExecute implements MLExecutable {
                     Thread.currentThread().setContextClassLoader(contextClassLoader);
                 }
             });
-        } catch (PrivilegedActionException e) {
+        } catch (Exception e) {
             String errorMsg = "Failed to deploy model " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);

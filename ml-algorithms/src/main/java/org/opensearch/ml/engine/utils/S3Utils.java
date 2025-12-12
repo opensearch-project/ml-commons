@@ -5,9 +5,7 @@
 
 package org.opensearch.ml.engine.utils;
 
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
+import org.opensearch.secure_sm.AccessController;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -31,29 +29,29 @@ public class S3Utils {
 
         try {
             S3Client s3 = AccessController
-                .doPrivileged(
-                    (PrivilegedExceptionAction<S3Client>) () -> S3Client
+                .doPrivilegedChecked(
+                    () -> S3Client
                         .builder()
                         .region(Region.of(region))  // Specify the region here
                         .credentialsProvider(StaticCredentialsProvider.create(credentials))
                         .build()
                 );
             return s3;
-        } catch (PrivilegedActionException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Can't load credentials", e);
         }
     }
 
     public static void putObject(S3Client s3Client, String bucketName, String key, String content) {
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            AccessController.doPrivilegedChecked(() -> {
                 PutObjectRequest request = PutObjectRequest.builder().bucket(bucketName).key(key).build();
 
                 s3Client.putObject(request, RequestBody.fromString(content));
                 log.debug("Successfully uploaded file to S3: s3://{}/{}", bucketName, key);
                 return null; // Void return type for doPrivileged
             });
-        } catch (PrivilegedActionException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Failed to upload file to S3: s3://" + bucketName + "/" + key, e);
         }
     }
