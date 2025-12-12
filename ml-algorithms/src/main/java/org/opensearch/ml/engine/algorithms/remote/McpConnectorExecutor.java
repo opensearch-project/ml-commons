@@ -71,8 +71,8 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
             : MCP_DEFAULT_SSE_ENDPOINT;
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
         try {
-            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
+            Duration connectionTimeout = Duration.ofMillis(super.getConnectorClientConfig().getConnectionTimeoutMillis());
+            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeoutSeconds());
 
             Consumer<HttpRequest.Builder> headerConfig = builder -> {
                 if (connector.getDecryptedHeaders() != null) {
