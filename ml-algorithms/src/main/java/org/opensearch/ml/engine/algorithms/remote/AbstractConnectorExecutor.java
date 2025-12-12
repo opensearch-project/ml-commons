@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+
 import java.net.http.HttpRequest;
 
 import org.apache.logging.log4j.Logger;
@@ -16,23 +19,43 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 
 import lombok.Getter;
 import lombok.Setter;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Setter
 @Getter
 public abstract class AbstractConnectorExecutor implements RemoteConnectorExecutor {
-    private ConnectorClientConfig connectorClientConfig;
+
+    @Setter
+    private volatile boolean connectorPrivateIpEnabled;
+
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+
+    private ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
 
     public void initialize(Connector connector) {
         if (connector.getConnectorClientConfig() != null) {
             connectorClientConfig = connector.getConnectorClientConfig();
-        } else {
-            connectorClientConfig = new ConnectorClientConfig();
         }
+    }
+
+    protected SdkAsyncHttpClient getHttpClient() {
+        if (httpClientRef.get() == null) {
+            Duration connectionTimeout = Duration.ofMillis(connectorClientConfig.getConnectionTimeoutMillis());
+            Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeoutSeconds());
+            Integer maxConnection = connectorClientConfig.getMaxConnections();
+            this.httpClientRef
+                .compareAndSet(
+                    null,
+                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
+                );
+        }
+        return httpClientRef.get();
     }
 
     /**
