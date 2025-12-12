@@ -16,11 +16,9 @@ import static software.amazon.awssdk.http.SdkHttpMethod.PUT;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Logger;
@@ -32,7 +30,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -45,15 +42,12 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
@@ -76,8 +70,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private MLGuard mlGuard;
-
-    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     @Setter
     @Getter
