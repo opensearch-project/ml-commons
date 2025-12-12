@@ -49,8 +49,8 @@ public class HttpStreamingHandler extends BaseStreamingHandler {
         this.llmInterface = llmInterface;
 
         // Get connector client configuration
-        Duration connectionTimeout = Duration.ofSeconds(connectorClientConfig.getConnectionTimeout());
-        Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeout());
+        Duration connectionTimeout = Duration.ofMillis(connectorClientConfig.getConnectionTimeoutMillis());
+        Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeoutSeconds());
 
         // Initialize OkHttp client for SSE
         try {
