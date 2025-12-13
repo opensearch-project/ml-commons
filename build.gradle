@@ -75,8 +75,10 @@ allprojects {
     apply from: "$rootDir/build-tools/repositories.gradle"
 
     plugins.withId('java') {
-        sourceCompatibility = JavaVersion.VERSION_21;
-        targetCompatibility = JavaVersion.VERSION_21;
+        java {
+            sourceCompatibility = JavaVersion.VERSION_21
+            targetCompatibility = JavaVersion.VERSION_21
+        }
     }
 
     plugins.withId('jacoco') {
@@ -88,8 +90,10 @@ allprojects {
 }
 
 subprojects {
-    configurations {
-        testImplementation.extendsFrom compileOnly
+    plugins.withId('java') {
+        configurations {
+            testImplementation.extendsFrom compileOnly
+        }
     }
 
     configurations.all {

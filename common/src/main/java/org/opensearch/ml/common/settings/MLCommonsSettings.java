@@ -50,9 +50,9 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INFERENCE_TASKS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_batch_inference_tasks",
-            10,
+            100,
             0,
-            500,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -60,9 +60,9 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INGESTION_TASKS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_batch_ingestion_tasks",
-            10,
+            100,
             0,
-            500,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
