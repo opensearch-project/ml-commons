@@ -16,8 +16,8 @@ import java.util.Locale;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.contextmanagement.MLCreateContextManagementTemplateAction;
-import org.opensearch.ml.common.transport.contextmanagement.MLCreateContextManagementTemplateRequest;
+import org.opensearch.ml.common.transport.contextmanagement.MLUpdateContextManagementTemplateAction;
+import org.opensearch.ml.common.transport.contextmanagement.MLUpdateContextManagementTemplateRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -26,20 +26,20 @@ import org.opensearch.transport.client.node.NodeClient;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLCreateContextManagementTemplateAction extends BaseRestHandler {
-    private static final String ML_CREATE_CONTEXT_MANAGEMENT_TEMPLATE_ACTION = "ml_create_context_management_template_action";
+public class RestMLUpdateContextManagementTemplateAction extends BaseRestHandler {
+    private static final String ML_UPDATE_CONTEXT_MANAGEMENT_TEMPLATE_ACTION = "ml_update_context_management_template_action";
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLCreateContextManagementTemplateAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+    public RestMLUpdateContextManagementTemplateAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     public String getName() {
-        return ML_CREATE_CONTEXT_MANAGEMENT_TEMPLATE_ACTION;
+        return ML_UPDATE_CONTEXT_MANAGEMENT_TEMPLATE_ACTION;
     }
 
     @Override
@@ -47,7 +47,7 @@ public class RestMLCreateContextManagementTemplateAction extends BaseRestHandler
         return ImmutableList
             .of(
                 new Route(
-                    RestRequest.Method.POST,
+                    RestRequest.Method.PUT,
                     String.format(Locale.ROOT, "%s/context_management/{%s}", ML_BASE_URI, PARAMETER_TEMPLATE_NAME)
                 )
             );
@@ -55,19 +55,19 @@ public class RestMLCreateContextManagementTemplateAction extends BaseRestHandler
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLCreateContextManagementTemplateRequest createRequest = getRequest(request);
+        MLUpdateContextManagementTemplateRequest updateRequest = getRequest(request);
         return channel -> client
-            .execute(MLCreateContextManagementTemplateAction.INSTANCE, createRequest, new RestToXContentListener<>(channel));
+            .execute(MLUpdateContextManagementTemplateAction.INSTANCE, updateRequest, new RestToXContentListener<>(channel));
     }
 
     /**
-     * Creates a MLCreateContextManagementTemplateRequest from a RestRequest
+     * Creates a MLUpdateContextManagementTemplateRequest from a RestRequest
      *
      * @param request RestRequest
-     * @return MLCreateContextManagementTemplateRequest
+     * @return MLUpdateContextManagementTemplateRequest
      */
     @VisibleForTesting
-    MLCreateContextManagementTemplateRequest getRequest(RestRequest request) throws IOException {
+    MLUpdateContextManagementTemplateRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
             throw new IllegalStateException("Agent framework is disabled");
         }
@@ -84,6 +84,6 @@ public class RestMLCreateContextManagementTemplateAction extends BaseRestHandler
         // Set the template name from URL parameter
         template = template.toBuilder().name(templateName).build();
 
-        return new MLCreateContextManagementTemplateRequest(templateName, template);
+        return new MLUpdateContextManagementTemplateRequest(templateName, template);
     }
 }

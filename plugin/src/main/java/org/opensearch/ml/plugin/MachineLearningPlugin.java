@@ -95,6 +95,7 @@ import org.opensearch.ml.action.contextmanagement.CreateContextManagementTemplat
 import org.opensearch.ml.action.contextmanagement.DeleteContextManagementTemplateTransportAction;
 import org.opensearch.ml.action.contextmanagement.GetContextManagementTemplateTransportAction;
 import org.opensearch.ml.action.contextmanagement.ListContextManagementTemplatesTransportAction;
+import org.opensearch.ml.action.contextmanagement.UpdateContextManagementTemplateTransportAction;
 import org.opensearch.ml.action.controller.CreateControllerTransportAction;
 import org.opensearch.ml.action.controller.DeleteControllerTransportAction;
 import org.opensearch.ml.action.controller.DeployControllerTransportAction;
@@ -201,6 +202,7 @@ import org.opensearch.ml.common.transport.contextmanagement.MLCreateContextManag
 import org.opensearch.ml.common.transport.contextmanagement.MLDeleteContextManagementTemplateAction;
 import org.opensearch.ml.common.transport.contextmanagement.MLGetContextManagementTemplateAction;
 import org.opensearch.ml.common.transport.contextmanagement.MLListContextManagementTemplatesAction;
+import org.opensearch.ml.common.transport.contextmanagement.MLUpdateContextManagementTemplateAction;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLControllerGetAction;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerAction;
@@ -387,6 +389,7 @@ import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateAgentAction;
 import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
+import org.opensearch.ml.rest.RestMLUpdateContextManagementTemplateAction;
 import org.opensearch.ml.rest.RestMLUpdateControllerAction;
 import org.opensearch.ml.rest.RestMLUpdateMemoryAction;
 import org.opensearch.ml.rest.RestMLUpdateMemoryContainerAction;
@@ -633,6 +636,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class),
                 new ActionHandler<>(MLMcpServerAction.INSTANCE, TransportMcpServerAction.class),
                 new ActionHandler<>(MLCreateContextManagementTemplateAction.INSTANCE, CreateContextManagementTemplateTransportAction.class),
+                new ActionHandler<>(MLUpdateContextManagementTemplateAction.INSTANCE, UpdateContextManagementTemplateTransportAction.class),
                 new ActionHandler<>(MLGetContextManagementTemplateAction.INSTANCE, GetContextManagementTemplateTransportAction.class),
                 new ActionHandler<>(MLListContextManagementTemplatesAction.INSTANCE, ListContextManagementTemplatesTransportAction.class),
                 new ActionHandler<>(MLDeleteContextManagementTemplateAction.INSTANCE, DeleteContextManagementTemplateTransportAction.class)
@@ -1106,6 +1110,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService, mlFeatureEnabledSetting);
         RestMLCreateContextManagementTemplateAction restMLCreateContextManagementTemplateAction =
             new RestMLCreateContextManagementTemplateAction(mlFeatureEnabledSetting);
+        RestMLUpdateContextManagementTemplateAction restMLUpdateContextManagementTemplateAction =
+            new RestMLUpdateContextManagementTemplateAction(mlFeatureEnabledSetting);
         RestMLGetContextManagementTemplateAction restMLGetContextManagementTemplateAction = new RestMLGetContextManagementTemplateAction(
             mlFeatureEnabledSetting
         );
@@ -1191,6 +1197,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLPutIndexInsightConfigAction,
                 restMLGetIndexInsightConfigAction,
                 restMLCreateContextManagementTemplateAction,
+                restMLUpdateContextManagementTemplateAction,
                 restMLGetContextManagementTemplateAction,
                 restMLListContextManagementTemplatesAction,
                 restMLDeleteContextManagementTemplateAction

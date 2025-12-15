@@ -84,7 +84,7 @@ public class RestMLCreateContextManagementTemplateActionTests extends OpenSearch
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.PUT, route.getMethod());
+        assertEquals(RestRequest.Method.POST, route.getMethod());
         assertEquals("/_plugins/_ml/context_management/{template_name}", route.getPath());
     }
 
