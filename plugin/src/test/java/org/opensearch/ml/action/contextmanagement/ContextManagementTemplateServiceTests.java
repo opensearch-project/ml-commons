@@ -165,7 +165,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("Template name cannot be null or empty", exceptionCaptor.getValue().getMessage());
+        assertEquals("Template name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -177,7 +177,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("Template name cannot be null or empty", exceptionCaptor.getValue().getMessage());
+        assertEquals("Template name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -189,7 +189,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("Template name cannot be null or empty", exceptionCaptor.getValue().getMessage());
+        assertEquals("Template name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -201,7 +201,7 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("Template name cannot be null or empty", exceptionCaptor.getValue().getMessage());
+        assertEquals("Template name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -287,21 +287,53 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
 
         contextManagementTemplateService.getTemplate("   ", listener);
 
-        // Whitespace is not considered empty by Strings.isNullOrEmpty(), so it will proceed
-        // This tests the branch where template name is not null/empty but contains only whitespace
-        verify(client).threadPool();
+        // Whitespace-only template names should now be rejected
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+        verify(client, never()).threadPool();
     }
 
     @Test
-    public void testDeleteTemplate_WhitespaceTemplateName() {
+    public void testGetTemplate_EmptyTemplateName() {
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.getTemplate("", listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+        verify(client, never()).threadPool();
+    }
+
+    @Test
+    public void testGetTemplate_TabsAndSpacesTemplateName() {
+        @SuppressWarnings("unchecked")
+        ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.getTemplate("\t  \n  ", listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+        verify(client, never()).threadPool();
+    }
+
+    @Test
+    public void testDeleteTemplate_EmptyTemplateName() {
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
 
-        contextManagementTemplateService.deleteTemplate("   ", listener);
+        contextManagementTemplateService.deleteTemplate("", listener);
 
-        // Whitespace is not considered empty by Strings.isNullOrEmpty(), so it will proceed
-        // This tests the branch where template name is not null/empty but contains only whitespace
-        verify(client).threadPool();
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+        verify(client, never()).threadPool();
+    }
+
+    @Test
+    public void testDeleteTemplate_TabsAndSpacesTemplateName() {
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+
+        contextManagementTemplateService.deleteTemplate("\t  \n  ", listener);
+
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+        verify(client, never()).threadPool();
     }
 
     @Test
