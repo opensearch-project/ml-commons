@@ -16,6 +16,8 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -299,6 +301,47 @@ public class ContextManagementTemplateService {
                 }
             }));
         } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Update a context management template
+     * @param templateName The name of the template to update
+     * @param template The updated template
+     * @param listener ActionListener for the response
+     */
+    public void updateTemplate(String templateName, ContextManagementTemplate template, ActionListener<UpdateResponse> listener) {
+        try {
+            // Validate template
+            if (!template.isValid()) {
+                listener.onFailure(new IllegalArgumentException("Invalid context management template"));
+                return;
+            }
+
+            User user = RestActionUtils.getUserContext(client);
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+
+                // Set last modified timestamp
+                template.setLastModified(Instant.now());
+
+                // Create the update request
+                UpdateRequest updateRequest = new UpdateRequest(ContextManagementIndexUtils.getIndexName(), templateName)
+                    .doc(template.toXContent(jsonXContent.contentBuilder(), ToXContentObject.EMPTY_PARAMS))
+                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+                // Execute the update operation
+                client.update(updateRequest, ActionListener.wrap(updateResponse -> {
+                    log.info("Context management template updated successfully: {}", templateName);
+                    wrappedListener.onResponse(updateResponse);
+                }, exception -> {
+                    log.error("Failed to update context management template: {}", templateName, exception);
+                    wrappedListener.onFailure(exception);
+                }));
+            }
+        } catch (Exception e) {
+            log.error("Error updating context management template: {}", templateName, e);
             listener.onFailure(e);
         }
     }
