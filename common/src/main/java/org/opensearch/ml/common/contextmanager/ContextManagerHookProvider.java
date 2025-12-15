@@ -6,9 +6,9 @@
 package org.opensearch.ml.common.contextmanager;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.opensearch.ml.common.hooks.EnhancedPostToolEvent;
 import org.opensearch.ml.common.hooks.HookProvider;
@@ -33,7 +33,7 @@ public class ContextManagerHookProvider implements HookProvider {
      */
     public ContextManagerHookProvider(List<ContextManager> contextManagers) {
         this.contextManagers = new ArrayList<>(contextManagers);
-        this.hookToManagersMap = new HashMap<>();
+        this.hookToManagersMap = new ConcurrentHashMap<>();
 
         // Group managers by hook type based on their configuration
         // This would typically be done based on the template configuration

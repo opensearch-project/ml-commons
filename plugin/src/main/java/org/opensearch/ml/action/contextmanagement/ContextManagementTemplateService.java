@@ -24,7 +24,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -136,8 +135,8 @@ public class ContextManagementTemplateService {
      */
     public void getTemplate(String templateName, ActionListener<ContextManagementTemplate> listener) {
         try {
-            if (Strings.isNullOrEmpty(templateName)) {
-                listener.onFailure(new IllegalArgumentException("Template name cannot be null or empty"));
+            if (templateName == null || templateName.trim().isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("Template name cannot be null, empty, or whitespace"));
                 return;
             }
 
@@ -244,8 +243,8 @@ public class ContextManagementTemplateService {
      */
     public void deleteTemplate(String templateName, ActionListener<Boolean> listener) {
         try {
-            if (Strings.isNullOrEmpty(templateName)) {
-                listener.onFailure(new IllegalArgumentException("Template name cannot be null or empty"));
+            if (templateName == null || templateName.trim().isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("Template name cannot be null, empty, or whitespace"));
                 return;
             }
 
