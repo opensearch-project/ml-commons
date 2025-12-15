@@ -142,14 +142,41 @@ public class RestMLListContextManagementTemplatesActionTests extends OpenSearchT
         assertEquals("Agent framework is disabled", exception.getMessage());
     }
 
-    public void testGetRequestWithInvalidPagination() throws Exception {
-        RestRequest request = getRestRequestWithPagination(-1, -5);
+    public void testGetRequestWithNegativeFrom() {
+        RestRequest request = getRestRequestWithPagination(-1, 10);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));
+        assertEquals("Parameter 'from' must be non-negative", exception.getMessage());
+    }
+
+    public void testGetRequestWithZeroSize() {
+        RestRequest request = getRestRequestWithPagination(0, 0);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));
+        assertEquals("Parameter 'size' must be between 1 and 1000", exception.getMessage());
+    }
+
+    public void testGetRequestWithNegativeSize() {
+        RestRequest request = getRestRequestWithPagination(0, -5);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));
+        assertEquals("Parameter 'size' must be between 1 and 1000", exception.getMessage());
+    }
+
+    public void testGetRequestWithExcessiveSize() {
+        RestRequest request = getRestRequestWithPagination(0, 1001);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> restAction.getRequest(request));
+        assertEquals("Parameter 'size' must be between 1 and 1000", exception.getMessage());
+    }
+
+    public void testGetRequestWithMaxValidSize() throws Exception {
+        RestRequest request = getRestRequestWithPagination(0, 1000);
         MLListContextManagementTemplatesRequest result = restAction.getRequest(request);
 
         assertNotNull(result);
-        // The REST action passes through the parameters as-is, validation happens at the service level
-        assertEquals(-1, result.getFrom());
-        assertEquals(-5, result.getSize());
+        assertEquals(0, result.getFrom());
+        assertEquals(1000, result.getSize());
     }
 
     public void testPrepareRequestReturnsRestChannelConsumer() throws Exception {
