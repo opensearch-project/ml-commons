@@ -69,7 +69,7 @@ dependencies {
     }
 
     implementation platform(group: 'software.amazon.awssdk', name: 'bom', version:"${versions.aws}")
-    api 'software.amazon.awssdk:auth:${versions.aws}'
+    implementation group: 'software.amazon.awssdk', name: 'auth', version: "${versions.aws}"
     implementation group: 'software.amazon.awssdk', name:'apache-client', version: "${versions.aws}"
     implementation (group: 'software.amazon.awssdk', name: 'bedrockruntime', version: "${versions.aws}") {
         exclude group: 'io.netty'
@@ -95,6 +95,14 @@ dependencies {
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     api group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0'
     implementation group: 'com.squareup.okhttp3', name: 'okhttp-sse', version: '4.12.0'
+
+    // OpenTelemetry SDK for agent tracing
+    implementation platform('io.opentelemetry:opentelemetry-bom:1.40.0')
+    implementation 'io.opentelemetry:opentelemetry-api'
+    implementation 'io.opentelemetry:opentelemetry-sdk'
+    implementation 'io.opentelemetry:opentelemetry-sdk-trace'
+    implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
+    implementation 'io.opentelemetry.semconv:opentelemetry-semconv:1.25.0-alpha'
 }
 
 lombok {

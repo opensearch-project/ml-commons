@@ -20,6 +20,11 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_REGION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL;
@@ -261,6 +266,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
+import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
@@ -700,6 +706,17 @@ public class MachineLearningPlugin extends Plugin
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
+
+        // Initialize AgentTracer for OpenTelemetry tracing if OSIS endpoint is configured
+        String osisEndpoint = ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT.get(settings);
+        if (osisEndpoint != null && !osisEndpoint.isEmpty()) {
+            String awsAccessKey = ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY.get(settings);
+            String awsSecretKey = ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY.get(settings);
+            String awsSessionToken = ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN.get(settings);
+            String awsRegion = ML_COMMONS_AGENT_TRACING_AWS_REGION.get(settings);
+            AgentTracer.initialize(osisEndpoint, "ml-commons", awsAccessKey, awsSecretKey, awsSessionToken, awsRegion);
+        }
+
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
@@ -1421,7 +1438,12 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
                 MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AG_UI_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED
+                MLCommonsSettings.ML_COMMONS_MCP_HEADER_PASSTHROUGH_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_AWS_REGION
             );
         return settings;
     }

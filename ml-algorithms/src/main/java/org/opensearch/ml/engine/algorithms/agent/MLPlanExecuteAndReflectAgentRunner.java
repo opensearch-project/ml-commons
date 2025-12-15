@@ -45,7 +45,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
+
+import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
@@ -305,13 +311,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // planner prompt for the first call
         usePlannerPromptTemplate(allParams);
 
+        // Start OpenTelemetry agent span for tracing
+        String parentInteractionId = allParams.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+        String memoryId = allParams.get(MEMORY_ID_FIELD);
+        Span agentSpan = AgentTracer.startAgentSpan("PlanExecuteReflectAgent", memoryId, parentInteractionId);
+        Scope agentScope = AgentTracer.makeCurrent(agentSpan);
+
         if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
             List<String> completedSteps = new ArrayList<>();
-            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, null, listener);
+            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, null, listener, agentSpan, agentScope);
             return;
         }
 
-        String memoryId = allParams.get(MEMORY_ID_FIELD);
         String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = Integer.parseInt(allParams.getOrDefault(PLANNER_MESSAGE_HISTORY_LIMIT, DEFAULT_MESSAGE_HISTORY_LIMIT));
@@ -349,12 +360,22 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     usePlannerWithHistoryPromptTemplate(allParams);
                 }
 
-                setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener);
+                setToolsAndRunAgent(mlAgent, allParams, completedSteps, memory, memory.getId(), listener, agentSpan, agentScope);
             }, e -> {
                 AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to get chat history", e);
+                AgentTracer.endSpanWithError(agentSpan, e);
+                if (agentScope != null) {
+                    agentScope.close();
+                }
                 listener.onFailure(e);
             }), getThreadContext()));
-        }, listener::onFailure), getThreadContext()));
+        }, e -> {
+            AgentTracer.endSpanWithError(agentSpan, e);
+            if (agentScope != null) {
+                agentScope.close();
+            }
+            listener.onFailure(e);
+        }), getThreadContext()));
     }
 
     private void setToolsAndRunAgent(
@@ -363,7 +384,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         List<String> completedSteps,
         Memory<Interaction, ?, ?> memory,
         String conversationId,
-        ActionListener<Object> finalListener
+        ActionListener<Object> finalListener,
+        Span agentSpan,
+        Scope agentScope
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams);
 
@@ -376,6 +399,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             AtomicInteger traceNumber = new AtomicInteger(0);
 
+            // Create span tracking for LLM and step spans
+            AtomicReference<Span> currentLlmSpan = new AtomicReference<>();
+            AtomicReference<Span> currentStepSpan = new AtomicReference<>();
+            AtomicInteger llmIteration = new AtomicInteger(0);
+
             executePlanningLoop(
                 mlAgent.getLlm(),
                 allParams,
@@ -385,7 +413,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 0,
                 traceNumber,
                 mlAgent.getTenantId(),
-                finalListener
+                finalListener,
+                agentSpan,
+                agentScope,
+                currentLlmSpan,
+                currentStepSpan,
+                llmIteration
             );
         };
 
@@ -408,15 +441,29 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         int stepsExecuted,
         AtomicInteger traceNumber,
         String tenantId,
-        ActionListener<Object> finalListener
+        ActionListener<Object> finalListener,
+        Span agentSpan,
+        Scope agentScope,
+        AtomicReference<Span> currentLlmSpan,
+        AtomicReference<Span> currentStepSpan,
+        AtomicInteger llmIteration
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
         String parentInteractionId = allParams.get(MLAgentExecutor.PARENT_INTERACTION_ID);
 
         if (stepsExecuted >= maxSteps) {
+            // End agent span when max steps reached
+            AgentTracer.endSpan(agentSpan, true, "Max steps reached");
+            if (agentScope != null) {
+                agentScope.close();
+            }
             handleMaxStepsReached(llm, allParams, completedSteps, memory, parentInteractionId, finalListener);
             return;
         }
+
+        // Start LLM span for planning call
+        Span llmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet());
+        currentLlmSpan.set(llmSpan);
         MLPredictionTaskRequest request;
         // Planner agent doesn't use INTERACTIONS for now, reusing the INTERACTIONS to pass over
         // completedSteps to context management.
@@ -465,11 +512,23 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         StepListener<MLTaskResponse> planListener = new StepListener<>();
 
         planListener.whenComplete(llmOutput -> {
+            // End LLM span when response received
+            Span completedLlmSpan = currentLlmSpan.get();
+            if (completedLlmSpan != null) {
+                AgentTracer.endSpan(completedLlmSpan, true, null);
+                currentLlmSpan.set(null);
+            }
+
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
             Map<String, Object> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = (String) parseLLMOutput.get(RESULT_FIELD);
+                // End agent span successfully with final result
+                AgentTracer.endSpan(agentSpan, true, finalResult);
+                if (agentScope != null) {
+                    agentScope.close();
+                }
                 saveAndReturnFinalResult(
                     memory,
                     parentInteractionId,
@@ -484,6 +543,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 addSteps(steps, allParams, STEPS_FIELD);
 
                 String stepToExecute = steps.getFirst();
+
+                // Start step span for step execution
+                Span stepSpan = AgentTracer.startStepSpan(agentSpan, stepsExecuted + 1, stepToExecute);
+                currentStepSpan.set(stepSpan);
                 String reActAgentId = allParams.get(EXECUTOR_AGENT_ID_FIELD);
                 Map<String, String> reactParams = new HashMap<>();
                 reactParams.put(QUESTION_FIELD, stepToExecute);
@@ -617,6 +680,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         "PlanExecuteReflect Agent"
                     );
 
+                    // End step span after step execution completes
+                    Span completedStepSpan = currentStepSpan.get();
+                    if (completedStepSpan != null) {
+                        AgentTracer.endSpan(completedStepSpan, true, results.get(STEP_RESULT_FIELD));
+                        currentStepSpan.set(null);
+                    }
+
                     addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
 
                     useReflectPromptTemplate(allParams);
@@ -630,14 +700,37 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         stepsExecuted + 1,
                         traceNumber,
                         tenantId,
-                        finalListener
+                        finalListener,
+                        agentSpan,
+                        agentScope,
+                        currentLlmSpan,
+                        currentStepSpan,
+                        llmIteration
                     );
                 }, e -> {
+                    // End step span on error
+                    Span errStepSpan = currentStepSpan.get();
+                    if (errStepSpan != null) {
+                        AgentTracer.endSpanWithError(errStepSpan, e);
+                    }
+                    AgentTracer.endSpanWithError(agentSpan, e);
+                    if (agentScope != null) {
+                        agentScope.close();
+                    }
                     AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to execute ReAct agent", e);
                     finalListener.onFailure(e);
                 }));
             }
         }, e -> {
+            // End LLM span on error
+            Span errLlmSpan = currentLlmSpan.get();
+            if (errLlmSpan != null) {
+                AgentTracer.endSpanWithError(errLlmSpan, e);
+            }
+            AgentTracer.endSpanWithError(agentSpan, e);
+            if (agentScope != null) {
+                agentScope.close();
+            }
             AgentLoggingContext.errorWithException(log, getThreadContext(), "Failed to run deep research agent", e);
             finalListener.onFailure(e);
         });
