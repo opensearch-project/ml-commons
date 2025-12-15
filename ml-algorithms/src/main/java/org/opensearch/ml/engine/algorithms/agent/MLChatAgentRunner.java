@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_FRONTEND_TOOL_NAMES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
@@ -327,11 +328,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
         FunctionCalling functionCalling
     ) {
         // Start OpenTelemetry agent span for tracing
-        String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
-        Span agentSpan = AgentTracer.startAgentSpan("ChatAgent", sessionId, parentInteractionId);
+        // Use runId (from AG-UI) for gen_ai.request.id so frontend can query traces
+        String runId = params.get(AGUI_PARAM_RUN_ID);
+        Span agentSpan = AgentTracer.startAgentSpan("ChatAgent", sessionId, runId);
         Scope agentScope = AgentTracer.makeCurrent(agentSpan);
-        log.info("[ChatAgent-Tracing] Created agent span: spanId={}, valid={}",
-            agentSpan.getSpanContext().getSpanId(), agentSpan.getSpanContext().isValid());
+        log.info("[ChatAgent-Tracing] Created agent span: spanId={}, valid={}, runId={}",
+            agentSpan.getSpanContext().getSpanId(), agentSpan.getSpanContext().isValid(), runId);
 
         try {
             List<Map<String, Object>> frontendTools = new ArrayList<>();
@@ -377,6 +379,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Span agentSpan,
         Scope agentScope
     ) {
+        // Extract runId for child span correlation
+        String runId = parameters.get(AGUI_PARAM_RUN_ID);
+
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
         tmpParameters.put(PROMPT, prompt);
@@ -575,7 +580,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             });
 
                             // Start tool span for tracing
-                            Span toolSpan = AgentTracer.startToolSpan(agentSpan, action, actionInput);
+                            Span toolSpan = AgentTracer.startToolSpan(agentSpan, action, actionInput, runId);
                             currentToolSpan.set(toolSpan);
 
                             runTool(
@@ -717,7 +722,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     // Start next LLM span for tracing
-                    Span nextLlmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet());
+                    Span nextLlmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet(), runId);
                     currentLlmSpan.set(nextLlmSpan);
 
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
@@ -771,7 +776,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         // Start first LLM span for tracing
-        Span firstLlmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet());
+        Span firstLlmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet(), runId);
         currentLlmSpan.set(firstLlmSpan);
 
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);

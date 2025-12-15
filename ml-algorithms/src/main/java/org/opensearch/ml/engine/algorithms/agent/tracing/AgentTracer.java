@@ -471,34 +471,45 @@ public final class AgentTracer {
     /**
      * Start a root span for agent execution.
      * Use this for both ChatAgent and PlanExecuteReflectAgent.
+     *
+     * @param agentType Type of agent (e.g., "ChatAgent", "PlanExecuteReflectAgent")
+     * @param sessionId Session/conversation ID (memory_id)
+     * @param runId AG-UI run ID for frontend correlation (from AGUI_PARAM_RUN_ID)
      */
-    public static Span startAgentSpan(String agentType, String sessionId, String parentInteractionId) {
+    public static Span startAgentSpan(String agentType, String sessionId, String runId) {
         log.info("[AgentTracer] startAgentSpan called: enabled={}, initialized={}, tracer={}", enabled, initialized, tracer != null);
         if (!isEnabled()) {
-            log.warn("[AgentTracer] Tracing is DISABLED - spans will not be exported");
+            log.info("[AgentTracer] Tracing DISABLED (not initialized) - would have created span with: type={}, sessionId={}, runId={}",
+                agentType, sessionId, runId);
             return Span.getInvalid();
         }
 
-        log.info("[AgentTracer] Starting agent span: type={}, sessionId={}", agentType, sessionId);
+        log.info("[AgentTracer] Starting agent span: type={}, sessionId={}, runId={}", agentType, sessionId, runId);
         return tracer.spanBuilder(SpanNames.AGENT_RUN)
             .setSpanKind(SpanKind.SERVER)
             .setAttribute(AGENT_TYPE, agentType)
             .setAttribute(CONVERSATION_ID, sessionId != null ? sessionId : "")
-            .setAttribute(REQUEST_ID, parentInteractionId != null ? parentInteractionId : "")
+            .setAttribute(REQUEST_ID, runId != null ? runId : "")
             .startSpan();
     }
 
     /**
      * Start an LLM inference span.
+     *
+     * @param parent Parent agent span
+     * @param modelId Model ID being used
+     * @param iteration Current iteration number
+     * @param runId AG-UI run ID for frontend correlation
      */
-    public static Span startLlmSpan(Span parent, String modelId, int iteration) {
+    public static Span startLlmSpan(Span parent, String modelId, int iteration, String runId) {
         if (!isEnabled()) return Span.getInvalid();
 
         SpanBuilder builder = tracer.spanBuilder(SpanNames.LLM_INFERENCE)
             .setSpanKind(SpanKind.CLIENT)
             .setAttribute(MODEL, modelId != null ? modelId : "")
             .setAttribute(AGENT_ITERATION, (long) iteration)
-            .setAttribute(SYSTEM, "aws_bedrock");
+            .setAttribute(SYSTEM, "aws_bedrock")
+            .setAttribute(REQUEST_ID, runId != null ? runId : "");
 
         if (parent != null && parent.getSpanContext().isValid()) {
             builder.setParent(Context.current().with(parent));
@@ -509,14 +520,20 @@ public final class AgentTracer {
 
     /**
      * Start a tool execution span.
+     *
+     * @param parent Parent agent span
+     * @param toolName Name of the tool being executed
+     * @param toolInput Tool input parameters
+     * @param runId AG-UI run ID for frontend correlation
      */
-    public static Span startToolSpan(Span parent, String toolName, String toolInput) {
+    public static Span startToolSpan(Span parent, String toolName, String toolInput, String runId) {
         if (!isEnabled()) return Span.getInvalid();
 
         SpanBuilder builder = tracer.spanBuilder(SpanNames.TOOL_EXECUTE + "." + toolName)
             .setSpanKind(SpanKind.CLIENT)
             .setAttribute(TOOL_NAME, toolName)
-            .setAttribute(TOOL_INPUT, truncate(toolInput));
+            .setAttribute(TOOL_INPUT, truncate(toolInput))
+            .setAttribute(REQUEST_ID, runId != null ? runId : "");
 
         if (parent != null && parent.getSpanContext().isValid()) {
             builder.setParent(Context.current().with(parent));

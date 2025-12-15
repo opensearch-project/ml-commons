@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
@@ -312,9 +313,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         usePlannerPromptTemplate(allParams);
 
         // Start OpenTelemetry agent span for tracing
-        String parentInteractionId = allParams.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+        // Use runId (from AG-UI) for gen_ai.request.id so frontend can query traces
+        String runId = allParams.get(AGUI_PARAM_RUN_ID);
         String memoryId = allParams.get(MEMORY_ID_FIELD);
-        Span agentSpan = AgentTracer.startAgentSpan("PlanExecuteReflectAgent", memoryId, parentInteractionId);
+        Span agentSpan = AgentTracer.startAgentSpan("PlanExecuteReflectAgent", memoryId, runId);
         Scope agentScope = AgentTracer.makeCurrent(agentSpan);
 
         if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
@@ -450,6 +452,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     ) {
         int maxSteps = Integer.parseInt(allParams.getOrDefault(MAX_STEPS_EXECUTED_FIELD, DEFAULT_MAX_STEPS_EXECUTED));
         String parentInteractionId = allParams.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+        String runId = allParams.get(AGUI_PARAM_RUN_ID);
 
         if (stepsExecuted >= maxSteps) {
             // End agent span when max steps reached
@@ -462,7 +465,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         // Start LLM span for planning call
-        Span llmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet());
+        Span llmSpan = AgentTracer.startLlmSpan(agentSpan, llm.getModelId(), llmIteration.incrementAndGet(), runId);
         currentLlmSpan.set(llmSpan);
         MLPredictionTaskRequest request;
         // Planner agent doesn't use INTERACTIONS for now, reusing the INTERACTIONS to pass over
