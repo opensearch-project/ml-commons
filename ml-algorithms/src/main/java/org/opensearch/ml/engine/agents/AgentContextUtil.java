@@ -145,6 +145,10 @@ public class AgentContextUtil {
     ) {
         ContextManagerContext context = buildContextManagerContext(parameters, interactions, toolSpecs, memory);
 
+        if (hookRegistry == null) {
+            return context;
+        }
+
         try {
             PreLLMEvent event = new PreLLMEvent(context, new HashMap<>());
             hookRegistry.emit(event);

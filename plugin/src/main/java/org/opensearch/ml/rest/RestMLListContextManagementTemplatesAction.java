@@ -65,6 +65,13 @@ public class RestMLListContextManagementTemplatesAction extends BaseRestHandler 
         int from = request.paramAsInt("from", 0);
         int size = request.paramAsInt("size", 10);
 
+        if (from < 0) {
+            throw new IllegalArgumentException("Parameter 'from' must be non-negative");
+        }
+        if (size <= 0 || size > 1000) {
+            throw new IllegalArgumentException("Parameter 'size' must be between 1 and 1000");
+        }
+
         return new MLListContextManagementTemplatesRequest(from, size);
     }
 }
