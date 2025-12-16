@@ -24,6 +24,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -118,7 +119,12 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+            .thenReturn(
+                new ClusterSettings(
+                    settings,
+                    Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES)
+                )
+            );
 
         this.action = spy(new CreateInteractionTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
