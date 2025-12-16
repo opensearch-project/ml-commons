@@ -104,7 +104,12 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES)));
+            .thenReturn(
+                new ClusterSettings(
+                    settings,
+                    Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES)
+                )
+            );
 
         this.action = spy(new CreateConversationTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
     }

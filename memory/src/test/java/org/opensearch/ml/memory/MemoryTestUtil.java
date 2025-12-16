@@ -19,6 +19,7 @@ package org.opensearch.ml.memory;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES;
 
 import java.util.Set;
 
@@ -27,8 +28,6 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES;
-
 public class MemoryTestUtil {
 
     public static ClusterService clusterServiceWithMemoryFeatureDisabled() {
@@ -36,7 +35,12 @@ public class MemoryTestUtil {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), false).build();
         when(mockClusterService.getSettings()).thenReturn(settings);
         when(mockClusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES)));
+            .thenReturn(
+                new ClusterSettings(
+                    settings,
+                    Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, ML_COMMONS_MEMORY_REST_ACCESS_RESTRICTED_BACKEND_ROLES)
+                )
+            );
         return mockClusterService;
     }
 
