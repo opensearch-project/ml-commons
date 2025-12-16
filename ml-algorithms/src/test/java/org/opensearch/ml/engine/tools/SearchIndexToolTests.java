@@ -520,4 +520,44 @@ public class SearchIndexToolTests {
 
         assertArrayEquals(new String[] { "test-index" }, cap.getValue().indices());
     }
+
+    @Test
+    public void testRunWithSizeInInput() {
+        String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}, \"size\": 5}";
+        Map<String, String> parameters = Map.of("input", inputString);
+        mockedSearchIndexTool.run(parameters, null);
+        
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        assertEquals(5, cap.getValue().source().size());
+    }
+
+    @Test
+    public void testRunWithSizeAsParameter() {
+        Map<String, String> parameters = Map.of(
+            "index", "test-index", 
+            "query", "{\"query\": {\"match_all\": {}}}",
+            "size", "3"
+        );
+        mockedSearchIndexTool.run(parameters, null);
+        
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        assertEquals(3, cap.getValue().source().size());
+    }
+
+    @Test
+    public void testRunWithInvalidSizeParameter() {
+        Map<String, String> parameters = Map.of(
+            "index", "test-index", 
+            "query", "{\"query\": {\"match_all\": {}}}",
+            "size", "invalid"
+        );
+        mockedSearchIndexTool.run(parameters, null);
+        
+        ArgumentCaptor<SearchRequest> cap = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client, times(1)).search(cap.capture(), any());
+        // Size should not be set when invalid
+        assertEquals(-1, cap.getValue().source().size());
+    }
 }
