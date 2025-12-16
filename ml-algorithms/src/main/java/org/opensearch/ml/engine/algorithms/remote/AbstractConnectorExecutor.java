@@ -23,7 +23,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
     @Setter
     private volatile boolean connectorPrivateIpEnabled;
 
-    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+    private volatile AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     private ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
 
@@ -45,5 +45,12 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
                 );
         }
         return httpClientRef.get();
+    }
+
+    public void close() {
+        SdkAsyncHttpClient httpClient = httpClientRef.get();
+        if (httpClient != null) {
+            httpClient.close();
+        }
     }
 }
