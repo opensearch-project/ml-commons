@@ -108,6 +108,22 @@ publishing {
                         url = "https://github.com/opensearch-project/ml-commons"
                     }
                 }
+                // Add a dependencies section to signal that consumers of the client need to provide these
+                withXml {
+                    def dependencies = asNode().appendNode('dependencies')
+                    
+                    def addProvidedDependency = { group, artifact, version ->
+                        def dependency = dependencies.appendNode('dependency')
+                        dependency.appendNode('groupId', group)
+                        dependency.appendNode('artifactId', artifact)
+                        dependency.appendNode('version', version)
+                        dependency.appendNode('scope', 'provided')
+                    }
+
+                    addProvidedDependency('org.json', 'json', '20231013')
+                    addProvidedDependency('com.jayway.jsonpath', 'json-path', '2.9.0')
+                    addProvidedDependency('org.apache.commons', 'commons-text', '1.10.0')
+                }
             }
         }
 
