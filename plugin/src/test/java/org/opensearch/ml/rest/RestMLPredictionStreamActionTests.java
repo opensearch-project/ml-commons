@@ -25,11 +25,13 @@ import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -163,10 +165,11 @@ public class RestMLPredictionStreamActionTests {
         FakeRestRequest request = createFakeRestRequestWithValidContent("/_plugins/_ml/models/test-model/_predict");
         BytesReference content = request.content();
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
             restAction.getRequest("test-model", "REMOTE", request, content);
         });
         assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, exception.getMessage());
+        assertEquals(RestStatus.BAD_REQUEST, exception.status());
     }
 
     @Test
