@@ -133,62 +133,53 @@ public class EncryptorImpl implements Encryptor {
     private void initMasterKey(String tenantId, ActionListener<Boolean> listener) {
         tenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         if (tenantMasterKeys.containsKey(tenantId)) {
-            log.info("Master key is already available");
+            log.info("Master key is already available for tenant {}", tenantId);
             listener.onResponse(true);
             return;
         }
-        // checking and setting the waiting listeners for master key generation
-        List<ActionListener<Boolean>> newWaitingListenersPerTenant = new ArrayList<>();
-        List<ActionListener<Boolean>> existingWaitingListenersPerTenant = tenantWaitingListenerMap
-            .putIfAbsent(tenantId, newWaitingListenersPerTenant);
-        List<ActionListener<Boolean>> waitingListenersPerTenant = (existingWaitingListenersPerTenant != null)
-            ? existingWaitingListenersPerTenant
-            : newWaitingListenersPerTenant;
-        waitingListenersPerTenant.add(listener);
-        synchronized (waitingListenersPerTenant) {
-            try {
-                // checking and waiting if the master key generation triggered by any other thread
-                if (existingWaitingListenersPerTenant != null && tenantWaitingListenerMap.containsKey(tenantId)) {
-                    log.info("Waiting for other thread to generate master key");
-                    waitingListenersPerTenant.wait();
-                }
-            } catch (InterruptedException e) {
-                throw new MLException("Interrupted while waiting for other thread to generate master key." + e.getMessage());
+
+        List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.computeIfAbsent(tenantId, k -> new ArrayList<>());
+        synchronized (waitingListeners) {
+            if (tenantMasterKeys.containsKey(tenantId)) {
+                log.info("Master key generation is handled by other thread for tenant {}", tenantId);
+                listener.onResponse(true);
+                return;
+            }
+            boolean isFirstThread = waitingListeners.isEmpty();
+            waitingListeners.add(listener);
+            if (!isFirstThread) {
+                log.info("Master key generation is already initiated by other thread for tenant {}", tenantId);
+                return;
             }
         }
-        if (tenantMasterKeys.containsKey(tenantId) || !tenantWaitingListenerMap.containsKey(tenantId)) {
-            log.info("Master key generation is handled by other thread");
-            return;
-        }
-        log.info("Generating master key for tenant : " + tenantId);
+
+        log.info("Generating master key for tenant : {}", tenantId);
         String masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
         mlIndicesHandler.initMLConfigIndex(createInitMLConfigIndexListener(tenantId, masterKeyId));
     }
 
     private void handleSuccess(String tenantId, String masterKey) {
         this.tenantMasterKeys.put(tenantId, masterKey);
-        log.info("ML encryption master key initialized, no action needed");
+        log.info("ML encryption master key initialized for tenant {}, no action needed", tenantId);
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
         synchronized (waitingListeners) {
-            log.info("Notifying all waiting threads");
-            waitingListeners.notifyAll();
+            waitingListeners.forEach(listener -> listener.onResponse(true));
+            waitingListeners.clear();
         }
-        waitingListeners.forEach(listener -> listener.onResponse(true));
     }
 
     private void handleError(String tenantId, Exception exception) {
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
         synchronized (waitingListeners) {
-            log.info("Got error while generating master key and notifying all waiting threads");
-            waitingListeners.notifyAll();
-        }
-        if (exception != null) {
-            log.debug("Failed to init master key for tenant {}", tenantId, exception);
-            if (exception instanceof RuntimeException) {
-                waitingListeners.forEach(listener -> listener.onFailure(exception));
-            } else {
-                waitingListeners.forEach(listener -> listener.onFailure(new MLException(exception)));
+            if (exception != null) {
+                log.debug("Failed to init master key for tenant {}", tenantId, exception);
+                if (exception instanceof RuntimeException) {
+                    waitingListeners.forEach(listener -> listener.onFailure(exception));
+                } else {
+                    waitingListeners.forEach(listener -> listener.onFailure(new MLException(exception)));
+                }
             }
+            waitingListeners.clear();
         }
     }
 

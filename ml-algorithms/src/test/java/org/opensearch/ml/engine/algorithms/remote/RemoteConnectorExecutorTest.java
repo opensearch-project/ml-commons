@@ -406,7 +406,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_WithInputProcessors_EmptyList() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
@@ -428,7 +428,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_WithInputProcessors_ExtractJson() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         // Create input processors configuration
@@ -459,7 +459,7 @@ public class RemoteConnectorExecutorTest {
     @Test
     public void executePreparePayloadAndInvoke_WithInputProcessors_JsonString() {
         Map<String, String> parameters = ImmutableMap.of(SERVICE_NAME_FIELD, "sagemaker", REGION_FIELD, "us-west-2");
-        Connector connector = getConnector(parameters);
+        createConnector(parameters);
         AwsConnectorExecutor executor = getExecutor(connector);
 
         // Create input processors as JSON string
