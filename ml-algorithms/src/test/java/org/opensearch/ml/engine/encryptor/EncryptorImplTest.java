@@ -895,6 +895,7 @@ public class EncryptorImplTest {
         }
         Assert.assertTrue("Test should encrypt or decrypt within the specified time period", latch.await(60, SECONDS));
         verify(mlIndicesHandler, timeout(1000).times(3)).initMLConfigIndex(any());
+        testThreadPool.shutdown();
     }
 
     @Test
@@ -934,6 +935,7 @@ public class EncryptorImplTest {
         }
         Assert.assertTrue("Test should throw expected exception within the specified time period", latch.await(20, SECONDS));
         verify(mlIndicesHandler, timeout(1000).times(1)).initMLConfigIndex(any());
+        testThreadPool.shutdown();
     }
 
     void testEncryptionDecryption(String tenantId, String text, CountDownLatch latch) {
