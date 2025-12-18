@@ -486,7 +486,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
-                    streamingWrapper.sendToolResponse(outputToOutputString(output), sessionId, parentInteractionId);
+                    streamingWrapper.sendToolResponse(outputToOutputString(filteredOutput), sessionId, parentInteractionId);
                     traceTensors
                         .add(
                             ModelTensors
@@ -625,7 +625,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                Map
+                                    .of(
+                                        TOOL_CALL_ID,
+                                        toolCallId,
+                                        "tool_response",
+                                        "Tool " + action + " failed: " + processTextDoc(e.getMessage())
+                                    ),
                                 INTERACTIONS_PREFIX
                             )
                         );

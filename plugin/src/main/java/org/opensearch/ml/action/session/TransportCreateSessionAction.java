@@ -15,6 +15,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -110,6 +111,7 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
         MLMemorySession session = MLMemorySession
             .builder()
             .ownerId(input.getOwnerId())
+            .memoryContainerId(input.getMemoryContainerId())
             .summary(input.getSummary())
             .createdTime(now)
             .lastUpdateTime(now)
@@ -127,12 +129,17 @@ public class TransportCreateSessionAction extends HandledTransportAction<MLCreat
         try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
             session.toXContent(builder, ToXContent.EMPTY_PARAMS);
             indexRequest.source(builder);
+            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             memoryContainerHelper.indexData(container.getConfiguration(), indexRequest, ActionListener.wrap(r -> {
                 MLCreateSessionResponse response = MLCreateSessionResponse.builder().sessionId(r.getId()).status("created").build();
                 actionListener.onResponse(response);
-            }, e -> { actionListener.onFailure(e); }));
+            }, e -> {
+                log.error("Failed to create session in container {}", input.getMemoryContainerId(), e);
+                actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+            }));
         } catch (IOException e) {
-            actionListener.onFailure(e);
+            log.error("Failed to build XContent for session in container {}", input.getMemoryContainerId(), e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 

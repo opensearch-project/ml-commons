@@ -8,6 +8,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
@@ -23,12 +24,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
-import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -93,7 +94,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         this.memoryContainerHelper = memoryContainerHelper;
 
         // Initialize services
-        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry);
+        this.memoryProcessingService = new MemoryProcessingService(client, xContentRegistry, memoryContainerHelper);
         this.memorySearchService = new MemorySearchService(memoryContainerHelper);
         this.memoryOperationsService = new MemoryOperationsService(memoryContainerHelper);
         this.threadPool = threadPool;
@@ -149,7 +150,10 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
             boolean userProvidedSessionId = input.getNamespace() != null && input.getNamespace().containsKey(SESSION_ID_FIELD);
 
-            if (!userProvidedSessionId && input.getPayloadType() == PayloadType.CONVERSATIONAL && !configuration.isDisableSession()) {
+            if (!userProvidedSessionId
+                && input.getPayloadType() == PayloadType.CONVERSATIONAL
+                && !configuration.isDisableSession()
+                && configuration.getLlmId() != null) {
                 IndexRequest indexRequest = new IndexRequest(configuration.getSessionIndexName());
                 // TODO: use LLM to summarize first user message
                 ActionListener<String> summaryListener = ActionListener.wrap(summary -> {
@@ -160,6 +164,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                 .of(
                                     OWNER_ID_FIELD,
                                     input.getOwnerId(),
+                                    MEMORY_CONTAINER_ID_FIELD,
+                                    input.getMemoryContainerId(),
                                     SUMMARY_FIELD,
                                     summary,
                                     NAMESPACE_FIELD,
@@ -170,19 +176,36 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     now.getEpochSecond()
                                 )
                         );
+                    indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     ActionListener<IndexResponse> responseActionListener = ActionListener.<IndexResponse>wrap(r -> {
                         input.getNamespace().put(SESSION_ID_FIELD, r.getId());
                         processAndIndexMemory(input, container, user, actionListener);
-                    }, e -> actionListener.onFailure(e));
+                    }, e -> {
+                        log.error("Failed to index session data", e);
+                        actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                    });
                     memoryContainerHelper.indexData(configuration, indexRequest, responseActionListener);
-                }, exception -> actionListener.onFailure(exception));
+                }, exception -> {
+                    // Preserve client errors (4XX) with their detailed messages
+                    if (exception instanceof OpenSearchStatusException) {
+                        OpenSearchStatusException osException = (OpenSearchStatusException) exception;
+                        if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                            actionListener.onFailure(exception);
+                            return;
+                        }
+                    }
+                    // Wrap server errors and unexpected exceptions
+                    log.error("Failed to summarize messages for session creation", exception);
+                    actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                });
 
                 memoryProcessingService.summarizeMessages(container.getConfiguration(), messages, summaryListener);
             } else {
                 processAndIndexMemory(input, container, user, actionListener);
             }
         } catch (Exception e) {
-            actionListener.onFailure(e);
+            log.error("Failed to create session", e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -219,7 +242,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 if (infer) {
                     threadPool.executor(AGENTIC_MEMORY_THREAD_POOL).execute(() -> {
                         try {
-                            extractLongTermMemory(input, container, user, ActionListener.wrap(res -> { log.info(res.toString()); }, e -> {
+                            extractLongTermMemory(input, container, user, ActionListener.wrap(res -> {}, e -> {
                                 log.error("Failed to extract longTermMemory id from memory container", e);
                             }));
                         } catch (Exception e) {
@@ -231,7 +254,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             memoryContainerHelper.indexData(memoryConfig, indexRequest, responseActionListener);
         } catch (Exception e) {
             log.error("Failed to add memory", e);
-            actionListener.onFailure(e);
+            actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 
@@ -244,10 +267,11 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             mlAddMemoriesInput.toXContent(builder, ToXContent.EMPTY_PARAMS, true);
 
             indexRequest.source(builder);
+            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             return indexRequest;
         } catch (IOException e) {
-            logger.error("Failed to build index request source", e);
-            throw new RuntimeException("Failed to build index request", e);
+            log.error("Failed to build index request source", e);
+            throw new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -272,9 +296,18 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     memoryProcessingService.runMemoryStrategy(strategy, messages, memoryConfig, ActionListener.wrap(facts -> {
                         storeLongTermMemory(strategy, strategyNameSpace, input, messages, user, facts, memoryConfig, actionListener);
                     }, e -> {
+                        // Preserve client errors (4XX) with their detailed messages
+                        if (e instanceof OpenSearchStatusException) {
+                            OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                            if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                                actionListener.onFailure(e);
+                                return;
+                            }
+                        }
+                        // Wrap server errors and unexpected exceptions
                         log.error("Failed to extract facts with LLM", e);
                         memoryOperationsService.writeErrorToMemoryHistory(memoryConfig, strategyNameSpace, input, e);
-                        actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
+                        actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
                     }));
                 }
             }
@@ -311,25 +344,36 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 log.debug("Found {} total similar facts across all {} new facts", allSearchResults.size(), facts.size());
 
                 if (allSearchResults.size() > 0) {
-                    memoryProcessingService.makeMemoryDecisions(facts, allSearchResults, memoryConfig, ActionListener.wrap(decisions -> {
-                        memoryOperationsService
-                            .executeMemoryOperations(
-                                decisions,
-                                memoryConfig,
-                                strategyNameSpace,
-                                user,
-                                input,
-                                strategy,
-                                ActionListener.wrap(operationResults -> {
-                                    List<MemoryResult> allResults = new ArrayList<>(operationResults);
-                                    MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
-                                    actionListener.onResponse(response);
-                                }, actionListener::onFailure)
-                            );
-                    }, e -> {
-                        log.error("Failed to make memory decisions", e);
-                        actionListener.onFailure(new OpenSearchException("Failed to make memory decisions: " + e.getMessage(), e));
-                    }));
+                    memoryProcessingService
+                        .makeMemoryDecisions(facts, allSearchResults, strategy, memoryConfig, ActionListener.wrap(decisions -> {
+                            memoryOperationsService
+                                .executeMemoryOperations(
+                                    decisions,
+                                    memoryConfig,
+                                    strategyNameSpace,
+                                    user,
+                                    input,
+                                    strategy,
+                                    ActionListener.wrap(operationResults -> {
+                                        List<MemoryResult> allResults = new ArrayList<>(operationResults);
+                                        MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(allResults).build();
+                                        actionListener.onResponse(response);
+                                    }, actionListener::onFailure)
+                                );
+                        }, e -> {
+                            // Preserve client errors (4XX) with their detailed messages
+                            if (e instanceof OpenSearchStatusException) {
+                                OpenSearchStatusException osException = (OpenSearchStatusException) e;
+                                if (osException.status().getStatus() >= 400 && osException.status().getStatus() < 500) {
+                                    actionListener.onFailure(e);
+                                    return;
+                                }
+                            }
+                            // Wrap server errors and unexpected exceptions
+                            log.error("Failed to make memory decisions", e);
+                            actionListener
+                                .onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
+                        }));
                 } else {
                     List<MemoryDecision> decisions = new ArrayList<>();
                     for (int i = 0; i < facts.size(); i++) {
@@ -352,7 +396,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 }
             }, e -> {
                 log.error("Failed to search similar facts", e);
-                actionListener.onFailure(new OpenSearchException("Failed to search similar facts: " + e.getMessage(), e));
+                actionListener.onFailure(new OpenSearchStatusException("Internal server error", RestStatus.INTERNAL_SERVER_ERROR));
             }));
         } else {
             // No memory decisions needed
@@ -365,7 +409,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     user,
                     strategy,
                     indexRequests,
-                    memoryInfos
+                    memoryInfos,
+                    input.getMemoryContainerId()
                 );
         }
     }

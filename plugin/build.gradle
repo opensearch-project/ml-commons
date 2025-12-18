@@ -163,10 +163,11 @@ publishing {
             mavenCentral()
             maven { url "https://ci.opensearch.org/ci/dbc/snapshots/lucene/" }
             name = "Snapshots"
-            url = "https://central.sonatype.com/repository/maven-snapshots/"
-            credentials {
-                username "$System.env.SONATYPE_USERNAME"
-                password "$System.env.SONATYPE_PASSWORD"
+            url = System.getenv("MAVEN_SNAPSHOTS_S3_REPO")
+            credentials(AwsCredentials) {
+                accessKey = System.getenv("AWS_ACCESS_KEY_ID")
+                secretKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+                sessionToken = System.getenv("AWS_SESSION_TOKEN")
             }
         }
     }
@@ -212,7 +213,7 @@ tasks.named("check").configure { dependsOn(integTest) }
 
 // Enable Security if -Dsecurity=true or -Dhttps=true
 def securityEnabled = System.getProperty("security", "false") == "true" ||
-        System.getProperty("https", "false")   == "true"
+        System.getProperty("https", "false") == "true"
 
 integTest {
     dependsOn "bundlePlugin"
@@ -320,7 +321,7 @@ def configureClusterPlugins(cluster, jobSchedZip, securityZip, securityEnabled) 
         plugin(project.tasks.bundlePlugin.archiveFile)
 
         if (securityEnabled) {
-            nodes.each { node ->
+            cluster.nodes.each { node ->
                 node.extraConfigFile("kirk.pem",       file("build/resources/test/kirk.pem"))
                 node.extraConfigFile("kirk-key.pem",   file("build/resources/test/kirk-key.pem"))
                 node.extraConfigFile("esnode.pem",     file("build/resources/test/esnode.pem"))
@@ -592,16 +593,10 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.utils.ParseUtils',
         'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
         'org.opensearch.ml.jobs.processors.MLJobProcessor',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction',
-        'org.opensearch.ml.action.memorycontainer.memory.TransportAddMemoriesAction.*',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction',
-        'org.opensearch.ml.rest.RestMLDeleteMemoryAction.*',
         'org.opensearch.ml.rest.RestMLPredictionStreamAction',
         'org.opensearch.ml.rest.RestMLPredictionStreamAction.*',
         'org.opensearch.ml.rest.RestMLExecuteStreamAction',
         'org.opensearch.ml.rest.RestMLExecuteStreamAction.*',
-        'org.opensearch.ml.rest.RestMLCreateSessionAction',
-        'org.opensearch.ml.rest.RestMLCreateSessionAction.*'
 ]
 
 jacocoTestCoverageVerification {
@@ -677,6 +672,15 @@ configurations.all {
     resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.3'
     resolutionStrategy.force 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.18.3'
     resolutionStrategy.force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.3'
+    resolutionStrategy.force "io.netty:netty-codec-http:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-codec-http2:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-codec:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-transport:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-common:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-buffer:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-handler:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-resolver:${versions.netty}"
+    resolutionStrategy.force "io.netty:netty-transport-native-unix-common:${versions.netty}"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
@@ -689,7 +693,7 @@ afterEvaluate {
         version = "${project.version}" - "-SNAPSHOT"
 
         into '/usr/share/opensearch/plugins'
-        from(zipTree(bundlePlugin.archivePath)) {
+        from(zipTree(bundlePlugin.archiveFile.get().asFile)) {
             into opensearchplugin.name
         }
 

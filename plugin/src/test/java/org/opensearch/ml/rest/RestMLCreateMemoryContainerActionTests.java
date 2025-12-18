@@ -12,10 +12,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -122,7 +118,8 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
             + "    \"embedding_model_id\": \"test-embedding-model\",\n"
             + "    \"llm_id\": \"test-llm-model\",\n"
             + "    \"embedding_dimension\": 768,\n"
-            + "    \"max_infer_size\": 8\n"
+            + "    \"max_infer_size\": 8,\n"
+            + "    \"disable_session\": false\n"
             + "  }\n"
             + "}";
 
@@ -135,19 +132,10 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         assertEquals("test-memory-container", input.getName());
         assertEquals("Test memory container description", input.getDescription());
         assertNotNull(input.getConfiguration());
-        assertEquals(".plugins-ml-am-test-memory-" + MEM_CONTAINER_MEMORY_TYPE_SESSIONS, input.getConfiguration().getSessionIndexName());
-        assertEquals(
-            ".plugins-ml-am-test-memory-" + MEM_CONTAINER_MEMORY_TYPE_WORKING,
-            input.getConfiguration().getWorkingMemoryIndexName()
-        );
-        assertEquals(
-            ".plugins-ml-am-test-memory-" + MEM_CONTAINER_MEMORY_TYPE_HISTORY,
-            input.getConfiguration().getLongMemoryHistoryIndexName()
-        );
-        assertEquals(
-            ".plugins-ml-am-test-memory-" + MEM_CONTAINER_MEMORY_TYPE_LONG_TERM,
-            input.getConfiguration().getLongMemoryIndexName()
-        );
+        assertEquals(".plugins-ml-am-test-memory-" + "sessions", input.getConfiguration().getSessionIndexName());
+        assertEquals(".plugins-ml-am-test-memory-" + "working", input.getConfiguration().getWorkingMemoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-" + "history", input.getConfiguration().getLongMemoryHistoryIndexName());
+        assertEquals(".plugins-ml-am-test-memory-" + "long-term", input.getConfiguration().getLongMemoryIndexName());
         assertNull(input.getTenantId()); // Multi-tenancy disabled
     }
 

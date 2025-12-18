@@ -5,7 +5,10 @@
 
 package org.opensearch.ml.rest;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
@@ -14,8 +17,8 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,12 +26,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lease.Releasable;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.support.XContentHttpChunk;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.rest.RestStatus;
@@ -38,8 +45,9 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.http.HttpChunk;
 import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -50,6 +58,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteStreamTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
@@ -74,11 +83,17 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     private static final String ML_EXECUTE_STREAM_ACTION = "ml_execute_stream_action";
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private ClusterService clusterService;
+    private MLModelManager mlModelManager;
 
     /**
      * Constructor
      */
-    public RestMLExecuteStreamAction(MLFeatureEnabledSetting mlFeatureEnabledSetting, ClusterService clusterService) {
+    public RestMLExecuteStreamAction(
+        MLModelManager mlModelManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        ClusterService clusterService
+    ) {
+        this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.clusterService = clusterService;
     }
@@ -122,6 +137,14 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
 
         String agentId = request.param(PARAMETER_AGENT_ID);
 
+        // Validate agent and model synchronously before starting stream
+        MLAgent agent = validateAndGetAgent(agentId, client);
+        if (agent.getLlm() != null && agent.getLlm().getModelId() != null) {
+            if (!isModelValid(agent.getLlm().getModelId(), request, client)) {
+                throw new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND);
+            }
+        }
+
         final StreamingRestChannelConsumer consumer = (channel) -> {
             Map<String, List<String>> headers = Map
                 .of(
@@ -134,10 +157,12 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 );
             channel.prepareResponse(RestStatus.OK, headers);
 
-            Flux.from(channel).ofType(HttpChunk.class).concatMap(chunk -> {
-                final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
+            Flux.from(channel).ofType(HttpChunk.class).collectList().flatMap(chunks -> {
                 try {
-                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, chunk.content());
+                    BytesReference completeContent = combineChunks(chunks);
+                    MLExecuteTaskRequest mlExecuteTaskRequest = getRequest(agentId, request, completeContent);
+
+                    final CompletableFuture<HttpChunk> future = new CompletableFuture<>();
                     StreamTransportResponseHandler<MLTaskResponse> handler = new StreamTransportResponseHandler<MLTaskResponse>() {
                         @Override
                         public void handleStreamResponse(StreamTransportResponse<MLTaskResponse> streamResponse) {
@@ -190,19 +215,23 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                             handler
                         );
 
-                } catch (IOException e) {
-                    throw new MLException("Got an exception in flux.", e);
+                    return Mono.fromCompletionStage(future);
+                } catch (Exception e) {
+                    log.error("Failed to parse or process request", e);
+                    return Mono.error(e);
                 }
-
-                return Mono.fromCompletionStage(future);
-            }).doOnNext(channel::sendChunk).onErrorComplete(ex -> {
-                // Error handling
+            }).doOnNext(channel::sendChunk).onErrorResume(ex -> {
+                log.error("Error occurred", ex);
                 try {
-                    channel.sendResponse(new BytesRestResponse(channel, (Exception) ex));
-                    return true;
-                } catch (final IOException e) {
-                    throw new UncheckedIOException(e);
+                    String errorMessage = ex instanceof IOException
+                        ? "Failed to parse request: " + ex.getMessage()
+                        : "Error processing request: " + ex.getMessage();
+                    HttpChunk errorChunk = createHttpChunk("data: {\"error\": \"" + errorMessage.replace("\"", "\\\"") + "\"}\n\n", true);
+                    channel.sendChunk(errorChunk);
+                } catch (Exception e) {
+                    log.error("Failed to send error chunk", e);
                 }
+                return Mono.empty();
             }).subscribe();
         };
 
@@ -215,6 +244,59 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                 channel.sendResponse(new BytesRestResponse(channel, validationError));
             }
         };
+    }
+
+    @VisibleForTesting
+    MLAgent validateAndGetAgent(String agentId, NodeClient client) {
+        try {
+            CompletableFuture<MLAgent> future = new CompletableFuture<>();
+
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.get(new GetRequest(ML_AGENT_INDEX, agentId), ActionListener.runBefore(ActionListener.wrap(response -> {
+                    if (response.isExists()) {
+                        try {
+                            XContentParser parser = jsonXContent
+                                .createParser(null, LoggingDeprecationHandler.INSTANCE, response.getSourceAsString());
+                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            future.complete(MLAgent.parse(parser));
+                        } catch (Exception e) {
+                            future.completeExceptionally(e);
+                        }
+                    } else {
+                        future.completeExceptionally(new OpenSearchStatusException("Agent not found", RestStatus.NOT_FOUND));
+                    }
+                }, future::completeExceptionally), context::restore));
+            }
+
+            // TODO: Make validation async
+            return future.get(5, SECONDS);
+        } catch (Exception e) {
+            log.error("Failed to validate agent {}", agentId, e);
+            throw new OpenSearchStatusException("Failed to find agent with the provided agent id: " + agentId, RestStatus.NOT_FOUND);
+        }
+    }
+
+    @VisibleForTesting
+    boolean isModelValid(String modelId, RestRequest request, NodeClient client) throws IOException {
+        try {
+            CompletableFuture<MLModel> future = new CompletableFuture<>();
+
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                mlModelManager
+                    .getModel(
+                        modelId,
+                        getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
+                        ActionListener.runBefore(ActionListener.wrap(future::complete, future::completeExceptionally), context::restore)
+                    );
+            }
+
+            // TODO: make model validation async
+            future.get(5, SECONDS);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to validate model {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -248,77 +330,95 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
     }
 
     private HttpChunk convertToHttpChunk(MLTaskResponse response) throws IOException {
-        String memoryId = "";
-        String parentInteractionId = "";
-        String content = "";
+        String sseData;
         boolean isLast = false;
 
-        // TODO: refactor to handle other types of agents
-        // Extract values from multiple tensors
         try {
-            ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
-            if (output != null && !output.getMlModelOutputs().isEmpty()) {
-                ModelTensors modelTensors = output.getMlModelOutputs().get(0);
-                List<ModelTensor> tensors = modelTensors.getMlModelTensors();
+            Map<String, ?> dataMap = extractDataMap(response);
 
-                for (ModelTensor tensor : tensors) {
-                    String name = tensor.getName();
-                    if ("memory_id".equals(name) && tensor.getResult() != null) {
-                        memoryId = tensor.getResult();
-                    } else if ("parent_interaction_id".equals(name) && tensor.getResult() != null) {
-                        parentInteractionId = tensor.getResult();
-                    } else if (("llm_response".equals(name) || "response".equals(name)) && tensor.getDataAsMap() != null) {
-                        Map<String, ?> dataMap = tensor.getDataAsMap();
-                        if (dataMap.containsKey("content")) {
-                            content = (String) dataMap.get("content");
-                            if (content == null)
-                                content = "";
-                        }
-                        if (dataMap.containsKey("is_last")) {
-                            isLast = Boolean.TRUE.equals(dataMap.get("is_last"));
-                        }
+            if (dataMap.containsKey("error")) {
+                // Error response
+                String errorMessage = (String) dataMap.get("error");
+                sseData = String.format("data: {\"error\": \"%s\"}\n\n", errorMessage.replace("\"", "\\\"").replace("\n", "\\n"));
+                isLast = true;
+            } else {
+                // TODO: refactor to handle other types of agents
+                // Regular response - extract values and build proper structure
+                String memoryId = extractTensorResult(response, "memory_id");
+                String parentInteractionId = extractTensorResult(response, "parent_interaction_id");
+                String content = dataMap.containsKey("content") ? (String) dataMap.get("content") : "";
+                isLast = dataMap.containsKey("is_last") ? Boolean.TRUE.equals(dataMap.get("is_last")) : false;
+                boolean finalIsLast = isLast;
+
+                List<ModelTensor> orderedTensors = List
+                    .of(
+                        ModelTensor.builder().name("memory_id").result(memoryId).build(),
+                        ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
+                        ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
+                            {
+                                put("content", content);
+                                put("is_last", finalIsLast);
+                            }
+                        }).build()
+                    );
+
+                ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
+                ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
+
+                XContentBuilder builder = XContentFactory.jsonBuilder();
+                tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                sseData = "data: " + builder.toString() + "\n\n";
+            }
+        } catch (Exception e) {
+            log.error("Failed to process response", e);
+            sseData = "data: {\"error\": \"Processing failed\"}\n\n";
+            isLast = true;
+        }
+        return createHttpChunk(sseData, isLast);
+    }
+
+    private String extractTensorResult(MLTaskResponse response, String tensorName) {
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        if (output != null && !output.getMlModelOutputs().isEmpty()) {
+            ModelTensors tensors = output.getMlModelOutputs().get(0);
+            for (ModelTensor tensor : tensors.getMlModelTensors()) {
+                if (tensorName.equals(tensor.getName()) && tensor.getResult() != null) {
+                    return tensor.getResult();
+                }
+            }
+        }
+        return "";
+    }
+
+    private Map<String, ?> extractDataMap(MLTaskResponse response) {
+        ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
+        if (output != null && !output.getMlModelOutputs().isEmpty()) {
+            ModelTensors tensors = output.getMlModelOutputs().get(0);
+            for (ModelTensor tensor : tensors.getMlModelTensors()) {
+                String name = tensor.getName();
+                if ("error".equals(name) || "llm_response".equals(name) || "response".equals(name)) {
+                    Map<String, ?> dataMap = tensor.getDataAsMap();
+                    if (dataMap != null) {
+                        return dataMap;
                     }
                 }
             }
-        } catch (Exception e) {
-            log.error("Failed to extract values from response", e);
         }
+        return Map.of();
+    }
 
-        String finalContent = content;
-        boolean finalIsLast = isLast;
-
-        log
-            .info(
-                "Converting to HttpChunk - memoryId: '{}', parentId: '{}', content: '{}', isLast: {}",
-                memoryId,
-                parentInteractionId,
-                content,
-                isLast
-            );
-
-        // Create ordered tensors
-        List<ModelTensor> orderedTensors = List
-            .of(
-                ModelTensor.builder().name("memory_id").result(memoryId).build(),
-                ModelTensor.builder().name("parent_interaction_id").result(parentInteractionId).build(),
-                ModelTensor.builder().name("response").dataAsMap(new LinkedHashMap<String, Object>() {
-                    {
-                        put("content", finalContent);
-                        put("is_last", finalIsLast);
-                    }
-                }).build()
-            );
-
-        ModelTensors tensors = ModelTensors.builder().mlModelTensors(orderedTensors).build();
-
-        ModelTensorOutput tensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(tensors)).build();
-
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        tensorOutput.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonData = builder.toString();
-
-        String sseData = "data: " + jsonData + "\n\n";
-        return createHttpChunk(sseData, isLast);
+    @VisibleForTesting
+    BytesReference combineChunks(List<HttpChunk> chunks) {
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            for (HttpChunk chunk : chunks) {
+                chunk.content().writeTo(buffer);
+            }
+            return BytesReference.fromByteBuffer(ByteBuffer.wrap(buffer.toByteArray()));
+        } catch (IOException e) {
+            log.error("Failed to combine chunks", e);
+            throw new OpenSearchStatusException("Failed to combine request chunks", RestStatus.INTERNAL_SERVER_ERROR, e);
+        }
     }
 
     private HttpChunk createHttpChunk(String sseData, boolean isLast) {

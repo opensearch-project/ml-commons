@@ -32,6 +32,11 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * Change the setting name to same naming convention with others ([#4215](https://github.com/opensearch-project/ml-commons/pull/4215))
 * Enabling agentic memory feature by default as we are going GA ([#4240](https://github.com/opensearch-project/ml-commons/pull/4240))
 * Add parameter to control delete memories when delete container ([#4238](https://github.com/opensearch-project/ml-commons/pull/4238))
+* Refactor and add more validation to processor chain ([#4260](https://github.com/opensearch-project/ml-commons/pull/4260))
+* [Agentic Search] Use same model for Agent and QPT ([#4262](https://github.com/opensearch-project/ml-commons/pull/4262))
+* Improve semantic fact extraction prompt and add JSON enforcement ([#4282](https://github.com/opensearch-project/ml-commons/pull/4282))
+* Improve user preference extraction prompt with XML-based structure ([#4288](https://github.com/opensearch-project/ml-commons/pull/4288))
+* Enable execute tool feature flag by default ([#4296](https://github.com/opensearch-project/ml-commons/pull/4296))
 
 ### Bug Fixes
 * Fix NPE when execute flow agent with mutli tenancy is off ([#4189](https://github.com/opensearch-project/ml-commons/pull/4189))
@@ -53,10 +58,22 @@ Compatible with OpenSearch and OpenSearch Dashboards version 3.3.0
 * Skip the model interface validation for batch predict ([#4219](https://github.com/opensearch-project/ml-commons/pull/4219))
 * Fix: use builtin BulkByScrollResponse parser to parse delete by query response in memories ([#4237](https://github.com/opensearch-project/ml-commons/pull/4237))
 * Fix stream predict with security enabled ([#4248](https://github.com/opensearch-project/ml-commons/pull/4248))
+* Fix wrong field name in get working memory API ([#4255](https://github.com/opensearch-project/ml-commons/pull/4255))
+* Fix: allow only container owner to delete memory container ([#4258](https://github.com/opensearch-project/ml-commons/pull/4258))
+* [Agent Framework] Exception handling for runtime exceptions during async execution ([#4263](https://github.com/opensearch-project/ml-commons/pull/4263))
+* Fix json parsing error by extracing json first; add for each processor; support input processor ([#4278](https://github.com/opensearch-project/ml-commons/pull/4278))
+* Fix: add validations during create and update memory container ([#4284](https://github.com/opensearch-project/ml-commons/pull/4284))
+* Fix agent streaming with security enabled + error handling ([#4256](https://github.com/opensearch-project/ml-commons/pull/4256))
+* Fix llm result path; convert message to user prompt string ([#4283](https://github.com/opensearch-project/ml-commons/pull/4283))
+* Fix llm result path error ([#4292](https://github.com/opensearch-project/ml-commons/pull/4292))
+* Fix dimension update flow to allow embedding type update ([#4297](https://github.com/opensearch-project/ml-commons/pull/4297))
+* Verify llm before summarize session ([#4300](https://github.com/opensearch-project/ml-commons/pull/4300))
 
 ### Infrastructure
 * Update maintainer list ([#4139](https://github.com/opensearch-project/ml-commons/pull/4139))
 * Downloads test certificates from security plugin ([#4245](https://github.com/opensearch-project/ml-commons/pull/4245))
+* Update approver matching to be exact match ([#4247](https://github.com/opensearch-project/ml-commons/pull/4247))
+* Fix approver parsing bug in require-approval workflow ([#4259](https://github.com/opensearch-project/ml-commons/pull/4259))
 
 ### Documentation
 * Add colpali blueprint ([#4130](https://github.com/opensearch-project/ml-commons/pull/4130))

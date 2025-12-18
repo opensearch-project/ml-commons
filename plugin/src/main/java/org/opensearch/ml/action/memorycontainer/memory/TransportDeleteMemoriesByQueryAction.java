@@ -5,13 +5,9 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_HISTORY;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_WORKING;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
-import java.util.Locale;
+import java.time.Instant;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
@@ -25,6 +21,7 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryRequest;
@@ -93,7 +90,7 @@ public class TransportDeleteMemoriesByQueryAction extends
             }
 
             // Step 4: Get the memory index name based on type
-            String memoryType = request.getMemoryType();
+            MemoryType memoryType = request.getMemoryType();
             String memoryIndexName = getMemoryIndexName(container, memoryType);
 
             if (memoryIndexName == null) {
@@ -124,13 +121,16 @@ public class TransportDeleteMemoriesByQueryAction extends
             // Step 6: Build the DeleteByQueryRequest
             DeleteByQueryRequest deleteByQueryRequest = new DeleteByQueryRequest(memoryIndexName);
 
-            // Step 7: Apply query with owner filtering for non-admin users
-            QueryBuilder finalQuery = memoryContainerHelper.addOwnerIdFilter(user, query);
+            // Step 7: Apply container ID filter to prevent cross-container deletion when containers share index prefix
+            QueryBuilder containerFilteredQuery = memoryContainerHelper.addContainerIdFilter(memoryContainerId, query);
+
+            // Step 8: Apply owner filtering for non-admin users
+            QueryBuilder finalQuery = memoryContainerHelper.addOwnerIdFilter(user, containerFilteredQuery);
             deleteByQueryRequest.setQuery(finalQuery);
             deleteByQueryRequest.setRefresh(true);
 
-            // Step 8: Execute the delete by query
-            executeDeleteByQuery(container.getConfiguration(), deleteByQueryRequest, actionListener);
+            // Step 9: Execute the delete by query
+            executeDeleteByQuery(memoryContainerId, memoryType, user, container.getConfiguration(), deleteByQueryRequest, actionListener);
 
         }, error -> {
             log.error("Failed to get memory container: " + memoryContainerId, error);
@@ -141,22 +141,21 @@ public class TransportDeleteMemoriesByQueryAction extends
     /**
      * Get the memory index name based on the memory type
      */
-    private String getMemoryIndexName(MLMemoryContainer container, String memoryType) {
+    private String getMemoryIndexName(MLMemoryContainer container, MemoryType memoryType) {
         if (container == null || container.getConfiguration() == null) {
             return null;
         }
 
         MemoryConfiguration config = container.getConfiguration();
-        String normalizedType = memoryType.toLowerCase(Locale.ROOT);
 
-        switch (normalizedType) {
-            case MEM_CONTAINER_MEMORY_TYPE_SESSIONS:
+        switch (memoryType) {
+            case SESSIONS:
                 return config.isDisableSession() ? null : config.getSessionIndexName();
-            case MEM_CONTAINER_MEMORY_TYPE_WORKING:
+            case WORKING:
                 return config.getWorkingMemoryIndexName();
-            case MEM_CONTAINER_MEMORY_TYPE_LONG_TERM:
+            case LONG_TERM:
                 return config.getLongMemoryIndexName();
-            case MEM_CONTAINER_MEMORY_TYPE_HISTORY:
+            case HISTORY:
                 return config.isDisableHistory() ? null : config.getLongMemoryHistoryIndexName();
             default:
                 return null;
@@ -167,6 +166,9 @@ public class TransportDeleteMemoriesByQueryAction extends
      * Execute the delete by query request, handling system indices appropriately
      */
     private void executeDeleteByQuery(
+        String memoryContainerId,
+        MemoryType memoryType,
+        User user,
         MemoryConfiguration configuration,
         DeleteByQueryRequest deleteByQueryRequest,
         ActionListener<MLDeleteMemoriesByQueryResponse> actionListener
@@ -184,7 +186,16 @@ public class TransportDeleteMemoriesByQueryAction extends
                 log.warn("Delete by query operation timed out");
             }
 
-            log.info("Delete by query completed. Deleted {} documents in {} ms", response.getDeleted(), response.getTook().millis());
+            log
+                .info(
+                    "Delete memories by query - Event: MEMORIES_DELETED_BY_QUERY, Container ID: {}, Memory Type: {}, Deleted Count: {}, Duration: {}ms, User: {}, Timestamp: {}",
+                    memoryContainerId,
+                    memoryType,
+                    response.getDeleted(),
+                    response.getTook().millis(),
+                    user != null ? user.getName() : "unknown",
+                    Instant.now()
+                );
             // Wrap the BulkByScrollResponse in our response wrapper
             actionListener.onResponse(new MLDeleteMemoriesByQueryResponse(response));
         }, error -> {

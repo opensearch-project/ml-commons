@@ -118,6 +118,7 @@ public class MLMemorySessionTest {
     public void testConstructorWithAllFields() {
         MLMemorySession session = new MLMemorySession(
             "owner-123",
+            "container-123",
             "Test session summary",
             testCreatedTime,
             testLastUpdateTime,
@@ -141,7 +142,7 @@ public class MLMemorySessionTest {
 
     @Test
     public void testConstructorWithNullFields() {
-        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null);
+        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null, null);
 
         assertNull(session.getOwnerId());
         assertNull(session.getSummary());
@@ -329,7 +330,7 @@ public class MLMemorySessionTest {
 
     @Test
     public void testSettersAndGetters() {
-        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null);
+        MLMemorySession session = new MLMemorySession(null, null, null, null, null, null, null, null, null, null);
 
         // Test setters
         session.setOwnerId("new-owner");

@@ -392,6 +392,7 @@ public class MLAgentUpdateInputTest {
             {
               "agent_id": "test-agent-id",
               "name": "test-agent",
+              "type": "flow",
               "description": "test description",
               "llm": {
                 "model_id": "test-model-id",
@@ -423,6 +424,7 @@ public class MLAgentUpdateInputTest {
             """;
         testParseFromJsonString(inputStr, parsedInput -> {
             assertEquals("test-agent", parsedInput.getName());
+            assertEquals("flow", parsedInput.getType());
             assertEquals("test description", parsedInput.getDescription());
             assertEquals("test-model-id", parsedInput.getLlmModelId());
             assertEquals(1, parsedInput.getTools().size());
@@ -960,6 +962,41 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
+    public void testAgentTypeValidation() {
+        MLAgent originalAgent = MLAgent.builder().type(MLAgentType.FLOW.name()).name("Test Agent").build();
+
+        // Same type should be allowed
+        MLAgentUpdateInput sameTypeInput = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .type(MLAgentType.FLOW.name())
+            .name("Updated Name")
+            .build();
+
+        MLAgent updatedAgent = sameTypeInput.toMLAgent(originalAgent);
+        assertEquals(MLAgentType.FLOW.name(), updatedAgent.getType());
+        assertEquals("Updated Name", updatedAgent.getName());
+
+        // Different type should throw error
+        MLAgentUpdateInput differentTypeInput = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .name("Updated Name")
+            .build();
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> { differentTypeInput.toMLAgent(originalAgent); });
+        assertEquals("Agent type cannot be updated", e.getMessage());
+
+        // No type provided should work (original type)
+        MLAgentUpdateInput noTypeInput = MLAgentUpdateInput.builder().agentId("test-agent-id").name("Updated Name").build();
+
+        MLAgent originalAgentType = noTypeInput.toMLAgent(originalAgent);
+        assertEquals(MLAgentType.FLOW.name(), originalAgentType.getType());
+        assertEquals("Updated Name", originalAgentType.getName());
+    }
+
+    @Test
     public void testStreamInputOutputWithVersion() throws IOException {
         MLAgentUpdateInput input = MLAgentUpdateInput
             .builder()
@@ -994,5 +1031,55 @@ public class MLAgentUpdateInputTest {
         assertEquals(input.getAppType(), parsedInput.getAppType());
         assertEquals(input.getLastUpdateTime(), parsedInput.getLastUpdateTime());
         assertEquals(input.getTenantId(), parsedInput.getTenantId());
+    }
+
+    @Test
+    public void testParseWithMcpConnectors() throws Exception {
+        String inputStr = """
+            {
+              "agent_id": "test-agent-id",
+              "name": "test-agent",
+              "parameters": {
+                "_llm_interface": "openai/v1/chat/completions",
+                "mcp_connectors": [
+                  {
+                    "mcp_connector_id": "test-connector-id",
+                    "tool_filters": ["^get_alerts$", "^list_.*$"]
+                  }
+                ]
+              }
+            }
+            """;
+        testParseFromJsonString(inputStr, parsedInput -> {
+            assertEquals("test-agent", parsedInput.getName());
+            assertNotNull(parsedInput.getParameters());
+            assertEquals("openai/v1/chat/completions", parsedInput.getParameters().get("_llm_interface"));
+            assertTrue(parsedInput.getParameters().containsKey("mcp_connectors"));
+            String mcpConnectorsJson = parsedInput.getParameters().get("mcp_connectors");
+            assertTrue(mcpConnectorsJson.contains("test-connector-id"));
+            assertTrue(mcpConnectorsJson.contains("tool_filters"));
+        });
+    }
+
+    @Test
+    public void testParseWithMcpConnectorsMinimal() throws Exception {
+        String inputStr = """
+            {
+              "agent_id": "test-agent-id",
+              "parameters": {
+                "mcp_connectors": [
+                  {
+                    "mcp_connector_id": "connector-123"
+                  }
+                ]
+              }
+            }
+            """;
+        testParseFromJsonString(inputStr, parsedInput -> {
+            assertNotNull(parsedInput.getParameters());
+            assertTrue(parsedInput.getParameters().containsKey("mcp_connectors"));
+            String mcpConnectorsJson = parsedInput.getParameters().get("mcp_connectors");
+            assertTrue(mcpConnectorsJson.contains("connector-123"));
+        });
     }
 }

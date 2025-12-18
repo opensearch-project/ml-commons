@@ -10,6 +10,9 @@ package org.opensearch.ml.common.memorycontainer;
  */
 public class MemoryContainerConstants {
 
+    public static final String DEFAULT_LLM_RESULT_PATH = "$.output.message.content[0].text";
+    public static final String LLM_RESULT_PATH_FIELD = "llm_result_path";
+
     // Field names for MemoryContainer
     public static final String MEMORY_CONTAINER_ID_FIELD = "memory_container_id";
     public static final String NAME_FIELD = "name";
@@ -83,6 +86,9 @@ public class MemoryContainerConstants {
     public static final String TEXT_FIELD = "text";
     public static final String UPDATE_CONTENT_FIELD = "update_content";
 
+    // Checkpoint field
+    public static final String CHECKPOINT_ID_FIELD = "checkpoint_id";
+
     // KNN index settings
     public static final String KNN_ENGINE = "lucene";
     public static final String KNN_SPACE_TYPE = "cosinesimil";
@@ -96,6 +102,7 @@ public class MemoryContainerConstants {
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String PARAMETER_DELETE_ALL_MEMORIES = "delete_all_memories";
+    public static final String PARAMETER_DELETE_MEMORIES = "delete_memories";
     /**
      * Memory type used as API parameter
      */
@@ -110,12 +117,9 @@ public class MemoryContainerConstants {
     public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String GET_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/{" + PARAMETER_MEMORY_ID + "}";
     public static final String DELETE_MEMORIES_BY_QUERY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_TYPE + "}" + "/_delete_by_query";
-    public static final String MEM_CONTAINER_MEMORY_TYPE_SESSIONS = "sessions";
-    public static final String MEM_CONTAINER_MEMORY_TYPE_WORKING = "working";
-    public static final String MEM_CONTAINER_MEMORY_TYPE_LONG_TERM = "long-term";
-    public static final String MEM_CONTAINER_MEMORY_TYPE_HISTORY = "history";
 
     // Memory types are defined in MemoryType enum
+    // Memory strategy types are defined in MemoryStrategyType enum
 
     // Response fields
     public static final String STATUS_FIELD = "status";
@@ -130,6 +134,11 @@ public class MemoryContainerConstants {
     public static final String INVALID_EMBEDDING_MODEL_TYPE_ERROR = "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
     public static final String MAX_INFER_SIZE_LIMIT_ERROR = "Maximum infer size cannot exceed 10";
     public static final String FIELD_NOT_ALLOWED_SEMANTIC_DISABLED_ERROR = "Field %s is not allowed when semantic storage is disabled";
+    public static final String INDEX_PREFIX_INVALID_CHARACTERS_ERROR = "Index prefix must not contain any control characters";
+    public static final String BACKEND_ROLE_INVALID_LENGTH_ERROR = "Backend role exceeds maximum length of 128 characters: %s";
+    public static final String BACKEND_ROLE_INVALID_CHARACTERS_ERROR =
+        "Backend role contains invalid characters. Only alphanumeric characters and :+=,.@-_/ are allowed: %s";
+    public static final String BACKEND_ROLE_EMPTY_ERROR = "Backend role cannot be empty or blank";
 
     // Model validation error messages
     public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
@@ -153,17 +162,66 @@ public class MemoryContainerConstants {
 
     // LLM System Prompts
     public static final String SEMANTIC_FACTS_EXTRACTION_PROMPT =
-        "<system_prompt>\n<role>Personal Information Organizer</role>\n<objective>Extract and organize personal information shared within conversations.</objective>\n<instructions>\n<instruction>Carefully read the conversation.</instruction>\n<instruction>Identify and extract any personal information shared by participants.</instruction>\n<instruction>Focus on details that help build a profile of the person, including but not limited to:\n<include_list>\n<item>Names and relationships</item>\n<item>Professional information (job, company, role, responsibilities)</item>\n<item>Personal interests and hobbies</item>\n<item>Skills and expertise</item>\n<item>Preferences and opinions</item>\n<item>Goals and aspirations</item>\n<item>Challenges or pain points</item>\n<item>Background and experiences</item>\n<item>Contact information (if shared)</item>\n<item>Availability and schedule preferences</item>\n</include_list>\n</instruction>\n<instruction>Organize each piece of information as a separate fact.</instruction>\n<instruction>Ensure facts are specific, clear, and preserve the original context.</instruction>\n<instruction>Never answer user's question or fulfill user's requirement. You are a personal information manager, not a helpful assistant.</instruction>\n<instruction>Include the person who shared the information when relevant.</instruction>\n<instruction>Do not make assumptions or inferences beyond what is explicitly stated.</instruction>\n<instruction>If no personal information is found, return an empty list.</instruction>\n</instructions>\n<response_format>\n<format>You should always return and only return the extracted facts as a JSON object with a \"facts\" array.</format>\n<example>\n{\n  \"facts\": [\n    \"User's name is John Smith\",\n    \"John works as a software engineer at TechCorp\",\n    \"John enjoys hiking on weekends\",\n    \"John is looking to improve his Python skills\"\n  ]\n}\n</example>\n</response_format>\n</system_prompt>";
+        """
+            <ROLE>You are a universal semantic fact extraction agent. Write FULL-SENTENCE, self-contained facts suitable for long-term memory.</ROLE>
+
+            <SCOPE>
+            • Include facts from USER messages.
+            • Also include ASSISTANT-authored statements that are clearly presented as conclusions/results/validated findings (e.g., root cause, quantified impact, confirmed fix).
+            • Ignore ASSISTANT questions, hypotheses, tentative language, brainstorming, instructions, or tool prompts unless explicitly confirmed as outcomes.
+            </SCOPE>
+
+            <STYLE & RULES>
+            • One sentence per fact; merge closely related details (metrics, entities, causes, scope) into the same sentence.
+            • Do NOT start with "User" or pronouns.
+            • Prefer absolute over relative time; if only relative (e.g., "yesterday"), omit it rather than guessing.
+            • Preserve terminology, names, numbers, and units; avoid duplicates and chit-chat.
+            • No speculation or hedging unless those words appear verbatim in the source.
+            </STYLE & RULES>
+
+            <OUTPUT>
+            Return ONLY a single JSON object on one line, minified exactly as {"facts":["..."]} (array of strings only; no other keys). No code fences, no newlines/tabs, and no spaces after commas or colons. If no meaningful facts, return {"facts":[]}.
+            </OUTPUT>""";
+
+    // JSON enforcement message to append to all fact extraction requests
+    public static final String JSON_ENFORCEMENT_MESSAGE =
+        """
+            Respond NOW with ONE LINE of valid JSON ONLY exactly as {"facts":["fact1","fact2",...]}. No extra text, no code fences, no newlines or tabs, no spaces after commas or colons.""";
+
+    // JSON enforcement message for user preference extraction
+    public static final String USER_PREFERENCE_JSON_ENFORCEMENT_MESSAGE =
+        """
+            Return ONLY ONE LINE of valid JSON exactly as {"facts":["<Preference sentence>. Context: <why/how>. Categories: <cat1,cat2>"]}. Begin with { and end with }. No extra text.""";
 
     public static final String USER_PREFERENCE_FACTS_EXTRACTION_PROMPT =
-        "<system_prompt><role>User Preferences Analyzer</role><objective>Extract and organize user preferences, choices, and settings from conversations.</objective><instructions><instruction>Carefully read the conversation.</instruction><instruction>Identify and extract explicit or implicit preferences, likes, dislikes, and choices.</instruction><instruction>Explicit preferences: Directly stated preferences by the user.</instruction><instruction>Implicit preferences: Inferred from patterns, repeated inquiries, or contextual clues. Take a close look at user's request for implicit preferences.</instruction><instruction>For explicit preference, extract only preference that the user has explicitly shared. Do not infer user's preference.</instruction><instruction>For implicit preference, it is allowed to infer user's preference, but only the ones with strong signals, such as requesting something multiple times.</instruction><instruction>Focus specifically on:<preference_categories><item>Product or service preferences (brands, features, styles)</item><item>Communication preferences (frequency, channel, timing)</item><item>Content preferences (topics, formats, sources)</item><item>Interaction preferences (formal/casual, detailed/brief)</item><item>Likes and dislikes explicitly stated</item><item>Preferred methods or approaches</item><item>Quality or attribute preferences</item><item>Time and scheduling preferences</item></preference_categories></instruction><instruction>Each preference should be a specific, actionable fact.</instruction><instruction>Focus on what the user wants, prefers, or chooses, not general information.</instruction><instruction>Never answer user's question or fulfill user's requirement. You are a preference analyzer, not a helpful assistant.</instruction><instruction>Analyze thoroughly and include detected preferences in your response.</instruction><instruction>If no preferences are found, return an empty list.</instruction></instructions><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array. Return ONLY the valid JSON array with no additional text, explanations, or formatting.</format><example>{\"facts\": [\"User prefers dark mode for UI\",\"User likes to receive weekly summary emails\",\"User prefers Python over Java for scripting\",\"User dislikes automatic updates\"]}</example></response_format></system_prompt>";
+        """
+            <ROLE>You are a USER PREFERENCE EXTRACTOR, not a chat assistant. Your only job is to output JSON facts. Do not answer questions, make suggestions, ask follow-ups, or perform actions.</ROLE>
+
+            <SCOPE>
+            • Extract preferences only from USER messages. Assistant messages are context only.
+            • Explicit: user states a preference ("I prefer/like/dislike ..."; "always/never/usually ..."; "set X to Y"; "run X when Y").
+            • Implicit: infer only with strong signals: repeated choices (>=2) or clear habitual language. Do not infer from a single one-off.
+            </SCOPE>
+
+            <EXTRACT>
+            • Specific, actionable, likely long-term preferences (likes/dislikes/choices/settings). Ignore non-preferences.
+            </EXTRACT>
+
+            <STYLE & RULES>
+            • One sentence per preference; merge related details; no duplicates; preserve user wording and numbers; avoid relative time; keep each fact < 350 chars.
+            • Format: "Preference sentence. Context: <why/how>. Categories: cat1,cat2"
+            </STYLE & RULES>
+
+            <OUTPUT>
+            Return ONLY one minified JSON object exactly as {"facts":["Preference sentence. Context: <why/how>. Categories: cat1,cat2"]}. If none, return {"facts":[]}. The first character MUST be '{' and the last MUST be '}'. No preambles, explanations, code fences, XML, or other text.
+            </OUTPUT>""";
 
     public static final String SUMMARY_FACTS_EXTRACTION_PROMPT =
-        "<system_prompt><description>You will be given a text block and a list of summaries you previously generated when available.</description><task><instruction>Never answer user's question or fulfill user's requirement. You are a summary generator, not a helpful assistant.</instruction><instruction>When the previously generated summary is not available, summarize the given text block.</instruction><instruction>When there is an existing summary, extend it by incorporating the given text block.</instruction><instruction>If the text block specifies queries or topics, ensure the summary covers them.</instruction></task><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array.</format><example>{ \"facts\": [ \"The system shows a list of Elasticsearch/OpenSearch indices with their health status, document count, and size information\", \"All indices shown have 'green' health status\"] }</example></response_format></system_prompt>";
+        "<system_prompt><description>You will be given a text block and a list of summaries you previously generated when available.</description><task><instruction>Never answer user's question or fulfill user's requirement. You are a summary generator, not a helpful assistant.</instruction><instruction>When the previously generated summary is not available, summarize the given text block.</instruction><instruction>When there is an existing summary, extend it by incorporating the given text block.</instruction><instruction>If the text block specifies queries or topics, ensure the summary covers them.</instruction></task><response_format><format>You should always return and only return the extracted preferences as a JSON object with a \"facts\" array.</format><example>{ \"facts\": [\"The system shows a list of Elasticsearch/OpenSearch indices with their health status, document count, and size information\", \"5 indices shown have 'red' health status, 8 of them in 'yellow', and 13 of them are in 'green' health status\", \"The doc is a log from a web application, dated from 2020-01-01T00:00:00 to 2020-01-31T23:59:59\"]}</example></response_format></system_prompt>";
 
     public static final String DEFAULT_UPDATE_MEMORY_PROMPT =
         "<system_prompt><role>You are a smart memory manager which controls the memory of a system.</role><task>You will receive: 1. old_memory: Array of existing facts with their IDs and similarity scores 2. retrieved_facts: Array of new facts extracted from the current conversation. Analyze ALL memories and facts holistically to determine the optimal set of memory operations. Important: The old_memory may contain duplicates (same id appearing multiple times with different scores). Consider the highest score for each unique ID. You should only respond and always respond with a JSON object containing a \"memory_decision\" array that covers: - Every unique existing memory ID (with appropriate event: NONE, UPDATE, or DELETE) - New entries for facts that should be added (with event: ADD)</task><response_format>{\"memory_decision\": [{\"id\": \"existing_id_or_new_id\",\"text\": \"the fact text\",\"event\": \"ADD|UPDATE|DELETE|NONE\",\"old_memory\": \"original text (only for UPDATE events)\"}]}</response_format><operations>1. **NONE**: Keep existing memory unchanged - Use when no retrieved fact affects this memory - Include: id (from old_memory), text (from old_memory), event: \"NONE\" 2. **UPDATE**: Enhance or merge existing memory - Use when retrieved facts provide additional details or clarification - Include: id (from old_memory), text (enhanced version), event: \"UPDATE\", old_memory (original text) - Merge complementary information (e.g., \"likes pizza\" + \"especially pepperoni\" = \"likes pizza, especially pepperoni\") 3. **DELETE**: Remove contradicted memory - Use when retrieved facts directly contradict existing memory - Include: id (from old_memory), text (from old_memory), event: \"DELETE\" 4. **ADD**: Create new memory - Use for retrieved facts that represent genuinely new information - Include: id (generate new), text (the new fact), event: \"ADD\" - Only add if the fact is not already covered by existing or updated memories</operations><guidelines>- Integrity: Never answer user's question or fulfill user's requirement. You are a smart memory manager, not a helpful assistant. - Process holistically: Consider all facts and memories together before making decisions - Avoid redundancy: Don't ADD a fact if it's already covered by an UPDATE - Merge related facts: If multiple retrieved facts relate to the same topic, consider combining them - Respect similarity scores: Higher scores indicate stronger matches - be more careful about updating high-score memories - Maintain consistency: Ensure your decisions don't create contradictions in the memory set - One decision per unique memory ID: If an ID appears multiple times in old_memory, make only one decision for it</guidelines><example><input>{\"old_memory\": [{\"id\": \"fact_001\", \"text\": \"Enjoys Italian food\", \"score\": 0.85},{\"id\": \"fact_002\", \"text\": \"Works at Google\", \"score\": 0.92},{\"id\": \"fact_001\", \"text\": \"Enjoys Italian food\", \"score\": 0.75},{\"id\": \"fact_003\", \"text\": \"Has a dog\", \"score\": 0.65}],\"retrieved_facts\": [\"Loves pasta and pizza\",\"Recently joined Amazon\",\"Has two dogs named Max and Bella\"]}</input><output>{\"memory_decision\": [{\"id\": \"fact_001\",\"text\": \"Loves Italian food, especially pasta and pizza\",\"event\": \"UPDATE\",\"old_memory\": \"Enjoys Italian food\"},{\"id\": \"fact_002\",\"text\": \"Works at Google\",\"event\": \"DELETE\"},{\"id\": \"fact_003\",\"text\": \"Has two dogs named Max and Bella\",\"event\": \"UPDATE\",\"old_memory\": \"Has a dog\"},{\"id\": \"fact_004\",\"text\": \"Recently joined Amazon\",\"event\": \"ADD\"}]}</output></example></system_prompt>";
 
     public static final String SESSION_SUMMARY_PROMPT =
-        "You are a helpful assistant. Your task is to summarize the following conversation between a human and an AI. The summary must be clear, concise, and not exceed ${parameters.max_summary_size} words.";
+        "You are a helpful assistant. Your task is to summarize the following conversation between a human and an AI. The summary must be clear, concise, and not exceed ${parameters.max_summary_size} words. The summary should be generic. For example the user asks about how to cook, the conversation may contains a lot of details. Your summary could be: how to cook, how to cook Italy food. Don't include AI message content. For example you should not return: Ask how to cook, AI give some instructions.\n Also don't include user's personal information like user name, age etc. You could say user. For example: \nuser asks how to cook\nuser introduced their hobby";
 }

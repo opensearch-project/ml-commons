@@ -50,9 +50,9 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INFERENCE_TASKS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_batch_inference_tasks",
-            10,
+            100,
             0,
-            500,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -60,9 +60,9 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INGESTION_TASKS = Setting
         .intSetting(
             ML_PLUGIN_SETTING_PREFIX + "max_batch_ingestion_tasks",
-            10,
+            100,
             0,
-            500,
+            10000,
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -311,12 +311,6 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Boolean> ML_COMMONS_AGENTIC_SEARCH_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "agentic_search_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
-    public static final String ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE =
-        "The QueryPlanningTool tool for Agentic Search is not enabled. To enable, please update the setting "
-            + ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey();
-
     public static final Setting<Boolean> ML_COMMONS_MCP_CONNECTOR_ENABLED = Setting
         .boolSetting(ML_PLUGIN_SETTING_PREFIX + "mcp_connector_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE =
@@ -345,7 +339,7 @@ public final class MLCommonsSettings {
 
     // Feature flag for execute tool API
     public static final Setting<Boolean> ML_COMMONS_EXECUTE_TOOL_ENABLED = Setting
-        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "execute_tools_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting(ML_PLUGIN_SETTING_PREFIX + "execute_tools_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE =
         "The Execute Tool API is not enabled. To enable, please update the setting " + ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey();
 

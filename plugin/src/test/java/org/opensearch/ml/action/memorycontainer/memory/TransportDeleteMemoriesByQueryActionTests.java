@@ -14,9 +14,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
 
 import java.util.Collections;
@@ -44,6 +42,7 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesByQueryResponse;
@@ -107,7 +106,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
             .builder()
             .name("test-container")
             .description("Test container")
-            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(false).build())
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(false).disableSession(false).build())
             .build();
 
         // Setup mock user
@@ -129,7 +128,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_Success() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+        MemoryType memoryType = MemoryType.SESSIONS;
         QueryBuilder query = new MatchAllQueryBuilder();
         MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(memoryContainerId, memoryType, query);
 
@@ -167,7 +166,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_FeatureDisabled() {
         // Arrange
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
-        MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest("container-123", MEM_CONTAINER_MEMORY_TYPE_SESSIONS, null);
+        MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest("container-123", MemoryType.SESSIONS, null);
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -186,11 +185,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_ContainerNotFound() {
         // Arrange
         String memoryContainerId = "non-existent";
-        MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(
-            memoryContainerId,
-            MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-            null
-        );
+        MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(memoryContainerId, MemoryType.SESSIONS, null);
 
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
@@ -214,11 +209,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_AccessDenied() {
         // Arrange
         String memoryContainerId = "container-123";
-        MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(
-            memoryContainerId,
-            MEM_CONTAINER_MEMORY_TYPE_SESSIONS,
-            null
-        );
+        MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(memoryContainerId, MemoryType.SESSIONS, null);
 
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
@@ -246,7 +237,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_NullQueryThrowsException() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "working";
+        MemoryType memoryType = MemoryType.WORKING;
         MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(memoryContainerId, memoryType, null);
 
         doAnswer(invocation -> {
@@ -276,9 +267,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
     @Test
     public void testDoExecute_InvalidMemoryType() {
-        // Arrange
+        // Arrange - Create a container with disabled sessions
+        MLMemoryContainer containerWithDisabledSessions = MLMemoryContainer
+            .builder()
+            .name("test-container")
+            .description("Test container with disabled sessions")
+            .configuration(MemoryConfiguration.builder().indexPrefix("test-memory").useSystemIndex(false).disableSession(true).build())
+            .build();
+
         String memoryContainerId = "container-123";
-        String memoryType = "invalid_type";
+        MemoryType memoryType = MemoryType.SESSIONS;
         // Provide explicit query
         MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(
             memoryContainerId,
@@ -288,11 +286,11 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
 
         doAnswer(invocation -> {
             ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
-            listener.onResponse(mockContainer);
+            listener.onResponse(containerWithDisabledSessions);
             return null;
         }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
 
-        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(containerWithDisabledSessions))).thenReturn(true);
 
         // Act
         transportAction.doExecute(task, request, actionListener);
@@ -311,7 +309,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_SystemIndexHandling() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
+        MemoryType memoryType = MemoryType.LONG_TERM;
 
         // Configure container with system index
         mockContainer = MLMemoryContainer
@@ -356,7 +354,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_DeleteByQueryFailure() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "history";
+        MemoryType memoryType = MemoryType.HISTORY;
         MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(
             memoryContainerId,
             memoryType,
@@ -394,7 +392,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_AdminUserNoOwnerFilter() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+        MemoryType memoryType = MemoryType.SESSIONS;
 
         // Create an admin user with all_access role
         User adminUser = new User("admin-user", List.of("admin-backend"), List.of("all_access"), List.of());
@@ -413,6 +411,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock addContainerIdFilter to add container ID filter
+        when(memoryContainerHelper.addContainerIdFilter(anyString(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            String containerId = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+            return filteredQuery;
+        });
 
         // Mock addOwnerIdFilter to return the original query for admin users
         when(memoryContainerHelper.addOwnerIdFilter(any(User.class), any(QueryBuilder.class))).thenAnswer(invocation -> {
@@ -436,14 +444,15 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         DeleteByQueryRequest capturedRequest = deleteRequestCaptor.getValue();
         assertNotNull(capturedRequest);
         assertNotNull(capturedRequest.getSearchRequest().source().query());
-        // For admin users with all_access, the query should not be wrapped in a bool filter
+        // Query should have container ID filter applied
         String queryString = capturedRequest.getSearchRequest().source().query().toString();
-        assertTrue("Admin user query should be match_all, not wrapped in bool: " + queryString, queryString.contains("match_all"));
+        assertTrue("Query should contain memory_container_id filter: " + queryString, queryString.contains("memory_container_id"));
+        assertTrue("Query should contain bool filter: " + queryString, queryString.contains("bool"));
     }
 
     @Test
     public void testDoExecute_AllMemoryTypes() throws Exception {
-        for (String memoryType : VALID_MEMORY_TYPES) {
+        for (MemoryType memoryType : MemoryType.values()) {
             setUp();
 
             // Arrange
@@ -484,7 +493,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_NonAdminUserWithOwnerFilter() {
         // Arrange - Non-admin user should have owner filter applied
         String memoryContainerId = "container-123";
-        String memoryType = "working";
+        MemoryType memoryType = MemoryType.WORKING;
 
         // Create a regular user without all_access role
         User regularUser = new User("regular-user", List.of("backend-role"), List.of("ml_user"), List.of());
@@ -503,6 +512,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock addContainerIdFilter to add container ID filter
+        when(memoryContainerHelper.addContainerIdFilter(anyString(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            String containerId = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+            return filteredQuery;
+        });
 
         // Mock addOwnerIdFilter to simulate adding owner filter for non-admin users
         when(memoryContainerHelper.addOwnerIdFilter(any(User.class), any(QueryBuilder.class))).thenAnswer(invocation -> {
@@ -541,7 +560,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_NullUserNoOwnerFilter() {
         // Arrange - Null user (security disabled) should not have owner filter
         String memoryContainerId = "container-123";
-        String memoryType = MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+        MemoryType memoryType = MemoryType.SESSIONS;
 
         // No user in context (security disabled)
         MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(
@@ -557,6 +576,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         }).when(memoryContainerHelper).getMemoryContainer(eq(memoryContainerId), any());
 
         when(memoryContainerHelper.checkMemoryContainerAccess(any(), eq(mockContainer))).thenReturn(true);
+
+        // Mock addContainerIdFilter to add container ID filter
+        when(memoryContainerHelper.addContainerIdFilter(anyString(), any(QueryBuilder.class))).thenAnswer(invocation -> {
+            String containerId = invocation.getArgument(0);
+            QueryBuilder query = invocation.getArgument(1);
+            BoolQueryBuilder filteredQuery = QueryBuilders.boolQuery();
+            filteredQuery.must(query);
+            filteredQuery.filter(QueryBuilders.termQuery(MEMORY_CONTAINER_ID_FIELD, containerId));
+            return filteredQuery;
+        });
 
         // Mock addOwnerIdFilter to return original query for null user (security disabled)
         when(memoryContainerHelper.addOwnerIdFilter(any(), any(QueryBuilder.class))).thenAnswer(invocation -> {
@@ -580,16 +609,16 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
         DeleteByQueryRequest capturedRequest = deleteRequestCaptor.getValue();
         assertNotNull(capturedRequest);
         String queryString = capturedRequest.getSearchRequest().source().query().toString();
-        // With null user, query should not be wrapped in bool filter
-        assertTrue("Null user query should be term query: " + queryString, queryString.contains("term"));
-        assertFalse("Null user query should not have bool filter: " + queryString, queryString.contains("bool"));
+        // With container ID filter, query should now be wrapped in bool filter
+        assertTrue("Query should contain bool filter for container ID: " + queryString, queryString.contains("bool"));
+        assertTrue("Query should contain memory_container_id: " + queryString, queryString.contains("memory_container_id"));
     }
 
     @Test
     public void testDoExecute_DisabledSessionMemory() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = MEM_CONTAINER_MEMORY_TYPE_SESSIONS;
+        MemoryType memoryType = MemoryType.SESSIONS;
 
         // Create container with session disabled
         mockContainer = MLMemoryContainer
@@ -635,7 +664,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_DisabledHistoryMemory() {
         // Arrange
         String memoryContainerId = "container-123";
-        String memoryType = "history";
+        MemoryType memoryType = MemoryType.HISTORY;
 
         // Create container with history disabled
         mockContainer = MLMemoryContainer
@@ -681,7 +710,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_WithBulkResponseVariations() {
         // Arrange - Test response handler with deleted count
         String memoryContainerId = "container-123";
-        String memoryType = "working";
+        MemoryType memoryType = MemoryType.WORKING;
         MLDeleteMemoriesByQueryRequest request = new MLDeleteMemoriesByQueryRequest(
             memoryContainerId,
             memoryType,
@@ -717,7 +746,7 @@ public class TransportDeleteMemoriesByQueryActionTests extends OpenSearchTestCas
     public void testDoExecute_SystemIndexExceptionHandling() {
         // Arrange - Test system index exception handling branch
         String memoryContainerId = "container-123";
-        String memoryType = MEM_CONTAINER_MEMORY_TYPE_LONG_TERM;
+        MemoryType memoryType = MemoryType.LONG_TERM;
 
         // Create container with system index enabled
         mockContainer = MLMemoryContainer

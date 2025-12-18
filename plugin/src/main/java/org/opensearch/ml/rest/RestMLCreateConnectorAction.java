@@ -13,7 +13,10 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -21,13 +24,14 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestRequestFilter;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLCreateConnectorAction extends BaseRestHandler {
+public class RestMLCreateConnectorAction extends BaseRestHandler implements RestRequestFilter {
     private static final String ML_CREATE_CONNECTOR_ACTION = "ml_create_connector_action";
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -64,7 +68,7 @@ public class RestMLCreateConnectorAction extends BaseRestHandler {
     @VisibleForTesting
     MLCreateConnectorRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
         if (!request.hasContent()) {
             throw new IOException("Create Connector request has empty body");
@@ -75,5 +79,10 @@ public class RestMLCreateConnectorAction extends BaseRestHandler {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         mlCreateConnectorInput.setTenantId(tenantId);
         return new MLCreateConnectorRequest(mlCreateConnectorInput);
+    }
+
+    @Override
+    public Set<String> getFilteredFields() {
+        return Set.of("credential", "*.Authorization");
     }
 }

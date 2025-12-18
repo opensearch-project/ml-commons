@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
+import static org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput.validateBackendRoles;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,21 +23,27 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.memorycontainer.MemoryConfiguration;
 
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable {
+    public static final String MEMORY_CONFIG_FIELD = "configuration";
+
     private String name;
     private String description;
     private List<String> backendRoles;
+    private MemoryConfiguration configuration;
 
     @Builder
-    public MLUpdateMemoryContainerInput(String name, String description, List<String> backendRoles) {
+    public MLUpdateMemoryContainerInput(String name, String description, List<String> backendRoles, MemoryConfiguration configuration) {
         this.name = name;
         this.description = description;
+        validateBackendRoles(backendRoles);
         this.backendRoles = backendRoles;
+        this.configuration = configuration;
     }
 
     public MLUpdateMemoryContainerInput(StreamInput in) throws IOException {
@@ -44,6 +51,9 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
             backendRoles = in.readStringList();
+        }
+        if (in.readBoolean()) {
+            this.configuration = new MemoryConfiguration(in);
         }
     }
 
@@ -55,6 +65,13 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         if (!CollectionUtils.isEmpty(backendRoles)) {
             out.writeBoolean(true);
             out.writeStringCollection(backendRoles);
+        } else {
+            out.writeBoolean(false);
+        }
+
+        if (configuration != null) {
+            out.writeBoolean(true);
+            configuration.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -72,6 +89,9 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         if (!CollectionUtils.isEmpty(backendRoles)) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
+        if (configuration != null) {
+            builder.field(MEMORY_CONFIG_FIELD, configuration);
+        }
         builder.endObject();
         return builder;
     }
@@ -80,6 +100,7 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
         String name = null;
         String description = null;
         List<String> backendRoles = null;
+        MemoryConfiguration configuration = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -100,13 +121,22 @@ public class MLUpdateMemoryContainerInput implements ToXContentObject, Writeable
                         backendRoles.add(parser.text());
                     }
                     break;
+                case MEMORY_CONFIG_FIELD:
+                    configuration = MemoryConfiguration.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
 
-        return MLUpdateMemoryContainerInput.builder().name(name).description(description).backendRoles(backendRoles).build();
+        return MLUpdateMemoryContainerInput
+            .builder()
+            .name(name)
+            .description(description)
+            .backendRoles(backendRoles)
+            .configuration(configuration)
+            .build();
     }
 
 }

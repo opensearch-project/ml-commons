@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.SKIP_VALIDATE_MISSING_PARAMETERS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.escapeRemoteInferenceInputData;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+import static org.opensearch.ml.engine.processor.ProcessorChain.INPUT_PROCESSORS;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -18,7 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -54,6 +54,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamPredictActionListener;
+import org.opensearch.ml.engine.processor.ProcessorChain;
 import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportChannel;
@@ -181,7 +182,7 @@ public interface RemoteConnectorExecutor {
 
     default void setClient(Client client) {}
 
-    default void setConnectorPrivateIpEnabled(AtomicBoolean connectorPrivateIpEnabled) {}
+    default void setConnectorPrivateIpEnabled(boolean connectorPrivateIpEnabled) {}
 
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
 
@@ -242,6 +243,13 @@ public interface RemoteConnectorExecutor {
         // override again to always prioritize the input parameter
         parameters.putAll(inputParameters);
         String payload = connector.createPayload(action, parameters);
+
+        List<Map<String, Object>> processorConfigs = ProcessorChain.extractProcessorConfigs(parameters, INPUT_PROCESSORS);
+        if (!processorConfigs.isEmpty()) {
+            ProcessorChain processorChain = new ProcessorChain(processorConfigs);
+            payload = StringUtils.toJson(processorChain.process(payload));
+        }
+
         if (!Boolean.parseBoolean(parameters.getOrDefault(SKIP_VALIDATE_MISSING_PARAMETERS, "false"))) {
             connector.validatePayload(payload);
         }

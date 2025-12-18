@@ -18,6 +18,7 @@ import java.util.Locale;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
@@ -69,7 +70,8 @@ public class RestMLGetMemoryAction extends BaseRestHandler {
     @VisibleForTesting
     MLGetMemoryRequest getRequest(RestRequest request) throws IOException {
         String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
-        String memoryType = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        String memoryTypeStr = getParameterId(request, PARAMETER_MEMORY_TYPE);
+        MemoryType memoryType = MemoryType.fromString(memoryTypeStr);
         String memoryId = getParameterId(request, PARAMETER_MEMORY_ID);
         return new MLGetMemoryRequest(memoryContainerId, memoryType, memoryId);
     }

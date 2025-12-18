@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_I
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENTS_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.METADATA_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_ID_FIELD;
@@ -42,6 +43,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
 
     // Required fields
     private String ownerId;
+    private String memoryContainerId;
     private String summary;
     private Instant createdTime;
     private Instant lastUpdateTime;
@@ -53,6 +55,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
 
     public MLMemorySession(
         String ownerId,
+        String memoryContainerId,
         String summary,
         Instant createdTime,
         Instant lastUpdateTime,
@@ -63,6 +66,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         String tenantId
     ) {
         this.ownerId = ownerId;
+        this.memoryContainerId = memoryContainerId;
         this.summary = summary;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -75,6 +79,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
 
     public MLMemorySession(StreamInput in) throws IOException {
         this.ownerId = in.readOptionalString();
+        this.memoryContainerId = in.readOptionalString();
         this.summary = in.readOptionalString();
         this.createdTime = in.readOptionalInstant();
         this.lastUpdateTime = in.readOptionalInstant();
@@ -96,6 +101,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(ownerId);
+        out.writeOptionalString(memoryContainerId);
         out.writeOptionalString(summary);
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
@@ -133,6 +139,9 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         if (ownerId != null) {
             builder.field(OWNER_ID_FIELD, ownerId);
         }
+        if (memoryContainerId != null) {
+            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
+        }
         if (summary != null) {
             builder.field(SUMMARY_FIELD, summary);
         }
@@ -163,6 +172,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
 
     public static MLMemorySession parse(XContentParser parser) throws IOException {
         String ownerId = null;
+        String memoryContainerId = null;
         String summary = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
@@ -180,6 +190,9 @@ public class MLMemorySession implements ToXContentObject, Writeable {
             switch (fieldName) {
                 case OWNER_ID_FIELD:
                     ownerId = parser.text();
+                    break;
+                case MEMORY_CONTAINER_ID_FIELD:
+                    memoryContainerId = parser.text();
                     break;
                 case SUMMARY_FIELD:
                     summary = parser.text();
@@ -214,6 +227,7 @@ public class MLMemorySession implements ToXContentObject, Writeable {
         return MLMemorySession
             .builder()
             .ownerId(ownerId)
+            .memoryContainerId(memoryContainerId)
             .summary(summary)
             .createdTime(createdTime)
             .lastUpdateTime(lastUpdateTime)

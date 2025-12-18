@@ -320,7 +320,7 @@ public class RestMLPredictionStreamAction extends BaseRestHandler {
             throw new IllegalStateException("Streaming is only supported for remote models");
         }
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
         if (ActionType.BATCH_PREDICT == actionType) {
             throw new IllegalStateException("Streaming is not supported for batch predict.");

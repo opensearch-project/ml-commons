@@ -18,6 +18,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -25,11 +26,11 @@ import lombok.Getter;
 @Getter
 public class MLDeleteMemoryRequest extends ActionRequest {
     private final String memoryContainerId;
-    private final String memoryType;
+    private final MemoryType memoryType;
     private final String memoryId;
 
     @Builder
-    public MLDeleteMemoryRequest(String memoryContainerId, String memoryType, String memoryId) {
+    public MLDeleteMemoryRequest(String memoryContainerId, MemoryType memoryType, String memoryId) {
         this.memoryContainerId = memoryContainerId;
         this.memoryType = memoryType;
         this.memoryId = memoryId;
@@ -38,7 +39,7 @@ public class MLDeleteMemoryRequest extends ActionRequest {
     public MLDeleteMemoryRequest(StreamInput input) throws IOException {
         super(input);
         this.memoryContainerId = input.readString();
-        this.memoryType = input.readString();
+        this.memoryType = input.readEnum(MemoryType.class);
         this.memoryId = input.readString();
     }
 
@@ -46,7 +47,7 @@ public class MLDeleteMemoryRequest extends ActionRequest {
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         output.writeString(memoryContainerId);
-        output.writeString(memoryType);
+        output.writeEnum(memoryType);
         output.writeString(memoryId);
     }
 

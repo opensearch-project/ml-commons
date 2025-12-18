@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.QueryBuilder;
@@ -20,6 +19,7 @@ import org.opensearch.ml.common.memorycontainer.MemoryStrategy;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.MemorySearchQueryBuilder;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -75,9 +75,9 @@ public class MemorySearchService {
 
         try {
             QueryBuilder queryBuilder = MemorySearchQueryBuilder
-                .buildFactSearchQuery(strategy, fact, input.getNamespace(), input.getOwnerId(), memoryConfig);
+                .buildFactSearchQuery(strategy, fact, input.getNamespace(), input.getOwnerId(), memoryConfig, input.getMemoryContainerId());
 
-            log.debug("Searching for similar facts with query: {}", queryBuilder.toString());
+            log.debug("Searching for similar facts");
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             searchSourceBuilder.query(queryBuilder);
@@ -85,7 +85,14 @@ public class MemorySearchService {
             searchSourceBuilder.fetchSource(new String[] { MEMORY_FIELD }, null);
 
             String indexName = memoryConfig.getLongMemoryIndexName();
-            SearchRequest searchRequest = new SearchRequest().indices(indexName).source(searchSourceBuilder);
+            String tenantId = memoryConfig.getTenantId();
+
+            SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+                .builder()
+                .indices(indexName)
+                .searchSourceBuilder(searchSourceBuilder)
+                .tenantId(tenantId)
+                .build();
 
             ActionListener<SearchResponse> searchResponseActionListener = ActionListener.wrap(response -> {
                 for (SearchHit hit : response.getHits().getHits()) {
@@ -96,16 +103,16 @@ public class MemorySearchService {
                     }
                 }
 
-                log.debug("Found {} similar facts for: {}", response.getHits().getHits().length, fact);
+                log.debug("Found {} similar facts", response.getHits().getHits().length);
 
                 searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             }, e -> {
-                log.error("Failed to search for similar facts for: {}", fact, e);
+                log.error("Failed to search for similar facts");
                 searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
             });
             memoryContainerHelper.searchData(memoryConfig, searchRequest, searchResponseActionListener);
         } catch (Exception e) {
-            log.error("Failed to build search query for fact: {}", fact, e);
+            log.error("Failed to build search query for facts");
             searchFactsSequentially(strategy, input, facts, currentIndex + 1, memoryConfig, maxInferSize, allResults, listener);
         }
     }

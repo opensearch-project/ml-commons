@@ -15,21 +15,25 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestRequestFilter;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLUpdateConnectorAction extends BaseRestHandler {
+public class RestMLUpdateConnectorAction extends BaseRestHandler implements RestRequestFilter {
     private static final String ML_UPDATE_CONNECTOR_ACTION = "ml_update_connector_action";
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -58,7 +62,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
     @VisibleForTesting
     private MLUpdateConnectorRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
 
         if (!request.hasContent()) {
@@ -75,5 +79,10 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
         } catch (IllegalStateException illegalStateException) {
             throw new OpenSearchParseException(illegalStateException.getMessage());
         }
+    }
+
+    @Override
+    public Set<String> getFilteredFields() {
+        return Set.of("credential", "*.Authorization");
     }
 }

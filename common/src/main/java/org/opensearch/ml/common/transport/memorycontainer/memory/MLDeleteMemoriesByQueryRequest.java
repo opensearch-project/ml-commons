@@ -8,12 +8,10 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 import static org.opensearch.action.ValidateActions.addValidationError;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
-import static org.opensearch.ml.common.memorycontainer.MemoryConfiguration.VALID_MEMORY_TYPES;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_TYPE;
 
 import java.io.IOException;
-import java.util.Locale;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -23,6 +21,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -37,10 +36,10 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     private static final String QUERY_FIELD = "query";
 
     private String memoryContainerId;
-    private String memoryType;
+    private MemoryType memoryType;
     private QueryBuilder query;
 
-    public MLDeleteMemoriesByQueryRequest(String memoryContainerId, String memoryType, QueryBuilder query) {
+    public MLDeleteMemoriesByQueryRequest(String memoryContainerId, MemoryType memoryType, QueryBuilder query) {
         this.memoryContainerId = memoryContainerId;
         this.memoryType = memoryType;
         this.query = query;
@@ -49,7 +48,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     public MLDeleteMemoriesByQueryRequest(StreamInput in) throws IOException {
         super(in);
         this.memoryContainerId = in.readString();
-        this.memoryType = in.readString();
+        this.memoryType = in.readEnum(MemoryType.class);
         this.query = in.readNamedWriteable(QueryBuilder.class);
     }
 
@@ -57,7 +56,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(memoryContainerId);
-        out.writeString(memoryType);
+        out.writeEnum(memoryType);
         out.writeNamedWriteable(query);
     }
 
@@ -69,17 +68,8 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
             validationException = addValidationError("Memory container ID is required", validationException);
         }
 
-        if (memoryType == null || memoryType.isEmpty()) {
+        if (memoryType == null) {
             validationException = addValidationError("Memory type is required", validationException);
-        } else {
-            // Validate memory type is one of the allowed values
-            String normalizedType = memoryType.toLowerCase(Locale.ROOT);
-            if (!VALID_MEMORY_TYPES.contains(normalizedType)) {
-                validationException = addValidationError(
-                    "Invalid memory type. Must be one of: session, working, long_term, history",
-                    validationException
-                );
-            }
         }
 
         if (query == null) {
@@ -93,7 +83,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(PARAMETER_MEMORY_CONTAINER_ID, memoryContainerId);
-        builder.field(PARAMETER_MEMORY_TYPE, memoryType);
+        builder.field(PARAMETER_MEMORY_TYPE, memoryType.getValue());
         builder.field(QUERY_FIELD, query);
         builder.endObject();
         return builder;
@@ -101,7 +91,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
 
     public static MLDeleteMemoriesByQueryRequest parse(XContentParser parser) throws IOException {
         String memoryContainerId = null;
-        String memoryType = null;
+        MemoryType memoryType = null;
         QueryBuilder query = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -114,7 +104,7 @@ public class MLDeleteMemoriesByQueryRequest extends ActionRequest implements ToX
                     memoryContainerId = parser.text();
                     break;
                 case PARAMETER_MEMORY_TYPE:
-                    memoryType = parser.text();
+                    memoryType = MemoryType.fromString(parser.text());
                     break;
                 case QUERY_FIELD:
                     query = parseQuery(parser);

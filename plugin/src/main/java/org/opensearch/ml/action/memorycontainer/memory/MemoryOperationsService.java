@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ACTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_AFTER_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_BEFORE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAMESPACE_FIELD;
@@ -59,13 +60,9 @@ public class MemoryOperationsService {
      * Maps strategy type to corresponding MemoryType
      */
     private MemoryStrategyType getMemoryTypeFromStrategy(MemoryStrategy strategy) {
-        String strategyType = strategy.getType();
-        if ("user_preference".equalsIgnoreCase(strategyType)) {
-            return MemoryStrategyType.USER_PREFERENCE;
-        } else if ("summary".equalsIgnoreCase(strategyType)) {
-            return MemoryStrategyType.SUMMARY;
-        }
-        return MemoryStrategyType.SEMANTIC; // Default for "semantic" and any other types
+        MemoryStrategyType type = strategy.getType();
+        // Just return the type directly since it's already a MemoryStrategyType
+        return type != null ? type : MemoryStrategyType.SEMANTIC; // Default to SEMANTIC if null
     }
 
     public void executeMemoryOperations(
@@ -93,6 +90,7 @@ public class MemoryOperationsService {
                     MLLongTermMemory newMemory = MLLongTermMemory
                         .builder()
                         .ownerId(input.getOwnerId())
+                        .memoryContainerId(input.getMemoryContainerId())
                         .memory(decision.getText())
                         .strategyType(getMemoryTypeFromStrategy(strategy))
                         .namespace(namespace)
@@ -173,6 +171,7 @@ public class MemoryOperationsService {
             listener.onResponse(results);
             return;
         }
+        bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         ActionListener<BulkResponse> bulkResponseActionListener = ActionListener.wrap(bulkResponse -> {
             if (bulkResponse.hasFailures()) {
@@ -199,8 +198,12 @@ public class MemoryOperationsService {
             BulkRequest bulkHistoryRequest = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             for (MemoryResult memoryResult : results) {
                 bulkHistoryRequest
-                    .add(new IndexRequest(longTermMemoryHistoryIndex).source(createMemoryHistory(memoryResult, namespace, input)));
+                    .add(
+                        new IndexRequest(longTermMemoryHistoryIndex)
+                            .source(createMemoryHistory(memoryResult, namespace, input, input.getMemoryContainerId()))
+                    );
             }
+            bulkHistoryRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             ActionListener<BulkResponse> bulkHistoryResponseListener = ActionListener.wrap(bulkHistoryResponse -> {
                 if (bulkHistoryResponse.hasFailures()) {
                     log.error("Bulk memory history operations had failures: {}", bulkHistoryResponse.buildFailureMessage());
@@ -224,7 +227,12 @@ public class MemoryOperationsService {
         MLAddMemoriesInput input,
         Exception exception
     ) {
-        Map<String, Object> errorMemoryHistory = createErrorMemoryHistory(strategyNamespace, input, exception);
+        Map<String, Object> errorMemoryHistory = createErrorMemoryHistory(
+            strategyNamespace,
+            input,
+            exception,
+            input.getMemoryContainerId()
+        );
         IndexRequest indexRequest = new IndexRequest(configuration.getLongMemoryHistoryIndexName());
         indexRequest.source(errorMemoryHistory);
         memoryContainerHelper.indexData(configuration, indexRequest, ActionListener.wrap(r -> {
@@ -235,13 +243,17 @@ public class MemoryOperationsService {
     public Map<String, Object> createErrorMemoryHistory(
         Map<String, String> strategyNamespace,
         MLAddMemoriesInput input,
-        Exception exception
+        Exception exception,
+        String memoryContainerId
     ) {
         Map<String, Object> history = new HashMap<>();
         String ownerId = input.getOwnerId();
         Map<String, String> tags = input.getTags();
         if (ownerId == null) {
             history.put(OWNER_ID_FIELD, ownerId);
+        }
+        if (memoryContainerId != null) {
+            history.put(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         history.put(CREATED_TIME_FIELD, Instant.now().toEpochMilli());
         if (strategyNamespace != null && strategyNamespace.size() > 0) {
@@ -258,11 +270,15 @@ public class MemoryOperationsService {
     private Map<String, Object> createMemoryHistory(
         MemoryResult memoryResult,
         Map<String, String> strategyNamespace,
-        MLAddMemoriesInput input
+        MLAddMemoriesInput input,
+        String memoryContainerId
     ) {
         Map<String, Object> history = new HashMap<>();
         if (memoryResult.getOwnerId() != null) {
             history.put(OWNER_ID_FIELD, memoryResult.getOwnerId());
+        }
+        if (memoryContainerId != null) {
+            history.put(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         history.put(MEMORY_ID_FIELD, memoryResult.getMemoryId());
         history.put(MEMORY_ACTION_FIELD, memoryResult.getEvent().getValue());
@@ -295,7 +311,8 @@ public class MemoryOperationsService {
         User user,
         MemoryStrategy strategy,
         List<IndexRequest> indexRequests,
-        List<MemoryInfo> memoryInfos
+        List<MemoryInfo> memoryInfos,
+        String memoryContainerId
     ) {
         Instant now = Instant.now();
 
@@ -306,6 +323,7 @@ public class MemoryOperationsService {
                 .strategyType(getMemoryTypeFromStrategy(strategy))
                 .namespace(strategyNameSpace)
                 .tags(input.getTags())
+                .memoryContainerId(memoryContainerId)
                 .strategyId(strategy.getId())
                 .createdTime(now)
                 .lastUpdatedTime(now)

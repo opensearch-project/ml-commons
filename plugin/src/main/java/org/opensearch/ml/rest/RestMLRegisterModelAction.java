@@ -17,9 +17,12 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -28,13 +31,14 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestRequestFilter;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLRegisterModelAction extends BaseRestHandler {
+public class RestMLRegisterModelAction extends BaseRestHandler implements RestRequestFilter {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -101,10 +105,15 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         mlInput.setTenantId(tenantId);
         if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(REMOTE_INFERENCE_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         } else if (FunctionName.isDLModel(mlInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+            throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
         return new MLRegisterModelRequest(mlInput);
+    }
+
+    @Override
+    public Set<String> getFilteredFields() {
+        return Set.of("connector.credential", "*.Authorization");
     }
 }
