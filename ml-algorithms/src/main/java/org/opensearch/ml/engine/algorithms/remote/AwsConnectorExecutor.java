@@ -75,9 +75,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     @Getter
     private StreamTransportService streamTransportService;
 
-    @Setter
-    private volatile boolean connectorPrivateIpEnabled;
-
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (AwsConnector) connector;
