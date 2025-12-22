@@ -338,7 +338,7 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "        \"model\": \"command-r-08-2024\"\n"
         + "    },\n"
         + "    \"client_config\": {\n"
-        + "        \"read_timeout\": 60\n"
+        + "        \"read_timeout\": 60000\n"
         + "    },\n"
         + "    \"actions\": [\n"
         + "        {\n"
