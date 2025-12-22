@@ -133,7 +133,7 @@ public class EncryptorImpl implements Encryptor {
     private void initMasterKey(String tenantId, ActionListener<Boolean> listener) {
         tenantId = Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID);
         if (tenantMasterKeys.containsKey(tenantId)) {
-            log.info("Master key is already available for tenant {}", tenantId);
+            log.trace("Master key is already available for tenant {}", tenantId);
             listener.onResponse(true);
             return;
         }
@@ -141,14 +141,18 @@ public class EncryptorImpl implements Encryptor {
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.computeIfAbsent(tenantId, k -> new ArrayList<>());
         synchronized (waitingListeners) {
             if (tenantMasterKeys.containsKey(tenantId)) {
-                log.info("Master key generation is handled by other thread for tenant {}", tenantId);
+                log.debug("Master key generation is handled by other thread for tenant {}", tenantId);
                 listener.onResponse(true);
                 return;
             }
             boolean isFirstThread = waitingListeners.isEmpty();
             waitingListeners.add(listener);
             if (!isFirstThread) {
-                log.info("Master key generation is already initiated by other thread for tenant {}", tenantId);
+                log
+                    .debug(
+                        "Master key generation for tenant {} already initiated by another thread - request queued until completion",
+                        tenantId
+                    );
                 return;
             }
         }
@@ -160,8 +164,8 @@ public class EncryptorImpl implements Encryptor {
 
     private void handleSuccess(String tenantId, String masterKey) {
         this.tenantMasterKeys.put(tenantId, masterKey);
-        log.info("ML encryption master key initialized for tenant {}, no action needed", tenantId);
         List<ActionListener<Boolean>> waitingListeners = tenantWaitingListenerMap.remove(tenantId);
+        log.info("ML encryption master key initialized for tenant {}, responding to {} queued requests", tenantId, waitingListeners.size());
         synchronized (waitingListeners) {
             waitingListeners.forEach(listener -> listener.onResponse(true));
             waitingListeners.clear();
