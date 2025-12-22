@@ -51,6 +51,9 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
         + OPENAI_KEY
         + "\"\n"
         + "  },\n"
+        + "\"client_config\": {\n"
+        + "    \"read_timeout\": 60000\n"
+        + "  },\n"
         + "  \"actions\": [\n"
         + "      {\n"
         + "      \"action_type\": \"predict\",\n"

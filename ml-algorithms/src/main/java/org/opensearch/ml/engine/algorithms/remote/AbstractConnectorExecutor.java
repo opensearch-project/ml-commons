@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import java.time.Duration;
-import java.util.concurrent.atomic.AtomicReference;
-
 import java.net.http.HttpRequest;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.support.ThreadedActionListener;
@@ -18,13 +18,13 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.httpclient.MLHttpClientFactory;
+import org.opensearch.ml.common.output.model.ModelTensors;
 
 import lombok.Getter;
 import lombok.Setter;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 @Log4j2
 @Setter
@@ -34,7 +34,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
     @Setter
     private volatile boolean connectorPrivateIpEnabled;
 
-    private volatile AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
+    private final AtomicReference<SdkAsyncHttpClient> httpClientRef = new AtomicReference<>();
 
     private ConnectorClientConfig connectorClientConfig = new ConnectorClientConfig();
 
@@ -45,17 +45,37 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
     }
 
     protected SdkAsyncHttpClient getHttpClient() {
-        if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofMillis(connectorClientConfig.getConnectionTimeoutMillis());
-            Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeoutSeconds());
-            Integer maxConnection = connectorClientConfig.getMaxConnections();
-            this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
-                );
+        // This block for high performance retrieval after http client is created.
+        SdkAsyncHttpClient existingClient = httpClientRef.get();
+        if (existingClient != null) {
+            return existingClient;
         }
-        return httpClientRef.get();
+        // This block handles concurrent http client creation.
+        synchronized (this) {
+            existingClient = httpClientRef.get();
+            if (existingClient != null) {
+                return existingClient;
+            }
+            Duration connectionTimeout = Duration
+                .ofMillis(
+                    Optional
+                        .ofNullable(connectorClientConfig.getConnectionTimeoutMillis())
+                        .orElse(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE)
+                );
+            Duration readTimeout = Duration
+                .ofMillis(
+                    Optional
+                        .ofNullable(connectorClientConfig.getReadTimeoutMillis())
+                        .orElse(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE)
+                );
+            int maxConnection = Optional
+                .ofNullable(connectorClientConfig.getMaxConnections())
+                .orElse(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE);
+            SdkAsyncHttpClient newClient = MLHttpClientFactory
+                .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled);
+            httpClientRef.set(newClient);
+            return newClient;
+        }
     }
 
     /**
@@ -88,7 +108,7 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
     }
 
     public void close() {
-        SdkAsyncHttpClient httpClient = httpClientRef.get();
+        SdkAsyncHttpClient httpClient = httpClientRef.getAndSet(null);
         if (httpClient != null) {
             httpClient.close();
         }
