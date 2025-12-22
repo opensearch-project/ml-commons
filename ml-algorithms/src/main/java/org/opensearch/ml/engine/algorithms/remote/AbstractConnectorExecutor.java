@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.ml.common.connector.Connector;
@@ -34,21 +35,41 @@ public abstract class AbstractConnectorExecutor implements RemoteConnectorExecut
     }
 
     protected SdkAsyncHttpClient getHttpClient() {
-        if (httpClientRef.get() == null) {
-            Duration connectionTimeout = Duration.ofMillis(connectorClientConfig.getConnectionTimeoutMillis());
-            Duration readTimeout = Duration.ofSeconds(connectorClientConfig.getReadTimeoutSeconds());
-            Integer maxConnection = connectorClientConfig.getMaxConnections();
-            this.httpClientRef
-                .compareAndSet(
-                    null,
-                    MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled)
-                );
+        // This block for high performance retrieval after http client is created.
+        SdkAsyncHttpClient existingClient = httpClientRef.get();
+        if (existingClient != null) {
+            return existingClient;
         }
-        return httpClientRef.get();
+        // This block handles concurrent http client creation.
+        synchronized (this) {
+            existingClient = httpClientRef.get();
+            if (existingClient != null) {
+                return existingClient;
+            }
+            Duration connectionTimeout = Duration
+                .ofMillis(
+                    Optional
+                        .ofNullable(connectorClientConfig.getConnectionTimeoutMillis())
+                        .orElse(ConnectorClientConfig.CONNECTION_TIMEOUT_DEFAULT_VALUE)
+                );
+            Duration readTimeout = Duration
+                .ofSeconds(
+                    Optional
+                        .ofNullable(connectorClientConfig.getReadTimeoutSeconds())
+                        .orElse(ConnectorClientConfig.READ_TIMEOUT_DEFAULT_VALUE)
+                );
+            int maxConnection = Optional
+                .ofNullable(connectorClientConfig.getMaxConnections())
+                .orElse(ConnectorClientConfig.MAX_CONNECTION_DEFAULT_VALUE);
+            SdkAsyncHttpClient newClient = MLHttpClientFactory
+                .getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection, connectorPrivateIpEnabled);
+            httpClientRef.set(newClient);
+            return newClient;
+        }
     }
 
     public void close() {
-        SdkAsyncHttpClient httpClient = httpClientRef.get();
+        SdkAsyncHttpClient httpClient = httpClientRef.getAndSet(null);
         if (httpClient != null) {
             httpClient.close();
         }
