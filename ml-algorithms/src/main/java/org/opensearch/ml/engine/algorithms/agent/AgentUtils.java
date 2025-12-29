@@ -69,6 +69,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -1010,6 +1011,10 @@ public class AgentUtils {
             toolParams.putAll(runtimeResources);
         }
         Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+
+        // Map<String, Class<?>> toolParamDef = tool.getToolParamsDefinition();
+        // validateToolParameters(toolParams, toolParamDef);
+
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
 
@@ -1048,6 +1053,24 @@ public class AgentUtils {
             return Integer.parseInt(v);
         } catch (NumberFormatException e) {
             return value;
+        }
+    }
+
+    public static void validateToolParameters(Map<String, Object> parameters, Map<String, Class<?>> paramDef) {
+        for (Map.Entry<String, Class<?>> entry : paramDef.entrySet()) {
+            String paramName = entry.getKey();
+            Class<?> expectedType = entry.getValue();
+
+            try {
+                switch (expectedType.getSimpleName()) {
+                    case "Boolean" -> ConfigurationUtils.readBooleanProperty(null, null, parameters, paramName, false);
+                    case "Integer" -> ConfigurationUtils.readIntProperty(null, null, parameters, paramName, 0);
+                    case "String" -> ConfigurationUtils.readOptionalStringProperty(null, null, parameters, paramName);
+                    case "String[]" -> ConfigurationUtils.readOptionalList(null, null, parameters, paramName);
+                }
+            } catch (Exception e) {
+                throw new IllegalArgumentException(e.getMessage());
+            }
         }
     }
 }

@@ -54,7 +54,6 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
-import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -87,9 +86,6 @@ public class ListIndexTool implements Tool {
         + "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
-    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
-    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
-    private int maxQuestionLength = DEFAULT_MAX_QUESTION_LENGTH;
 
     @Setter
     @Getter
@@ -419,16 +415,16 @@ public class ListIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.isEmpty()) {
-            return false;
-        }
+        return parameters != null && !parameters.isEmpty();
+    }
 
-        // Validate question length
-        String question = parameters.get("question");
-        if (question != null && question.length() > maxQuestionLength) {
-            throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
-        }
-        return true;
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put("indices", String[].class);
+        params.put("local", Boolean.class);
+        params.put("page_size", Integer.class);
+        return params;
     }
 
     /**
@@ -468,15 +464,8 @@ public class ListIndexTool implements Tool {
 
         @Override
         public ListIndexTool create(Map<String, Object> params) {
-            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "question");
-            ConfigurationUtils.readOptionalList(TYPE, null, params, "indices");
-            ConfigurationUtils.readBooleanProperty(TYPE, null, params, "local", false);
-            ConfigurationUtils.readIntProperty(TYPE, null, params, "page_size", 100);
-
             ListIndexTool tool = new ListIndexTool(client, clusterService);
             tool.setOutputParser(ToolParser.createFromToolParams(params));
-            tool.maxQuestionLength = ConfigurationUtils
-                .readIntProperty(TYPE, null, params, MAX_QUESTION_LENGTH_FIELD, DEFAULT_MAX_QUESTION_LENGTH);
             return tool;
         }
 

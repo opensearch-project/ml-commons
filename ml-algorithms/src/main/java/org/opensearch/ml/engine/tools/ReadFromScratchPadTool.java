@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -85,6 +84,13 @@ public class ReadFromScratchPadTool implements Tool {
         return true;
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(PERSISTENT_NOTES_KEY, String.class);
+        return params;
+    }
+
     /**
      * Executes the ReadFromScratchPadTool.
      * This tool retrieves notes from the persistent scratchpad for the current conversation.
@@ -138,7 +144,6 @@ public class ReadFromScratchPadTool implements Tool {
 
         @Override
         public ReadFromScratchPadTool create(Map<String, Object> params) {
-            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, PERSISTENT_NOTES_KEY);
             return new ReadFromScratchPadTool();
         }
 

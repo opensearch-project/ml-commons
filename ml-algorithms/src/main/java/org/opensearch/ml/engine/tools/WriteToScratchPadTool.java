@@ -86,6 +86,14 @@ public class WriteToScratchPadTool implements Tool {
         return parameters != null && parameters.containsKey(NOTES_KEY);
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(NOTES_KEY, String.class);
+        params.put(RETURN_HISTORY_KEY, Boolean.class);
+        return params;
+    }
+
     /**
      * Executes the WriteToScratchPadTool.
      * This tool saves notes to the persistent scratchpad for the current conversation.

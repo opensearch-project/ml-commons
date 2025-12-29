@@ -21,7 +21,6 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.ToolUtils;
@@ -59,10 +58,6 @@ public class VisualizationsTool implements Tool {
         + "\"required\":[\"input\"],"
         + "\"additionalProperties\":false}";
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
-    public static final int DEFAULT_MAX_INPUT_LENGTH = 10000;
-    public static final String MAX_INPUT_LENGTH_FIELD = "max_input_length";
-    private int maxInputLength = DEFAULT_MAX_INPUT_LENGTH;
-
     @Setter
     @Getter
     private String description = DEFAULT_DESCRIPTION;
@@ -154,19 +149,19 @@ public class VisualizationsTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null
-            || parameters.isEmpty()
-            || Strings.isNullOrEmpty(parameters.get(INPUT_FIELD))
-            || !parameters.containsKey(INPUT_FIELD)) {
-            return false;
-        }
+        return parameters != null
+            && !parameters.isEmpty()
+            && !Strings.isNullOrEmpty(parameters.get("input"))
+            && parameters.containsKey("input");
+    }
 
-        // Validate input length
-        String input = parameters.get(INPUT_FIELD);
-        if (input != null && input.length() > maxInputLength) {
-            throw new IllegalArgumentException("input length cannot exceed " + maxInputLength + " characters");
-        }
-        return true;
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(INPUT_FIELD, String.class);
+        params.put(INDEX_FIELD, String.class);
+        params.put(SIZE_FIELD, Integer.class);
+        return params;
     }
 
     public static class Factory implements Tool.Factory<VisualizationsTool> {
@@ -193,9 +188,6 @@ public class VisualizationsTool implements Tool {
 
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
-            ConfigurationUtils.readStringProperty(TYPE, null, params, INPUT_FIELD);
-            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, INDEX_FIELD);
-            ConfigurationUtils.readIntProperty(TYPE, null, params, SIZE_FIELD, 3);
             String index = params.get(INDEX_FIELD) == null ? ".kibana" : (String) params.get(INDEX_FIELD);
             String sizeStr = params.get(SIZE_FIELD) == null ? "3" : (String) params.get(SIZE_FIELD);
             int size;
@@ -204,9 +196,7 @@ public class VisualizationsTool implements Tool {
             } catch (NumberFormatException ignored) {
                 size = DEFAULT_SIZE;
             }
-            VisualizationsTool tool = VisualizationsTool.builder().client(client).index(index).size(size).build();
-            tool.maxInputLength = ConfigurationUtils.readIntProperty(TYPE, null, params, MAX_INPUT_LENGTH_FIELD, DEFAULT_MAX_INPUT_LENGTH);
-            return tool;
+            return VisualizationsTool.builder().client(client).index(index).size(size).build();
         }
 
         @Override

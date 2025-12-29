@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.engine.tools;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -101,6 +101,13 @@ public class ConnectorTool implements Tool {
         return parameters != null && !parameters.isEmpty();
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put("response_filter", String.class);
+        return params;
+    }
+
     public static class Factory implements Tool.Factory<ConnectorTool> {
         public static final String TYPE = "ConnectorTool";
         public static final String DEFAULT_DESCRIPTION = "Invokes external service. Required: 'connector_id'. Returns: service response.";
@@ -126,7 +133,6 @@ public class ConnectorTool implements Tool {
 
         @Override
         public ConnectorTool create(Map<String, Object> params) {
-            ConfigurationUtils.readOptionalStringProperty(TYPE, null, params, "response_filter");
             ConnectorTool connectorTool = new ConnectorTool(client, (String) params.get(CONNECTOR_ID));
             connectorTool.setOutputParser(ToolParser.createFromToolParams(params));
             return connectorTool;

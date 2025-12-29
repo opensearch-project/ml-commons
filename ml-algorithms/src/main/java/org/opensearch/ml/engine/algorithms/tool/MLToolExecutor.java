@@ -14,6 +14,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
@@ -25,6 +26,8 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.Executable;
+import org.opensearch.ml.engine.algorithms.agent.AgentUtils;
+import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -86,6 +89,24 @@ public class MLToolExecutor implements Executable {
             Map<String, String> mutableParams = new HashMap<>(parameters);
             Map<String, Object> originalParams = toolMLInput.getOriginalParameters();
             Tool tool = toolFactory.create(originalParams);
+
+            int maxQuestionLength;
+            try {
+                maxQuestionLength = ConfigurationUtils
+                    .readIntProperty(
+                        "MLTool",
+                        null,
+                        originalParams,
+                        MLAgentExecutor.MAX_QUESTION_LENGTH_FIELD,
+                        MLAgentExecutor.DEFAULT_MAX_QUESTION_LENGTH
+                    );
+            } catch (Exception e) {
+                throw new IllegalArgumentException(e.getMessage());
+            }
+
+            MLAgentExecutor.validateAgentParameters(originalParams, maxQuestionLength);
+            Map<String, Class<?>> toolParamDef = tool.getToolParamsDefinition();
+            AgentUtils.validateToolParameters(originalParams, toolParamDef);
 
             if (!tool.validate(mutableParams)) {
                 listener.onFailure(new IllegalArgumentException("Invalid parameters for tool: " + toolName));
