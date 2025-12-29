@@ -142,7 +142,7 @@ public class HttpConnectorTest {
 
     @Test
     public void decrypt_Throws_Exception() {
-        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("Exception during decrypting credentials");
         TriConsumer<String, String, ActionListener<String>> decryptErrorFunction = (s, v, l) -> l
             .onFailure(new RuntimeException("Exception during decrypting credentials"));
