@@ -182,6 +182,8 @@ public class EncryptorImpl implements Encryptor {
                 } else {
                     waitingListeners.forEach(listener -> listener.onFailure(new MLException(exception)));
                 }
+            } else {
+                waitingListeners.forEach(listener -> listener.onFailure(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR)));
             }
             waitingListeners.clear();
         }

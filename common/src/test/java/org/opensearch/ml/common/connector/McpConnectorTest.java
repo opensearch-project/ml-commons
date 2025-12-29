@@ -34,6 +34,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.search.SearchModule;
 
@@ -143,6 +144,26 @@ public class McpConnectorTest {
         Assert.assertNull(removeConnector.getCredential());
         Assert.assertNull(removeConnector.getDecryptedCredential());
         Assert.assertNull(removeConnector.getDecryptedHeaders());
+    }
+
+    @Test
+    public void testEncryptThrowException() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Exception during encrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> encryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during encrypting credentials"));
+        McpConnector encryptConnector = createMcpConnector();
+        encryptConnector.encrypt(encryptErrorFunction, null);
+    }
+
+    @Test
+    public void testDecryptThrowException() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Exception during decrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> decryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during decrypting credentials"));
+        McpConnector decryptConnector = createMcpConnector();
+        decryptConnector.decrypt("", decryptErrorFunction, null);
     }
 
     @Test

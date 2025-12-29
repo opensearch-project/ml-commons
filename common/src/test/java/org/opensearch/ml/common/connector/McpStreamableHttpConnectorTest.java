@@ -34,6 +34,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.search.SearchModule;
 
@@ -136,6 +137,16 @@ public class McpStreamableHttpConnectorTest {
     }
 
     @Test
+    public void decryptThrowsException() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Exception during decrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> decryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during decrypting credentials"));
+        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        connector.decrypt("", decryptErrorFunction, null);
+    }
+
+    @Test
     public void encrypt() {
         McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
         connector.encrypt(encryptFunction, null);
@@ -147,6 +158,16 @@ public class McpStreamableHttpConnectorTest {
         Assert.assertNull(connector.getCredential());
         Assert.assertNull(connector.getDecryptedCredential());
         Assert.assertNull(connector.getDecryptedHeaders());
+    }
+
+    @Test
+    public void encryptThrowsException() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Exception during encrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> encryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during encrypting credentials"));
+        McpStreamableHttpConnector connector = createMcpStreamableHttpConnector();
+        connector.encrypt(encryptErrorFunction, null);
     }
 
     @Test
