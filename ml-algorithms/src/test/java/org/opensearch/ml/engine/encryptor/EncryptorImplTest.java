@@ -1,9 +1,12 @@
 package org.opensearch.ml.engine.encryptor;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
@@ -19,6 +22,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -50,6 +54,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -148,9 +153,11 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
-        Assert.assertNotNull(encrypted);
-        Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", null, listener);
     }
 
     @Test
@@ -178,15 +185,15 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
-        Assert.assertNotNull(encrypted);
-        Assert.assertNotEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            Assert.assertNotEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", null, listener);
     }
 
     @Test
     public void encrypt_NonExistingMasterKey_FailedToCreateNewKey() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("random test exception");
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -206,13 +213,17 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("random test exception", error.getMessage());
+        });
+        encryptor.encrypt("test", null, listener);
     }
 
     @Test
     public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_NonRuntimeException() {
-        exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("random IO exception");
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -232,7 +243,13 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("java.io.IOException: random IO exception", error.getMessage());
+        });
+        encryptor.encrypt("test", null, listener);
     }
 
     @Test
@@ -241,8 +258,6 @@ public class EncryptorImplTest {
          * The context of this unit test is if there's any version conflict then we create new key, but if that fails
          * again then we throw ResourceNotFoundException exception.
          */
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -267,7 +282,13 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        encryptor.encrypt("test", TENANT_ID);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof ResourceNotFoundException);
+            Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, error.getMessage());
+        });
+        encryptor.encrypt("test", TENANT_ID, listener);
     }
 
     @Test
@@ -298,9 +319,11 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
-        Assert.assertNotNull(encrypted);
-        Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", null, listener);
     }
 
     @Test
@@ -309,26 +332,31 @@ public class EncryptorImplTest {
         exceptionRule.expectMessage("test exception");
         doThrow(new RuntimeException("test exception")).when(mlIndicesHandler).initMLConfigIndex(any());
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null, listener);
     }
 
     @Test
     public void encrypt_FailedToInitMLConfigIndex() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("No response to create ML Config index");
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onFailure(new RuntimeException("random test exception"));
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("No response to create ML Config index", error.getMessage());
+        });
+        encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null, listener);
     }
 
     @Test
     public void encrypt_FailedToGetMasterKey() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("random test exception");
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -340,7 +368,13 @@ public class EncryptorImplTest {
             return null;
         }).when(client).get(any(), any());
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("random test exception", error.getMessage());
+        });
+        encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null, listener);
     }
 
     @Test
@@ -348,11 +382,13 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(null, masterKey.get(DEFAULT_TENANT_ID));
         String test = encryptor.getMasterKey(null);
         Assert.assertNotNull(test);
-        String encrypted1 = encryptor.encrypt("test", null);
-
-        encryptor.setMasterKey(null, encryptor.generateMasterKey());
-        String encrypted2 = encryptor.encrypt("test", null);
-        Assert.assertNotEquals(encrypted1, encrypted2);
+        ActionListener<String> listener1 = ActionListener.wrap(encrypted1 -> {
+            ActionListener<String> listener2 = ActionListener
+                .wrap(encrypted2 -> { Assert.assertNotEquals(encrypted1, encrypted2); }, error -> {});
+            encryptor.setMasterKey(null, encryptor.generateMasterKey());
+            encryptor.encrypt("test", null, listener2);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", null, listener1);
     }
 
     @Test
@@ -373,17 +409,18 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
-        String decrypted = encryptor.decrypt(encrypted, null);
-        Assert.assertEquals("test", decrypted);
-        Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        ActionListener<String> encryptionListener = ActionListener.wrap(encrypted -> {
+            ActionListener<String> decryptionListener = ActionListener.wrap(decrypted -> {
+                Assert.assertEquals("test", decrypted);
+                Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+            }, error -> {});
+            encryptor.decrypt(encrypted, null, decryptionListener);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", null, encryptionListener);
     }
 
     @Test
     public void encrypt_NullMasterKey_NullMasterKey_MasterKeyNotExistInIndex() {
-        exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Fetching master key timed out.");
-
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             GetResponse response = mock(GetResponse.class);
@@ -394,14 +431,17 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof ResourceNotFoundException);
+            Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, error.getMessage());
+        });
+        encryptor.encrypt("test", null, listener);
     }
 
     @Test
     public void decrypt_NullMasterKey_GetMasterKey_Exception() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("test error");
-
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -415,7 +455,13 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.decrypt("test", null);
+        ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("test error", error.getMessage());
+        });
+        encryptor.decrypt("test", null, listener);
     }
 
     @Test
@@ -436,28 +482,12 @@ public class EncryptorImplTest {
         }).when(client).get(any(), any());
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        String encrypted = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encryptor.getMasterKey(TENANT_ID));
-        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
-    }
-
-    @Test
-    public void decrypt_MLConfigIndexNotFound() {
-        exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Fetching master key timed out.");
-
-        Metadata metadata = new Metadata.Builder().indices(ImmutableMap.of()).build();
-        when(clusterState.metadata()).thenReturn(metadata);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("test error"));
-            return null;
-        }).when(client).get(any(), any());
-
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.decrypt("test", null);
+        ActionListener<String> listener1 = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encryptor.getMasterKey(TENANT_ID));
+            ActionListener<String> listener2 = ActionListener.wrap(decrypted -> { Assert.assertEquals("test", decrypted); }, error -> {});
+            encryptor.decrypt(encrypted, TENANT_ID, listener2);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", TENANT_ID, listener1);
     }
 
     @Test
@@ -481,23 +511,22 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
 
+        ActionListener<String> listener = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+
+            // Verify that the tenant-specific master key is added
+            String tenantMasterKey = encryptor.getMasterKey(TENANT_ID);
+            Assert.assertNotNull(tenantMasterKey);
+
+            // Ensure that the master key for this tenant matches the expected value
+            Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(TENANT_ID));
+        }, error -> { throw new MLException(error); });
         // Encrypt using the specified tenant ID
-        String encrypted = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted);
-
-        // Verify that the tenant-specific master key is added
-        String tenantMasterKey = encryptor.getMasterKey(TENANT_ID);
-        Assert.assertNotNull(tenantMasterKey);
-
-        // Ensure that the master key for this tenant matches the expected value
-        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(TENANT_ID));
+        encryptor.encrypt("test", TENANT_ID, listener);
     }
 
     @Test
     public void encrypt_SdkClientPutDataObjectFailure() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("Failed to index ML encryption master key");
-
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -518,7 +547,13 @@ public class EncryptorImplTest {
         }).when(client).index(any(), any());
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        encryptor.encrypt("test", null);
+        ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("Failed to index ML encryption master key", error.getMessage());
+        });
+        encryptor.encrypt("test", null, listener);
     }
 
     // Helper method to prepare a valid GetResponse
@@ -591,9 +626,14 @@ public class EncryptorImplTest {
 
         // Old buggy code would try to access response.source().get(masterKeyId) and get null
         // This test ensures the new fix works — we access MASTER_KEY properly
-        String encrypted = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted);
-        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
+        ActionListener<String> listener1 = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            ActionListener<String> listener2 = ActionListener.wrap(decrypted -> { Assert.assertEquals("test", decrypted); }, error -> {
+                throw new MLException(error);
+            });
+            encryptor.decrypt(encrypted, TENANT_ID, listener2);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", TENANT_ID, listener1);
     }
 
     @Test
@@ -632,10 +672,13 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
-
-        encryptor.encrypt("test", TENANT_ID);
+        ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, error.getMessage());
+        });
+        encryptor.encrypt("test", TENANT_ID, listener);
     }
 
     @Test
@@ -668,10 +711,13 @@ public class EncryptorImplTest {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
-
-        encryptor.encrypt("test", TENANT_ID);
+        ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, error.getMessage());
+        });
+        encryptor.encrypt("test", TENANT_ID, listener);
     }
 
     @Test
@@ -704,9 +750,14 @@ public class EncryptorImplTest {
         // Now run encryption; it should handle the version conflict by fetching the key, and then succeed.
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         // This will go through the PUT failure, then version conflict handling, and use the returned key.
-        String encrypted = encryptor.encrypt("test", TENANT_ID);
-        Assert.assertNotNull(encrypted);
-        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
+        ActionListener<String> listener1 = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            ActionListener<String> listener2 = ActionListener.wrap(decrypted -> { Assert.assertEquals("test", decrypted); }, error -> {
+                throw new MLException(error);
+            });
+            encryptor.decrypt(encrypted, TENANT_ID, listener2);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt("test", TENANT_ID, listener1);
     }
 
     @Test
@@ -735,16 +786,18 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         // We expect an MLException (or a ResourceNotFoundException) to be thrown due to the failure in getting the key.
-        exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Failed to get master key"); // Or adjust based on your exact message.
-
-        encryptor.encrypt("test", TENANT_ID);
+        ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals("java.io.IOException: Failed to get master key on retry", error.getMessage()); // Or adjust based on your
+                                                                                                               // exact message.
+        });
+        encryptor.encrypt("test", TENANT_ID, listener);
     }
 
     @Test
     public void encrypt_GetSourceAsMapIsNull_ShouldThrowResourceNotFound() throws Exception {
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
 
         // Simulate ML config index init success
         doAnswer(invocation -> {
@@ -776,7 +829,125 @@ public class EncryptorImplTest {
         }).when(client).get(any(), any());
 
         // Now run it
-        encryptor.encrypt("test", TENANT_ID);
+        ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+            throw new RuntimeException("Successfully encrypted, expected Exception here");
+        }, error -> {
+            Assert.assertTrue(error instanceof RuntimeException);
+            Assert.assertEquals(MASTER_KEY_NOT_READY_ERROR, error.getMessage());
+        });
+        encryptor.encrypt("test", TENANT_ID, listener);
+    }
+
+    @Test
+    public void test_MultipleEncryptDecryptRequests_From_SingleThread() throws InterruptedException, IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        for (int i = 0; i < 3; i++) {
+            ActionListener<String> listener1 = ActionListener.wrap(encrypted -> {
+                Assert.assertNotNull(encrypted);
+                ActionListener<String> listener2 = ActionListener.wrap(decrypted -> { Assert.assertEquals("test", decrypted); }, error -> {
+                    throw new MLException(error);
+                });
+                encryptor.decrypt(encrypted, TENANT_ID, listener2);
+            }, error -> { throw new MLException(error); });
+            encryptor.encrypt("test", null, listener1);
+        }
+    }
+
+    @Test
+    public void test_MultipleEncryptDecryptRequests_From_MultipleThreads() throws InterruptedException, IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        TestThreadPool testThreadPool = new TestThreadPool("testThreadPool");
+        CountDownLatch latch = new CountDownLatch(9);
+        String[] tenantIds = new String[] { "123456", "1234567", null };
+        String[] texts = new String[] { "test1", "test2", "test3" };
+        for (int i = 0; i < 3; i++) {
+            testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[0], texts[0], latch); });
+            testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[1], texts[1], latch); });
+            testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[2], texts[2], latch); });
+        }
+        Assert.assertTrue("Test should encrypt or decrypt within the specified time period", latch.await(60, SECONDS));
+        verify(mlIndicesHandler, timeout(1000).times(3)).initMLConfigIndex(any());
+        testThreadPool.shutdown();
+    }
+
+    @Test
+    public void test_MultipleEncryptDecryptRequests_From_MultipleThreads_Throws_Exception() throws InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new RuntimeException("random test exception"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        TestThreadPool testThreadPool = new TestThreadPool("testThreadPool");
+        CountDownLatch latch = new CountDownLatch(3);
+        for (int i = 0; i < 3; i++) {
+            testThreadPool.generic().submit(() -> {
+                ActionListener<String> listener = ActionListener.wrap(decrypted -> {
+                    throw new RuntimeException("Successfully encrypted, expected Exception here");
+                }, error -> {
+                    Assert.assertTrue(error instanceof RuntimeException);
+                    Assert.assertEquals("random test exception", error.getMessage());
+                    latch.countDown();
+                });
+                encryptor.encrypt("test", "123456", listener);
+            });
+        }
+        Assert.assertTrue("Test should throw expected exception within the specified time period", latch.await(20, SECONDS));
+        verify(mlIndicesHandler, timeout(1000).times(1)).initMLConfigIndex(any());
+        testThreadPool.shutdown();
+    }
+
+    void testEncryptionDecryption(String tenantId, String text, CountDownLatch latch) {
+        ActionListener<String> listener1 = ActionListener.wrap(encrypted -> {
+            Assert.assertNotNull(encrypted);
+            ActionListener<String> listener2 = ActionListener.wrap(decrypted -> {
+                Assert.assertEquals(text, decrypted);
+                latch.countDown();
+            }, error -> { throw new MLException(error); });
+            encryptor.decrypt(encrypted, tenantId, listener2);
+        }, error -> { throw new MLException(error); });
+        encryptor.encrypt(text, tenantId, listener1);
     }
 
     // Helper method to prepare a valid IndexResponse
