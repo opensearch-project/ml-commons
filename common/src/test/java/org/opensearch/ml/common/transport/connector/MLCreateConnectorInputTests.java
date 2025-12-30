@@ -324,8 +324,8 @@ public class MLCreateConnectorInputTests {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
             assertEquals(TEST_CONNECTOR_NAME, parsedInput.getName());
             assertEquals(20, parsedInput.getConnectorClientConfig().getMaxConnections().intValue());
-            assertEquals(10000, parsedInput.getConnectorClientConfig().getReadTimeout().intValue());
-            assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeout().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getReadTimeoutSeconds().intValue());
+            assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeoutMillis().intValue());
         });
     }
 
