@@ -47,6 +47,9 @@ public class AgentMLInput extends MLInput {
     @Setter
     private Boolean isAsync;
 
+    @Getter
+    private Map<String, Object> originalParameters;
+
     @Builder(builderMethodName = "AgentMLInputBuilder")
     public AgentMLInput(String agentId, String tenantId, FunctionName functionName, MLInputDataset inputDataset) {
         this(agentId, tenantId, functionName, inputDataset, false);
@@ -100,7 +103,9 @@ public class AgentMLInput extends MLInput {
                     tenantId = parser.textOrNull();
                     break;
                 case PARAMETERS_FIELD:
-                    Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
+                    Map<String, Object> rawParams = parser.map();
+                    originalParameters = rawParams;
+                    Map<String, String> parameters = StringUtils.getParameterMap(rawParams);
                     inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
                 case ASYNC_FIELD:

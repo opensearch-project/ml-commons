@@ -69,6 +69,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -1001,12 +1002,19 @@ public class AgentUtils {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
         Map<String, Object> toolParams = new HashMap<>();
-        toolParams.putAll(executeParams);
+        // Parse JSON strings back to original type since we need to validate each parameter type when creating tool
+        for (Map.Entry<String, String> entry : executeParams.entrySet()) {
+            toolParams.put(entry.getKey(), parseValue(entry.getValue()));
+        }
         Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
         if (runtimeResources != null) {
             toolParams.putAll(runtimeResources);
         }
         Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+
+        Map<String, Class<?>> toolParamDef = tool.getToolParamsDefinition();
+        validateToolParameters(toolParams, toolParamDef);
+
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
 
@@ -1018,5 +1026,51 @@ public class AgentUtils {
         }
 
         return tool;
+    }
+
+    private static Object parseValue(String value) {
+        if (value == null || "null".equals(value)) {
+            return null;
+        }
+        String v = value.trim();
+
+        // Try JSON array
+        if (v.startsWith("[") && v.endsWith("]")) {
+            try {
+                return gson.fromJson(v, List.class);
+            } catch (Exception e) {
+                return value;
+            }
+        }
+
+        // Try boolean
+        if ("true".equalsIgnoreCase(v) || "false".equalsIgnoreCase(v)) {
+            return Boolean.parseBoolean(v);
+        }
+
+        // Try integer
+        try {
+            return Integer.parseInt(v);
+        } catch (NumberFormatException e) {
+            return value;
+        }
+    }
+
+    public static void validateToolParameters(Map<String, Object> parameters, Map<String, Class<?>> paramDef) {
+        for (Map.Entry<String, Class<?>> entry : paramDef.entrySet()) {
+            String paramName = entry.getKey();
+            Class<?> expectedType = entry.getValue();
+
+            try {
+                switch (expectedType.getSimpleName()) {
+                    case "Boolean" -> ConfigurationUtils.readBooleanProperty(null, null, parameters, paramName, false);
+                    case "Integer" -> ConfigurationUtils.readIntProperty(null, null, parameters, paramName, 0);
+                    case "String" -> ConfigurationUtils.readOptionalStringProperty(null, null, parameters, paramName);
+                    case "String[]" -> ConfigurationUtils.readOptionalList(null, null, parameters, paramName);
+                }
+            } catch (Exception e) {
+                throw new IllegalArgumentException(e.getMessage());
+            }
+        }
     }
 }

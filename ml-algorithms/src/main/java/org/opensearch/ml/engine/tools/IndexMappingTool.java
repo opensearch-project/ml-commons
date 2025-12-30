@@ -175,7 +175,22 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && !parameters.isEmpty() && parameters.containsKey("index");
+        if (parameters == null || parameters.isEmpty()) {
+            return false;
+        }
+        if (!parameters.containsKey("index")) {
+            throw new IllegalArgumentException("Missing required parameter [index]");
+        }
+
+        return true;
+    }
+
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put("index", String[].class);
+        params.put("local", Boolean.class);
+        return params;
     }
 
     /**

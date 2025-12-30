@@ -43,6 +43,9 @@ public class VisualizationsTool implements Tool {
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
     public static final String STRICT_FIELD = "strict";
+    public static final String INPUT_FIELD = "input";
+    public static final String INDEX_FIELD = "index";
+    public static final String SIZE_FIELD = "size";
 
     /**
      * default number of visualizations returned
@@ -93,7 +96,7 @@ public class VisualizationsTool implements Tool {
             Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
             boolQueryBuilder.must().add(QueryBuilders.termQuery("type", SAVED_OBJECT_TYPE));
-            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get("input")));
+            boolQueryBuilder.must().add(QueryBuilders.matchQuery(SAVED_OBJECT_TYPE + ".title", parameters.get(INPUT_FIELD)));
 
             SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource().query(boolQueryBuilder);
             searchSourceBuilder.from(0).size(size);
@@ -152,6 +155,15 @@ public class VisualizationsTool implements Tool {
             && parameters.containsKey("input");
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(INPUT_FIELD, String.class);
+        params.put(INDEX_FIELD, String.class);
+        params.put(SIZE_FIELD, Integer.class);
+        return params;
+    }
+
     public static class Factory implements Tool.Factory<VisualizationsTool> {
         private Client client;
 
@@ -176,8 +188,8 @@ public class VisualizationsTool implements Tool {
 
         @Override
         public VisualizationsTool create(Map<String, Object> params) {
-            String index = params.get("index") == null ? ".kibana" : (String) params.get("index");
-            String sizeStr = params.get("size") == null ? "3" : (String) params.get("size");
+            String index = params.get(INDEX_FIELD) == null ? ".kibana" : (String) params.get(INDEX_FIELD);
+            String sizeStr = params.get(SIZE_FIELD) == null ? "3" : (String) params.get(SIZE_FIELD);
             int size;
             try {
                 size = Integer.parseInt(sizeStr);
