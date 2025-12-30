@@ -1,4 +1,4 @@
-# Yandex Cloud AI Studio connector standard blueprint example for embedding models
+# Yandex Cloud AI Studio connector legacy blueprint example for embedding models
 
 This blueprint demonstrates how to deploy a Yandex Cloud AI Studio embedding models. 
 
