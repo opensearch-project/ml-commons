@@ -114,7 +114,7 @@ public class MLAgentTest {
     @Test
     public void constructor_DuplicateTool() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate tool defined: test");
+        exceptionRule.expectMessage("Duplicate tool defined in agent configuration");
 
         MLAgent agent = new MLAgent(
             "test_name",
@@ -353,7 +353,7 @@ public class MLAgentTest {
     @Test
     public void constructor_InvalidAgentType() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage(" is not a valid Agent Type");
+        exceptionRule.expectMessage("Invalid Agent Type");
 
         new MLAgent(
             "test_name",
