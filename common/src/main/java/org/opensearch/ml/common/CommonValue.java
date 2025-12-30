@@ -54,6 +54,7 @@ public class CommonValue {
     public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
     public static final String MCP_SESSION_MANAGEMENT_INDEX = ".plugins-ml-mcp-session-management";
     public static final String MCP_TOOLS_INDEX = ".plugins-ml-mcp-tools";
+    public static final String ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX = ".plugins-ml-context-management-templates";
     // index created in 3.1 to track all ml jobs created via job scheduler
     public static final String ML_JOBS_INDEX = ".plugins-ml-jobs";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
@@ -76,6 +77,7 @@ public class CommonValue {
     public static final String ML_LONG_MEMORY_HISTORY_INDEX_MAPPING_PATH = "index-mappings/ml_memory_long_term_history.json";
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
+    public static final String ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX_MAPPING_PATH = "index-mappings/ml_context_management_templates.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
     public static final String ML_INDEX_INSIGHT_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_config.json";
     public static final String ML_INDEX_INSIGHT_STORAGE_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight_storage.json";
@@ -98,6 +100,7 @@ public class CommonValue {
     public static final Version VERSION_3_2_0 = Version.fromString("3.2.0");
     public static final Version VERSION_3_3_0 = Version.fromString("3.3.0");
     public static final Version VERSION_3_4_0 = Version.fromString("3.4.0");
+    public static final Version VERSION_3_5_0 = Version.fromString("3.5.0");
 
     // Connector Constants
     public static final String NAME_FIELD = "name";
