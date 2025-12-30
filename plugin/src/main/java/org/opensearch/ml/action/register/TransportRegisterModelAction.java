@@ -169,7 +169,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
-        if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
+        if (registerModelInput.getUrl() != null
+            && !isModelUrlAllowed
+            && registerModelInput.getFunctionName() != FunctionName.METRICS_CORRELATION) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
