@@ -51,9 +51,6 @@ public class MetricsCorrelationInput implements Input {
                 throw new IllegalArgumentException("All the input metrics sizes should be same");
             }
         }
-        if (inputData.size() >= expectedLength) {
-            throw new IllegalArgumentException("The number of metrics to correlate must be smaller than the length of each time series.");
-        }
         this.inputData = inputData;
     }
 
