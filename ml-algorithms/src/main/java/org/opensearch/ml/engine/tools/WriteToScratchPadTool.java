@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -152,8 +151,6 @@ public class WriteToScratchPadTool implements Tool {
 
         @Override
         public WriteToScratchPadTool create(Map<String, Object> params) {
-            ConfigurationUtils.readStringProperty(TYPE, null, params, NOTES_KEY);
-            ConfigurationUtils.readBooleanProperty(TYPE, null, params, RETURN_HISTORY_KEY, false);
             return new WriteToScratchPadTool();
         }
 

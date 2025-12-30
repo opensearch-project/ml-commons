@@ -1012,8 +1012,8 @@ public class AgentUtils {
         }
         Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
 
-        // Map<String, Class<?>> toolParamDef = tool.getToolParamsDefinition();
-        // validateToolParameters(toolParams, toolParamDef);
+        Map<String, Class<?>> toolParamDef = tool.getToolParamsDefinition();
+        validateToolParameters(toolParams, toolParamDef);
 
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
