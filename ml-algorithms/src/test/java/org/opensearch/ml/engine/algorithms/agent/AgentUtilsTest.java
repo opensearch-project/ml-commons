@@ -2000,4 +2000,12 @@ public class AgentUtilsTest extends MLStaticMockBase {
         doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
         connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
     }
+
+    @Test
+    public void testGetMatchedTool_PrefersExactMatchOverPrefix() {
+        // When two tools share a prefix, exact match should win regardless of order
+        List<String> tools = List.of("get_order_history", "get_order_history_simple");
+        assertEquals("get_order_history_simple", AgentUtils.getMatchedTool(tools, "get_order_history_simple"));
+        assertEquals("get_order_history", AgentUtils.getMatchedTool(tools, "get_order_history"));
+    }
 }
