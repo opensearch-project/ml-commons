@@ -169,11 +169,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new OpenSearchStatusException(LOCAL_MODEL_DISABLED_ERR_MSG, RestStatus.BAD_REQUEST);
         }
-        if (registerModelInput.getUrl() != null
-            && !isModelUrlAllowed
-            && registerModelInput.getFunctionName() != FunctionName.METRICS_CORRELATION
-            && !registerModelInput
-                .getUrl().equals("https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b2/torch_script/metrics_correlation-1.0.0b2-torch_script.zip")) {
+        if (registerModelInput.getUrl() != null && !isModelUrlAllowed && !isMetricsCorrelation(registerModelInput)) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
@@ -203,6 +199,15 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         } else {
             checkUserAccess(registerModelInput, listener, false);
         }
+    }
+
+    private boolean isMetricsCorrelation(MLRegisterModelInput registerModelInput) {
+        return registerModelInput.getFunctionName() == FunctionName.METRICS_CORRELATION
+            && registerModelInput
+                .getUrl()
+                .equals(
+                    "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b2/torch_script/metrics_correlation-1.0.0b2-torch_script.zip"
+                );
     }
 
     private void checkUserAccess(
