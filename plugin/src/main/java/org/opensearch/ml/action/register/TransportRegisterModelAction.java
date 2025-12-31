@@ -171,7 +171,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
         if (registerModelInput.getUrl() != null
             && !isModelUrlAllowed
-            && registerModelInput.getFunctionName() != FunctionName.METRICS_CORRELATION) {
+            && registerModelInput.getFunctionName() != FunctionName.METRICS_CORRELATION
+            && !registerModelInput
+                .getUrl().equals("https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b2/torch_script/metrics_correlation-1.0.0b2-torch_script.zip")) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
