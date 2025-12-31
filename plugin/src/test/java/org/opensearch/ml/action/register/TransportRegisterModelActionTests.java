@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -452,9 +453,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             )
         );
 
-        MLRegisterModelRequest request = prepareRequestMcorr(
-            "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b2/torch_script/metrics_correlation-1.0.0b2-torch_script.zip"
-        );
+        MLRegisterModelRequest request = prepareRequestMcorr(MCORR_MODEL_URL);
 
         // Should not throw exception for METRICS_CORRELATION url
         transportRegisterModelAction.doExecute(task, request, actionListener);
