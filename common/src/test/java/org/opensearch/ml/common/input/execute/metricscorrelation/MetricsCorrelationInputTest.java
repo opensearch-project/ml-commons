@@ -61,7 +61,37 @@ public class MetricsCorrelationInputTest {
         inputData.add(new float[] { 1.0f, 2.0f, 3.0f });
         inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
         MetricsCorrelationInput.builder().inputData(inputData).build();
+    }
 
+    @Test
+    public void constructor_MetricsCountEqualToTimeSeriesLength() {
+        List<float[]> inputData = new ArrayList<>();
+
+        // Create 4 metrics with length 4 each
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        inputData.add(new float[] { 5.0f, 6.0f, 7.0f, 8.0f });
+        inputData.add(new float[] { 9.0f, 10.0f, 11.0f, 12.0f });
+        inputData.add(new float[] { 13.0f, 14.0f, 15.0f, 16.0f });
+
+        // Should not throw an exception
+        MetricsCorrelationInput result = MetricsCorrelationInput.builder().inputData(inputData).build();
+        assertEquals(4, result.getInputData().size());
+    }
+
+    @Test
+    public void constructor_MetricsCountGreaterThanTimeSeriesLength() {
+        List<float[]> inputData = new ArrayList<>();
+
+        // Create 5 metrics with length 3 each
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f });
+        inputData.add(new float[] { 4.0f, 5.0f, 6.0f });
+        inputData.add(new float[] { 7.0f, 8.0f, 9.0f });
+        inputData.add(new float[] { 10.0f, 11.0f, 12.0f });
+        inputData.add(new float[] { 13.0f, 14.0f, 15.0f });
+
+        // Should not throw an exception
+        MetricsCorrelationInput result = MetricsCorrelationInput.builder().inputData(inputData).build();
+        assertEquals(5, result.getInputData().size());
     }
 
     @Test

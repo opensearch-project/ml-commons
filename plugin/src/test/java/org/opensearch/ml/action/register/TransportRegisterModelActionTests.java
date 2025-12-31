@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -54,6 +55,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -405,6 +407,101 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         IllegalArgumentException e = assertThrows(
             IllegalArgumentException.class,
             () -> transportRegisterModelAction.doExecute(task, prepareRequest("test url", "testModelGroupsID"), actionListener)
+        );
+        assertEquals(
+            e.getMessage(),
+            "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
+        );
+    }
+
+    @Test
+    public void testUrlNotAllowed_Mcorr() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false)
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_URL_REGEX,
+            ML_COMMONS_ALLOW_MODEL_URL,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        transportRegisterModelAction = spy(
+            new TransportRegisterModelAction(
+                transportService,
+                actionFilters,
+                modelHelper,
+                mlIndicesHandler,
+                mlModelManager,
+                mlTaskManager,
+                clusterService,
+                settings,
+                threadPool,
+                client,
+                sdkClient,
+                nodeFilter,
+                mlTaskDispatcher,
+                mlStats,
+                modelAccessControlHelper,
+                connectorAccessControlHelper,
+                mlModelGroupManager,
+                mlFeatureEnabledSetting
+            )
+        );
+
+        MLRegisterModelRequest request = prepareRequestMcorr(MCORR_MODEL_URL);
+
+        // Should not throw exception for METRICS_CORRELATION url
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+    }
+
+    @Test
+    public void testUrlNotAllowed_McorrWrongUrl() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false)
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_URL_REGEX,
+            ML_COMMONS_ALLOW_MODEL_URL,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        transportRegisterModelAction = spy(
+            new TransportRegisterModelAction(
+                transportService,
+                actionFilters,
+                modelHelper,
+                mlIndicesHandler,
+                mlModelManager,
+                mlTaskManager,
+                clusterService,
+                settings,
+                threadPool,
+                client,
+                sdkClient,
+                nodeFilter,
+                mlTaskDispatcher,
+                mlStats,
+                modelAccessControlHelper,
+                connectorAccessControlHelper,
+                mlModelGroupManager,
+                mlFeatureEnabledSetting
+            )
+        );
+
+        // Should throw exception for METRICS_CORRELATION model with wrong url
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> transportRegisterModelAction.doExecute(task, prepareRequestMcorr("test url"), actionListener)
         );
         assertEquals(
             e.getMessage(),
@@ -790,6 +887,19 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             )
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .url(url)
+            .build();
+        return new MLRegisterModelRequest(registerModelInput);
+    }
+
+    private MLRegisterModelRequest prepareRequestMcorr(String url) {
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("testModelName")
+            .functionName(FunctionName.METRICS_CORRELATION)
+            .modelGroupId("testModelGroupsID")
+            .url(url)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(MetricsCorrelationModelConfig.builder().modelType("testModelType").build())
             .build();
         return new MLRegisterModelRequest(registerModelInput);
     }
