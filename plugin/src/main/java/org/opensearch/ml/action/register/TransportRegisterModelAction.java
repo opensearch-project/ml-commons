@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALL
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_MODEL_URL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -203,11 +204,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     private boolean isMetricsCorrelation(MLRegisterModelInput registerModelInput) {
         return registerModelInput.getFunctionName() == FunctionName.METRICS_CORRELATION
-            && registerModelInput
-                .getUrl()
-                .equals(
-                    "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b2/torch_script/metrics_correlation-1.0.0b2-torch_script.zip"
-                );
+            && registerModelInput.getUrl().equals(MCORR_MODEL_URL);
     }
 
     private void checkUserAccess(
