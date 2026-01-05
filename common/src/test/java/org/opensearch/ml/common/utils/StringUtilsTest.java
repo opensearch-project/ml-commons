@@ -101,7 +101,7 @@ public class StringUtilsTest {
         assertEquals("nested_value", nestedMap.get("nested_key"));
         List list = (List) nestedMap.get("nested_array");
         assertEquals(2, list.size());
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -111,7 +111,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
     }
 
@@ -121,7 +121,7 @@ public class StringUtilsTest {
         assertEquals(1, response.size());
         assertTrue(response.get("response") instanceof List);
         List list = (List) response.get("response");
-        assertEquals(1.0, list.get(0));
+        assertEquals(1, list.get(0));
         assertEquals("a", list.get(1));
         assertTrue(list.get(2) instanceof List);
         assertTrue(list.get(3) instanceof Map);

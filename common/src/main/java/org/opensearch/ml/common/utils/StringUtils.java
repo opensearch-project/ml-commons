@@ -39,9 +39,12 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -100,7 +103,9 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static final ObjectMapper MAPPER = new ObjectMapper();
+    public static final ObjectMapper MAPPER = new ObjectMapper()
+        .configure(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION, true)
+        .configure(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY, true);
 
     public static boolean isValidJsonString(String json) {
         if (json == null || json.isBlank()) {
@@ -168,18 +173,21 @@ public class StringUtils {
     }
 
     public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
-        Map<String, Object> result;
-        JsonElement jsonElement = JsonParser.parseString(jsonStr);
-        if (jsonElement.isJsonObject()) {
-            result = gson.fromJson(jsonElement, Map.class);
-        } else if (jsonElement.isJsonArray()) {
-            List<Object> list = gson.fromJson(jsonElement, List.class);
-            result = new HashMap<>();
-            result.put(defaultKey, list);
-        } else {
-            throw new IllegalArgumentException("Unsupported response type");
+        try {
+            JsonNode jsonNode = MAPPER.readTree(jsonStr);
+            if (jsonNode.isObject()) {
+                return MAPPER.convertValue(jsonNode, Map.class);
+            } else if (jsonNode.isArray()) {
+                List<Object> list = MAPPER.convertValue(jsonNode, List.class);
+                Map<String, Object> result = new HashMap<>();
+                result.put(defaultKey, list);
+                return result;
+            } else {
+                throw new IllegalArgumentException("Unsupported response type");
+            }
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
         }
-        return result;
     }
 
     /**
@@ -294,7 +302,11 @@ public class StringUtils {
                 if (value instanceof String) {
                     return (String) value;
                 } else {
-                    return gson.toJson(value);
+                    try {
+                        return MAPPER.writeValueAsString(value);
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException("Failed to serialize to JSON", e);
+                    }
                 }
             });
         } catch (PrivilegedActionException e) {
