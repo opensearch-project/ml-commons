@@ -35,6 +35,7 @@ import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.DataType;
 import ai.djl.translate.TranslatorContext;
+import ai.djl.util.PairList;
 
 public class TextSimilarityTranslator extends SentenceTransformerTranslator {
     public final String SIMILARITY_NAME = "similarity";
@@ -95,4 +96,73 @@ public class TextSimilarityTranslator extends SentenceTransformerTranslator {
         return output;
     }
 
+    @Override
+    public NDList batchProcessInput(TranslatorContext ctx, List<Input> inputs) {
+        NDManager manager = ctx.getNDManager();
+        int batchSize = inputs.size();
+        List<String> sentences = new ArrayList<>(batchSize);
+        List<String> contexts = new ArrayList<>(batchSize);
+        for (Input input : inputs) {
+            String sentence = input.getAsString(0);
+            String context = input.getAsString(1);
+            sentences.add(sentence);
+            contexts.add(context);
+        }
+        // Tokenize in batches
+        Encoding[] encodings = tokenizer.batchEncode(new PairList<>(sentences, contexts));
+        int seqLen = encodings[0].getIds().length;
+        for (Encoding enc : encodings) {
+            seqLen = Math.max(seqLen, enc.getIds().length);
+        }
+        long[][] inputIds = new long[batchSize][seqLen];
+        long[][] attentionMasks = new long[batchSize][seqLen];
+        long[][] tokenTypeIds = new long[batchSize][seqLen];
+        for (int i = 0; i < batchSize; i++) {
+            inputIds[i] = encodings[i].getIds();
+            attentionMasks[i] = encodings[i].getAttentionMask();
+            tokenTypeIds[i] = encodings[i].getTypeIds();
+        }
+        NDArray inputIdsArray = manager.create(inputIds);
+        inputIdsArray.setName("input_ids");
+        NDArray attentionMaskArray = manager.create(attentionMasks);
+        attentionMaskArray.setName("attention_mask");
+        NDArray tokenTypeArray = manager.create(tokenTypeIds);
+        tokenTypeArray.setName("token_type_ids");
+        NDList ndList = new NDList();
+        ndList.add(inputIdsArray);
+        ndList.add(attentionMaskArray);
+        ndList.add(tokenTypeArray);
+        return ndList;
+    }
+
+    @Override
+    public List<Output> batchProcessOutput(TranslatorContext ctx, NDList list) {
+        NDArray batchArray = list.getFirst();
+        int batchSize = (int) batchArray.getShape().get(0);
+        List<Output> outputs = new ArrayList<>(batchSize);
+        for (int i = 0; i < batchSize; i++) {
+            NDArray itemArray = batchArray.get(i);
+
+            Number[] itemData = itemArray.toArray();
+            long[] itemShape = itemArray.getShape().getShape();
+            DataType dataType = itemArray.getDataType();
+            MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
+            ByteBuffer itemBuffer = itemArray.toByteBuffer();
+
+            ModelTensor tensor = ModelTensor
+                .builder()
+                .name(SIMILARITY_NAME)
+                .data(itemData)
+                .shape(itemShape)
+                .dataType(mlResultDataType)
+                .byteBuffer(itemBuffer)
+                .build();
+
+            ModelTensors modelTensorOutput = new ModelTensors(List.of(tensor));
+            Output output = new Output(200, "OK");
+            output.add(modelTensorOutput.toBytes());
+            outputs.add(output);
+        }
+        return outputs;
+    }
 }
