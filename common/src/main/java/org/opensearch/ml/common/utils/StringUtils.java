@@ -39,12 +39,10 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -82,6 +80,9 @@ public class StringUtils {
     private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_/'\"]*$");
 
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
+
+    // Maximum allowed JSON string size (10MB)
+    private static final int MAX_JSON_SIZE = 10_000_000;
 
     public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
         .serializeNulls()
@@ -173,6 +174,12 @@ public class StringUtils {
     }
 
     public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
+        if (jsonStr == null) {
+            throw new IllegalArgumentException("JSON string cannot be null");
+        }
+        if (jsonStr.length() > MAX_JSON_SIZE) {
+            throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d bytes)", MAX_JSON_SIZE));
+        }
         try {
             JsonNode jsonNode = MAPPER.readTree(jsonStr);
             if (jsonNode.isObject()) {
