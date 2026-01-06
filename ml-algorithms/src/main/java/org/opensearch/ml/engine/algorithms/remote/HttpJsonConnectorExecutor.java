@@ -11,12 +11,9 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_IN
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -37,6 +34,7 @@ import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.script.ScriptService;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
 
@@ -130,8 +128,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController
-                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
+            AccessController.doPrivileged(() -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
             actionListener.onFailure(e);

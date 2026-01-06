@@ -10,8 +10,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -38,6 +36,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -107,8 +106,7 @@ public class ModelGuardrail extends Guardrail {
         ActionListener<MLTaskResponse> internalListener = ActionListener.wrap(predictionResponse -> {
             ModelTensorOutput output = (ModelTensorOutput) predictionResponse.getOutput();
             ModelTensor tensor = output.getMlModelOutputs().get(0).getMlModelTensors().get(0);
-            String guardrailResponse = AccessController
-                .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(tensor.getDataAsMap().get("response")));
+            String guardrailResponse = AccessController.doPrivileged(() -> gson.toJson(tensor.getDataAsMap().get("response")));
             log.info("Guardrail response: {}", guardrailResponse);
             if (!validateAcceptRegex(guardrailResponse)) {
                 isAccepted.set(false);

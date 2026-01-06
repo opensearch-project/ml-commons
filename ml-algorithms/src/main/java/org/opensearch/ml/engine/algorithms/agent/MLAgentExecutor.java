@@ -17,9 +17,6 @@ import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,6 +74,7 @@ import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.TransportChannel;
 import org.opensearch.transport.client.Client;
 
@@ -528,7 +526,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    @SuppressWarnings("removal")
     private ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,
@@ -658,8 +655,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    @SuppressWarnings("removal")
-    public void processOutput(Object output, List<ModelTensor> modelTensors) throws PrivilegedActionException {
+    public void processOutput(Object output, List<ModelTensor> modelTensors) {
         Gson gson = new Gson();
         if (output instanceof ModelTensorOutput) {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) output;
@@ -672,13 +668,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             } else if (((List<?>) output).get(0) instanceof ModelTensors) {
                 ((List<ModelTensors>) output).forEach(outs -> { modelTensors.addAll(outs.getMlModelTensors()); });
             } else {
-                String result = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                String result = AccessController.doPrivileged(() -> gson.toJson(output));
                 modelTensors.add(ModelTensor.builder().name("response").result(result).build());
             }
         } else {
-            String result = output instanceof String
-                ? (String) output
-                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+            String result = output instanceof String ? (String) output : AccessController.doPrivileged(() -> gson.toJson(output));
             modelTensors.add(ModelTensor.builder().name("response").result(result).build());
         }
     }

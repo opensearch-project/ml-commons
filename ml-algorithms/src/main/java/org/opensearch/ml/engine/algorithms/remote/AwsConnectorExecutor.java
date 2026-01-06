@@ -12,12 +12,9 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_IN
 import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.text.StringEscapeUtils;
@@ -38,6 +35,7 @@ import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandler;
 import org.opensearch.ml.engine.algorithms.remote.streaming.StreamingHandlerFactory;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.script.ScriptService;
+import org.opensearch.secure_sm.AccessController;
 import org.opensearch.transport.StreamTransportService;
 import org.opensearch.transport.client.Client;
 
@@ -92,7 +90,6 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         return log;
     }
 
-    @SuppressWarnings("removal")
     @Override
     public void invokeRemoteService(
         String action,
@@ -131,8 +128,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                     )
                 )
                 .build();
-            AccessController
-                .doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> getHttpClient().execute(executeRequest));
+            AccessController.doPrivileged(() -> getHttpClient().execute(executeRequest));
         } catch (RuntimeException exception) {
             log.error("Failed to execute {} in aws connector: {}", action, exception.getMessage(), exception);
             actionListener.onFailure(exception);
