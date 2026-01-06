@@ -212,6 +212,8 @@ public class McpConnector implements Connector {
                 decrypted.put(key, function.apply(credential.get(key), tenantId));
             }
             this.decryptedCredential = decrypted;
+        } else {
+            this.decryptedCredential = new HashMap<>();
         }
         this.decryptedHeaders = createDecryptedHeaders(headers);
     }
