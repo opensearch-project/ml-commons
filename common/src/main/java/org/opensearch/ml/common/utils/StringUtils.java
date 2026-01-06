@@ -81,8 +81,16 @@ public class StringUtils {
 
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
-    // Maximum allowed JSON string size (10MB)
-    private static final int MAX_JSON_SIZE = 10_000_000;
+    // Maximum allowed JSON string size (configurable via plugins.ml_commons.max_json_size)
+    private static volatile int maxJsonSize;
+
+    /**
+     * Sets the maximum allowed JSON string size for parsing.
+     * @param size the maximum size, or -1 for unlimited
+     */
+    public static void setMaxJsonSize(int size) {
+        maxJsonSize = size;
+    }
 
     public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
         .serializeNulls()
@@ -177,8 +185,9 @@ public class StringUtils {
         if (jsonStr == null) {
             throw new IllegalArgumentException("JSON string cannot be null");
         }
-        if (jsonStr.length() > MAX_JSON_SIZE) {
-            throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d bytes)", MAX_JSON_SIZE));
+        // Check size limit if configured (maxJsonSize = -1 means unlimited)
+        if (maxJsonSize > 0 && jsonStr.length() > maxJsonSize) {
+            throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d characters)", maxJsonSize));
         }
         try {
             JsonNode jsonNode = MAPPER.readTree(jsonStr);

@@ -251,6 +251,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.update_cache.MLUpdateModelCacheAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
@@ -645,6 +646,12 @@ public class MachineLearningPlugin extends Plugin
         this.scriptService = scriptService;
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
+
+        // Initialize max JSON size from settings and set up listener for dynamic updates
+        StringUtils.setMaxJsonSize(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings));
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE, StringUtils::setMaxJsonSize);
 
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
         mlFeatureEnabledSetting.addListener(mlTaskManager);
@@ -1364,7 +1371,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_FEATURE_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID,
                 MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL,
-                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED
+                MLCommonsSettings.ML_COMMONS_STREAM_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE
             );
         return settings;
     }

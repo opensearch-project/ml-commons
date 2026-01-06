@@ -1267,4 +1267,58 @@ public class StringUtilsTest {
         // Normal messages should be handled properly
         assertTrue("Normal messages should be handled properly", escapedMessage.length() > 0);
     }
+
+    @Test
+    public void testFromJson_NullInput() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> StringUtils.fromJson(null, "response"));
+        assertEquals("JSON string cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void testFromJson_ExceedsMaxSize() {
+        // Set a small limit for testing
+        StringUtils.setMaxJsonSize(1000);
+
+        try {
+            // Create a JSON string larger than the limit
+            StringBuilder largeJson = new StringBuilder("{\"data\":\"");
+            for (int i = 0; i < 1000; i++) {
+                largeJson.append("a");
+            }
+            largeJson.append("\"}");
+
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> StringUtils.fromJson(largeJson.toString(), "response")
+            );
+            assertTrue(exception.getMessage().contains("JSON string size exceeds maximum allowed size"));
+        } finally {
+            StringUtils.setMaxJsonSize(100_000_000);
+        }
+    }
+
+    @Test
+    public void testFromJson_DuplicateKeys() {
+        // JSON with duplicate keys should be rejected due to STRICT_DUPLICATE_DETECTION
+        String jsonWithDuplicateKeys = "{\"user\": \"test\", \"role\": \"admin\", \"user\": \"malicious\"}";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.fromJson(jsonWithDuplicateKeys, "response")
+        );
+        assertTrue(exception.getMessage().contains("Invalid JSON format"));
+        assertTrue(exception.getCause() instanceof com.fasterxml.jackson.core.JsonParseException);
+    }
+
+    @Test
+    public void testFromJson_DuplicateKeysNested() {
+        // Test duplicate keys in nested objects
+        String jsonWithNestedDuplicates = "{\"config\": {\"timeout\": 30, \"retries\": 3, \"timeout\": 60}}";
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.fromJson(jsonWithNestedDuplicates, "response")
+        );
+        assertTrue(exception.getMessage().contains("Invalid JSON format"));
+    }
 }
