@@ -410,11 +410,8 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         HookRegistry hookRegistry = new HookRegistry();
 
         if (!contextManagers.isEmpty()) {
-            // Create context manager hook provider
-            ContextManagerHookProvider hookProvider = new ContextManagerHookProvider(contextManagers);
-
-            // Update hook configuration based on template
-            hookProvider.updateHookConfiguration(template.getHooks());
+            // Create context manager hook provider with template configuration
+            ContextManagerHookProvider hookProvider = new ContextManagerHookProvider(contextManagers, template.getHooks());
 
             // Register hooks
             hookProvider.registerHooks(hookRegistry);

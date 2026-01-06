@@ -531,12 +531,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             List<org.opensearch.ml.common.contextmanager.ContextManager> contextManagers = createContextManagers(template);
 
             if (!contextManagers.isEmpty()) {
-                // Create hook provider and register with hook registry
+                // Create hook provider with template configuration and register with hook registry
                 org.opensearch.ml.common.contextmanager.ContextManagerHookProvider hookProvider =
-                    new org.opensearch.ml.common.contextmanager.ContextManagerHookProvider(contextManagers);
-
-                // Update hook configuration based on template
-                hookProvider.updateHookConfiguration(template.getHooks());
+                    new org.opensearch.ml.common.contextmanager.ContextManagerHookProvider(contextManagers, template.getHooks());
 
                 // Register hooks with the registry
                 hookProvider.registerHooks(hookRegistry);

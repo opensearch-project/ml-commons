@@ -34,11 +34,22 @@ public class ContextManagerHookProvider implements HookProvider {
     public ContextManagerHookProvider(List<ContextManager> contextManagers) {
         this.contextManagers = new ArrayList<>(contextManagers);
         this.hookToManagersMap = new ConcurrentHashMap<>();
+        // Note: Hook organization will be done via updateHookConfiguration() 
+        // when template configuration is available
+    }
 
-        // Group managers by hook type based on their configuration
-        // This would typically be done based on the template configuration
-        // For now, we'll organize them by common hook types
-        organizeManagersByHook();
+    /**
+     * Constructor for ContextManagerHookProvider with initial configuration
+     * @param contextManagers List of context managers to register
+     * @param hookConfiguration Map of hook names to manager configurations
+     */
+    public ContextManagerHookProvider(List<ContextManager> contextManagers, Map<String, List<ContextManagerConfig>> hookConfiguration) {
+        this.contextManagers = new ArrayList<>(contextManagers);
+        this.hookToManagersMap = new ConcurrentHashMap<>();
+        
+        if (hookConfiguration != null && !hookConfiguration.isEmpty()) {
+            organizeManagersByHookConfiguration(hookConfiguration);
+        }
     }
 
     /**
@@ -112,29 +123,29 @@ public class ContextManagerHookProvider implements HookProvider {
     }
 
     /**
-     * Organize managers by hook type
-     * This is a simplified implementation - in practice, this would be based on
-     * the context management template configuration
+     * Organize managers by hook configuration
+     * @param hookConfiguration Map of hook names to manager configurations
      */
-    private void organizeManagersByHook() {
-        // For now, we'll assign managers to hooks based on their type
-        // This would be replaced with actual template-based configuration
-        for (ContextManager manager : contextManagers) {
-            String managerType = manager.getType();
+    private void organizeManagersByHookConfiguration(Map<String, List<ContextManagerConfig>> hookConfiguration) {
+        hookToManagersMap.clear();
+        
+        for (Map.Entry<String, List<ContextManagerConfig>> entry : hookConfiguration.entrySet()) {
+            String hookName = entry.getKey();
+            List<ContextManagerConfig> configs = entry.getValue();
 
-            // Assign managers to appropriate hooks based on their type
-            if ("ToolsOutputTruncateManager".equals(managerType)) {
-                addManagerToHook("POST_TOOL", manager);
-            } else if ("SlidingWindowManager".equals(managerType) || "SummarizingManager".equals(managerType)) {
-                addManagerToHook("POST_MEMORY", manager);
-                addManagerToHook("PRE_LLM", manager);
-            } else if ("SystemPromptAugmentationManager".equals(managerType)) {
-                addManagerToHook("PRE_LLM", manager);
-            } else {
-                // Default to PRE_LLM for unknown types
-                addManagerToHook("PRE_LLM", manager);
+            for (ContextManagerConfig config : configs) {
+                // Find the corresponding context manager
+                ContextManager manager = findManagerByType(config.getType());
+                if (manager != null) {
+                    addManagerToHook(hookName, manager);
+                } else {
+                    log.warn("Context manager of type {} not found for hook {}", config.getType(), hookName);
+                }
             }
         }
+
+        log.info("Organized {} context managers across {} hooks from configuration", 
+                contextManagers.size(), hookConfiguration.size());
     }
 
     /**
@@ -152,23 +163,7 @@ public class ContextManagerHookProvider implements HookProvider {
      * @param hookConfiguration Map of hook names to manager configurations
      */
     public void updateHookConfiguration(Map<String, List<ContextManagerConfig>> hookConfiguration) {
-        hookToManagersMap.clear();
-
-        for (Map.Entry<String, List<ContextManagerConfig>> entry : hookConfiguration.entrySet()) {
-            String hookName = entry.getKey();
-            List<ContextManagerConfig> configs = entry.getValue();
-
-            for (ContextManagerConfig config : configs) {
-                // Find the corresponding context manager
-                ContextManager manager = findManagerByType(config.getType());
-                if (manager != null) {
-                    addManagerToHook(hookName, manager);
-                } else {
-                    log.warn("Context manager of type {} not found", config.getType());
-                }
-            }
-        }
-
+        organizeManagersByHookConfiguration(hookConfiguration);
         log.info("Updated hook configuration with {} hooks", hookConfiguration.size());
     }
 

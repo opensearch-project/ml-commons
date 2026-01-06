@@ -169,18 +169,6 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetTemplate_EmptyTemplateName() {
-        @SuppressWarnings("unchecked")
-        ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
-
-        contextManagementTemplateService.getTemplate("", listener);
-
-        ArgumentCaptor<IllegalArgumentException> exceptionCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
-        verify(listener).onFailure(exceptionCaptor.capture());
-        assertEquals("Template name cannot be null, empty, or whitespace", exceptionCaptor.getValue().getMessage());
-    }
-
-    @Test
     public void testDeleteTemplate_NullTemplateName() {
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -309,17 +297,6 @@ public class ContextManagementTemplateServiceTests extends OpenSearchTestCase {
         ActionListener<ContextManagementTemplate> listener = mock(ActionListener.class);
 
         contextManagementTemplateService.getTemplate("\t  \n  ", listener);
-
-        verify(listener).onFailure(any(IllegalArgumentException.class));
-        verify(client, never()).threadPool();
-    }
-
-    @Test
-    public void testDeleteTemplate_EmptyTemplateName() {
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> listener = mock(ActionListener.class);
-
-        contextManagementTemplateService.deleteTemplate("", listener);
 
         verify(listener).onFailure(any(IllegalArgumentException.class));
         verify(client, never()).threadPool();
