@@ -39,7 +39,7 @@ dependencies {
     testImplementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     testImplementation group: 'org.json', name: 'json', version: '20231013'
-    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson_annotations}")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     testImplementation ('com.jayway.jsonpath:json-path:2.9.0') {
