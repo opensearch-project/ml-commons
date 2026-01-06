@@ -77,7 +77,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("{\"image\": \"base64data\"}", dataSet.getParameters().get("inputImage"));
+        assertEquals("base64data", dataSet.getParameters().get("inputImage"));
     }
 
     @Test
@@ -86,7 +86,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("{\"video\": \"videodata\"}", dataSet.getParameters().get("inputVideo"));
+        assertEquals("videodata", dataSet.getParameters().get("inputVideo"));
     }
 
     @Test
@@ -95,7 +95,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("{\"audio\": \"audiodata\"}", dataSet.getParameters().get("inputAudio"));
+        assertEquals("audiodata", dataSet.getParameters().get("inputAudio"));
     }
 
     @Test

@@ -15,10 +15,16 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class NovaMultiModalEmbeddingPreProcessFunction extends ConnectorPreProcessFunction {
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public NovaMultiModalEmbeddingPreProcessFunction() {
         this.returnDirectlyForRemoteInferenceInput = true;
@@ -40,12 +46,38 @@ public class NovaMultiModalEmbeddingPreProcessFunction extends ConnectorPreProce
 
         Map<String, String> parametersMap = new HashMap<>();
         String parameterName = detectModalityParameter(input);
-        parametersMap.put(parameterName, input);
+        String content = extractContent(input);
+        parametersMap.put(parameterName, content);
 
         return RemoteInferenceInputDataSet
             .builder()
             .parameters(convertScriptStringToJsonString(Map.of("parameters", parametersMap)))
             .build();
+    }
+
+    private String extractContent(String input) {
+        if (input == null || !input.startsWith("{")) {
+            return input;
+        }
+
+        try {
+            JsonNode node = objectMapper.readTree(input);
+            JsonNode value;
+
+            if ((value = node.get("text")) != null)
+                return value.asText();
+            if ((value = node.get("image")) != null)
+                return value.asText();
+            if ((value = node.get("audio")) != null)
+                return value.asText();
+            if ((value = node.get("video")) != null)
+                return value.asText();
+
+            return input;
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse JSON: {}", e.getMessage());
+            return input;
+        }
     }
 
     private String detectModalityParameter(String input) {
