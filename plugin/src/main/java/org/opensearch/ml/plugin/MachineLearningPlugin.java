@@ -5,21 +5,7 @@
 
 package org.opensearch.ml.plugin;
 
-import static org.opensearch.ml.common.CommonValue.MCP_SESSION_MANAGEMENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_AGENTIC_MEMORY_INDEX_PATTERN;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.*;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_GLOBAL_RESOURCE_CACHE_TTL;
@@ -1542,6 +1528,8 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(MCP_TOOLS_INDEX, "ML Commons MCP tools Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_JOBS_INDEX, "ML Commons Jobs Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_AGENTIC_MEMORY_INDEX_PATTERN, "ML Commons Agentic Memory Index Pattern"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX, "ML Commons Context Management Index "));
+
         return systemIndexDescriptors;
     }
 
