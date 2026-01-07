@@ -50,5 +50,5 @@ These blueprints include pre- and post-processing functions, suitable when you n
 - VertexAI
   - [embedding](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/gcp_vertexai_connector_embedding_blueprint.md)
 
-- Yandex Cloud:
+- Yandex Cloud
   - text embedding: [text-search-doc & text-search-query](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/yandexcloud_connector_embedding_legacy_blueprint.md) 
