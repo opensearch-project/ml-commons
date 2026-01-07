@@ -50,6 +50,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
@@ -760,5 +761,20 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 return null;
             }).when(client).get(any(), any());
         }
+    }
+
+    public void testShouldTrackRemoteFailure() {
+        // Test IllegalArgumentException - should not track
+        assertFalse(taskRunner.shouldTrackRemoteFailure(new IllegalArgumentException("Invalid argument")));
+
+        // Test OpenSearchStatusException with BAD_REQUEST - should not track
+        assertFalse(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Bad request", RestStatus.BAD_REQUEST)));
+
+        // Test OpenSearchStatusException with other status - should track
+        assertTrue(taskRunner.shouldTrackRemoteFailure(new OpenSearchStatusException("Server error", RestStatus.INTERNAL_SERVER_ERROR)));
+
+        // Test other exceptions - should track
+        assertTrue(taskRunner.shouldTrackRemoteFailure(new RuntimeException("Runtime error")));
+        assertTrue(taskRunner.shouldTrackRemoteFailure(new IOException("IO error")));
     }
 }
