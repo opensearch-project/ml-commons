@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector.functions.preprocess;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,10 +31,8 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
     NovaMultiModalEmbeddingPreProcessFunction function;
 
     TextSimilarityInputDataSet textSimilarityInputDataSet;
-    TextDocsInputDataSet textDocsInputDataSet;
     RemoteInferenceInputDataSet remoteInferenceInputDataSet;
 
-    MLInput textEmbeddingInput;
     MLInput textSimilarityInput;
     MLInput remoteInferenceInput;
 
@@ -41,10 +40,8 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
     public void setUp() {
         function = new NovaMultiModalEmbeddingPreProcessFunction();
         textSimilarityInputDataSet = TextSimilarityInputDataSet.builder().queryText("test").textDocs(Arrays.asList("hello")).build();
-        textDocsInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("hello")).build();
         remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("key1", "value1", "key2", "value2")).build();
 
-        textEmbeddingInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         textSimilarityInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(textSimilarityInputDataSet).build();
         remoteInferenceInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
     }
@@ -65,7 +62,8 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
 
     @Test
     public void process_TextInput() {
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+        TextDocsInputDataSet jsonInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("{\"text\": \"hello\"}")).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
         assertEquals("hello", dataSet.getParameters().get("inputText"));
@@ -113,5 +111,18 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
     public void process_RemoteInferenceInput() {
         RemoteInferenceInputDataSet dataSet = function.apply(remoteInferenceInput);
         assertEquals(remoteInferenceInputDataSet, dataSet);
+    }
+
+    @Test
+    public void testExtractContent_MalformedJson() {
+        NovaMultiModalEmbeddingPreProcessFunction function = new NovaMultiModalEmbeddingPreProcessFunction();
+        TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("{ invalid json }")).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+
+        RemoteInferenceInputDataSet result = function.process(mlInput);
+
+        assertNotNull(result);
+        // Verify the malformed JSON is returned unchanged in the parameters
+        assertEquals("{ invalid json }", result.getParameters().get("inputText"));
     }
 }

@@ -1085,6 +1085,48 @@ public class ConnectorUtilsTest {
     }
 
     @Test
+    public void testBuildSdkRequest_NovaMalformedJson() throws IOException {
+        Connector connector = mock(Connector.class);
+        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
+        when(connector.getActionEndpoint("predict", Map.of()))
+            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String malformedJson = "{ invalid json }";
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest("predict", connector, Map.of(), malformedJson, software.amazon.awssdk.http.SdkHttpMethod.POST);
+
+        assertNotNull(request);
+        assertTrue(request.contentStreamProvider().isPresent());
+
+        // Verify the payload was returned unchanged due to parsing exception
+        String actualPayload = new String(request.contentStreamProvider().get().newStream().readAllBytes());
+        assertEquals(malformedJson, actualPayload);
+    }
+
+    @Test
+    public void testBuildSdkRequest_NovaMissingSingleEmbeddingParams() throws IOException {
+        Connector connector = mock(Connector.class);
+        when(connector.getParameters()).thenReturn(Map.of("model", BEDROCK_NOVA_MODEL));
+        when(connector.getActionEndpoint("predict", Map.of()))
+            .thenReturn("https://bedrock-runtime.us-east-1.amazonaws.com/model/test/invoke");
+        when(connector.getDecryptedHeaders()).thenReturn(Map.of("Content-Type", "application/json"));
+
+        String jsonWithoutParams = "{\"taskType\":\"SINGLE_EMBEDDING\"}";
+
+        SdkHttpFullRequest request = ConnectorUtils
+            .buildSdkRequest("predict", connector, Map.of(), jsonWithoutParams, software.amazon.awssdk.http.SdkHttpMethod.POST);
+
+        assertNotNull(request);
+        assertTrue(request.contentStreamProvider().isPresent());
+
+        // Verify the payload was returned unchanged since singleEmbeddingParams is null
+        String actualPayload = new String(request.contentStreamProvider().get().newStream().readAllBytes());
+        assertEquals(jsonWithoutParams, actualPayload);
+    }
+
+    @Test
     public void testBuildSdkRequest_NonNovaModelSkipsCleaning() throws IOException {
         Connector connector = mock(Connector.class);
         when(connector.getParameters()).thenReturn(Map.of("model", "gpt-3.5-turbo"));
