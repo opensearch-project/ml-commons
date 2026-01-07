@@ -346,7 +346,8 @@ public class ConnectorUtils {
         String charset = parameters.getOrDefault("charset", "UTF-8");
 
         // Clean empty JSON sections for Bedrock Nova embedding requests
-        String model = connector.getParameters().get("model");
+        Map<String, String> connectorParams = connector.getParameters();
+        String model = connectorParams != null ? connectorParams.get("model") : null;
         if (payload != null && model != null && model.equals(BEDROCK_NOVA_MODEL)) {
             payload = cleanBedrockNovaRequest(payload);
         }
