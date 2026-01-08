@@ -104,6 +104,14 @@ public interface Tool {
     }
 
     /**
+     * Get tool parameter definitions for validation.
+     * @return Map of parameter names to their expected types
+     */
+    default Map<String, Class<?>> getToolParamsDefinition() {
+        return Collections.emptyMap();
+    }
+
+    /**
      * Tool factory which can create instance of {@link Tool}.
      * @param <T> The subclass this factory produces
      */

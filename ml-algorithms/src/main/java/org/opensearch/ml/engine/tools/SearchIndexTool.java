@@ -131,6 +131,13 @@ public class SearchIndexTool implements Tool {
         return true;
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(INPUT_FIELD, String.class);
+        return params;
+    }
+
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);

@@ -418,6 +418,15 @@ public class ListIndexTool implements Tool {
         return parameters != null && !parameters.isEmpty();
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put("indices", String[].class);
+        params.put("local", Boolean.class);
+        params.put("page_size", Integer.class);
+        return params;
+    }
+
     /**
      * Factory for the {@link ListIndexTool}
      */

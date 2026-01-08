@@ -84,6 +84,13 @@ public class ReadFromScratchPadTool implements Tool {
         return true;
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(PERSISTENT_NOTES_KEY, String.class);
+        return params;
+    }
+
     /**
      * Executes the ReadFromScratchPadTool.
      * This tool retrieves notes from the persistent scratchpad for the current conversation.

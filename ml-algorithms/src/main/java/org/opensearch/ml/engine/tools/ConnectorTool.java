@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
@@ -98,6 +99,13 @@ public class ConnectorTool implements Tool {
     @Override
     public boolean validate(Map<String, String> parameters) {
         return parameters != null && !parameters.isEmpty();
+    }
+
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put("response_filter", String.class);
+        return params;
     }
 
     public static class Factory implements Tool.Factory<ConnectorTool> {
