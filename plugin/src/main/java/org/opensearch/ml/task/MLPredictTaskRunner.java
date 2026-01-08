@@ -585,7 +585,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 // double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
                                 // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
-                        }, e -> { handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName); });
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, shouldTrackRemoteFailure(e), modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener, channel); // with listener
                     } else {
                         // long startTime = System.nanoTime();
