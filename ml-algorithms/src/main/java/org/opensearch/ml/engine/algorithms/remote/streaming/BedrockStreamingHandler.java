@@ -108,6 +108,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     ) {
         try {
             AtomicBoolean isStreamClosed = new AtomicBoolean(false);
+            AtomicBoolean firstToolSent = new AtomicBoolean(false);
             AtomicReference<String> toolName = new AtomicReference<>();
             AtomicReference<Map<String, Object>> toolInput = new AtomicReference<>();
             AtomicReference<String> toolUseId = new AtomicReference<>();
@@ -146,7 +147,18 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     log.debug("Tool execution in progress - keeping stream open");
                 }
             }).subscriber(event -> {
-                handleStreamEvent(event, listener, isStreamClosed, toolName, toolInput, toolUseId, toolInputAccumulator, currentState);
+                log.debug("BEDROCK_RAW_EVENT: Type={}, Event={}", event.sdkEventType(), event);
+                handleStreamEvent(
+                    event,
+                    listener,
+                    isStreamClosed,
+                    firstToolSent,
+                    toolName,
+                    toolInput,
+                    toolUseId,
+                    toolInputAccumulator,
+                    currentState
+                );
             }).build();
 
             // Start streaming
@@ -224,6 +236,7 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
         ConverseStreamOutput event,
         StreamPredictActionListener<MLTaskResponse, ?> listener,
         AtomicBoolean isStreamClosed,
+        AtomicBoolean firstToolSent,
         AtomicReference<String> toolName,
         AtomicReference<Map<String, Object>> toolInput,
         AtomicReference<String> toolUseId,
@@ -307,7 +320,8 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                 break;
 
             case ACCUMULATING_TOOL_INPUT:
-                if (isToolInputDelta(event)) {
+                // TODO: support parallel tool use
+                if (isToolInputDelta(event) && !firstToolSent.get()) {
                     String inputFragment = getToolInputFragment(event);
                     accumulateToolInput(inputFragment, toolInput, toolInputAccumulator);
 
@@ -318,11 +332,21 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
                     } else {
                         sendContentResponse(inputFragment, false, listener);
                     }
+                } else if (isCurrentToolInputComplete(event)) {
+                    // contentBlockStop during ACCUMULATING_TOOL_INPUT means this tool's input is complete
+                    // Since we do not support parallel tool execution yet, drop tool args after the first
+                    firstToolSent.set(true);
+                    log.info("First tool complete, will drop events for subsequent tools");
                 } else if (isToolInputComplete(event)) {
+                    // Ensure toolInput is set even if it's empty
+                    if (toolInput.get() == null) {
+                        toolInput.set(Map.of());
+                    }
+
                     if (isAGUIAgent) {
                         BaseEvent toolCallEndEvent = new ToolCallEndEvent(toolUseId.get());
                         sendAGUIEvent(toolCallEndEvent, false, listener);
-                        log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}' after args completed", toolName.get());
+                        log.debug("AG-UI: Sent TOOL_CALL_END event for tool '{}'", toolName.get());
                     }
 
                     currentState.set(StreamState.WAITING_FOR_TOOL_RESULT);
@@ -377,6 +401,10 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
 
     private boolean isToolInputComplete(ConverseStreamOutput event) {
         return event.sdkEventType() == ConverseStreamOutput.EventType.MESSAGE_STOP && event.toString().contains(STOP_REASON_TOOL_USE);
+    }
+
+    private boolean isCurrentToolInputComplete(ConverseStreamOutput event) {
+        return event.sdkEventType() == ConverseStreamOutput.EventType.CONTENT_BLOCK_STOP;
     }
 
     private MLTaskResponse createToolUseResponse(
@@ -476,17 +504,19 @@ public class BedrockStreamingHandler extends BaseStreamingHandler {
     }
 
     private BedrockRuntimeAsyncClient buildBedrockRuntimeAsyncClient() {
-        AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
-            ? StaticCredentialsProvider
-                .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
-            : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
+        return java.security.AccessController.doPrivileged((java.security.PrivilegedAction<BedrockRuntimeAsyncClient>) () -> {
+            AwsCredentialsProvider awsCredentialsProvider = connector.getSessionToken() != null
+                ? StaticCredentialsProvider
+                    .create(AwsSessionCredentials.create(connector.getAccessKey(), connector.getSecretKey(), connector.getSessionToken()))
+                : StaticCredentialsProvider.create(AwsBasicCredentials.create(connector.getAccessKey(), connector.getSecretKey()));
 
-        return BedrockRuntimeAsyncClient
-            .builder()
-            .region(Region.of(connector.getRegion()))
-            .credentialsProvider(awsCredentialsProvider)
-            .httpClient(httpClient)
-            .build();
+            return BedrockRuntimeAsyncClient
+                .builder()
+                .region(Region.of(connector.getRegion()))
+                .credentialsProvider(awsCredentialsProvider)
+                .httpClient(httpClient)
+                .build();
+        });
     }
 
     private List<SystemContentBlock> parseSystemMessages(JsonNode systemArray) {
