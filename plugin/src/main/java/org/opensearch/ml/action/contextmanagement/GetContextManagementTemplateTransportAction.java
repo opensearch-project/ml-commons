@@ -44,26 +44,23 @@ public class GetContextManagementTemplateTransportAction extends
         MLGetContextManagementTemplateRequest request,
         ActionListener<MLGetContextManagementTemplateResponse> listener
     ) {
-        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
-        ActionListener<MLGetContextManagementTemplateResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
-        try {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             log.debug("Getting context management template: {}", request.getTemplateName());
 
             contextManagementTemplateService.getTemplate(request.getTemplateName(), ActionListener.wrap(template -> {
                 if (template != null) {
                     log.debug("Successfully retrieved context management template: {}", request.getTemplateName());
-                    wrappedListener.onResponse(new MLGetContextManagementTemplateResponse(template));
+                    listener.onResponse(new MLGetContextManagementTemplateResponse(template));
                 } else {
                     log.warn("Context management template not found: {}", request.getTemplateName());
-                    wrappedListener.onFailure(new RuntimeException("Context management template not found: " + request.getTemplateName()));
+                    listener.onFailure(new RuntimeException("Context management template not found: " + request.getTemplateName()));
                 }
             }, exception -> {
                 log.error("Error getting context management template: {}", request.getTemplateName(), exception);
-                wrappedListener.onFailure(exception);
+                listener.onFailure(exception);
             }));
         } catch (Exception e) {
             log.error("Unexpected error getting context management template: {}", request.getTemplateName(), e);
-            context.restore();
             listener.onFailure(e);
         }
     }
