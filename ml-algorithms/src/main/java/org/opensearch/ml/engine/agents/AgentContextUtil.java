@@ -14,8 +14,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.contextmanager.ContextManagerContext;
-import org.opensearch.ml.common.hooks.EnhancedPostToolEvent;
 import org.opensearch.ml.common.hooks.HookRegistry;
+import org.opensearch.ml.common.hooks.PostToolEvent;
 import org.opensearch.ml.common.hooks.PreLLMEvent;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -123,7 +123,7 @@ public class AgentContextUtil {
                     toolSpecs,
                     memory
                 );
-                EnhancedPostToolEvent event = new EnhancedPostToolEvent(null, null, context, new HashMap<>());
+                PostToolEvent event = new PostToolEvent(null, null, context, new HashMap<>());
                 hookRegistry.emit(event);
 
                 Object processedOutput = extractProcessedToolOutput(context);

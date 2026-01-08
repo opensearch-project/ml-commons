@@ -302,6 +302,29 @@ public class SummarizationManagerTest {
         Assert.assertEquals("Empty filter fallback", result);
     }
 
+    @Test
+    public void testExecuteWithSummarizationFailure() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("summarization_model_id", "test-model");
+        manager.initialize(config);
+
+        // Add enough interactions to trigger summarization
+        addToolInteractionsToContext(20);
+        int originalSize = context.getToolInteractions().size();
+
+        // Execute - this will fail because we don't have a real client
+        // but it should gracefully skip summarization
+        manager.execute(context);
+
+        // Should keep original interactions unchanged when summarization fails
+        Assert.assertEquals(originalSize, context.getToolInteractions().size());
+
+        // Verify original interactions are preserved
+        for (int i = 0; i < originalSize; i++) {
+            Assert.assertEquals("Tool output " + (i + 1), context.getToolInteractions().get(i));
+        }
+    }
+
     /**
      * Helper method to create a mock MLTaskResponse with the given data.
      */

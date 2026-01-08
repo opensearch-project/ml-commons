@@ -241,7 +241,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 agentInput.setHookRegistry(hookRegistry);
 
                 log
-                    .info(
+                    .debug(
                         "Executing agent with context management template: {} using {} context managers",
                         contextManagementName,
                         contextManagers.size()
@@ -250,7 +250,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 // Execute agent with hook registry
                 try {
                     mlEngine.execute(request.getInput(), ActionListener.wrap(output -> {
-                        log.info("Agent execution completed successfully with context management");
+                        log.debug("Agent execution completed successfully with context management");
                         MLExecuteTaskResponse response = new MLExecuteTaskResponse(request.getFunctionName(), output);
                         listener.onResponse(response);
                     }, error -> {
@@ -346,6 +346,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                     return contextManagementName;
                 }
             } catch (Exception e) {
+                log.debug("Failed to retrieve context management name from agent, continuing to fallback methods: {}", e.getMessage());
                 // Continue to fallback methods
             }
         }
