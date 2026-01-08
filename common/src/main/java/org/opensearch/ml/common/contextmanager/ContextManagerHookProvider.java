@@ -10,10 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.opensearch.ml.common.hooks.EnhancedPostToolEvent;
 import org.opensearch.ml.common.hooks.HookProvider;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.hooks.PostMemoryEvent;
+import org.opensearch.ml.common.hooks.PostToolEvent;
 import org.opensearch.ml.common.hooks.PreLLMEvent;
 
 import lombok.extern.log4j.Log4j2;
@@ -34,7 +34,7 @@ public class ContextManagerHookProvider implements HookProvider {
     public ContextManagerHookProvider(List<ContextManager> contextManagers) {
         this.contextManagers = new ArrayList<>(contextManagers);
         this.hookToManagersMap = new ConcurrentHashMap<>();
-        // Note: Hook organization will be done via updateHookConfiguration() 
+        // Note: Hook organization will be done via updateHookConfiguration()
         // when template configuration is available
     }
 
@@ -46,7 +46,7 @@ public class ContextManagerHookProvider implements HookProvider {
     public ContextManagerHookProvider(List<ContextManager> contextManagers, Map<String, List<ContextManagerConfig>> hookConfiguration) {
         this.contextManagers = new ArrayList<>(contextManagers);
         this.hookToManagersMap = new ConcurrentHashMap<>();
-        
+
         if (hookConfiguration != null && !hookConfiguration.isEmpty()) {
             organizeManagersByHookConfiguration(hookConfiguration);
         }
@@ -60,7 +60,7 @@ public class ContextManagerHookProvider implements HookProvider {
     public void registerHooks(HookRegistry registry) {
         // Register callbacks for each hook type
         registry.addCallback(PreLLMEvent.class, this::handlePreLLM);
-        registry.addCallback(EnhancedPostToolEvent.class, this::handlePostTool);
+        registry.addCallback(PostToolEvent.class, this::handlePostTool);
         registry.addCallback(PostMemoryEvent.class, this::handlePostMemory);
 
         log.info("Registered context manager hooks for {} managers", contextManagers.size());
@@ -77,9 +77,9 @@ public class ContextManagerHookProvider implements HookProvider {
 
     /**
      * Handle PostTool hook events
-     * @param event The EnhancedPostTool event
+     * @param event The PostTool event
      */
-    private void handlePostTool(EnhancedPostToolEvent event) {
+    private void handlePostTool(PostToolEvent event) {
         log.debug("Handling PostTool event");
         executeManagersForHook("POST_TOOL", event.getContext());
     }
@@ -128,7 +128,7 @@ public class ContextManagerHookProvider implements HookProvider {
      */
     private void organizeManagersByHookConfiguration(Map<String, List<ContextManagerConfig>> hookConfiguration) {
         hookToManagersMap.clear();
-        
+
         for (Map.Entry<String, List<ContextManagerConfig>> entry : hookConfiguration.entrySet()) {
             String hookName = entry.getKey();
             List<ContextManagerConfig> configs = entry.getValue();
@@ -144,8 +144,7 @@ public class ContextManagerHookProvider implements HookProvider {
             }
         }
 
-        log.info("Organized {} context managers across {} hooks from configuration", 
-                contextManagers.size(), hookConfiguration.size());
+        log.info("Organized {} context managers across {} hooks from configuration", contextManagers.size(), hookConfiguration.size());
     }
 
     /**

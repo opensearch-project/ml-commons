@@ -40,15 +40,12 @@ public class UpdateContextManagementTemplateTransportAction extends
 
     @Override
     protected void doExecute(Task task, MLUpdateContextManagementTemplateRequest request, ActionListener<UpdateResponse> listener) {
-        ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
-        ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
-        try {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             log.info("Updating context management template: {}", request.getTemplateName());
 
-            contextManagementTemplateService.updateTemplate(request.getTemplateName(), request.getTemplate(), wrappedListener);
+            contextManagementTemplateService.updateTemplate(request.getTemplateName(), request.getTemplate(), listener);
         } catch (Exception e) {
             log.error("Failed to update context management template: {}", request.getTemplateName(), e);
-            context.restore();
             listener.onFailure(e);
         }
     }

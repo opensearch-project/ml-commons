@@ -669,11 +669,11 @@ public class MLAgentTest {
         );
 
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(CommonValue.VERSION_3_3_0);
+        output.setVersion(CommonValue.VERSION_3_5_0);
         agent.writeTo(output);
 
         StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(CommonValue.VERSION_3_3_0);
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLAgent deserializedAgent = new MLAgent(streamInput);
 
         assertEquals("template_name", deserializedAgent.getContextManagementTemplateName());
@@ -709,11 +709,11 @@ public class MLAgentTest {
         );
 
         BytesStreamOutput output = new BytesStreamOutput();
-        output.setVersion(CommonValue.VERSION_3_3_0);
+        output.setVersion(CommonValue.VERSION_3_5_0);
         agent.writeTo(output);
 
         StreamInput streamInput = output.bytes().streamInput();
-        streamInput.setVersion(CommonValue.VERSION_3_3_0);
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
         MLAgent deserializedAgent = new MLAgent(streamInput);
 
         assertNull(deserializedAgent.getContextManagementTemplateName());

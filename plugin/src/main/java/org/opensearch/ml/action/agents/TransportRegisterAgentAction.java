@@ -89,13 +89,20 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
-        // Validate context management configuration (following connector pattern)
+        validateAgent(agent, ActionListener.wrap(validatedAgent -> {
+            // All validations passed, proceed with registration
+            proceedWithAgentRegistration(validatedAgent, listener);
+        }, listener::onFailure));
+    }
+
+    private void validateAgent(MLAgent agent, ActionListener<MLAgent> listener) {
+        // Validate context management configuration
         if (agent.hasContextManagementTemplate()) {
-            // Validate context management template access (similar to connector access validation)
+            // Validate context management template access
             String templateName = agent.getContextManagementTemplateName();
             agentRegistrationValidator.validateContextManagementTemplateAccess(templateName, ActionListener.wrap(hasAccess -> {
                 if (Boolean.TRUE.equals(hasAccess)) {
-                    continueAgentRegistration(agent, listener);
+                    listener.onResponse(agent);
                 } else {
                     listener
                         .onFailure(
@@ -109,12 +116,16 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
                 listener.onFailure(e);
             }));
         } else if (agent.getInlineContextManagement() != null) {
-            // Validate inline context management configuration only if it exists (similar to inline connector validation)
-            validateInlineContextManagement(agent);
-            continueAgentRegistration(agent, listener);
+            // Validate inline context management configuration
+            try {
+                validateInlineContextManagement(agent);
+                listener.onResponse(agent);
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
         } else {
-            // No context management configuration - that's fine, continue with registration
-            continueAgentRegistration(agent, listener);
+            // No context management configuration - that's fine
+            listener.onResponse(agent);
         }
     }
 
@@ -141,7 +152,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
     }
 
-    private void continueAgentRegistration(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
+    private void proceedWithAgentRegistration(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
         String mcpConnectorConfigJSON = (agent.getParameters() != null) ? agent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.

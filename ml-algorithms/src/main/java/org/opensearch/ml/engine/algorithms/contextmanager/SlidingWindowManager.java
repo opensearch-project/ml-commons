@@ -98,7 +98,7 @@ public class SlidingWindowManager implements ContextManager {
         }
 
         // Find safe start point to avoid breaking tool pairs
-        int startIndex = findSafeStartPoint(interactions, originalSize - maxMessages);
+        int startIndex = ContextManagerUtils.findSafePoint(interactions, originalSize - maxMessages, true);
 
         // Keep the most recent interactions from safe start point
         List<String> updatedInteractions = new ArrayList<>(interactions.subList(startIndex, originalSize));
@@ -146,46 +146,4 @@ public class SlidingWindowManager implements ContextManager {
         }
     }
 
-    /**
-     * Find a safe start point that doesn't break assistant-tool message pairs
-     * Same logic as SummarizationManager but for finding start point
-     */
-    private int findSafeStartPoint(List<String> interactions, int targetStartPoint) {
-        if (targetStartPoint <= 0) {
-            return 0;
-        }
-        if (targetStartPoint >= interactions.size()) {
-            return interactions.size();
-        }
-
-        int startPoint = targetStartPoint;
-
-        while (startPoint < interactions.size()) {
-            try {
-                String messageAtStart = interactions.get(startPoint);
-
-                // Oldest message cannot be a toolResult because it needs a toolUse preceding it
-                boolean hasToolResult = messageAtStart.contains("toolResult");
-
-                // Oldest message can be a toolUse only if a toolResult immediately follows it
-                boolean hasToolUse = messageAtStart.contains("toolUse");
-                boolean nextHasToolResult = false;
-                if (startPoint + 1 < interactions.size()) {
-                    nextHasToolResult = interactions.get(startPoint + 1).contains("toolResult");
-                }
-
-                if (hasToolResult || (hasToolUse && startPoint + 1 < interactions.size() && !nextHasToolResult)) {
-                    startPoint++;
-                } else {
-                    break;
-                }
-
-            } catch (Exception e) {
-                log.warn("Error checking message at index {}: {}", startPoint, e.getMessage());
-                startPoint++;
-            }
-        }
-
-        return startPoint;
-    }
 }

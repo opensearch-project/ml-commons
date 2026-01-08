@@ -52,6 +52,8 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
+import org.opensearch.ml.common.contextmanager.ContextManager;
+import org.opensearch.ml.common.contextmanager.ContextManagerHookProvider;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.hooks.HookRegistry;
 import org.opensearch.ml.common.input.Input;
@@ -66,9 +68,7 @@ import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
-import org.opensearch.ml.engine.algorithms.contextmanager.SlidingWindowManager;
-import org.opensearch.ml.engine.algorithms.contextmanager.SummarizationManager;
-import org.opensearch.ml.engine.algorithms.contextmanager.ToolsOutputTruncateManager;
+import org.opensearch.ml.engine.algorithms.contextmanager.ContextManagerFactory;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -528,12 +528,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             // Fresh HookRegistry ensures no duplicate registrations
 
             // Create context managers from template configuration
-            List<org.opensearch.ml.common.contextmanager.ContextManager> contextManagers = createContextManagers(template);
+            List<ContextManager> contextManagers = ContextManagerFactory.createContextManagers(template, client);
 
             if (!contextManagers.isEmpty()) {
                 // Create hook provider with template configuration and register with hook registry
-                org.opensearch.ml.common.contextmanager.ContextManagerHookProvider hookProvider =
-                    new org.opensearch.ml.common.contextmanager.ContextManagerHookProvider(contextManagers, template.getHooks());
+                ContextManagerHookProvider hookProvider = new ContextManagerHookProvider(contextManagers, template.getHooks());
 
                 // Register hooks with the registry
                 hookProvider.registerHooks(hookRegistry);
@@ -545,127 +544,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         } catch (Exception e) {
             log.error("Failed to process inline context management template '{}': {}", template.getName(), e.getMessage(), e);
         }
-    }
-
-    /**
-     * Create context managers from template configuration
-     * 
-     * @param template the context management template
-     * @return list of created context managers
-     */
-    private List<org.opensearch.ml.common.contextmanager.ContextManager> createContextManagers(ContextManagementTemplate template) {
-        List<org.opensearch.ml.common.contextmanager.ContextManager> managers = new ArrayList<>();
-
-        try {
-            // Iterate through all hooks and their configurations
-            for (Map.Entry<String, List<org.opensearch.ml.common.contextmanager.ContextManagerConfig>> entry : template
-                .getHooks()
-                .entrySet()) {
-                String hookName = entry.getKey();
-                List<org.opensearch.ml.common.contextmanager.ContextManagerConfig> configs = entry.getValue();
-
-                log.debug("Processing hook '{}' with {} configurations", hookName, configs.size());
-
-                for (org.opensearch.ml.common.contextmanager.ContextManagerConfig config : configs) {
-                    try {
-                        org.opensearch.ml.common.contextmanager.ContextManager manager = createContextManager(config);
-                        if (manager != null) {
-                            managers.add(manager);
-                            log.debug("Created context manager: {} for hook: {}", config.getType(), hookName);
-                        }
-                    } catch (Exception e) {
-                        log
-                            .error(
-                                "Failed to create context manager of type '{}' for hook '{}': {}",
-                                config.getType(),
-                                hookName,
-                                e.getMessage(),
-                                e
-                            );
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to create context managers from template: {}", e.getMessage(), e);
-        }
-
-        return managers;
-    }
-
-    /**
-     * Create a single context manager from configuration
-     * 
-     * @param config the context manager configuration
-     * @return the created context manager or null if creation failed
-     */
-    private org.opensearch.ml.common.contextmanager.ContextManager createContextManager(
-        org.opensearch.ml.common.contextmanager.ContextManagerConfig config
-    ) {
-        try {
-            String type = config.getType();
-            Map<String, Object> managerConfig = config.getConfig();
-
-            log.debug("Creating context manager of type: {}", type);
-
-            // Create context manager based on type
-            switch (type) {
-                case "ToolsOutputTruncateManager":
-                    return createToolsOutputTruncateManager(managerConfig);
-                case "SummarizationManager":
-                case "SummarizingManager":
-                    return createSummarizationManager(managerConfig);
-                case "MemoryManager":
-                    return createMemoryManager(managerConfig);
-                case "ConversationManager":
-                    return createConversationManager(managerConfig);
-                default:
-                    log.warn("Unknown context manager type: {}", type);
-                    return null;
-            }
-        } catch (Exception e) {
-            log.error("Failed to create context manager: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    /**
-     * Create ToolsOutputTruncateManager
-     */
-    private org.opensearch.ml.common.contextmanager.ContextManager createToolsOutputTruncateManager(Map<String, Object> config) {
-        log.debug("Creating ToolsOutputTruncateManager with config: {}", config);
-        ToolsOutputTruncateManager manager = new ToolsOutputTruncateManager();
-        manager.initialize(config != null ? config : new HashMap<>());
-        return manager;
-    }
-
-    /**
-     * Create SummarizationManager
-     */
-    private org.opensearch.ml.common.contextmanager.ContextManager createSummarizationManager(Map<String, Object> config) {
-        log.debug("Creating SummarizationManager with config: {}", config);
-        SummarizationManager manager = new SummarizationManager(client);
-        manager.initialize(config != null ? config : new HashMap<>());
-        return manager;
-    }
-
-    /**
-     * Create SlidingWindowManager (used for MemoryManager type)
-     */
-    private org.opensearch.ml.common.contextmanager.ContextManager createMemoryManager(Map<String, Object> config) {
-        log.debug("Creating SlidingWindowManager (MemoryManager) with config: {}", config);
-        SlidingWindowManager manager = new SlidingWindowManager();
-        manager.initialize(config != null ? config : new HashMap<>());
-        return manager;
-    }
-
-    /**
-     * Create ConversationManager (placeholder - using SummarizationManager for now)
-     */
-    private org.opensearch.ml.common.contextmanager.ContextManager createConversationManager(Map<String, Object> config) {
-        log.debug("Creating ConversationManager (using SummarizationManager as placeholder) with config: {}", config);
-        SummarizationManager manager = new SummarizationManager(client);
-        manager.initialize(config != null ? config : new HashMap<>());
-        return manager;
     }
 
     private void executeAgent(

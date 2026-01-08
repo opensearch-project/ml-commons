@@ -272,6 +272,36 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }, listener::onFailure));
     }
 
+    /**
+     * Process PRE_LLM hook and update interactions if modified by context managers
+     */
+    private void processPreLLMHook(
+        Map<String, String> tmpParameters,
+        List<String> interactions,
+        Map<String, MLToolSpec> toolSpecMap,
+        Memory memory,
+        HookRegistry hookRegistry
+    ) {
+        if (hookRegistry != null && !interactions.isEmpty()) {
+            List<MLToolSpec> toolSpecs = new ArrayList<>(toolSpecMap.values());
+            ContextManagerContext contextAfterEvent = AgentContextUtil
+                .emitPreLLMHook(tmpParameters, interactions, toolSpecs, memory, hookRegistry);
+
+            // Check if context managers actually modified the interactions
+            List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
+            if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
+                interactions.clear();
+                interactions.addAll(updatedInteractions);
+
+                // Update parameters if context manager set INTERACTIONS
+                String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
+                if (contextInteractions != null && !contextInteractions.isEmpty()) {
+                    tmpParameters.put(INTERACTIONS, contextInteractions);
+                }
+            }
+        }
+    }
+
     private void runAgent(
         MLAgent mlAgent,
         Map<String, String> params,
@@ -543,25 +573,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         return;
                     }
                     // Emit PRE_LLM hook event
-                    if (hookRegistry != null && !interactions.isEmpty()) {
-                        List<MLToolSpec> currentToolSpecs = new ArrayList<>(toolSpecMap.values());
-                        ContextManagerContext contextAfterEvent = AgentContextUtil
-                            .emitPreLLMHook(tmpParameters, interactions, currentToolSpecs, memory, hookRegistry);
-
-                        // Check if context managers actually modified the interactions
-                        List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
-
-                        if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
-                            interactions.clear();
-                            interactions.addAll(updatedInteractions);
-
-                            // Update parameters if context manager set INTERACTIONS
-                            String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
-                            if (contextInteractions != null && !contextInteractions.isEmpty()) {
-                                tmpParameters.put(INTERACTIONS, contextInteractions);
-                            }
-                        }
-                    }
+                    processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
                     ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
                     streamingWrapper.executeRequest(request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
@@ -575,25 +587,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         // Emit PRE_LLM hook event for initial LLM call
-        List<MLToolSpec> initialToolSpecs = new ArrayList<>(toolSpecMap.values());
         tmpParameters.put("_llm_model_id", llm.getModelId());
-        if (hookRegistry != null && !interactions.isEmpty()) {
-            ContextManagerContext contextAfterEvent = AgentContextUtil
-                .emitPreLLMHook(tmpParameters, interactions, initialToolSpecs, memory, hookRegistry);
-
-            // Check if context managers actually modified the interactions
-            List<String> updatedInteractions = contextAfterEvent.getToolInteractions();
-            if (updatedInteractions != null && !updatedInteractions.equals(interactions)) {
-                interactions.clear();
-                interactions.addAll(updatedInteractions);
-
-                // Update parameters if context manager set INTERACTIONS
-                String contextInteractions = contextAfterEvent.getParameters().get(INTERACTIONS);
-                if (contextInteractions != null && !contextInteractions.isEmpty()) {
-                    tmpParameters.put(INTERACTIONS, contextInteractions);
-                }
-            }
-        }
+        processPreLLMHook(tmpParameters, interactions, toolSpecMap, memory, hookRegistry);
         ActionRequest request = streamingWrapper.createPredictionRequest(llm, tmpParameters, tenantId);
         streamingWrapper.executeRequest(request, firstListener);
 

@@ -143,7 +143,7 @@ public class SummarizationManager implements ContextManager {
         }
 
         // Find a safe cut point that doesn't break assistant-tool pairs
-        int safeCutPoint = findSafeCutPoint(interactions, messagesToSummarizeCount);
+        int safeCutPoint = ContextManagerUtils.findSafePoint(interactions, messagesToSummarizeCount, false);
 
         if (safeCutPoint <= 0) {
             return;
@@ -199,32 +199,22 @@ public class SummarizationManager implements ContextManager {
             ActionListener<MLTaskResponse> listener = ActionListener.wrap(response -> {
                 try {
                     String summary = extractSummaryFromResponse(response, context);
-                    processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalInteractions);
+                    if (summary != null) {
+                        processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalInteractions);
+                    } else {
+                        // Summary extraction failed, keep original interactions
+                        log.warn("Summary extraction failed, keeping original interactions");
+                    }
                 } catch (Exception e) {
-                    // Fallback to default behavior
-                    processSummarizationResult(
-                        context,
-                        "Summarized " + messagesToSummarizeCount + " previous tool interactions",
-                        messagesToSummarizeCount,
-                        remainingMessages,
-                        originalInteractions
-                    );
+                    // Fallback: skip summarization, keep original interactions
+                    log.warn("Summarization failed, keeping original interactions: {}", e.getMessage());
                 } finally {
                     latch.countDown();
                 }
             }, e -> {
-                try {
-                    // Fallback to default behavior
-                    processSummarizationResult(
-                        context,
-                        "Summarized " + messagesToSummarizeCount + " previous tool interactions",
-                        messagesToSummarizeCount,
-                        remainingMessages,
-                        originalInteractions
-                    );
-                } finally {
-                    latch.countDown();
-                }
+                // Fallback: skip summarization, keep original interactions
+                log.warn("Summarization request failed, keeping original interactions: {}", e.getMessage());
+                latch.countDown();
             });
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
@@ -233,14 +223,8 @@ public class SummarizationManager implements ContextManager {
             latch.await(30, TimeUnit.SECONDS);
 
         } catch (Exception e) {
-            // Fallback to default behavior
-            processSummarizationResult(
-                context,
-                "Summarized " + messagesToSummarizeCount + " previous interactions",
-                messagesToSummarizeCount,
-                remainingMessages,
-                originalInteractions
-            );
+            // Fallback: skip summarization, keep original interactions
+            log.warn("Summarization setup failed, keeping original interactions: {}", e.getMessage());
         }
     }
 
@@ -313,8 +297,10 @@ public class SummarizationManager implements ContextManager {
                                     return result;
                                 }
                             } catch (PathNotFoundException e) {
+                                log.debug("JSONPath filter not found, falling back to default parsing: {}", e.getMessage());
                                 // Fall back to default parsing
                             } catch (Exception e) {
+                                log.warn("Error applying JSONPath filter, falling back to default parsing: {}", e.getMessage());
                                 // Fall back to default parsing
                             }
                         }
@@ -336,7 +322,7 @@ public class SummarizationManager implements ContextManager {
             log.error("Failed to extract summary from response", e);
         }
 
-        return "Summary generation failed";
+        return null; // Return null to indicate failure, let caller handle fallback
     }
 
     private double parseDoubleConfig(Map<String, Object> config, String key, double defaultValue) {
@@ -385,51 +371,4 @@ public class SummarizationManager implements ContextManager {
         }
     }
 
-    /**
-     * Find a safe cut point that doesn't break assistant-tool message pairs
-     * Exact same logic as Strands agent
-     */
-    private int findSafeCutPoint(List<String> interactions, int targetCutPoint) {
-        if (targetCutPoint >= interactions.size()) {
-            return targetCutPoint;
-        }
-        // // the current agent logic is when odd number it's tool called result and even number is tool input, should always summarize for
-        // pairs, so the targetCutPoint needs to be even
-        // if (targetCutPoint%2==0){
-        // return targetCutPoint;
-        // } else {
-        // return min(targetCutPoint+1,interactions.size());
-        // }
-        int splitPoint = targetCutPoint;
-
-        while (splitPoint < interactions.size()) {
-            try {
-                String messageAtSplit = interactions.get(splitPoint);
-
-                // Oldest message cannot be a toolResult because it needs a toolUse preceding it
-                boolean hasToolResult = (messageAtSplit.contains("toolResult") || messageAtSplit.contains("tool_call_id"));
-
-                // Oldest message can be a toolUse only if a toolResult immediately follows it
-                boolean hasToolUse = messageAtSplit.contains("toolUse");
-                boolean nextHasToolResult = false;
-                // TODO we need better way to handle the tool result based on the llm interfaces.
-                if (splitPoint + 1 < interactions.size()) {
-                    nextHasToolResult = (interactions.get(splitPoint + 1).contains("toolResult")
-                        || messageAtSplit.contains("tool_call_id"));
-                }
-
-                if (hasToolResult || (hasToolUse && splitPoint + 1 < interactions.size() && !nextHasToolResult)) {
-                    splitPoint++;
-                } else {
-                    break;
-                }
-
-            } catch (Exception e) {
-                log.warn("Error checking message at index {}: {}", splitPoint, e.getMessage());
-                splitPoint++;
-            }
-        }
-
-        return splitPoint;
-    }
 }

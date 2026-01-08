@@ -48,6 +48,8 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class ContextManagementTemplateService {
 
+    private static final int DEFAULT_MAX_TEMPLATES = 1000;
+
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final ClusterService clusterService;
@@ -185,7 +187,7 @@ public class ContextManagementTemplateService {
      * @param listener ActionListener for the response
      */
     public void listTemplates(ActionListener<List<ContextManagementTemplate>> listener) {
-        listTemplates(0, 1000, listener);
+        listTemplates(0, DEFAULT_MAX_TEMPLATES, listener);
     }
 
     /**
@@ -312,6 +314,11 @@ public class ContextManagementTemplateService {
      */
     public void updateTemplate(String templateName, ContextManagementTemplate template, ActionListener<UpdateResponse> listener) {
         try {
+            if (templateName == null || templateName.trim().isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("Template name cannot be null, empty, or whitespace"));
+                return;
+            }
+
             // Validate template
             if (!template.isValid()) {
                 listener.onFailure(new IllegalArgumentException("Invalid context management template"));
@@ -335,8 +342,13 @@ public class ContextManagementTemplateService {
                     log.info("Context management template updated successfully: {}", templateName);
                     wrappedListener.onResponse(updateResponse);
                 }, exception -> {
-                    log.error("Failed to update context management template: {}", templateName, exception);
-                    wrappedListener.onFailure(exception);
+                    if (exception instanceof IndexNotFoundException) {
+                        wrappedListener
+                            .onFailure(new MLResourceNotFoundException("Context management template not found: " + templateName));
+                    } else {
+                        log.error("Failed to update context management template: {}", templateName, exception);
+                        wrappedListener.onFailure(exception);
+                    }
                 }));
             }
         } catch (Exception e) {
