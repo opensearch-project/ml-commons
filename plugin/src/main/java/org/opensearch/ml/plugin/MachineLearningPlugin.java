@@ -647,14 +647,10 @@ public class MachineLearningPlugin extends Plugin
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
 
-        // Initialize max JSON size from settings and set up listener for dynamic updates
-        StringUtils.setMaxJsonSize(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE.get(settings));
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MAX_JSON_SIZE, StringUtils::setMaxJsonSize);
-
         mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
         mlFeatureEnabledSetting.addListener(mlTaskManager);
+
+        StringUtils.setMLFeatureEnabledSetting(mlFeatureEnabledSetting);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client, mlFeatureEnabledSetting);
 

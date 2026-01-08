@@ -13,6 +13,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.*;
 
 import java.io.IOException;
@@ -35,6 +37,7 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.TypeAdapter;
@@ -1276,13 +1279,16 @@ public class StringUtilsTest {
 
     @Test
     public void testFromJson_ExceedsMaxSize() {
-        // Set a small limit for testing
-        StringUtils.setMaxJsonSize(1000);
+        // Create a mock MLFeatureEnabledSetting with a small limit for testing
+        MLFeatureEnabledSetting mockSetting = mock(MLFeatureEnabledSetting.class);
+        when(mockSetting.getMaxJsonSize()).thenReturn(100);
+
+        StringUtils.setMLFeatureEnabledSetting(mockSetting);
 
         try {
-            // Create a JSON string larger than the limit
+            // Create a JSON string larger than the limit (100 bytes)
             StringBuilder largeJson = new StringBuilder("{\"data\":\"");
-            for (int i = 0; i < 1000; i++) {
+            for (int i = 0; i < 200; i++) {
                 largeJson.append("a");
             }
             largeJson.append("\"}");
@@ -1293,7 +1299,7 @@ public class StringUtilsTest {
             );
             assertTrue(exception.getMessage().contains("JSON string size exceeds maximum allowed size"));
         } finally {
-            StringUtils.setMaxJsonSize(100_000_000);
+            StringUtils.setMLFeatureEnabledSetting(null);
         }
     }
 

@@ -38,6 +38,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -81,15 +82,14 @@ public class StringUtils {
 
     public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
-    // Maximum allowed JSON string size (configurable via plugins.ml_commons.max_json_size)
-    private static volatile int maxJsonSize;
+    private static volatile MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
-     * Sets the maximum allowed JSON string size for parsing.
-     * @param size the maximum size, or -1 for unlimited
+     * Sets the MLFeatureEnabledSetting instance for accessing dynamic settings.
+     * @param setting the MLFeatureEnabledSetting instance
      */
-    public static void setMaxJsonSize(int size) {
-        maxJsonSize = size;
+    public static void setMLFeatureEnabledSetting(MLFeatureEnabledSetting setting) {
+        mlFeatureEnabledSetting = setting;
     }
 
     public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
@@ -186,8 +186,11 @@ public class StringUtils {
             throw new IllegalArgumentException("JSON string cannot be null");
         }
         // Check size limit if configured (maxJsonSize = -1 means unlimited)
-        if (maxJsonSize > 0 && jsonStr.length() > maxJsonSize) {
-            throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d characters)", maxJsonSize));
+        if (mlFeatureEnabledSetting != null) {
+            int maxJsonSize = mlFeatureEnabledSetting.getMaxJsonSize();
+            if (maxJsonSize > 0 && jsonStr.getBytes(StandardCharsets.UTF_8).length > maxJsonSize) {
+                throw new IllegalArgumentException(String.format("JSON string size exceeds maximum allowed size (%d bytes)", maxJsonSize));
+            }
         }
         try {
             JsonNode jsonNode = MAPPER.readTree(jsonStr);
