@@ -8,7 +8,6 @@ package org.opensearch.ml.action.mcpserver;
 import static org.opensearch.ml.common.CommonValue.ERROR_CODE_FIELD;
 import static org.opensearch.ml.common.CommonValue.ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_INTERNAL_ERROR;
-import static org.opensearch.ml.common.CommonValue.JSON_RPC_PARSE_ERROR;
 import static org.opensearch.ml.common.CommonValue.JSON_RPC_SERVER_NOT_READY_ERROR;
 import static org.opensearch.ml.common.CommonValue.MESSAGE_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
@@ -76,14 +75,8 @@ public class TransportMcpServerAction extends HandledTransportAction<ActionReque
                 return;
             }
 
-            final McpSchema.JSONRPCMessage message;
-            try {
-                message = McpSchema.deserializeJsonRpcMessage(objectMapper, mlMcpServerRequest.getRequestBody());
-            } catch (Exception e) {
-                log.error("Parse error: " + e.getMessage(), e);
-                handleError(null, JSON_RPC_PARSE_ERROR, "Parse error: " + e.getMessage(), listener);
-                return;
-            }
+            // Get the already-parsed and validated message from the request
+            final McpSchema.JSONRPCMessage message = mlMcpServerRequest.getMessage();
 
             if (message instanceof McpSchema.JSONRPCNotification) {
                 listener.onResponse(new MLMcpServerResponse(true, null, null));
