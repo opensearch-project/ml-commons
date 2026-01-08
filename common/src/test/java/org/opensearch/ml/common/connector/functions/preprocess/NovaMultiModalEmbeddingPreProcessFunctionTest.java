@@ -66,7 +66,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("hello", dataSet.getParameters().get("inputText"));
+        assertEquals("hello", dataSet.getParameters().get("text"));
     }
 
     @Test
@@ -75,7 +75,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("base64data", dataSet.getParameters().get("inputImage"));
+        assertEquals("base64data", dataSet.getParameters().get("image"));
     }
 
     @Test
@@ -84,7 +84,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("videodata", dataSet.getParameters().get("inputVideo"));
+        assertEquals("videodata", dataSet.getParameters().get("video"));
     }
 
     @Test
@@ -93,7 +93,7 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(jsonInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("audiodata", dataSet.getParameters().get("inputAudio"));
+        assertEquals("audiodata", dataSet.getParameters().get("audio"));
     }
 
     @Test
@@ -123,6 +123,6 @@ public class NovaMultiModalEmbeddingPreProcessFunctionTest {
 
         assertNotNull(result);
         // Verify the malformed JSON is returned unchanged in the parameters
-        assertEquals("{ invalid json }", result.getParameters().get("inputText"));
+        assertEquals("{ invalid json }", result.getParameters().get("text"));
     }
 }

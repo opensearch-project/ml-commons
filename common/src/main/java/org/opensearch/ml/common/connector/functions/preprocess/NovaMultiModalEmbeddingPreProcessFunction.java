@@ -84,17 +84,17 @@ public class NovaMultiModalEmbeddingPreProcessFunction extends ConnectorPreProce
         try {
             JsonNode node = objectMapper.readTree(input);
             if (node.has("text"))
-                return "inputText";
+                return "text";
             if (node.has("image"))
-                return "inputImage";
+                return "image";
             if (node.has("video"))
-                return "inputVideo";
+                return "video";
             if (node.has("audio"))
-                return "inputAudio";
-            return "inputText";
+                return "audio";
+            return "text";
         } catch (JsonProcessingException e) {
             log.warn("Failed to detect modality from input, defaulting to text: {}", e.getMessage());
-            return "inputText";
+            return "text";
         }
     }
 }
