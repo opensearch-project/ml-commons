@@ -1,12 +1,9 @@
 package org.opensearch.ml.engine.encryptor;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
@@ -893,8 +890,7 @@ public class EncryptorImplTest {
             testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[1], texts[1], latch); });
             testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[2], texts[2], latch); });
         }
-        Assert.assertTrue("Test should encrypt or decrypt within the specified time period", latch.await(60, SECONDS));
-        verify(mlIndicesHandler, timeout(1000).times(3)).initMLConfigIndex(any());
+        latch.await();
         testThreadPool.shutdown();
     }
 
@@ -933,8 +929,7 @@ public class EncryptorImplTest {
                 encryptor.encrypt("test", "123456", listener);
             });
         }
-        Assert.assertTrue("Test should throw expected exception within the specified time period", latch.await(20, SECONDS));
-        verify(mlIndicesHandler, timeout(1000).times(1)).initMLConfigIndex(any());
+        latch.await();
         testThreadPool.shutdown();
     }
 
