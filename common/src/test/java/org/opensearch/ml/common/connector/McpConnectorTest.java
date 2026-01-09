@@ -16,23 +16,25 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.search.SearchModule;
 
@@ -40,16 +42,16 @@ public class McpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    TriConsumer<String, String, ActionListener<String>> encryptFunction;
+    TriConsumer<String, String, ActionListener<String>> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING =
         "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"sse_endpoint\":\"/custom/sse\"}}";
 
     @Before
     public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v, l) -> l.onResponse("encrypted: " + s.toLowerCase(Locale.ROOT));
+        decryptFunction = (s, v, l) -> l.onResponse("decrypted: " + s.toUpperCase(Locale.ROOT));
     }
 
     @Test
@@ -142,6 +144,26 @@ public class McpConnectorTest {
         Assert.assertNull(removeConnector.getCredential());
         Assert.assertNull(removeConnector.getDecryptedCredential());
         Assert.assertNull(removeConnector.getDecryptedHeaders());
+    }
+
+    @Test
+    public void testEncryptThrowException() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Exception during encrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> encryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during encrypting credentials"));
+        McpConnector encryptConnector = createMcpConnector();
+        encryptConnector.encrypt(encryptErrorFunction, null);
+    }
+
+    @Test
+    public void testDecryptThrowException() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Exception during decrypting credentials");
+        TriConsumer<String, String, ActionListener<String>> decryptErrorFunction = (s, v, l) -> l
+            .onFailure(new RuntimeException("Exception during decrypting credentials"));
+        McpConnector decryptConnector = createMcpConnector();
+        decryptConnector.decrypt("", decryptErrorFunction, null);
     }
 
     @Test
