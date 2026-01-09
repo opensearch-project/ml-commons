@@ -619,7 +619,7 @@ public class MetricsCorrelationTest {
     @Test
     public void testConstants() {
         // Test that constants are properly defined
-        assertEquals("1.0.0b1", MetricsCorrelation.MCORR_ML_VERSION);
+        assertEquals("1.0.0b2", MetricsCorrelation.MCORR_ML_VERSION);
         assertEquals("in-house", MetricsCorrelation.MODEL_TYPE);
         assertNotNull("Model URL should be defined", MetricsCorrelation.MCORR_MODEL_URL);
         assertTrue("Model URL should be valid", MetricsCorrelation.MCORR_MODEL_URL.startsWith("https://"));
