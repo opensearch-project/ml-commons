@@ -29,6 +29,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.contextmanager.ContextManagementTemplate;
 import org.opensearch.search.SearchModule;
 
 public class MLAgentTest {
@@ -65,6 +66,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
     }
@@ -86,6 +89,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
     }
@@ -107,6 +112,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
     }
@@ -128,6 +135,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
     }
@@ -146,6 +155,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -174,6 +185,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -197,6 +210,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -220,6 +235,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -243,6 +260,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -279,6 +298,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -336,6 +357,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -367,6 +390,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test",
             false,
+            null,
+            null,
             null
         );
     }
@@ -386,6 +411,8 @@ public class MLAgentTest {
                 Instant.EPOCH,
                 "test",
                 false,
+                null,
+                null,
                 null
             );
             assertNotNull(agent); // Ensuring object creation was successful without throwing an exception
@@ -396,7 +423,22 @@ public class MLAgentTest {
 
     @Test
     public void writeTo_ReadFrom_HiddenFlag_VersionCompatibility() throws IOException {
-        MLAgent agent = new MLAgent("test", "FLOW", "test", null, null, null, null, Instant.EPOCH, Instant.EPOCH, "test", true, null);
+        MLAgent agent = new MLAgent(
+            "test",
+            "FLOW",
+            "test",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            true,
+            null,
+            null,
+            null
+        );
 
         // Serialize and deserialize with an older version
         BytesStreamOutput output = new BytesStreamOutput();
@@ -460,6 +502,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test_app",
             true,
+            null,
+            null,
             null
         );
 
@@ -486,6 +530,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             "test_app",
             null,
+            null,
+            null,
             null
         );
 
@@ -496,5 +542,326 @@ public class MLAgentTest {
         assertEquals("flow", tagsMap.get("type"));
         assertFalse(tagsMap.containsKey("memory_type"));
         assertFalse(tagsMap.containsKey("_llm_interface"));
+    }
+
+    @Test
+    public void constructor_ConflictingContextManagement() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Cannot specify both context_management_name and context_management");
+
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            "template_name",
+            new ContextManagementTemplate(),
+            null
+        );
+    }
+
+    @Test
+    public void hasContextManagement_WithTemplateName() {
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            "template_name",
+            null,
+            null
+        );
+
+        assertTrue(agent.hasContextManagement());
+        assertTrue(agent.hasContextManagementTemplate());
+        assertEquals("template_name", agent.getContextManagementTemplateName());
+        assertNull(agent.getInlineContextManagement());
+    }
+
+    @Test
+    public void hasContextManagement_WithInlineConfig() {
+        ContextManagementTemplate template = ContextManagementTemplate
+            .builder()
+            .name("test_template")
+            .description("test description")
+            .hooks(Map.of("POST_TOOL", List.of()))
+            .build();
+
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            null,
+            template,
+            null
+        );
+
+        assertTrue(agent.hasContextManagement());
+        assertFalse(agent.hasContextManagementTemplate());
+        assertNull(agent.getContextManagementTemplateName());
+        assertEquals(template, agent.getInlineContextManagement());
+    }
+
+    @Test
+    public void hasContextManagement_NoContextManagement() {
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            null,
+            null,
+            null
+        );
+
+        assertFalse(agent.hasContextManagement());
+        assertFalse(agent.hasContextManagementTemplate());
+        assertNull(agent.getContextManagementTemplateName());
+        assertNull(agent.getInlineContextManagement());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ContextManagementName() throws IOException {
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            "template_name",
+            null,
+            null
+        );
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        agent.writeTo(output);
+
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLAgent deserializedAgent = new MLAgent(streamInput);
+
+        assertEquals("template_name", deserializedAgent.getContextManagementTemplateName());
+        assertNull(deserializedAgent.getInlineContextManagement());
+        assertTrue(deserializedAgent.hasContextManagement());
+        assertTrue(deserializedAgent.hasContextManagementTemplate());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ContextManagementInline() throws IOException {
+        ContextManagementTemplate template = ContextManagementTemplate
+            .builder()
+            .name("test_template")
+            .description("test description")
+            .hooks(Map.of("POST_TOOL", List.of()))
+            .build();
+
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            null,
+            template,
+            null
+        );
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_5_0);
+        agent.writeTo(output);
+
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_5_0);
+        MLAgent deserializedAgent = new MLAgent(streamInput);
+
+        assertNull(deserializedAgent.getContextManagementTemplateName());
+        assertNotNull(deserializedAgent.getInlineContextManagement());
+        assertEquals("test_template", deserializedAgent.getInlineContextManagement().getName());
+        assertEquals("test description", deserializedAgent.getInlineContextManagement().getDescription());
+        assertTrue(deserializedAgent.hasContextManagement());
+        assertFalse(deserializedAgent.hasContextManagementTemplate());
+    }
+
+    @Test
+    public void writeTo_ReadFrom_ContextManagement_VersionCompatibility() throws IOException {
+        MLAgent agent = new MLAgent(
+            "test_agent",
+            MLAgentType.FLOW.name(),
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            "template_name",
+            null,
+            null
+        );
+
+        // Serialize with older version (before context management support)
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(CommonValue.VERSION_3_2_0);
+        agent.writeTo(output);
+
+        StreamInput streamInput = output.bytes().streamInput();
+        streamInput.setVersion(CommonValue.VERSION_3_2_0);
+        MLAgent deserializedAgent = new MLAgent(streamInput);
+
+        // Context management fields should be null for older versions
+        assertNull(deserializedAgent.getContextManagementTemplateName());
+        assertNull(deserializedAgent.getInlineContextManagement());
+        assertFalse(deserializedAgent.hasContextManagement());
+    }
+
+    @Test
+    public void parse_WithContextManagementName() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"type\":\"FLOW\",\"context_management_name\":\"template_name\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parseFromUserInput(parser);
+
+        assertEquals("test", agent.getName());
+        assertEquals("FLOW", agent.getType());
+        assertEquals("template_name", agent.getContextManagementTemplateName());
+        assertNull(agent.getInlineContextManagement());
+        assertTrue(agent.hasContextManagement());
+        assertTrue(agent.hasContextManagementTemplate());
+    }
+
+    @Test
+    public void parse_WithInlineContextManagement() throws IOException {
+        String jsonStr =
+            "{\"name\":\"test\",\"type\":\"FLOW\",\"context_management\":{\"name\":\"inline_template\",\"description\":\"test\",\"hooks\":{\"POST_TOOL\":[]}}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLAgent agent = MLAgent.parseFromUserInput(parser);
+
+        assertEquals("test", agent.getName());
+        assertEquals("FLOW", agent.getType());
+        assertNull(agent.getContextManagementTemplateName());
+        assertNotNull(agent.getInlineContextManagement());
+        assertEquals("inline_template", agent.getInlineContextManagement().getName());
+        assertEquals("test", agent.getInlineContextManagement().getDescription());
+        assertTrue(agent.hasContextManagement());
+        assertFalse(agent.hasContextManagementTemplate());
+    }
+
+    @Test
+    public void toXContent_WithContextManagementName() throws IOException {
+        MLAgent agent = new MLAgent(
+            "test",
+            "FLOW",
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            "template_name",
+            null,
+            null
+        );
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        assertTrue(content.contains("\"context_management_name\":\"template_name\""));
+        assertFalse(content.contains("\"context_management\":"));
+    }
+
+    @Test
+    public void toXContent_WithInlineContextManagement() throws IOException {
+        ContextManagementTemplate template = ContextManagementTemplate
+            .builder()
+            .name("inline_template")
+            .description("test description")
+            .hooks(Map.of("POST_TOOL", List.of()))
+            .build();
+
+        MLAgent agent = new MLAgent(
+            "test",
+            "FLOW",
+            "test description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test_app",
+            false,
+            null,
+            template,
+            null
+        );
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        assertFalse(content.contains("\"context_management_name\":"));
+        assertTrue(content.contains("\"context_management\":"));
+        assertTrue(content.contains("\"inline_template\""));
     }
 }
