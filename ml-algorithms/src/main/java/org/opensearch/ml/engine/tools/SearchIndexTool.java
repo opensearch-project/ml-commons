@@ -184,17 +184,6 @@ public class SearchIndexTool implements Tool {
             }
         }
 
-        if (fixedQuery.startsWith("{") && fixedQuery.contains("\\\"") && fixedQuery.endsWith("}")) {
-            try {
-                String unescaped = fixedQuery.replaceAll("\\\\\"", "\"");
-                Object parsed = PLAIN_NUMBER_GSON.fromJson(unescaped, Object.class);
-                log.info("Successfully fixed escaped JSON query");
-                return PLAIN_NUMBER_GSON.toJson(parsed);
-            } catch (JsonSyntaxException ignored) {
-                // Continue with other fixes
-            }
-        }
-
         fixedQuery = fixMalformedJson(fixedQuery);
 
         try {
