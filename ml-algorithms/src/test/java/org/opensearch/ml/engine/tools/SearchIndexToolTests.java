@@ -542,7 +542,7 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testFixMalformedJson_withMultipleExtraClosingBraces() {
         // Test multiple extra closing braces scenario
-        String malformedInput = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}}}\"}";
+        String malformedInput = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}}}}}}\"}";
         Map<String, String> parameters = Map.of("input", malformedInput);
 
         ActionListener<String> listener = mock(ActionListener.class);
