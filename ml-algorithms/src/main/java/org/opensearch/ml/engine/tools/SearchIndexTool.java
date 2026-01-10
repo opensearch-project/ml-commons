@@ -140,13 +140,13 @@ public class SearchIndexTool implements Tool {
      */
     private String normalizeQueryParameter(JsonElement queryElement) {
         if (queryElement.isJsonObject()) {
-            return GSON.toJson(queryElement);
+            return PLAIN_NUMBER_GSON.toJson(queryElement);
         } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
             String queryString = queryElement.getAsString();
             return normalizeQueryString(queryString);
         } else {
-            Object queryObject = GSON.fromJson(queryElement, Object.class);
-            return GSON.toJson(queryObject);
+            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
+            return PLAIN_NUMBER_GSON.toJson(queryObject);
         }
     }
 
@@ -160,8 +160,8 @@ public class SearchIndexTool implements Tool {
         }
 
         try {
-            Object parsed = GSON.fromJson(queryString, Object.class);
-            return GSON.toJson(parsed);
+            Object parsed = PLAIN_NUMBER_GSON.fromJson(queryString, Object.class);
+            return PLAIN_NUMBER_GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.debug("Initial query parsing failed, attempting to fix common LLM formatting issues: {}", e.getMessage());
         }
@@ -176,9 +176,9 @@ public class SearchIndexTool implements Tool {
         if (fixedQuery.startsWith("\"") && fixedQuery.endsWith("\"") && fixedQuery.length() > 1) {
             String unwrapped = fixedQuery.substring(1, fixedQuery.length() - 1);
             try {
-                Object parsed = GSON.fromJson(unwrapped, Object.class);
+                Object parsed = PLAIN_NUMBER_GSON.fromJson(unwrapped, Object.class);
                 log.info("Successfully fixed stringified JSON query by removing outer quotes");
-                return GSON.toJson(parsed);
+                return PLAIN_NUMBER_GSON.toJson(parsed);
             } catch (JsonSyntaxException ignored) {
                 // Keep original if unwrapping doesn't work
             }
@@ -187,9 +187,9 @@ public class SearchIndexTool implements Tool {
         fixedQuery = fixMalformedJson(fixedQuery);
 
         try {
-            Object parsed = GSON.fromJson(fixedQuery, Object.class);
+            Object parsed = PLAIN_NUMBER_GSON.fromJson(fixedQuery, Object.class);
             log.info("Successfully fixed malformed query through escape correction and brace balancing");
-            return GSON.toJson(parsed);
+            return PLAIN_NUMBER_GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.warn("Could not auto-fix malformed query, using original: {}", queryString);
             return queryString;
