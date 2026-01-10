@@ -94,6 +94,7 @@ public class StringUtils {
 
     public static final Gson PLAIN_NUMBER_GSON = new GsonBuilder()
         .serializeNulls()
+        .setStrictness(com.google.gson.Strictness.LENIENT)
         .registerTypeAdapter(Float.class, new PlainFloatAdapter())
         .registerTypeAdapter(float.class, new PlainFloatAdapter())
         .registerTypeAdapter(Double.class, new PlainDoubleAdapter())
