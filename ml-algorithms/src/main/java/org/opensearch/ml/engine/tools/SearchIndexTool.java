@@ -140,13 +140,13 @@ public class SearchIndexTool implements Tool {
      */
     private String normalizeQueryParameter(JsonElement queryElement) {
         if (queryElement.isJsonObject()) {
-            return PLAIN_NUMBER_GSON.toJson(queryElement);
+            return GSON.toJson(queryElement);
         } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
             String queryString = queryElement.getAsString();
             return normalizeQueryString(queryString);
         } else {
-            Object queryObject = PLAIN_NUMBER_GSON.fromJson(queryElement, Object.class);
-            return PLAIN_NUMBER_GSON.toJson(queryObject);
+            Object queryObject = GSON.fromJson(queryElement, Object.class);
+            return GSON.toJson(queryObject);
         }
     }
 
@@ -160,8 +160,8 @@ public class SearchIndexTool implements Tool {
         }
 
         try {
-            Object parsed = PLAIN_NUMBER_GSON.fromJson(queryString, Object.class);
-            return PLAIN_NUMBER_GSON.toJson(parsed);
+            Object parsed = GSON.fromJson(queryString, Object.class);
+            return GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.debug("Initial query parsing failed, attempting to fix common LLM formatting issues: {}", e.getMessage());
         }
@@ -176,9 +176,9 @@ public class SearchIndexTool implements Tool {
         if (fixedQuery.startsWith("\"") && fixedQuery.endsWith("\"") && fixedQuery.length() > 1) {
             String unwrapped = fixedQuery.substring(1, fixedQuery.length() - 1);
             try {
-                Object parsed = PLAIN_NUMBER_GSON.fromJson(unwrapped, Object.class);
+                Object parsed = GSON.fromJson(unwrapped, Object.class);
                 log.info("Successfully fixed stringified JSON query by removing outer quotes");
-                return PLAIN_NUMBER_GSON.toJson(parsed);
+                return GSON.toJson(parsed);
             } catch (JsonSyntaxException ignored) {
                 // Keep original if unwrapping doesn't work
             }
@@ -348,7 +348,7 @@ public class SearchIndexTool implements Tool {
             try {
                 searchRequest = getSearchRequest(index, query);
             } catch (Exception e) {
-                log.error("Failed to parse search query. Index: {}, Query: {}", index, query, e);
+                log.error("Failed to parse search query. Index: {}", index, e);
                 listener
                     .onFailure(
                         new IllegalArgumentException("Invalid query format. Expected valid OpenSearch DSL query. Error: " + e.getMessage())
