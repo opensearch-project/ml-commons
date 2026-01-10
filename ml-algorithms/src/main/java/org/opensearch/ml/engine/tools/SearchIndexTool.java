@@ -187,9 +187,9 @@ public class SearchIndexTool implements Tool {
         fixedQuery = fixMalformedJson(fixedQuery);
 
         try {
-            Object parsed = PLAIN_NUMBER_GSON.fromJson(fixedQuery, Object.class);
+            Object parsed = GSON.fromJson(fixedQuery, Object.class);
             log.info("Successfully fixed malformed query through escape correction and brace balancing");
-            return PLAIN_NUMBER_GSON.toJson(parsed);
+            return GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.warn("Could not auto-fix malformed query, using original: {}", queryString);
             return queryString;
