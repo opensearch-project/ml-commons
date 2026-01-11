@@ -139,6 +139,9 @@ public class SearchIndexTool implements Tool {
      * Handles both JSON objects and malformed JSON strings from LLMs.
      */
     private String normalizeQueryParameter(JsonElement queryElement) {
+        if (queryElement == null || queryElement.isJsonNull()) {
+            return null;
+        }
         if (queryElement.isJsonObject()) {
             return PLAIN_NUMBER_GSON.toJson(queryElement);
         } else if (queryElement.isJsonPrimitive() && queryElement.getAsJsonPrimitive().isString()) {
