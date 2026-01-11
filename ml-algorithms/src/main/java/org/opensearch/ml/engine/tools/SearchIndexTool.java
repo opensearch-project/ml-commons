@@ -77,9 +77,7 @@ public class SearchIndexTool implements Tool {
         + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
         + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
 
-    private static final Gson GSON = new GsonBuilder()
-        .serializeSpecialFloatingPointValues()
-        .create();
+    private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
     public static final String RETURN_RAW_RESPONSE = "return_raw_response";
@@ -181,7 +179,7 @@ public class SearchIndexTool implements Tool {
 
         // Try conservative fixes first: only outer quote removal and brace balancing
         String fixedQuery = queryString.trim();
-        
+
         // 1. Try removing outer quotes if the content looks like stringified JSON
         if (fixedQuery.startsWith("\"") && fixedQuery.endsWith("\"") && fixedQuery.length() > 1) {
             String unwrapped = fixedQuery.substring(1, fixedQuery.length() - 1);
