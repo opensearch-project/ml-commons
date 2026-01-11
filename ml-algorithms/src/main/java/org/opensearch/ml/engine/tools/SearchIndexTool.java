@@ -161,6 +161,17 @@ public class SearchIndexTool implements Tool {
 
         try {
             Object parsed = PLAIN_NUMBER_GSON.fromJson(queryString, Object.class);
+            if (parsed instanceof String s && !StringUtils.isEmpty(s)) {
+                try {
+                    Object reparsed = PLAIN_NUMBER_GSON.fromJson(s, Object.class);
+                    // Only unwrap if the inner content is structured JSON (object/array), not another string.
+                    if (!(reparsed instanceof String)) {
+                        return PLAIN_NUMBER_GSON.toJson(reparsed);
+                    }
+                } catch (JsonSyntaxException ignored) {
+                    // fall through to return the original parsed form
+                }
+            }
             return PLAIN_NUMBER_GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.debug("Initial query parsing failed, attempting to fix common LLM formatting issues: {}", e.getMessage());
