@@ -699,4 +699,5 @@ public class SearchIndexToolTests {
         // The source should contain the normalized query structure
         assertFalse(capturedRequest.source().toString().isEmpty());
     }
+
 }
