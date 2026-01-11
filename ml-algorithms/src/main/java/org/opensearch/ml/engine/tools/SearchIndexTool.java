@@ -202,21 +202,51 @@ public class SearchIndexTool implements Tool {
             // Continue with aggressive fixes only as last resort
         }
 
-        // 3. Last resort: aggressive escape sequence fixes (may corrupt legitimate JSON)
-        log.debug("Applying aggressive escape sequence fixes as last resort");
-        String aggressiveFixed = queryString;
-        aggressiveFixed = aggressiveFixed.replaceAll("\\\\\\\\\"", "\\\\\"");
-        aggressiveFixed = aggressiveFixed.replaceAll("\\\\\"", "\"");
-        aggressiveFixed = fixMalformedJson(aggressiveFixed);
+        // 3. Smart escape sequence fixes (preserves internal quotes)
+        log.debug("Applying smart escape sequence fixes while preserving internal quotes");
+        String smartFixed = fixEscapeSequencesPreservingInternalQuotes(queryString);
+        smartFixed = fixMalformedJson(smartFixed);
 
         try {
-            Object parsed = PLAIN_NUMBER_GSON.fromJson(aggressiveFixed, Object.class);
-            log.info("Successfully fixed malformed query through aggressive escape correction");
+            Object parsed = PLAIN_NUMBER_GSON.fromJson(smartFixed, Object.class);
+            log.info("Successfully fixed malformed query through smart escape correction");
             return PLAIN_NUMBER_GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.warn("Could not auto-fix malformed query (length: {}), using original", queryString.length());
             return queryString;
         }
+    }
+
+    /**
+     * Fixes escape sequences while preserving legitimate internal quotes in JSON strings.
+     * Only applies aggressive fixes outside of quoted string values.
+     */
+    private String fixEscapeSequencesPreservingInternalQuotes(String input) {
+        if (StringUtils.isEmpty(input)) {
+            return input;
+        }
+
+        // Only apply aggressive escape fixes if the string doesn't look like it contains
+        // legitimate JSON with internal quotes (basic heuristic)
+        if (!containsLegitimateInternalQuotes(input)) {
+            // Safe to apply aggressive fixes
+            String fixed = input;
+            fixed = fixed.replaceAll("\\\\\\\\\"", "\\\\\"");
+            fixed = fixed.replaceAll("\\\\\"", "\"");
+            return fixed;
+        }
+
+        // If it might contain legitimate quotes, only fix obvious double-escaping
+        return input.replaceAll("\\\\\\\\\"", "\\\\\"");
+    }
+
+    /**
+     * Basic heuristic to detect if the string might contain legitimate internal quotes.
+     * Looks for patterns like "field": "value with \"quotes\""
+     */
+    private boolean containsLegitimateInternalQuotes(String input) {
+        // Look for pattern: "key": "value with \"internal\" quotes"
+        return input.matches(".*\"[^\"]*\"\\s*:\\s*\"[^\"]*\\\\\"[^\"]*\".*");
     }
 
     /**
