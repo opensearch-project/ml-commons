@@ -79,7 +79,6 @@ public class SearchIndexTool implements Tool {
 
     private static final Gson GSON = new GsonBuilder()
         .serializeSpecialFloatingPointValues()
-        .setStrictness(com.google.gson.Strictness.LENIENT)
         .create();
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
