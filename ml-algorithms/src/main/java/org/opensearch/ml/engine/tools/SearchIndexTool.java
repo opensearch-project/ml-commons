@@ -191,7 +191,7 @@ public class SearchIndexTool implements Tool {
             log.info("Successfully fixed malformed query through escape correction and brace balancing");
             return PLAIN_NUMBER_GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
-            log.warn("Could not auto-fix malformed query, using original: {}", queryString);
+            log.warn("Could not auto-fix malformed query (length: {}), using original", queryString.length());
             return queryString;
         }
     }
