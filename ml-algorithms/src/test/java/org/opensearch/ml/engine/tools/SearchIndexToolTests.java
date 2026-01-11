@@ -631,8 +631,8 @@ public class SearchIndexToolTests {
 
     @Test
     @SneakyThrows
-    public void testLenientGsonParsing_withSpecialFloatingPoints() {
-        // Test that LENIENT GSON mode handles special floating point values
+    public void testGsonParsing_withSpecialFloatingPoints() {
+        // Test that GSON with serializeSpecialFloatingPointValues handles floating point values
         String inputWithSpecialValues = "{\"index\":\"test-index\",\"query\":{\"query\":{\"range\":{\"score\":{\"gte\":1.0}}}}}";
         Map<String, String> parameters = Map.of("input", inputWithSpecialValues);
 
