@@ -179,13 +179,10 @@ public class SearchIndexTool implements Tool {
             log.debug("Initial query parsing failed, attempting to fix common LLM formatting issues: {}", e.getMessage());
         }
 
-        String fixedQuery = queryString;
-
-        fixedQuery = fixedQuery.replaceAll("\\\\\\\\\"", "\\\\\"");
-
-        fixedQuery = fixedQuery.replaceAll("\\\\\"", "\"");
-
-        fixedQuery = fixedQuery.trim();
+        // Try conservative fixes first: only outer quote removal and brace balancing
+        String fixedQuery = queryString.trim();
+        
+        // 1. Try removing outer quotes if the content looks like stringified JSON
         if (fixedQuery.startsWith("\"") && fixedQuery.endsWith("\"") && fixedQuery.length() > 1) {
             String unwrapped = fixedQuery.substring(1, fixedQuery.length() - 1);
             try {
@@ -193,15 +190,30 @@ public class SearchIndexTool implements Tool {
                 log.info("Successfully fixed stringified JSON query by removing outer quotes");
                 return PLAIN_NUMBER_GSON.toJson(parsed);
             } catch (JsonSyntaxException ignored) {
-                // Keep original if unwrapping doesn't work
+                // Continue with other fixes
             }
         }
 
-        fixedQuery = fixMalformedJson(fixedQuery);
+        // 2. Try brace balancing
+        String braceFixed = fixMalformedJson(fixedQuery);
+        try {
+            Object parsed = PLAIN_NUMBER_GSON.fromJson(braceFixed, Object.class);
+            log.info("Successfully fixed malformed query through brace balancing");
+            return PLAIN_NUMBER_GSON.toJson(parsed);
+        } catch (JsonSyntaxException ignored) {
+            // Continue with aggressive fixes only as last resort
+        }
+
+        // 3. Last resort: aggressive escape sequence fixes (may corrupt legitimate JSON)
+        log.debug("Applying aggressive escape sequence fixes as last resort");
+        String aggressiveFixed = queryString;
+        aggressiveFixed = aggressiveFixed.replaceAll("\\\\\\\\\"", "\\\\\"");
+        aggressiveFixed = aggressiveFixed.replaceAll("\\\\\"", "\"");
+        aggressiveFixed = fixMalformedJson(aggressiveFixed);
 
         try {
-            Object parsed = PLAIN_NUMBER_GSON.fromJson(fixedQuery, Object.class);
-            log.info("Successfully fixed malformed query through escape correction and brace balancing");
+            Object parsed = PLAIN_NUMBER_GSON.fromJson(aggressiveFixed, Object.class);
+            log.info("Successfully fixed malformed query through aggressive escape correction");
             return PLAIN_NUMBER_GSON.toJson(parsed);
         } catch (JsonSyntaxException e) {
             log.warn("Could not auto-fix malformed query (length: {}), using original", queryString.length());
