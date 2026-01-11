@@ -275,8 +275,12 @@ public class SearchIndexTool implements Tool {
 
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
-        searchSourceBuilder.parseXContent(queryParser);
+        try {
+            XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, query);
+            searchSourceBuilder.parseXContent(queryParser);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid query format: malformed JSON structure detected", e);
+        }
         return new SearchRequest().source(searchSourceBuilder).indices(index);
     }
 
