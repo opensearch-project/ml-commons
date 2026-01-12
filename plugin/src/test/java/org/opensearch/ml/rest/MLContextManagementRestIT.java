@@ -31,7 +31,13 @@ public class MLContextManagementRestIT extends MLCommonsRestTestCase {
             + templateName
             + "\",\n"
             + "  \"description\": \"Test template for integration test\",\n"
-            + "  \"context_managers\": []\n"
+            + "  \"hooks\": {\n"
+            + "    \"pre_execution\": [\n"
+            + "      {\n"
+            + "        \"type\": \"TestContextManager\"\n"
+            + "      }\n"
+            + "    ]\n"
+            + "  }\n"
             + "}";
 
         Response createResponse = TestHelper
@@ -43,7 +49,7 @@ public class MLContextManagementRestIT extends MLCommonsRestTestCase {
                 TestHelper.toHttpEntity(createRequestBody),
                 null
             );
-        assertEquals(201, createResponse.getStatusLine().getStatusCode());
+        assertEquals(200, createResponse.getStatusLine().getStatusCode());
 
         // Test update with PUT
         String updateRequestBody = "{\n"
@@ -51,7 +57,13 @@ public class MLContextManagementRestIT extends MLCommonsRestTestCase {
             + templateName
             + "\",\n"
             + "  \"description\": \"Updated test template\",\n"
-            + "  \"context_managers\": []\n"
+            + "  \"hooks\": {\n"
+            + "    \"pre_execution\": [\n"
+            + "      {\n"
+            + "        \"type\": \"TestContextManager\"\n"
+            + "      }\n"
+            + "    ]\n"
+            + "  }\n"
             + "}";
 
         Response updateResponse = TestHelper
