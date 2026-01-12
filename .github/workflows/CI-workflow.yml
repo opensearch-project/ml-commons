@@ -107,7 +107,7 @@ jobs:
     needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
       matrix:
-        java: [21, 24]
+        java: [21, 25]
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
