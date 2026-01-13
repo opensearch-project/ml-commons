@@ -816,7 +816,6 @@ public class SearchIndexToolTests {
     public void testNormalization_verifyMultipleOuterQuotesHandled() {
         // Test handling of multiple outer quotes
         String multiQuoteInput = "{\"index\":\"test-index\",\"query\":\"\\\"{\\\\\\\"query\\\\\\\":{\\\\\\\"match_all\\\\\\\":{}}}\\\"\"}";
-        ;
         Map<String, String> parameters = Map.of("input", multiQuoteInput);
 
         ActionListener<String> listener = mock(ActionListener.class);
