@@ -81,7 +81,7 @@ public class EncryptorImplTest {
     @Mock
     ThreadPool threadPool;
     ThreadContext threadContext;
-    final int LATCH_WAIT_TIME = 5;
+    private static final long LATCH_WAIT_TIME = 5;
     final String USER_STRING = "myuser|role1,role2|myTenant";
     final String TENANT_ID = "myTenant";
     final String GENERATED_MASTER_KEY = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
@@ -618,8 +618,8 @@ public class EncryptorImplTest {
                 LatchedActionListener<String> latchedActionListener2 = new LatchedActionListener<>(actionListener2, latch2);
                 encryptor.decrypt(encrypted, TENANT_ID, latchedActionListener2);
                 Assert.assertTrue("Encryption failed", latch2.await(LATCH_WAIT_TIME, SECONDS));
-                if (failure1.get() != null)
-                    throw new AssertionError("Encryption failed", failure1.get());
+                if (failure2.get() != null)
+                    throw new AssertionError("Encryption failed", failure2.get());
             } catch (Throwable t) {
                 failure1.set(t);
             }
@@ -1120,7 +1120,7 @@ public class EncryptorImplTest {
             }, error -> { failure1.set(new MLException(error)); });
             CountDownLatch latch1 = new CountDownLatch(1);
             LatchedActionListener<String> latchedActionListener1 = new LatchedActionListener<>(actionListener1, latch1);
-            encryptor.encrypt("test", null, latchedActionListener1);
+            encryptor.encrypt("test", TENANT_ID, latchedActionListener1);
             Assert.assertTrue("Encryption failed", latch1.await(LATCH_WAIT_TIME, SECONDS));
             if (failure1.get() != null)
                 throw new AssertionError("Encryption failed", failure1.get());
@@ -1128,7 +1128,7 @@ public class EncryptorImplTest {
     }
 
     @Test
-    public void test_MultipleEncryptDecryptRequests_From_MultipleThreads() throws InterruptedException, IOException {
+    public void test_MultipleEncryptDecryptRequests_From_MultipleThreads() throws IOException, InterruptedException {
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = invocation.getArgument(0);
             actionListener.onResponse(true);
@@ -1145,13 +1145,16 @@ public class EncryptorImplTest {
         TestThreadPool testThreadPool = null;
         try {
             testThreadPool = new TestThreadPool("testThreadPool");
+            int numberOfThreads = 9;
+            CountDownLatch threadLatch = new CountDownLatch(numberOfThreads);
             String[] tenantIds = new String[] { "123456", "1234567", null };
             String[] texts = new String[] { "test1", "test2", "test3" };
             for (int i = 0; i < 3; i++) {
-                testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[0], texts[0]); });
-                testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[1], texts[1]); });
-                testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[2], texts[2]); });
+                testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[0], texts[0], threadLatch); });
+                testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[1], texts[1], threadLatch); });
+                testThreadPool.generic().submit(() -> { testEncryptionDecryption(tenantIds[2], texts[2], threadLatch); });
             }
+            Assert.assertTrue("Encryption failed with multiple threads", threadLatch.await(LATCH_WAIT_TIME * numberOfThreads, SECONDS));
         } finally {
             if (testThreadPool != null) {
                 testThreadPool.shutdown();
@@ -1184,17 +1187,21 @@ public class EncryptorImplTest {
         try {
             testThreadPool = new TestThreadPool("testThreadPool");
             int numberOfThreads = 3;
+            CountDownLatch threadLatch = new CountDownLatch(numberOfThreads);
             AtomicReference<Throwable> failure = new AtomicReference<>();
             for (int i = 0; i < numberOfThreads; i++) {
                 testThreadPool.generic().submit(() -> {
                     ActionListener<String> actionListener = ActionListener.wrap(decrypted -> {
                         failure.set(new RuntimeException("Successfully encrypted, expected Exception here"));
+                        threadLatch.countDown();
                     }, error -> {
                         try {
                             Assert.assertTrue(error instanceof RuntimeException);
                             Assert.assertEquals("random test exception", error.getMessage());
                         } catch (Throwable t) {
                             failure.set(t);
+                        } finally {
+                            threadLatch.countDown();
                         }
                     });
                     CountDownLatch latch = new CountDownLatch(1);
@@ -1209,6 +1216,7 @@ public class EncryptorImplTest {
                         throw new AssertionError("Encryption failed", failure.get());
                 });
             }
+            Assert.assertTrue("Encryption failed with multiple threads", threadLatch.await(LATCH_WAIT_TIME * numberOfThreads, SECONDS));
         } finally {
             if (testThreadPool != null) {
                 testThreadPool.shutdown();
@@ -1216,7 +1224,7 @@ public class EncryptorImplTest {
         }
     }
 
-    void testEncryptionDecryption(String tenantId, String text) {
+    void testEncryptionDecryption(String tenantId, String text, CountDownLatch threadLatch) {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         AtomicReference<Throwable> failure1 = new AtomicReference<>();
@@ -1229,16 +1237,18 @@ public class EncryptorImplTest {
                         Assert.assertEquals(text, decrypted);
                     } catch (Throwable t) {
                         failure2.set(t);
+                    } finally {
+                        threadLatch.countDown();
                     }
                 }, error -> {
-                    Assert.fail("Failed decryption of text : " + text + ", Reason : " + error);
+                    threadLatch.countDown();
                     failure2.set(new MLException(error));
                 });
                 CountDownLatch latch2 = new CountDownLatch(1);
                 LatchedActionListener<String> latchedActionListener2 = new LatchedActionListener<>(actionListener2, latch2);
                 encryptor.decrypt(encrypted, tenantId, latchedActionListener2);
                 try {
-                    Assert.assertTrue("Deryption failed", latch2.await(LATCH_WAIT_TIME, SECONDS));
+                    Assert.assertTrue("Decryption failed", latch2.await(LATCH_WAIT_TIME, SECONDS));
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -1246,9 +1256,11 @@ public class EncryptorImplTest {
                     throw new AssertionError("Decryption failed", failure2.get());
             } catch (Throwable t) {
                 failure1.set(t);
+            } finally {
+                threadLatch.countDown();
             }
         }, error -> {
-            Assert.fail("Failed encryption of text : " + text + ", Reason : " + error);
+            threadLatch.countDown();
             failure1.set(new MLException(error));
         });
         CountDownLatch latch1 = new CountDownLatch(1);
