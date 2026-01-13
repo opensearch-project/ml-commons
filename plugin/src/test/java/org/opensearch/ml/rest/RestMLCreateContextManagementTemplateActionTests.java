@@ -201,7 +201,7 @@ public class RestMLCreateContextManagementTemplateActionTests extends OpenSearch
         return "{\n"
             + "  \"description\": \"Test template\",\n"
             + "  \"hooks\": {\n"
-            + "    \"PreLLMEvent\": [\n"
+            + "    \"PRE_LLM\": [\n"
             + "      {\n"
             + "        \"type\": \"SummarizationManager\",\n"
             + "        \"config\": {\n"

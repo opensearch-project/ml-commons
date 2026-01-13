@@ -136,7 +136,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private SdkClient sdkClient;
     private Encryptor encryptor;
     private StreamingWrapper streamingWrapper;
-    private static HookRegistry hookRegistry;
+    private HookRegistry hookRegistry;
 
     public MLChatAgentRunner(
         Client client,
@@ -490,7 +490,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             toolParams,
                             interactions,
                             toolCallId,
-                            functionCalling
+                            functionCalling,
+                            hookRegistry
                         );
 
                     } else {
@@ -658,7 +659,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> toolParams,
         List<String> interactions,
         String toolCallId,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        HookRegistry hookRegistry
     ) {
         if (tools.get(action).validate(toolParams)) {
             try {

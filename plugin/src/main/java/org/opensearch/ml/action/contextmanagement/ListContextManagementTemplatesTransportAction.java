@@ -8,7 +8,6 @@ package org.opensearch.ml.action.contextmanagement;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.contextmanagement.MLListContextManagementTemplatesAction;
 import org.opensearch.ml.common.transport.contextmanagement.MLListContextManagementTemplatesRequest;
@@ -44,7 +43,7 @@ public class ListContextManagementTemplatesTransportAction extends
         MLListContextManagementTemplatesRequest request,
         ActionListener<MLListContextManagementTemplatesResponse> listener
     ) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try {
             log.debug("Listing context management templates from: {} size: {}", request.getFrom(), request.getSize());
 
             contextManagementTemplateService.listTemplates(request.getFrom(), request.getSize(), ActionListener.wrap(templates -> {

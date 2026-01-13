@@ -52,14 +52,14 @@ public class ContextManagerConfig implements ToXContentObject, Writeable {
      * Constructor from StreamInput
      */
     public ContextManagerConfig(StreamInput input) throws IOException {
-        this.type = input.readString();
+        this.type = input.readOptionalString();
         this.activation = input.readMap();
         this.config = input.readMap();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(type);
+        out.writeOptionalString(type);
         out.writeMap(activation);
         out.writeMap(config);
     }

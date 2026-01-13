@@ -10,6 +10,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -21,7 +22,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class ContextManagementIndexUtils {
 
-    public static final String CONTEXT_MANAGEMENT_TEMPLATES_INDEX = "ml_context_management_templates";
+    public static final String CONTEXT_MANAGEMENT_TEMPLATES_INDEX = CommonValue.ML_CONTEXT_MANAGEMENT_TEMPLATES_INDEX;
 
     private final Client client;
     private final ClusterService clusterService;
@@ -50,8 +51,10 @@ public class ContextManagementIndexUtils {
             return;
         }
 
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, context::restore);
+        try {
+            ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext();
+            ActionListener<Boolean> wrappedListener = ActionListener
+                .runBefore(ActionListener.runBefore(listener, context::restore), context::close);
 
             CreateIndexRequest createIndexRequest = new CreateIndexRequest(CONTEXT_MANAGEMENT_TEMPLATES_INDEX).settings(getIndexSettings());
 

@@ -184,6 +184,7 @@ public class SummarizationManager implements ContextManager {
         List<String> originalInteractions
     ) {
         CountDownLatch latch = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicBoolean timedOut = new java.util.concurrent.atomic.AtomicBoolean(false);
 
         try {
             // Create ML input dataset for remote inference
@@ -198,6 +199,9 @@ public class SummarizationManager implements ContextManager {
             // Execute prediction
             ActionListener<MLTaskResponse> listener = ActionListener.wrap(response -> {
                 try {
+                    if (timedOut.get()) {
+                        return;
+                    }
                     String summary = extractSummaryFromResponse(response, context);
                     if (summary != null) {
                         processSummarizationResult(context, summary, messagesToSummarizeCount, remainingMessages, originalInteractions);
@@ -212,15 +216,21 @@ public class SummarizationManager implements ContextManager {
                     latch.countDown();
                 }
             }, e -> {
-                // Fallback: skip summarization, keep original interactions
-                log.warn("Summarization request failed, keeping original interactions: {}", e.getMessage());
+                if (!timedOut.get()) {
+                    // Fallback: skip summarization, keep original interactions
+                    log.warn("Summarization request failed, keeping original interactions: {}", e.getMessage());
+                }
                 latch.countDown();
             });
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, listener);
 
             // Wait for summarization to complete (30 second timeout)
-            latch.await(30, TimeUnit.SECONDS);
+            boolean finished = latch.await(30, TimeUnit.SECONDS);
+            if (!finished) {
+                timedOut.set(true);
+                log.warn("Summarization timed out after 30s; skipping late results");
+            }
 
         } catch (Exception e) {
             // Fallback: skip summarization, keep original interactions

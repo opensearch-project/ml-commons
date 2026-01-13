@@ -79,7 +79,7 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
 
         // Read hooks map
         int hooksSize = input.readInt();
-        if (hooksSize > 0) {
+        if (hooksSize >= 0) {
             this.hooks = input.readMap(StreamInput::readString, in -> {
                 try {
                     int listSize = in.readInt();
@@ -92,6 +92,8 @@ public class ContextManagementTemplate implements ToXContentObject, Writeable {
                     throw new RuntimeException(e);
                 }
             });
+        } else {
+            this.hooks = null;
         }
 
         this.createdTime = input.readOptionalInstant();

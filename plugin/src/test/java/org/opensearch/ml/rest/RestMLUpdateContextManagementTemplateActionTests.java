@@ -25,6 +25,7 @@ import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.contextmanagement.MLUpdateContextManagementTemplateRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -102,5 +103,97 @@ public class RestMLUpdateContextManagementTemplateActionTests extends OpenSearch
             .build();
 
         restAction.prepareRequest(request, client);
+    }
+
+    @Test
+    public void testGetRequest_AgentFrameworkDisabled() throws Exception {
+        when(mlFeatureEnabledSetting.isAgentFrameworkEnabled()).thenReturn(false);
+
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_TEMPLATE_NAME, "test_template");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.PUT)
+            .withPath("/_plugins/_ml/context_management/test_template")
+            .withParams(params)
+            .withContent(new BytesArray("{}"), MediaTypeRegistry.JSON)
+            .build();
+
+        IllegalStateException exception = expectThrows(IllegalStateException.class, () -> {
+            restAction.getRequest(request);
+        });
+        assertEquals("Agent framework is disabled", exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequest_MissingTemplateName() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        // No template name parameter
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.PUT)
+            .withPath("/_plugins/_ml/context_management/")
+            .withParams(params)
+            .withContent(new BytesArray("{}"), MediaTypeRegistry.JSON)
+            .build();
+
+        IllegalArgumentException exception = expectThrows(IllegalArgumentException.class, () -> { restAction.getRequest(request); });
+        assertEquals("Template name is required", exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequest_EmptyTemplateName() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_TEMPLATE_NAME, "");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.PUT)
+            .withPath("/_plugins/_ml/context_management/")
+            .withParams(params)
+            .withContent(new BytesArray("{}"), MediaTypeRegistry.JSON)
+            .build();
+
+        IllegalArgumentException exception = expectThrows(IllegalArgumentException.class, () -> { restAction.getRequest(request); });
+        assertEquals("Template name is required", exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequest_WhitespaceTemplateName() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_TEMPLATE_NAME, "   ");
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.PUT)
+            .withPath("/_plugins/_ml/context_management/")
+            .withParams(params)
+            .withContent(new BytesArray("{}"), MediaTypeRegistry.JSON)
+            .build();
+
+        IllegalArgumentException exception = expectThrows(IllegalArgumentException.class, () -> { restAction.getRequest(request); });
+        assertEquals("Template name is required", exception.getMessage());
+    }
+
+    @Test
+    public void testGetRequest_ValidRequest() throws Exception {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_TEMPLATE_NAME, "test_template");
+
+        String requestContent = "{"
+            + "\"name\": \"test_template\","
+            + "\"description\": \"Test template\","
+            + "\"context_managers\": []"
+            + "}";
+
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.PUT)
+            .withPath("/_plugins/_ml/context_management/test_template")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), MediaTypeRegistry.JSON)
+            .build();
+
+        MLUpdateContextManagementTemplateRequest result = restAction.getRequest(request);
+        assertNotNull(result);
+        assertEquals("test_template", result.getTemplateName());
+        assertNotNull(result.getTemplate());
     }
 }

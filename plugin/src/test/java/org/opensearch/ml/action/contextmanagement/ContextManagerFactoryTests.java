@@ -140,4 +140,31 @@ public class ContextManagerFactoryTests {
             assertTrue(e.getMessage().contains("Unsupported context manager type"));
         }
     }
+
+    @Test
+    public void testCreateContextManager_WithActivationConfig() {
+        // Arrange
+        Map<String, Object> managerConfig = Map.of("maxLength", 1000);
+        Map<String, Object> activationConfig = Map.of("enabled", true);
+        ContextManagerConfig config = new ContextManagerConfig("ToolsOutputTruncateManager", managerConfig, activationConfig);
+
+        // Act
+        ContextManager contextManager = contextManagerFactory.createContextManager(config);
+
+        // Assert
+        assertNotNull(contextManager);
+        assertTrue(contextManager instanceof ToolsOutputTruncateManager);
+    }
+
+    @Test
+    public void testCreateContextManager_InitializationFailure() {
+        // Arrange - Create a config that might cause initialization issues
+        Map<String, Object> invalidConfig = Map.of("invalid", "config");
+        ContextManagerConfig config = new ContextManagerConfig("SummarizationManager", invalidConfig, null);
+
+        // Act & Assert - Should still create the manager even with invalid config
+        ContextManager contextManager = contextManagerFactory.createContextManager(config);
+        assertNotNull(contextManager);
+        assertTrue(contextManager instanceof SummarizationManager);
+    }
 }

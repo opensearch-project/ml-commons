@@ -6,7 +6,9 @@
 package org.opensearch.ml.action.contextmanagement;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -96,5 +98,46 @@ public class UpdateContextManagementTemplateTransportActionTests extends OpenSea
 
         assertEquals("test_template", templateNameCaptor.getValue());
         assertEquals("test_template", templateCaptor.getValue().getName());
+    }
+
+    @Test
+    public void testDoExecute_ServiceFailure() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Service error"));
+            return null;
+        }).when(contextManagementTemplateService).updateTemplate(any(), any(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testDoExecute_ExceptionInTryBlock() {
+        // Test exception handling in the try-catch block by making threadPool throw
+        when(client.threadPool()).thenThrow(new RuntimeException("ThreadPool error"));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof RuntimeException);
+        assertEquals("ThreadPool error", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_SuccessfulUpdate() {
+        UpdateResponse mockResponse = mock(UpdateResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(contextManagementTemplateService).updateTemplate(any(), any(), any());
+
+        action.doExecute(task, request, actionListener);
+
+        verify(actionListener).onResponse(mockResponse);
+        verify(contextManagementTemplateService).updateTemplate(eq("test_template"), any(ContextManagementTemplate.class), any());
     }
 }

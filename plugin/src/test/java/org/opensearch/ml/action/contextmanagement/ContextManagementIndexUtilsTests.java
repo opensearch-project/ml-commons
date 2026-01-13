@@ -70,7 +70,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
     @Test
     public void testGetIndexName() {
         String indexName = ContextManagementIndexUtils.getIndexName();
-        assertEquals("ml_context_management_templates", indexName);
+        assertEquals(".plugins-ml-context-management-templates", indexName);
     }
 
     @Test
@@ -80,7 +80,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
 
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(true);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(true);
 
         boolean exists = contextManagementIndexUtils.doesIndexExist();
         assertTrue(exists);
@@ -93,7 +93,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
 
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(false);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(false);
 
         boolean exists = contextManagementIndexUtils.doesIndexExist();
         assertFalse(exists);
@@ -106,7 +106,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
         Metadata metadata = mock(Metadata.class);
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(true);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(true);
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -124,7 +124,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
         Metadata metadata = mock(Metadata.class);
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(false);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(false);
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -147,7 +147,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
         verify(indicesAdminClient).create(requestCaptor.capture(), any());
 
         CreateIndexRequest request = requestCaptor.getValue();
-        assertEquals("ml_context_management_templates", request.index());
+        assertEquals(".plugins-ml-context-management-templates", request.index());
 
         Settings indexSettings = request.settings();
         assertEquals("1", indexSettings.get("index.number_of_shards"));
@@ -162,7 +162,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
         Metadata metadata = mock(Metadata.class);
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(false);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(false);
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -187,7 +187,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
         Metadata metadata = mock(Metadata.class);
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(false);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(false);
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
@@ -214,7 +214,7 @@ public class ContextManagementIndexUtilsTests extends OpenSearchTestCase {
         Metadata metadata = mock(Metadata.class);
         when(clusterService.state()).thenReturn(clusterState);
         when(clusterState.metadata()).thenReturn(metadata);
-        when(metadata.hasIndex("ml_context_management_templates")).thenReturn(false);
+        when(metadata.hasIndex(".plugins-ml-context-management-templates")).thenReturn(false);
 
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> listener = mock(ActionListener.class);
