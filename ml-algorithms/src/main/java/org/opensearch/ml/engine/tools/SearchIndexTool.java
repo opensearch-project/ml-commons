@@ -16,14 +16,14 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.OpenSearchParseException;
-import org.opensearch.core.common.ParsingException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.ParsingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -237,10 +237,10 @@ public class SearchIndexTool implements Tool {
         if (StringUtils.isEmpty(input)) {
             return input;
         }
-        
+
         String result = input.trim();
         int layersRemoved = 0;
-        
+
         // Remove multiple layers of outer quotes
         while (result.length() > 2 && result.startsWith("\"") && result.endsWith("\"")) {
             String unwrapped = result.substring(1, result.length() - 1);
@@ -254,11 +254,11 @@ public class SearchIndexTool implements Tool {
                 break;
             }
         }
-        
+
         if (layersRemoved > 0) {
             log.debug("Removed {} outer quote layer(s) from stringified JSON", layersRemoved);
         }
-        
+
         return result;
     }
 
@@ -314,10 +314,7 @@ public class SearchIndexTool implements Tool {
 
         } else if (braceBalance > 0) {
             // Unbalanced: more opening braces
-            log.debug(
-                "Unbalanced JSON: missing {} closing brace(s), cannot safely auto-fix without changing semantics",
-                braceBalance
-            );
+            log.debug("Unbalanced JSON: missing {} closing brace(s), cannot safely auto-fix without changing semantics", braceBalance);
             return input;
         }
 
@@ -443,7 +440,10 @@ public class SearchIndexTool implements Tool {
             if (StringUtils.isEmpty(query)) {
                 String rawQuery = parameters.get(QUERY_FIELD);
                 if (!StringUtils.isEmpty(rawQuery)) {
-                    log.info("Processing query parameter as string (backward compatibility mode). Consider using object format for better reliability.");
+                    log
+                        .info(
+                            "Processing query parameter as string (backward compatibility mode). Consider using object format for better reliability."
+                        );
                     query = normalizeQueryString(rawQuery);
                 }
             }
