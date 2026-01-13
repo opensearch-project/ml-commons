@@ -722,7 +722,7 @@ public class SearchIndexToolTests {
 
         SearchRequest capturedRequest = searchCaptor.getValue();
         assertArrayEquals(new String[] { "test-index" }, capturedRequest.indices());
-        
+
         // Verify the query structure is properly normalized
         String sourceString = capturedRequest.source().toString();
         assertTrue("Query should contain match_all", sourceString.contains("match_all"));
@@ -749,7 +749,7 @@ public class SearchIndexToolTests {
 
         SearchRequest capturedRequest = searchCaptor.getValue();
         String sourceString = capturedRequest.source().toString();
-        
+
         // Count braces to ensure they're balanced
         long openBraces = sourceString.chars().filter(ch -> ch == '{').count();
         long closeBraces = sourceString.chars().filter(ch -> ch == '}').count();
@@ -760,7 +760,8 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testNormalization_verifyComplexQueryPreserved() {
         // Test that complex query structure is preserved during normalization
-        String complexMalformed = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"bool\\\":{\\\"must\\\":[{\\\"match\\\":{\\\"title\\\":\\\"test\\\"}},{\\\"range\\\":{\\\"date\\\":{\\\"gte\\\":\\\"2023-01-01\\\"}}}]}},\\\"size\\\":5}\"}";
+        String complexMalformed =
+            "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"bool\\\":{\\\"must\\\":[{\\\"match\\\":{\\\"title\\\":\\\"test\\\"}},{\\\"range\\\":{\\\"date\\\":{\\\"gte\\\":\\\"2023-01-01\\\"}}}]}},\\\"size\\\":5}\"}";
         Map<String, String> parameters = Map.of("input", complexMalformed);
 
         ActionListener<String> listener = mock(ActionListener.class);
@@ -774,7 +775,7 @@ public class SearchIndexToolTests {
 
         SearchRequest capturedRequest = searchCaptor.getValue();
         String sourceString = capturedRequest.source().toString();
-        
+
         // Verify complex query elements are preserved
         assertTrue("Should contain bool query", sourceString.contains("bool"));
         assertTrue("Should contain must clause", sourceString.contains("must"));
@@ -801,10 +802,10 @@ public class SearchIndexToolTests {
 
         SearchRequest capturedRequest = searchCaptor.getValue();
         String sourceString = capturedRequest.source().toString();
-        
+
         // Verify the query is properly normalized
         assertTrue("Should contain match_all", sourceString.contains("match_all"));
-        
+
         // Count braces to ensure normalization worked
         long openBraces = sourceString.chars().filter(ch -> ch == '{').count();
         long closeBraces = sourceString.chars().filter(ch -> ch == '}').count();
@@ -815,7 +816,8 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testNormalization_verifyMultipleOuterQuotesHandled() {
         // Test handling of multiple outer quotes
-        String multiQuoteInput = "{\"index\":\"test-index\",\"query\":\"\\\"{\\\\\\\"query\\\\\\\":{\\\\\\\"match_all\\\\\\\":{}}}\\\"\"}";;
+        String multiQuoteInput = "{\"index\":\"test-index\",\"query\":\"\\\"{\\\\\\\"query\\\\\\\":{\\\\\\\"match_all\\\\\\\":{}}}\\\"\"}";
+        ;
         Map<String, String> parameters = Map.of("input", multiQuoteInput);
 
         ActionListener<String> listener = mock(ActionListener.class);
@@ -823,12 +825,12 @@ public class SearchIndexToolTests {
 
         // Should either succeed or fail gracefully without hanging
         verify(client, atMost(1)).search(any(), any());
-        
+
         // If it succeeded, verify the structure
         try {
             ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
             verify(client).search(searchCaptor.capture(), any());
-            
+
             SearchRequest capturedRequest = searchCaptor.getValue();
             assertArrayEquals(new String[] { "test-index" }, capturedRequest.indices());
         } catch (Exception e) {
@@ -839,8 +841,7 @@ public class SearchIndexToolTests {
 
     @Test
     public void testMixedEscapedAndUnescapedQuotesHandledSafely() {
-        String malformed =
-            "{\"field_1\":\"value with \\\"quotes\\\"\", \\\\\"field_2\\\\\", \"value\"}";
+        String malformed = "{\"field_1\":\"value with \\\"quotes\\\"\", \\\\\"field_2\\\\\", \"value\"}";
 
         String normalized = mockedSearchIndexTool.normalizeQueryString(malformed);
 
