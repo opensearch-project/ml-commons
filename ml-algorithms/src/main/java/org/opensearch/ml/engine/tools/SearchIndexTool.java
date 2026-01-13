@@ -79,8 +79,7 @@ public class SearchIndexTool implements Tool {
         + "The object MUST follow OpenSearch Query DSL and MUST include a top-level 'query' field. "
         + "Preferred format for reliable parsing. "
         + "Example: {\\\"query\\\":{\\\"match\\\":{\\\"field\\\":\\\"value\\\"}},\\\"size\\\":10}. "
-        + "String format is also supported for backward compatibility, but object format is strongly recommended.\"},"
-        + "\"additionalProperties\":false},"
+        + "String format is also supported for backward compatibility, but object format is strongly recommended.\"}},"
         + "\"required\":[\"index\",\"query\"],"
         + "\"additionalProperties\":false}";
 
