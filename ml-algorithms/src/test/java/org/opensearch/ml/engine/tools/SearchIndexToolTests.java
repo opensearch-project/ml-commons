@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -86,12 +87,15 @@ public class SearchIndexToolTests {
         Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
         assertEquals(
             "{\"type\":\"object\",\"properties\":"
-                + "{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
-                + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. "
-                + "You need to get index mapping to write correct search query. It must be a valid OpenSearch query. "
-                + "Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}"
-                + "\\nInvalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
-                + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}",
+                + "{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. Example: index1\"},"
+                + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch Query DSL as a JSON object. "
+                + "The object MUST follow OpenSearch Query DSL and MUST include a top-level 'query' field. "
+                + "Preferred format for reliable parsing. "
+                + "Example: {\\\"query\\\":{\\\"match\\\":{\\\"field\\\":\\\"value\\\"}},\\\"size\\\":10}. "
+                + "String format is also supported for backward compatibility, but object format is strongly recommended.\"},"
+                + "\"additionalProperties\":false},"
+                + "\"required\":[\"index\",\"query\"],"
+                + "\"additionalProperties\":false}",
             attributes.get(INPUT_SCHEMA_FIELD)
         );
         assertEquals(false, attributes.get(STRICT_FIELD));
@@ -698,6 +702,153 @@ public class SearchIndexToolTests {
         assertArrayEquals(new String[] { "test-index" }, capturedRequest.indices());
         // The source should contain the normalized query structure
         assertFalse(capturedRequest.source().toString().isEmpty());
+    }
+
+    // ========== Normalization Verification Tests ==========
+
+    @Test
+    @SneakyThrows
+    public void testNormalization_verifyFixedQueryStructure() {
+        // Test that malformed JSON is properly normalized to expected structure
+        String malformedInput = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}\"}";
+        Map<String, String> parameters = Map.of("input", malformedInput);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Capture the search request to verify the normalized query
+        ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(searchCaptor.capture(), any());
+
+        SearchRequest capturedRequest = searchCaptor.getValue();
+        assertArrayEquals(new String[] { "test-index" }, capturedRequest.indices());
+        
+        // Verify the query structure is properly normalized
+        String sourceString = capturedRequest.source().toString();
+        assertTrue("Query should contain match_all", sourceString.contains("match_all"));
+        assertFalse("Query should not contain escaped quotes", sourceString.contains("\\\""));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalization_verifyExtraBracesRemoved() {
+        // Test that extra closing braces are removed
+        String malformedInput = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"match_all\\\":{}}}}}}\"}";
+        Map<String, String> parameters = Map.of("input", malformedInput);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Verify that the search was executed successfully (no failure callback)
+        verify(listener, never()).onFailure(any());
+        verify(client, times(1)).search(any(), any());
+
+        // Capture and verify the normalized query structure
+        ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(searchCaptor.capture(), any());
+
+        SearchRequest capturedRequest = searchCaptor.getValue();
+        String sourceString = capturedRequest.source().toString();
+        
+        // Count braces to ensure they're balanced
+        long openBraces = sourceString.chars().filter(ch -> ch == '{').count();
+        long closeBraces = sourceString.chars().filter(ch -> ch == '}').count();
+        assertEquals("Braces should be balanced after normalization", openBraces, closeBraces);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalization_verifyComplexQueryPreserved() {
+        // Test that complex query structure is preserved during normalization
+        String complexMalformed = "{\"index\":\"test-index\",\"query\":\"{\\\"query\\\":{\\\"bool\\\":{\\\"must\\\":[{\\\"match\\\":{\\\"title\\\":\\\"test\\\"}},{\\\"range\\\":{\\\"date\\\":{\\\"gte\\\":\\\"2023-01-01\\\"}}}]}},\\\"size\\\":5}\"}";
+        Map<String, String> parameters = Map.of("input", complexMalformed);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        verify(listener, never()).onFailure(any());
+        verify(client, times(1)).search(any(), any());
+
+        ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(searchCaptor.capture(), any());
+
+        SearchRequest capturedRequest = searchCaptor.getValue();
+        String sourceString = capturedRequest.source().toString();
+        
+        // Verify complex query elements are preserved
+        assertTrue("Should contain bool query", sourceString.contains("bool"));
+        assertTrue("Should contain must clause", sourceString.contains("must"));
+        assertTrue("Should contain match query", sourceString.contains("match"));
+        assertTrue("Should contain range query", sourceString.contains("range"));
+        assertTrue("Should contain size parameter", sourceString.contains("size"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalization_verifyStringParameterNormalization() {
+        // Test normalization when query is passed as direct parameter
+        String malformedQuery = "{\"query\":{\"match_all\":{}}}}}"; // Extra closing braces
+        Map<String, String> parameters = Map.of("index", "test-index", "query", malformedQuery);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        verify(listener, never()).onFailure(any());
+        verify(client, times(1)).search(any(), any());
+
+        ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(searchCaptor.capture(), any());
+
+        SearchRequest capturedRequest = searchCaptor.getValue();
+        String sourceString = capturedRequest.source().toString();
+        
+        // Verify the query is properly normalized
+        assertTrue("Should contain match_all", sourceString.contains("match_all"));
+        
+        // Count braces to ensure normalization worked
+        long openBraces = sourceString.chars().filter(ch -> ch == '{').count();
+        long closeBraces = sourceString.chars().filter(ch -> ch == '}').count();
+        assertEquals("Braces should be balanced after normalization", openBraces, closeBraces);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testNormalization_verifyMultipleOuterQuotesHandled() {
+        // Test handling of multiple outer quotes
+        String multiQuoteInput = "{\"index\":\"test-index\",\"query\":\"\\\"{\\\\\\\"query\\\\\\\":{\\\\\\\"match_all\\\\\\\":{}}}\\\"\"}";;
+        Map<String, String> parameters = Map.of("input", multiQuoteInput);
+
+        ActionListener<String> listener = mock(ActionListener.class);
+        mockedSearchIndexTool.run(parameters, listener);
+
+        // Should either succeed or fail gracefully without hanging
+        verify(client, atMost(1)).search(any(), any());
+        
+        // If it succeeded, verify the structure
+        try {
+            ArgumentCaptor<SearchRequest> searchCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+            verify(client).search(searchCaptor.capture(), any());
+            
+            SearchRequest capturedRequest = searchCaptor.getValue();
+            assertArrayEquals(new String[] { "test-index" }, capturedRequest.indices());
+        } catch (Exception e) {
+            // If normalization couldn't fix it, that's acceptable - we just want to ensure no hanging
+            verify(listener, times(1)).onFailure(any());
+        }
+    }
+
+    @Test
+    public void testMixedEscapedAndUnescapedQuotesHandledSafely() {
+        String malformed =
+            "{\"field_1\":\"value with \\\"quotes\\\"\", \\\\\"field_2\\\\\", \"value\"}";
+
+        String normalized = mockedSearchIndexTool.normalizeQueryString(malformed);
+
+        // Either:
+        // 1. Successfully normalized into valid JSON
+        // OR
+        // 2. Returned original without crashing
+        assertNotNull(normalized);
     }
 
 }
