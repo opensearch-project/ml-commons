@@ -206,23 +206,26 @@ public class McpStreamableHttpConnector implements Connector {
     }
 
     @Override
-    public void decrypt(String action, TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        Map<String, String> decrypted = new HashMap<>();
-        for (String key : credential.keySet()) {
-            function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { decrypted.put(key, result); }, error -> {
-                throw new MLException(error);
-            }));
+    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
+        if (credential != null) {
+            Map<String, String> decrypted = new HashMap<>();
+            for (String key : credential.keySet()) {
+                decrypted.put(key, function.apply(credential.get(key), tenantId));
+            }
+            this.decryptedCredential = decrypted;
+        } else {
+            this.decryptedCredential = new HashMap<>();
         }
-        this.decryptedCredential = decrypted;
         this.decryptedHeaders = createDecryptedHeaders(headers);
     }
 
     @Override
-    public void encrypt(TriConsumer<String, String, ActionListener<String>> function, String tenantId) {
-        for (String key : credential.keySet()) {
-            function.apply(credential.get(key), tenantId, ActionListener.wrap(result -> { credential.put(key, result); }, error -> {
-                throw new MLException(error);
-            }));
+    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
+        if (credential != null) {
+            for (String key : credential.keySet()) {
+                String encrypted = function.apply(credential.get(key), tenantId);
+                credential.put(key, encrypted);
+            }
         }
     }
 
