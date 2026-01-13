@@ -57,8 +57,11 @@ public final class AGUIConstants {
     /** Parameter key for AG-UI assistant tool call messages */
     public static final String AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES = "agui_assistant_tool_call_messages";
 
-    /** Parameter key for backend tool names (used for filtering) */
+    /** Parameter key for backend tool names (used in prompts) */
     public static final String AGUI_PARAM_BACKEND_TOOL_NAMES = "backend_tool_names";
+
+    /** Parameter key for frontend tool names (used in prompts) */
+    public static final String AGUI_PARAM_FRONTEND_TOOL_NAMES = "agui_tool_names";
 
     /** Parameter key for current AG-UI message id */
     public static final String AGUI_PARAM_MESSAGE_ID = "agui_message_id";
