@@ -19,9 +19,12 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 import javax.crypto.spec.SecretKeySpec;
 
@@ -62,15 +65,26 @@ public class EncryptorImpl implements Encryptor {
     private ClusterService clusterService;
     private Client client;
     private SdkClient sdkClient;
-    private final Map<String, String> tenantMasterKeys;
+    private final Cache<String, String> tenantMasterKeys;
     private MLIndicesHandler mlIndicesHandler;
 
     // concurrent map can't have null as a key. This is to support single tenancy
     // assigning some random string so that it can't be duplicate
     public static final String DEFAULT_TENANT_ID = "03000200-0400-0500-0006-000700080009";
+    
+    // TTL for master key cache entries (5 minutes)
+    private static final long MASTER_KEY_CACHE_TTL_MINUTES = 5;
 
     public EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler) {
-        this.tenantMasterKeys = new ConcurrentHashMap<>();
+        this(clusterService, client, sdkClient, mlIndicesHandler, MASTER_KEY_CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+    }
+
+    // Package-private constructor for testing with custom TTL
+    EncryptorImpl(ClusterService clusterService, Client client, SdkClient sdkClient, MLIndicesHandler mlIndicesHandler, 
+                  long cacheTtl, TimeUnit timeUnit) {
+        this.tenantMasterKeys = CacheBuilder.newBuilder()
+            .expireAfterWrite(cacheTtl, timeUnit)
+            .build();
         this.clusterService = clusterService;
         this.client = client;
         this.sdkClient = sdkClient;
@@ -78,7 +92,14 @@ public class EncryptorImpl implements Encryptor {
     }
 
     public EncryptorImpl(String tenantId, String masterKey) {
-        this.tenantMasterKeys = new ConcurrentHashMap<>();
+        this(tenantId, masterKey, MASTER_KEY_CACHE_TTL_MINUTES, TimeUnit.MINUTES);
+    }
+
+    // Package-private constructor for testing with custom TTL
+    EncryptorImpl(String tenantId, String masterKey, long cacheTtl, TimeUnit timeUnit) {
+        this.tenantMasterKeys = CacheBuilder.newBuilder()
+            .expireAfterWrite(cacheTtl, timeUnit)
+            .build();
         this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
     }
 
@@ -89,14 +110,14 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public String getMasterKey(String tenantId) {
-        return tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
+        return tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
     }
 
     @Override
     public String encrypt(String plainText, String tenantId) {
-        initMasterKey(tenantId);
+        String masterKey = getOrInitMasterKey(tenantId);
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-        JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
+        JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
 
         final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
             .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
@@ -105,9 +126,9 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public String decrypt(String encryptedText, String tenantId) {
-        initMasterKey(tenantId);
+        String masterKey = getOrInitMasterKey(tenantId);
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-        JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
+        JceMasterKey jceMasterKey = createJceMasterKey(masterKey);
 
         final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
             .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
@@ -121,13 +142,26 @@ public class EncryptorImpl implements Encryptor {
         return Base64.getEncoder().encodeToString(keyBytes);
     }
 
-    private JceMasterKey createJceMasterKey(String tenantId) {
-        byte[] bytes = Base64.getDecoder().decode(tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)));
+    private JceMasterKey createJceMasterKey(String masterKey) {
+        byte[] bytes = Base64.getDecoder().decode(masterKey);
         return JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
     }
 
+    private String getOrInitMasterKey(String tenantId) {
+        String masterKey = tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
+        if (masterKey != null) {
+            return masterKey;
+        }
+        initMasterKey(tenantId);
+        masterKey = tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
+        if (masterKey == null) {
+            throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
+        }
+        return masterKey;
+    }
+
     private void initMasterKey(String tenantId) {
-        if (tenantMasterKeys.containsKey(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID))) {
+        if (tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) != null) {
             return;
         }
         String masterKeyId = MASTER_KEY;
@@ -164,7 +198,7 @@ public class EncryptorImpl implements Encryptor {
                 throw new MLException(exceptionRef.get());
             }
         }
-        if (tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) == null) {
+        if (tenantMasterKeys.getIfPresent(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) == null) {
             throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
         }
     }
