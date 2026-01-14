@@ -398,6 +398,20 @@ public class QueryPlanningTool implements WithModelTool {
         return true;
     }
 
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put(QUESTION_FIELD, String.class);
+        params.put(INDEX_NAME_FIELD, String.class);
+        params.put(GENERATION_TYPE_FIELD, String.class);
+        params.put(QUERY_PLANNER_SYSTEM_PROMPT_FIELD, String.class);
+        params.put(QUERY_PLANNER_USER_PROMPT_FIELD, String.class);
+        params.put("embedding_model_id", String.class);
+        params.put("response_filter", String.class);
+        params.put(SEARCH_TEMPLATES_FIELD, String[].class);
+        return params;
+    }
+
     public static class Factory implements WithModelTool.Factory<QueryPlanningTool> {
         private Client client;
         private static volatile Factory INSTANCE;
@@ -425,7 +439,6 @@ public class QueryPlanningTool implements WithModelTool {
             if (!params.containsKey(MODEL_ID_FIELD) && params.containsKey(AGENT_LLM_MODEL_ID)) {
                 params.put(MODEL_ID_FIELD, params.get(AGENT_LLM_MODEL_ID));
             }
-
             MLModelTool queryGenerationTool = MLModelTool.Factory.getInstance().create(params);
 
             String type = (String) params.get(GENERATION_TYPE_FIELD);

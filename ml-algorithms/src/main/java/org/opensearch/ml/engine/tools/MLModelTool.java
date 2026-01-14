@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -146,6 +147,14 @@ public class MLModelTool implements WithModelTool {
     @Override
     public boolean validate(Map<String, String> parameters) {
         return parameters != null && !parameters.isEmpty();
+    }
+
+    @Override
+    public Map<String, Class<?>> getToolParamsDefinition() {
+        Map<String, Class<?>> params = new HashMap<>();
+        params.put("prompt", String.class);
+        params.put("response_field", String.class);
+        return params;
     }
 
     public static class Factory implements WithModelTool.Factory<MLModelTool> {

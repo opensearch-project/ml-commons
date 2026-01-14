@@ -44,6 +44,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLTask;
@@ -100,6 +101,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
+    public static final int DEFAULT_MAX_QUESTION_LENGTH = 10000;
+    public static final String MAX_QUESTION_LENGTH_FIELD = "max_question_length";
 
     private Client client;
     private SdkClient sdkClient;
@@ -149,6 +152,22 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         String agentId = agentMLInput.getAgentId();
         String tenantId = agentMLInput.getTenantId();
         Boolean isAsync = agentMLInput.getIsAsync();
+
+        int maxQuestionLength;
+        try {
+            maxQuestionLength = ConfigurationUtils
+                .readIntProperty(
+                    "MLTool",
+                    null,
+                    agentMLInput.getOriginalParameters(),
+                    MAX_QUESTION_LENGTH_FIELD,
+                    DEFAULT_MAX_QUESTION_LENGTH
+                );
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e.getMessage());
+        }
+
+        validateAgentParameters(agentMLInput.getOriginalParameters(), maxQuestionLength);
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) agentMLInput.getInputDataset();
         if (inputDataSet == null || inputDataSet.getParameters() == null) {
@@ -728,6 +747,21 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                             e -> log.warn("Failed to update interaction {} with failure message", interactionId, e)
                         )
                 );
+        }
+    }
+
+    public static void validateAgentParameters(Map<String, Object> parameters, int maxQuestionLength) {
+        if (parameters == null) {
+            return;
+        }
+
+        try {
+            String question = ConfigurationUtils.readOptionalStringProperty(null, null, parameters, "question");
+            if (question != null && question.length() > maxQuestionLength) {
+                throw new IllegalArgumentException("question length cannot exceed " + maxQuestionLength + " characters");
+            }
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e.getMessage());
         }
     }
 }
