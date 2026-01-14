@@ -140,11 +140,15 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
                     toolUse.put("name", function.get("name"));
 
                     String argumentsJson = (String) function.get("arguments");
-                    try {
-                        Object argumentsObj = gson.fromJson(argumentsJson, Object.class);
-                        toolUse.put("input", argumentsObj);
-                    } catch (Exception e) {
+                    if (argumentsJson == null || argumentsJson.trim().isEmpty()) {
                         toolUse.put("input", Map.of());
+                    } else {
+                        try {
+                            Object argumentsObj = gson.fromJson(argumentsJson, Object.class);
+                            toolUse.put("input", argumentsObj);
+                        } catch (Exception e) {
+                            toolUse.put("input", Map.of());
+                        }
                     }
                 }
 
