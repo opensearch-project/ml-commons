@@ -8,8 +8,8 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_ASSISTANT_TOOL_CALL_MESSAGES;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_BACKEND_TOOL_NAMES;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_FRONTEND_TOOL_NAMES;
+import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOLS;
 import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_TOOL_CALL_RESULTS;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
@@ -61,11 +61,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.context.Scope;
-
-import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
-
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
@@ -98,6 +93,7 @@ import org.opensearch.ml.common.utils.AgentLoggingContext;
 import org.opensearch.ml.common.utils.ContextAwareActionListener;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
+import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -112,6 +108,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -332,8 +330,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String runId = params.get(AGUI_PARAM_RUN_ID);
         Span agentSpan = AgentTracer.startAgentSpan("ChatAgent", sessionId, runId);
         Scope agentScope = AgentTracer.makeCurrent(agentSpan);
-        log.info("[ChatAgent-Tracing] Created agent span: spanId={}, valid={}, runId={}",
-            agentSpan.getSpanContext().getSpanId(), agentSpan.getSpanContext().isValid(), runId);
+        log
+            .info(
+                "[ChatAgent-Tracing] Created agent span: spanId={}, valid={}, runId={}",
+                agentSpan.getSpanContext().getSpanId(),
+                agentSpan.getSpanContext().isValid(),
+                runId
+            );
 
         try {
             List<Map<String, Object>> frontendTools = new ArrayList<>();
@@ -345,7 +348,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 if (aguiToolCallResults != null && !aguiToolCallResults.isEmpty()) {
                     // Process tool call results from frontend
                     log.info("[ChatAgent-Tracing] Processing AG-UI tool results, passing span to processAGUIToolResults");
-                    processAGUIToolResults(mlAgent, params, listener, memory, sessionId, functionCalling, aguiToolCallResults, agentSpan, agentScope);
+                    processAGUIToolResults(
+                        mlAgent,
+                        params,
+                        listener,
+                        memory,
+                        sessionId,
+                        functionCalling,
+                        aguiToolCallResults,
+                        agentSpan,
+                        agentScope
+                    );
                     return;
                 }
 
@@ -460,8 +473,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
                         // End agent span successfully
-                        log.info("[ChatAgent-Tracing] Final answer received, ending agent span: spanId={}",
-                            agentSpan.getSpanContext().getSpanId());
+                        log
+                            .info(
+                                "[ChatAgent-Tracing] Final answer received, ending agent span: spanId={}",
+                                agentSpan.getSpanContext().getSpanId()
+                            );
                         AgentTracer.endSpan(agentSpan, true, finalAnswer);
                         if (agentScope != null) {
                             agentScope.close();
@@ -550,8 +566,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             // For frontend tool use, we close the response stream and wait for frontend tool result
                             // End agent span here since frontend will handle tool execution
                             // A new span will be created when frontend calls back with tool results
-                            log.info("[ChatAgent-Tracing] Frontend tool call detected (tool={}), ending agent span: spanId={}",
-                                action, agentSpan.getSpanContext().getSpanId());
+                            log
+                                .info(
+                                    "[ChatAgent-Tracing] Frontend tool call detected (tool={}), ending agent span: spanId={}",
+                                    action,
+                                    agentSpan.getSpanContext().getSpanId()
+                                );
                             AgentTracer.endSpan(agentSpan, true, "frontend_tool_call:" + action);
                             if (agentScope != null) {
                                 agentScope.close();
@@ -1574,7 +1594,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String aguiTools = params.get(AGUI_PARAM_TOOLS);
                     List<Map<String, Object>> frontendTools = parseFrontendTools(aguiTools);
 
-                    processUnifiedTools(mlAgent, updatedParams, listener, memory, sessionId, functionCalling, frontendTools, agentSpan, agentScope);
+                    processUnifiedTools(
+                        mlAgent,
+                        updatedParams,
+                        listener,
+                        memory,
+                        sessionId,
+                        functionCalling,
+                        frontendTools,
+                        agentSpan,
+                        agentScope
+                    );
                 } else {
                     listener.onFailure(new RuntimeException("No LLM messages generated from tool results"));
                 }

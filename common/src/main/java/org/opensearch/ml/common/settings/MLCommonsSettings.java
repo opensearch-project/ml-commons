@@ -504,43 +504,18 @@ public final class MLCommonsSettings {
 
     // Agent tracing OSIS endpoint for OpenTelemetry export
     public static final Setting<String> ML_COMMONS_AGENT_TRACING_OSIS_ENDPOINT = Setting
-        .simpleString(
-            ML_PLUGIN_SETTING_PREFIX + "agent_tracing.osis_endpoint",
-            "",
-            Setting.Property.NodeScope,
-            Setting.Property.Final
-        );
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.osis_endpoint", "", Setting.Property.NodeScope, Setting.Property.Final);
 
     // Agent tracing AWS credentials for OSIS authentication
     public static final Setting<String> ML_COMMONS_AGENT_TRACING_AWS_ACCESS_KEY = Setting
-        .simpleString(
-            ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_access_key",
-            "",
-            Setting.Property.NodeScope,
-            Setting.Property.Final
-        );
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_access_key", "", Setting.Property.NodeScope, Setting.Property.Final);
 
     public static final Setting<String> ML_COMMONS_AGENT_TRACING_AWS_SECRET_KEY = Setting
-        .simpleString(
-            ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_secret_key",
-            "",
-            Setting.Property.NodeScope,
-            Setting.Property.Final
-        );
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_secret_key", "", Setting.Property.NodeScope, Setting.Property.Final);
 
     public static final Setting<String> ML_COMMONS_AGENT_TRACING_AWS_SESSION_TOKEN = Setting
-        .simpleString(
-            ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_session_token",
-            "",
-            Setting.Property.NodeScope,
-            Setting.Property.Final
-        );
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_session_token", "", Setting.Property.NodeScope, Setting.Property.Final);
 
     public static final Setting<String> ML_COMMONS_AGENT_TRACING_AWS_REGION = Setting
-        .simpleString(
-            ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_region",
-            "",
-            Setting.Property.NodeScope,
-            Setting.Property.Final
-        );
+        .simpleString(ML_PLUGIN_SETTING_PREFIX + "agent_tracing.aws_region", "", Setting.Property.NodeScope, Setting.Property.Final);
 }

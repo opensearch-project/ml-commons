@@ -49,11 +49,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.context.Scope;
-
-import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
-
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
@@ -88,6 +83,7 @@ import org.opensearch.ml.common.utils.AgentLoggingContext;
 import org.opensearch.ml.common.utils.ContextAwareActionListener;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.agents.AgentContextUtil;
+import org.opensearch.ml.engine.algorithms.agent.tracing.AgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.TransportChannel;
@@ -96,6 +92,8 @@ import org.opensearch.transport.client.Client;
 import com.google.common.annotations.VisibleForTesting;
 import com.jayway.jsonpath.JsonPath;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import joptsimple.internal.Strings;
 import lombok.extern.log4j.Log4j2;
 
@@ -860,7 +858,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void saveAndReturnFinalResult(
-        Memory<Interaction, ?, ?> memory,
+        Memory memory,
         String parentInteractionId,
         String reactAgentMemoryId,
         String reactParentInteractionId,

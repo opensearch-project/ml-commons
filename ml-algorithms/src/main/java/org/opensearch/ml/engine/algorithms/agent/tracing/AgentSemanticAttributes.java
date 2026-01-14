@@ -153,8 +153,10 @@ public final class AgentSemanticAttributes {
      * Truncate a string for safe inclusion in spans.
      */
     public static String truncate(String value, int maxSize) {
-        if (value == null) return "";
-        if (value.length() <= maxSize) return value;
+        if (value == null)
+            return "";
+        if (value.length() <= maxSize)
+            return value;
         return value.substring(0, maxSize) + "...[TRUNCATED]";
     }
 

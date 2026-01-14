@@ -118,7 +118,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     implementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
     implementation (group: 'com.google.guava', name: 'guava', version: '32.1.3-jre') {
-	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation group: 'com.google.code.gson', name: 'gson', version: "${versions.gson}"
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: "${versions.commonslang}"
@@ -360,65 +360,27 @@ testClusters.integTest {
         }))
     }
 
-    configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)
-    // Streaming setup - enable with -Dstreaming=true
-    if (System.getProperty("streaming") == "true") {
-        setting 'opensearch.experimental.feature.transport.stream.enabled', 'true'
-        setting 'http.type', securityEnabled ? 'reactor-netty4-secure' : 'reactor-netty4'
+    // Agent tracing OSIS endpoint (set via -DosisEndpoint=xxx or environment variable)
 
-        if (_numNodes > 1) {
-            setting 'arrow.flight.publish_host', '127.0.0.1'
-            setting 'arrow.flight.bind_host', '127.0.0.1'
+    def osisEndpoint = System.getProperty("osisEndpoint") ?: System.getenv("OSIS_ENDPOINT") ?: ""
+    if (osisEndpoint) {
+        setting 'plugins.ml_commons.agent_tracing.osis_endpoint', osisEndpoint
+    }
+
+    // Agent tracing AWS credentials (set via system properties or environment variables)
+    def awsAccessKey = System.getProperty("awsAccessKey") ?: System.getenv("AWS_ACCESS_KEY_ID") ?: ""
+    def awsSecretKey = System.getProperty("awsSecretKey") ?: System.getenv("AWS_SECRET_ACCESS_KEY") ?: ""
+    def awsSessionToken = System.getProperty("awsSessionToken") ?: System.getenv("AWS_SESSION_TOKEN") ?: ""
+    def awsRegion = System.getProperty("awsRegion") ?: System.getenv("AWS_REGION") ?: ""
+    if (awsAccessKey && awsSecretKey) {
+        setting 'plugins.ml_commons.agent_tracing.aws_access_key', awsAccessKey
+        setting 'plugins.ml_commons.agent_tracing.aws_secret_key', awsSecretKey
+        if (awsSessionToken) {
+            setting 'plugins.ml_commons.agent_tracing.aws_session_token', awsSessionToken
         }
-
-        if (securityEnabled) {
-            setting 'transport.stream.type.default', 'FLIGHT-SECURE'
-            setting 'flight.ssl.enable', 'true'
+        if (awsRegion) {
+            setting 'plugins.ml_commons.agent_tracing.aws_region', awsRegion
         }
-
-        systemProperty 'io.netty.allocator.numDirectArenas', '1'
-        systemProperty 'io.netty.noUnsafe', 'false'
-        systemProperty 'io.netty.tryUnsafe', 'true'
-        systemProperty 'io.netty.tryReflectionSetAccessible', 'true'
-        jvmArgs '--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED'
-
-        // Required streaming plugins
-        def opensearchCore = System.getenv("OPENSEARCH_CORE_PATH") ?: { throw new GradleException("OPENSEARCH_CORE_PATH environment variable must be set") }()
-        def transportPluginDir = file("${opensearchCore}/plugins/transport-reactor-netty4/build/distributions")
-        def arrowPluginDir = file("${opensearchCore}/plugins/arrow-flight-rpc/build/distributions")
-
-        def transportPlugin = transportPluginDir.exists() ? transportPluginDir.listFiles()?.find { it.name.endsWith('.zip') } : null
-        def arrowPlugin = arrowPluginDir.exists() ? arrowPluginDir.listFiles()?.find { it.name.endsWith('.zip') } : null
-
-        if (!transportPlugin) {
-            throw new GradleException("transport-reactor-netty4 plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:transport-reactor-netty4:assemble")
-        }
-        if (!arrowPlugin) {
-            throw new GradleException("arrow-flight-rpc plugin not found. Run: cd ${opensearchCore} && ./gradlew :plugins:arrow-flight-rpc:assemble")
-        }
-
-        plugin(provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
-                        return transportPlugin
-                    }
-                }
-            }
-        }))
-        plugin(provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
-                        return arrowPlugin
-                    }
-                }
-            }
-        }))
     }
 
     configureClusterPlugins(delegate, jobSchedulerFile, securityPluginFile, securityEnabled)

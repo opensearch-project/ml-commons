@@ -9,8 +9,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_RUN_ID;
-import static org.opensearch.ml.common.agui.AGUIConstants.AGUI_PARAM_THREAD_ID;
+import static org.opensearch.ml.common.agui.AGUIConstants.*;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AG_UI_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.STREAM_EXECUTE_THREAD_POOL;
@@ -25,10 +24,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import org.opensearch.OpenSearchStatusException;
@@ -52,6 +48,7 @@ import org.opensearch.ml.action.execute.TransportExecuteStreamTaskAction;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.agui.*;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
@@ -80,6 +77,7 @@ import org.opensearch.transport.TransportRequestOptions;
 import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.transport.stream.StreamTransportResponse;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -198,7 +196,13 @@ public class RestMLExecuteStreamAction extends BaseRestHandler {
                         BaseEvent runStartedEvent = new RunStartedEvent(threadId, runId);
                         HttpChunk startChunk = createHttpChunk("data: " + runStartedEvent.toJsonString() + "\n\n", false);
                         channel.sendChunk(startChunk);
-                        log.debug("{}AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}", logPrefix, threadId, runId);
+                        log
+                            .debug(
+                                "{}AG-UI: RestMLExecuteStreamAction: Sent RUN_STARTED event - threadId={}, runId={}",
+                                logPrefix,
+                                threadId,
+                                runId
+                            );
                     }
 
                     // Extract backend tool names from agent configuration and add to request for AG-UI filtering

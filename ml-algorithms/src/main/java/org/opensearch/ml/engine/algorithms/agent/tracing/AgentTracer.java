@@ -32,6 +32,7 @@ import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.BatchSpanProcessor;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.semconv.ResourceAttributes;
+import lombok.extern.log4j.Log4j2;
 import okhttp3.Interceptor;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -49,8 +50,6 @@ import software.amazon.awssdk.auth.signer.params.Aws4SignerParams;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.SdkHttpMethod;
 import software.amazon.awssdk.regions.Region;
-
-import lombok.extern.log4j.Log4j2;
 
 /**
  * OpenTelemetry-based tracer for ML Commons agents.
@@ -143,8 +142,11 @@ public final class AgentTracer {
 
         // Validate AWS credentials
         if (accessKey == null || accessKey.isEmpty() || secretKey == null || secretKey.isEmpty()) {
-            log.warn("[AgentTracer] AWS credentials not configured, tracing disabled. " +
-                "Configure plugins.ml_commons.agent_tracing.aws_access_key and aws_secret_key to enable tracing.");
+            log
+                .warn(
+                    "[AgentTracer] AWS credentials not configured, tracing disabled. "
+                        + "Configure plugins.ml_commons.agent_tracing.aws_access_key and aws_secret_key to enable tracing."
+                );
             enabled = false;
             initialized = true;
             return;
@@ -162,8 +164,11 @@ public final class AgentTracer {
                 ? AwsSessionCredentials.create(accessKey, secretKey, sessionToken)
                 : AwsBasicCredentials.create(accessKey, secretKey);
             final AwsCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(credentials);
-            log.debug("[AgentTracer] AWS credentials provider created (access key: {}...)",
-                accessKey.substring(0, Math.min(4, accessKey.length())));
+            log
+                .debug(
+                    "[AgentTracer] AWS credentials provider created (access key: {}...)",
+                    accessKey.substring(0, Math.min(4, accessKey.length()))
+                );
 
             // Create OkHttp client with SigV4 signing interceptor
             log.debug("[AgentTracer] Creating OkHttp client with SigV4 interceptor for service: {}", OSIS_SERVICE_NAME);
@@ -182,30 +187,35 @@ public final class AgentTracer {
 
             // Create resource with service attributes
             log.debug("[AgentTracer] Creating resource with service attributes...");
-            Resource resource = Resource.getDefault()
-                .merge(Resource.create(Attributes.of(
-                    ResourceAttributes.SERVICE_NAME, serviceName,
-                    ResourceAttributes.SERVICE_VERSION, TRACER_VERSION
-                )));
+            Resource resource = Resource
+                .getDefault()
+                .merge(
+                    Resource
+                        .create(
+                            Attributes.of(ResourceAttributes.SERVICE_NAME, serviceName, ResourceAttributes.SERVICE_VERSION, TRACER_VERSION)
+                        )
+                );
 
             // Create tracer provider with batch processor
             log.debug("[AgentTracer] Creating tracer provider with batch processor...");
-            SdkTracerProvider tracerProvider = SdkTracerProvider.builder()
-                .addSpanProcessor(BatchSpanProcessor.builder(exporter)
-                    .setMaxQueueSize(2048)
-                    .setMaxExportBatchSize(32)  // Reduced to prevent payload too large errors
-                    .setScheduleDelay(1, TimeUnit.SECONDS)
-                    .setExporterTimeout(30, TimeUnit.SECONDS)
-                    .build())
+            SdkTracerProvider tracerProvider = SdkTracerProvider
+                .builder()
+                .addSpanProcessor(
+                    BatchSpanProcessor
+                        .builder(exporter)
+                        .setMaxQueueSize(2048)
+                        .setMaxExportBatchSize(32)  // Reduced to prevent payload too large errors
+                        .setScheduleDelay(1, TimeUnit.SECONDS)
+                        .setExporterTimeout(30, TimeUnit.SECONDS)
+                        .build()
+                )
                 .setResource(resource)
                 .build();
             log.debug("[AgentTracer] Tracer provider created");
 
             // Build SDK
             log.debug("[AgentTracer] Building OpenTelemetry SDK...");
-            sdk = OpenTelemetrySdk.builder()
-                .setTracerProvider(tracerProvider)
-                .build();
+            sdk = OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).build();
 
             tracer = sdk.getTracer(TRACER_NAME, TRACER_VERSION);
             initialized = true;
@@ -248,20 +258,19 @@ public final class AgentTracer {
 
             try {
                 // Get AWS credentials with privileged access to read credentials files
-                AwsCredentials credentials = AccessController.doPrivileged(
-                    (PrivilegedAction<AwsCredentials>) credentialsProvider::resolveCredentials
-                );
+                AwsCredentials credentials = AccessController
+                    .doPrivileged((PrivilegedAction<AwsCredentials>) credentialsProvider::resolveCredentials);
                 log.debug("[SigV4Interceptor] Resolved AWS credentials");
 
                 // Build SDK HTTP request
                 URI uri = originalRequest.url().uri();
-                SdkHttpFullRequest.Builder sdkRequestBuilder = SdkHttpFullRequest.builder()
+                SdkHttpFullRequest.Builder sdkRequestBuilder = SdkHttpFullRequest
+                    .builder()
                     .uri(uri)
                     .method(SdkHttpMethod.fromValue(originalRequest.method()));
 
                 // Copy headers
-                originalRequest.headers().forEach(pair ->
-                    sdkRequestBuilder.putHeader(pair.getFirst(), pair.getSecond()));
+                originalRequest.headers().forEach(pair -> sdkRequestBuilder.putHeader(pair.getFirst(), pair.getSecond()));
 
                 // Add host header if not present
                 if (originalRequest.header("Host") == null) {
@@ -284,7 +293,8 @@ public final class AgentTracer {
                 SdkHttpFullRequest sdkRequest = sdkRequestBuilder.build();
 
                 // Create signing parameters
-                Aws4SignerParams signingParams = Aws4SignerParams.builder()
+                Aws4SignerParams signingParams = Aws4SignerParams
+                    .builder()
                     .signingRegion(Region.of(region))
                     .signingName(serviceName)
                     .awsCredentials(credentials)
@@ -394,13 +404,15 @@ public final class AgentTracer {
             // Serialize spans to OTLP JSON format
             // OSIS accepts both JSON and protobuf formats
             StringBuilder json = new StringBuilder();
-            json.append("{\"resourceSpans\":[{\"resource\":{},\"scopeSpans\":[{\"scope\":{\"name\":\"")
+            json
+                .append("{\"resourceSpans\":[{\"resource\":{},\"scopeSpans\":[{\"scope\":{\"name\":\"")
                 .append(TRACER_NAME)
                 .append("\"},\"spans\":[");
 
             boolean first = true;
             for (SpanData span : spans) {
-                if (!first) json.append(",");
+                if (!first)
+                    json.append(",");
                 first = false;
                 json.append("{\"traceId\":\"").append(span.getTraceId()).append("\"");
                 json.append(",\"spanId\":\"").append(span.getSpanId()).append("\"");
@@ -413,7 +425,8 @@ public final class AgentTracer {
                 json.append(",\"attributes\":[");
                 boolean firstAttr = true;
                 for (var entry : span.getAttributes().asMap().entrySet()) {
-                    if (!firstAttr) json.append(",");
+                    if (!firstAttr)
+                        json.append(",");
                     firstAttr = false;
                     json.append("{\"key\":\"").append(escapeJson(entry.getKey().getKey())).append("\"");
                     json.append(",\"value\":{\"stringValue\":\"").append(escapeJson(String.valueOf(entry.getValue()))).append("\"}}");
@@ -431,12 +444,9 @@ public final class AgentTracer {
         }
 
         private String escapeJson(String value) {
-            if (value == null) return "";
-            return value.replace("\\", "\\\\")
-                       .replace("\"", "\\\"")
-                       .replace("\n", "\\n")
-                       .replace("\r", "\\r")
-                       .replace("\t", "\\t");
+            if (value == null)
+                return "";
+            return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
         }
 
         @Override
@@ -479,13 +489,19 @@ public final class AgentTracer {
     public static Span startAgentSpan(String agentType, String sessionId, String runId) {
         log.info("[AgentTracer] startAgentSpan called: enabled={}, initialized={}, tracer={}", enabled, initialized, tracer != null);
         if (!isEnabled()) {
-            log.info("[AgentTracer] Tracing DISABLED (not initialized) - would have created span with: type={}, sessionId={}, runId={}",
-                agentType, sessionId, runId);
+            log
+                .info(
+                    "[AgentTracer] Tracing DISABLED (not initialized) - would have created span with: type={}, sessionId={}, runId={}",
+                    agentType,
+                    sessionId,
+                    runId
+                );
             return Span.getInvalid();
         }
 
         log.info("[AgentTracer] Starting agent span: type={}, sessionId={}, runId={}", agentType, sessionId, runId);
-        return tracer.spanBuilder(SpanNames.AGENT_RUN)
+        return tracer
+            .spanBuilder(SpanNames.AGENT_RUN)
             .setSpanKind(SpanKind.SERVER)
             .setAttribute(AGENT_TYPE, agentType)
             .setAttribute(CONVERSATION_ID, sessionId != null ? sessionId : "")
@@ -502,9 +518,11 @@ public final class AgentTracer {
      * @param runId AG-UI run ID for frontend correlation
      */
     public static Span startLlmSpan(Span parent, String modelId, int iteration, String runId) {
-        if (!isEnabled()) return Span.getInvalid();
+        if (!isEnabled())
+            return Span.getInvalid();
 
-        SpanBuilder builder = tracer.spanBuilder(SpanNames.LLM_INFERENCE)
+        SpanBuilder builder = tracer
+            .spanBuilder(SpanNames.LLM_INFERENCE)
             .setSpanKind(SpanKind.CLIENT)
             .setAttribute(MODEL, modelId != null ? modelId : "")
             .setAttribute(AGENT_ITERATION, (long) iteration)
@@ -527,9 +545,11 @@ public final class AgentTracer {
      * @param runId AG-UI run ID for frontend correlation
      */
     public static Span startToolSpan(Span parent, String toolName, String toolInput, String runId) {
-        if (!isEnabled()) return Span.getInvalid();
+        if (!isEnabled())
+            return Span.getInvalid();
 
-        SpanBuilder builder = tracer.spanBuilder(SpanNames.TOOL_EXECUTE + "." + toolName)
+        SpanBuilder builder = tracer
+            .spanBuilder(SpanNames.TOOL_EXECUTE + "." + toolName)
             .setSpanKind(SpanKind.CLIENT)
             .setAttribute(TOOL_NAME, toolName)
             .setAttribute(TOOL_INPUT, truncate(toolInput))
@@ -546,9 +566,11 @@ public final class AgentTracer {
      * Start a step execution span (for PER agent).
      */
     public static Span startStepSpan(Span parent, int stepNumber, String stepDescription) {
-        if (!isEnabled()) return Span.getInvalid();
+        if (!isEnabled())
+            return Span.getInvalid();
 
-        SpanBuilder builder = tracer.spanBuilder(SpanNames.STEP_EXECUTE)
+        SpanBuilder builder = tracer
+            .spanBuilder(SpanNames.STEP_EXECUTE)
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(STEP_NUMBER, (long) stepNumber)
             .setAttribute(STEP_DESCRIPTION, truncate(stepDescription, 500));
@@ -564,9 +586,11 @@ public final class AgentTracer {
      * Start a planning phase span (for PER agent).
      */
     public static Span startPlanningSpan(Span parent, String modelId) {
-        if (!isEnabled()) return Span.getInvalid();
+        if (!isEnabled())
+            return Span.getInvalid();
 
-        SpanBuilder builder = tracer.spanBuilder(SpanNames.PLANNING)
+        SpanBuilder builder = tracer
+            .spanBuilder(SpanNames.PLANNING)
             .setSpanKind(SpanKind.INTERNAL)
             .setAttribute(MODEL, modelId != null ? modelId : "");
 
@@ -583,38 +607,48 @@ public final class AgentTracer {
      * Add an LLM request event to a span.
      */
     public static void addLlmRequestEvent(Span span, String prompt, int toolCount) {
-        if (!isEnabled() || span == null) return;
+        if (!isEnabled() || span == null)
+            return;
 
-        span.addEvent(EventNames.LLM_REQUEST, Attributes.builder()
-            .put("llm.prompt", truncate(prompt))
-            .put("llm.tool_count", toolCount)
-            .build());
+        span
+            .addEvent(
+                EventNames.LLM_REQUEST,
+                Attributes.builder().put("llm.prompt", truncate(prompt)).put("llm.tool_count", toolCount).build()
+            );
     }
 
     /**
      * Add an LLM response event to a span.
      */
     public static void addLlmResponseEvent(Span span, String response, String stopReason, long inputTokens, long outputTokens) {
-        if (!isEnabled() || span == null) return;
+        if (!isEnabled() || span == null)
+            return;
 
-        span.addEvent(EventNames.LLM_RESPONSE, Attributes.builder()
-            .put("llm.completion", truncate(response))
-            .put("llm.stop_reason", stopReason != null ? stopReason : "")
-            .put(INPUT_TOKENS.getKey(), inputTokens)
-            .put(OUTPUT_TOKENS.getKey(), outputTokens)
-            .build());
+        span
+            .addEvent(
+                EventNames.LLM_RESPONSE,
+                Attributes
+                    .builder()
+                    .put("llm.completion", truncate(response))
+                    .put("llm.stop_reason", stopReason != null ? stopReason : "")
+                    .put(INPUT_TOKENS.getKey(), inputTokens)
+                    .put(OUTPUT_TOKENS.getKey(), outputTokens)
+                    .build()
+            );
     }
 
     /**
      * Add a tool output event to a span.
      */
     public static void addToolOutputEvent(Span span, String toolResult, long durationMs) {
-        if (!isEnabled() || span == null) return;
+        if (!isEnabled() || span == null)
+            return;
 
-        span.addEvent(EventNames.TOOL_OUTPUT, Attributes.builder()
-            .put("tool.result", truncate(toolResult))
-            .put(TOOL_DURATION_MS.getKey(), durationMs)
-            .build());
+        span
+            .addEvent(
+                EventNames.TOOL_OUTPUT,
+                Attributes.builder().put("tool.result", truncate(toolResult)).put(TOOL_DURATION_MS.getKey(), durationMs).build()
+            );
     }
 
     // ============ Span Completion Methods ============
@@ -642,7 +676,12 @@ public final class AgentTracer {
      * End a span with an error.
      */
     public static void endSpanWithError(Span span, Throwable error) {
-        log.info("[AgentTracer] endSpanWithError called: span={}, error={}", span != null ? span.getSpanContext().getSpanId() : "null", error.getMessage());
+        log
+            .info(
+                "[AgentTracer] endSpanWithError called: span={}, error={}",
+                span != null ? span.getSpanContext().getSpanId() : "null",
+                error.getMessage()
+            );
         if (span == null || !span.getSpanContext().isValid()) {
             log.warn("[AgentTracer] endSpanWithError: span is null or invalid, skipping");
             return;
@@ -660,7 +699,8 @@ public final class AgentTracer {
      * Make a span current and return a scope for try-with-resources.
      */
     public static Scope makeCurrent(Span span) {
-        if (span == null) return () -> {};
+        if (span == null)
+            return () -> {};
         return span.makeCurrent();
     }
 
